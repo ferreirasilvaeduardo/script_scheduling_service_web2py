@@ -19,23 +19,23 @@ WEB2PY = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__))
 HELPER = os.path.join(WEB2PY, "bin", "sss-helper")
 
 
-_COPIA = {}
+_COPY = {}
 
 
 def setUpModule():
     # O helper nao tem sufixo .py: uma copia numa pasta temporaria permite importa-lo para os dubles.
-    _COPIA["pasta"] = tempfile.mkdtemp(prefix="sss_helper_mod_")
-    shutil.copy(HELPER, os.path.join(_COPIA["pasta"], "sss_helper_copia.py"))
-    sys.path.insert(0, _COPIA["pasta"])
+    _COPY["pasta"] = tempfile.mkdtemp(prefix="sss_helper_mod_")
+    shutil.copy(HELPER, os.path.join(_COPY["pasta"], "sss_helper_copia.py"))
+    sys.path.insert(0, _COPY["pasta"])
 
 
 def tearDownModule():
-    sys.path.remove(_COPIA["pasta"])
+    sys.path.remove(_COPY["pasta"])
     sys.modules.pop("sss_helper_copia", None)
-    shutil.rmtree(_COPIA["pasta"], ignore_errors=True)
+    shutil.rmtree(_COPY["pasta"], ignore_errors=True)
 
 
-def _carregar_helper():
+def _load_helper():
     import sss_helper_copia
     return sss_helper_copia
 
@@ -47,7 +47,7 @@ def _helper(*args, **kw):
     return p.returncode, p.stderr.decode("utf-8", "replace")
 
 
-def _vivo(pid):
+def _alive(pid):
     try:
         with open("/proc/%d/stat" % pid) as f:
             conteudo = f.read()
@@ -56,7 +56,7 @@ def _vivo(pid):
     return conteudo[conteudo.rindex(")") + 2:].split()[0] != "Z"
 
 
-def _esperar(condicao, prazo=10.0):
+def _wait(condicao, prazo=10.0):
     limite = time.monotonic() + prazo
     while time.monotonic() < limite:
         if condicao():
@@ -69,8 +69,8 @@ def _esperar(condicao, prazo=10.0):
 class TestSssHelper(unittest.TestCase):
 
     def setUp(self):
-        self.raiz = os.path.realpath(tempfile.mkdtemp(prefix="sss_helper_"))
-        self.base = os.path.join(self.raiz, "exec1")
+        self.root = os.path.realpath(tempfile.mkdtemp(prefix="sss_helper_"))
+        self.base = os.path.join(self.root, "exec1")
         os.mkdir(self.base, 0o700)
         self.popens = []
 
@@ -81,10 +81,10 @@ class TestSssHelper(unittest.TestCase):
             except OSError:
                 pass
             p.wait()
-        shutil.rmtree(self.raiz, ignore_errors=True)
+        shutil.rmtree(self.root, ignore_errors=True)
 
-    def grupo(self, cwd=None):
-        p = subprocess.Popen(["sleep", "300"], start_new_session=True, cwd=cwd or self.raiz)
+    def group(self, cwd=None):
+        p = subprocess.Popen(["sleep", "300"], start_new_session=True, cwd=cwd or self.root)
         self.popens.append(p)
         return p
 
@@ -119,25 +119,25 @@ class TestSssHelper(unittest.TestCase):
     # -- term / kill ------------------------------------------------------------
 
     def test_term_kill_com_identidade_divergente(self):
-        helper = _carregar_helper()
-        p = self.grupo()
+        helper = _load_helper()
+        p = self.group()
         inicio = helper._identity(p.pid)
         self.assertIsNotNone(inicio)
         for sub in ("term", "kill"):
             codigo, erro = _helper(sub, p.pid, inicio + 1)
             self.assertEqual(codigo, 3, sub)
             self.assertIn("identidade", erro)
-        self.assertTrue(_vivo(p.pid))
+        self.assertTrue(_alive(p.pid))
         self.assertEqual(_helper("term", p.pid, inicio)[0], 0)
         p.wait(10)
         self.assertEqual(p.returncode, -signal.SIGTERM)
-        q = self.grupo()
+        q = self.group()
         self.assertEqual(_helper("kill", q.pid, helper._identity(q.pid))[0], 0)
         q.wait(10)
         self.assertEqual(q.returncode, -signal.SIGKILL)
 
     def test_term_kill_com_grupo_vazio(self):
-        p = self.grupo()
+        p = self.group()
         os.killpg(p.pid, signal.SIGKILL)
         p.wait()
         for sub in ("term", "kill"):
@@ -145,7 +145,7 @@ class TestSssHelper(unittest.TestCase):
 
     def test_lider_sudo_de_root_com_identidade_certa_recebe_o_sinal(self):
         # Revisao de 2026-10-20: o lider do grupo e o sudo (root); EPERM na sondagem e o caso normal.
-        helper = _carregar_helper()
+        helper = _load_helper()
         for sub, sinal in ((helper._term, signal.SIGTERM), (helper._kill, signal.SIGKILL)):
             with mock.patch.object(helper.os, "kill", side_effect=PermissionError()), \
                     mock.patch.object(helper, "_identity", return_value=777), \
@@ -154,7 +154,7 @@ class TestSssHelper(unittest.TestCase):
             killpg.assert_called_once_with(4242, sinal)
 
     def test_lider_de_root_com_identidade_divergente_e_recusado(self):
-        helper = _carregar_helper()
+        helper = _load_helper()
         for sub in (helper._term, helper._kill):
             with mock.patch.object(helper.os, "kill", side_effect=PermissionError()), \
                     mock.patch.object(helper, "_identity", return_value=778), \
@@ -165,7 +165,7 @@ class TestSssHelper(unittest.TestCase):
             killpg.assert_not_called()
 
     def test_grupo_so_com_o_sudo_e_sucesso(self):
-        helper = _carregar_helper()
+        helper = _load_helper()
         with mock.patch.object(helper.os, "kill", side_effect=PermissionError()), \
                 mock.patch.object(helper, "_identity", return_value=777), \
                 mock.patch.object(helper.os, "killpg", side_effect=PermissionError()):
@@ -173,7 +173,7 @@ class TestSssHelper(unittest.TestCase):
             self.assertEqual(helper._kill(4242, 777), 0)
 
     def test_identidade_com_parenteses_no_nome(self):
-        helper = _carregar_helper()
+        helper = _load_helper()
         campos = " ".join(["Y"] + [str(i) for i in range(4, 60)])
         with mock.patch("builtins.open", mock.mock_open(read_data="77 (a) b)) %s" % campos)):
             self.assertEqual(helper._identity(77), 22)
@@ -181,31 +181,31 @@ class TestSssHelper(unittest.TestCase):
 
     # -- base_dir -------------------------------------------------------------
 
-    def _pastas_invalidas(self):
-        link = os.path.join(self.raiz, "link_base")
+    def _invalid_dirs(self):
+        link = os.path.join(self.root, "link_base")
         os.symlink(self.base, link)
-        arquivo = os.path.join(self.raiz, "arquivo")
+        arquivo = os.path.join(self.root, "arquivo")
         open(arquivo, "w").close()
         return ("exec1", self.base + "/", os.path.join(self.base, "..", "exec1"), link,
-                os.path.join(self.raiz, "nao_existe"), arquivo, "/")
+                os.path.join(self.root, "nao_existe"), arquivo, "/")
 
     def test_limpar_e_encerrar_ticket_com_pasta_base_invalida(self):
         alvo = os.path.join(self.base, "ticket_4")
         os.mkdir(alvo)
-        for pasta in self._pastas_invalidas():
+        for pasta in self._invalid_dirs():
             self.assertEqual(_helper("clean", pasta, 4)[0], 2, pasta)
             self.assertEqual(_helper("stop-ticket", pasta, 4, 1)[0], 2, pasta)
         self.assertTrue(os.path.isdir(alvo), "nada removido pela pasta recusada")
 
     def test_pasta_base_de_outro_dono(self):
-        helper = _carregar_helper()
+        helper = _load_helper()
         with mock.patch.object(helper.os, "geteuid", return_value=os.geteuid() + 1):
             with self.assertRaises(helper.Failure) as ctx:
                 helper._base_dir(self.base)
         self.assertEqual(ctx.exception.code, 2)
 
     def test_limpar_sem_seguir_links(self):
-        fora = os.path.join(self.raiz, "fora")
+        fora = os.path.join(self.root, "fora")
         os.mkdir(fora)
         with open(os.path.join(fora, "precioso.txt"), "w") as f:
             f.write("x")
@@ -228,15 +228,15 @@ class TestSssHelper(unittest.TestCase):
         os.makedirs(pasta)
         vizinha = os.path.join(self.base, "ticket_30")
         os.mkdir(vizinha)
-        dentro, fora = self.grupo(cwd=pasta), self.grupo(cwd=vizinha)
-        self.assertTrue(_esperar(lambda: os.path.realpath("/proc/%d/cwd" % dentro.pid) == pasta))
+        dentro, fora = self.group(cwd=pasta), self.group(cwd=vizinha)
+        self.assertTrue(_wait(lambda: os.path.realpath("/proc/%d/cwd" % dentro.pid) == pasta))
         self.assertEqual(_helper("stop-ticket", self.base, 3, 2)[0], 0)
         dentro.wait(10)
         self.assertEqual(dentro.returncode, -signal.SIGTERM)
-        self.assertTrue(_vivo(fora.pid))
+        self.assertTrue(_alive(fora.pid))
 
     def test_encerrar_ticket_nao_suportado(self):
-        helper = _carregar_helper()
+        helper = _load_helper()
         os.mkdir(os.path.join(self.base, "ticket_5"))
         isdir, exists, isfile = os.path.isdir, os.path.exists, os.path.isfile
 
@@ -254,7 +254,7 @@ class TestSssHelper(unittest.TestCase):
     # -- run --------------------------------------------------------------------
 
     def test_run_direto_com_cwd_umask_e_entrada_nula(self):
-        script = os.path.join(self.raiz, "script.py")
+        script = os.path.join(self.root, "script.py")
         with open(script, "w") as f:
             f.write("import os, resource, sys\n"
                     "m = os.umask(0)\n"
@@ -274,28 +274,28 @@ class TestSssHelper(unittest.TestCase):
         self.assertEqual(os.stat(os.path.join(pasta, "tmp")).st_mode & 0o777, 0o700)
 
     def test_run_execve_falho(self):
-        spec = {"ticket_id": 2, "argv": [os.path.join(self.raiz, "nao_existe")], "env": {}, "base_dir": self.base}
+        spec = {"ticket_id": 2, "argv": [os.path.join(self.root, "nao_existe")], "env": {}, "base_dir": self.base}
         codigo, erro = _helper("run", entrada=json.dumps(spec).encode("utf-8"))
         self.assertEqual(codigo, 4)
         self.assertIn("execve falhou", erro)
 
     # -- pasta de saida (CR-012) ------------------------------------------------
 
-    def _base_saida(self):
-        base = os.path.join(self.raiz, "output", "producao")
+    def _output_base(self):
+        base = os.path.join(self.root, "output", "producao")
         os.makedirs(base, 0o700)
         return base
 
-    def _helper_saida(self, *args):
+    def _helper_output(self, *args):
         """Executa o helper com a saida padrao capturada; devolve (codigo, stdout, stderr)."""
         p = subprocess.run([sys.executable, HELPER] + [str(a) for a in args], stdout=subprocess.PIPE,
                            stderr=subprocess.PIPE, timeout=60)
         return p.returncode, p.stdout, p.stderr.decode("utf-8", "replace")
 
     def test_run_cria_a_pasta_de_saida_do_ticket(self):
-        base = self._base_saida()
+        base = self._output_base()
         rel = "carga_diaria/2026/10/20/14/05/ticket_12"
-        script = os.path.join(self.raiz, "grava.py")
+        script = os.path.join(self.root, "grava.py")
         with open(script, "w") as f:
             f.write("import os\nopen(os.path.join(os.environ['SSS_OUTPUT_DIR'], 'r.txt'), 'w').write('ok')\n")
         alvo = os.path.join(base, rel)
@@ -311,7 +311,7 @@ class TestSssHelper(unittest.TestCase):
             self.assertEqual(os.stat(atual).st_mode & 0o777, 0o700, atual)
 
     def test_run_recusa_saida_invalida(self):
-        base = self._base_saida()
+        base = self._output_base()
         valida = {"ticket_id": 12, "argv": ["/bin/true"], "env": {}, "base_dir": self.base}
         for saida in ({"base": base}, {"base": base, "relativo": "x/2026/10/20/14/05/ticket_13"},
                       {"base": base, "relativo": "../2026/10/20/14/05/ticket_12"},
@@ -322,7 +322,7 @@ class TestSssHelper(unittest.TestCase):
             self.assertEqual(_helper("run", entrada=json.dumps(dict(valida, output=saida)).encode("utf-8"))[0], 2,
                              saida)
         # Link no caminho da saida (criado por terceiro): recusado sem seguir o link.
-        fora = os.path.join(self.raiz, "fora")
+        fora = os.path.join(self.root, "fora")
         os.mkdir(fora)
         os.symlink(fora, os.path.join(base, "x"))
         spec = dict(valida, output={"base": base, "relativo": "x/2026/10/20/14/05/ticket_12"})
@@ -331,9 +331,9 @@ class TestSssHelper(unittest.TestCase):
 
     def test_run_cria_a_pasta_de_entrada_e_preserva_o_conteudo(self):
         # CR-014 (README §8.14): permanente; o script le, grava e apaga; a existente fica como esta.
-        base = os.path.join(self.raiz, "input", "producao")
+        base = os.path.join(self.root, "input", "producao")
         os.makedirs(base, 0o700)
-        script = os.path.join(self.raiz, "consome.py")
+        script = os.path.join(self.root, "consome.py")
         with open(script, "w") as f:
             f.write("import os\nd = os.environ['SSS_INPUT_DIR']\n"
                     "n = len(os.listdir(d))\nopen(os.path.join(d, 'lido_%d.txt' % n), 'w').write('ok')\n")
@@ -350,7 +350,7 @@ class TestSssHelper(unittest.TestCase):
         self.assertEqual(os.stat(alvo).st_mode & 0o777, 0o750, "a existente fica como esta")
 
     def test_run_recusa_entrada_invalida(self):
-        base = os.path.join(self.raiz, "input", "producao")
+        base = os.path.join(self.root, "input", "producao")
         os.makedirs(base, 0o700)
         valida = {"ticket_id": 12, "argv": ["/bin/true"], "env": {}, "base_dir": self.base}
         for entrada in ({"base": base}, {"base": base, "relativo": "a/b"}, {"base": base, "relativo": ".."},
@@ -358,13 +358,13 @@ class TestSssHelper(unittest.TestCase):
                         {"base": "relativa", "relativo": "x"}, {"base": base + "/../producao", "relativo": "x"}):
             self.assertEqual(_helper("run", entrada=json.dumps(dict(valida, input=entrada)).encode("utf-8"))[0],
                              2, entrada)
-        fora = os.path.join(self.raiz, "fora_entrada")
+        fora = os.path.join(self.root, "fora_entrada")
         os.mkdir(fora)
         os.symlink(fora, os.path.join(base, "x"))
         spec = dict(valida, input={"base": base, "relativo": "x"})
         self.assertEqual(_helper("run", entrada=json.dumps(spec).encode("utf-8"))[0], 2, "link recusado")
 
-    def _preencher(self, base, rel, arquivos):
+    def _fill(self, base, rel, arquivos):
         pasta = os.path.join(base, rel)
         os.makedirs(pasta, 0o700)
         for nome, dados in arquivos.items():
@@ -377,7 +377,7 @@ class TestSssHelper(unittest.TestCase):
     def test_relativo_de_pastas_log_passa_no_helper(self):
         import datetime
         import log_paths
-        helper = _carregar_helper()
+        helper = _load_helper()
         dt = datetime.datetime(2026, 1, 2, 3, 4)
         for nome in (u"Carga Diária", u"-x-", u"a.b_c", u"!!!", u"x" * 60, u"Relatório 2026 (v2)"):
             _base, rel = log_paths.output_dir("/s", "PRODUCAO", nome, dt, 99, script_id=5)
@@ -386,16 +386,16 @@ class TestSssHelper(unittest.TestCase):
     def test_empacotar_so_arquivos_regulares_sem_seguir_links(self):
         import io
         import zipfile
-        base = self._base_saida()
+        base = self._output_base()
         rel = "carga/2026/10/20/14/05/ticket_7"
-        pasta = self._preencher(base, rel, {"a.txt": b"um", "sub/b.csv": b"x;y\n" * 1000})
-        segredo = os.path.join(self.raiz, "segredo.txt")
+        pasta = self._fill(base, rel, {"a.txt": b"um", "sub/b.csv": b"x;y\n" * 1000})
+        segredo = os.path.join(self.root, "segredo.txt")
         with open(segredo, "w") as f:
             f.write("nao pode sair")
         os.symlink(segredo, os.path.join(pasta, "link.txt"))
-        os.symlink(self.raiz, os.path.join(pasta, "link_pasta"))
+        os.symlink(self.root, os.path.join(pasta, "link_pasta"))
         os.mkfifo(os.path.join(pasta, "fifo"))
-        codigo, zip_, erro = self._helper_saida("pack", base, rel, 1048576, 10)
+        codigo, zip_, erro = self._helper_output("pack", base, rel, 1048576, 10)
         self.assertEqual(codigo, 0, erro)
         z = zipfile.ZipFile(io.BytesIO(zip_))
         self.assertEqual(sorted(z.namelist()), ["a.txt", "sub/b.csv"])
@@ -403,19 +403,19 @@ class TestSssHelper(unittest.TestCase):
         self.assertIsNone(z.testzip())
 
     def test_empacotar_vazia_e_limites(self):
-        base = self._base_saida()
+        base = self._output_base()
         rel = "carga/2026/10/20/14/05/ticket_8"
-        self.assertEqual(self._helper_saida("pack", base, rel, 1048576, 10)[0], 6, "inexistente")
-        pasta = self._preencher(base, rel, {})
+        self.assertEqual(self._helper_output("pack", base, rel, 1048576, 10)[0], 6, "inexistente")
+        pasta = self._fill(base, rel, {})
         os.makedirs(os.path.join(pasta, "so_pastas"))
-        self.assertEqual(self._helper_saida("pack", base, rel, 1048576, 10)[0], 6, "vazia")
-        self._preencher(base, "carga/2026/10/20/14/05/ticket_9", dict(("f%02d" % i, b"x") for i in range(11)))
-        codigo, _zip, erro = self._helper_saida("pack", base, "carga/2026/10/20/14/05/ticket_9", 1048576, 10)
+        self.assertEqual(self._helper_output("pack", base, rel, 1048576, 10)[0], 6, "vazia")
+        self._fill(base, "carga/2026/10/20/14/05/ticket_9", dict(("f%02d" % i, b"x") for i in range(11)))
+        codigo, _zip, erro = self._helper_output("pack", base, "carga/2026/10/20/14/05/ticket_9", 1048576, 10)
         self.assertEqual(codigo, 7, erro)
         self.assertIn("arquivos", erro)
-        self.assertEqual(self._helper_saida("pack", base, "carga/2026/10/20/14/05/ticket_9", 1048576, 11)[0], 0)
-        self._preencher(base, "carga/2026/10/20/14/05/ticket_10", {"grande.bin": os.urandom(2 * 1024 * 1024)})
-        codigo, _zip, erro = self._helper_saida("pack", base, "carga/2026/10/20/14/05/ticket_10", 1048576, 10)
+        self.assertEqual(self._helper_output("pack", base, "carga/2026/10/20/14/05/ticket_9", 1048576, 11)[0], 0)
+        self._fill(base, "carga/2026/10/20/14/05/ticket_10", {"grande.bin": os.urandom(2 * 1024 * 1024)})
+        codigo, _zip, erro = self._helper_output("pack", base, "carga/2026/10/20/14/05/ticket_10", 1048576, 10)
         self.assertEqual(codigo, 8, erro)
         self.assertIn("bytes", erro)
         for args in (("pack", base, rel, 0, 10), ("pack", base, rel, 1048576, 0),
@@ -423,28 +423,28 @@ class TestSssHelper(unittest.TestCase):
                      ("pack", base, "../x/2026/10/20/14/05/ticket_8", 1048576, 10),
                      ("pack", base, rel, 1048576), ("clean-output", base), ("purge-output", base, "0"),
                      ("purge-output", base, "7", "remover")):
-            self.assertEqual(self._helper_saida(*args)[0], 2, args)
+            self.assertEqual(self._helper_output(*args)[0], 2, args)
 
     def test_limpar_saida_sem_seguir_links(self):
-        base = self._base_saida()
+        base = self._output_base()
         rel = "carga/2026/10/20/14/05/ticket_11"
-        pasta = self._preencher(base, rel, {"a.txt": b"1"})
-        fora = os.path.join(self.raiz, "fora2")
+        pasta = self._fill(base, rel, {"a.txt": b"1"})
+        fora = os.path.join(self.root, "fora2")
         os.mkdir(fora)
         with open(os.path.join(fora, "manter.txt"), "w") as f:
             f.write("x")
         os.symlink(fora, os.path.join(pasta, "link"))
-        self.assertEqual(self._helper_saida("clean-output", base, rel)[0], 0)
+        self.assertEqual(self._helper_output("clean-output", base, rel)[0], 0)
         self.assertFalse(os.path.exists(pasta))
         self.assertTrue(os.path.exists(os.path.join(fora, "manter.txt")))
         self.assertTrue(os.path.isdir(os.path.dirname(pasta)), "as pastas acima ficam para o purge")
-        self.assertEqual(self._helper_saida("clean-output", base, rel)[0], 0, "ja removida")
+        self.assertEqual(self._helper_output("clean-output", base, rel)[0], 0, "ja removida")
 
     def test_purgar_saida_pela_data_do_caminho(self):
-        helper = _carregar_helper()
-        base = self._base_saida()
-        velha = self._preencher(base, "carga/2026/09/01/10/00/ticket_1", {"a": b"1"})
-        nova = self._preencher(base, "carga/2026/10/19/10/00/ticket_2", {"a": b"1"})
+        helper = _load_helper()
+        base = self._output_base()
+        velha = self._fill(base, "carga/2026/09/01/10/00/ticket_1", {"a": b"1"})
+        nova = self._fill(base, "carga/2026/10/19/10/00/ticket_2", {"a": b"1"})
         estranha = os.path.join(base, "carga", "2026", "09", "lixo")
         os.makedirs(estranha)
         import datetime

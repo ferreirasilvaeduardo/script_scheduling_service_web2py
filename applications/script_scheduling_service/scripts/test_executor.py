@@ -27,16 +27,16 @@ import path_guard
 import os_platform
 from sss_config import Secrets
 
-AGENTE_FALSO = 2 ** 31 - 3
+FAKE_AGENT = 2 ** 31 - 3
 STARTED_AT = datetime.datetime(2026, 10, 16, 14, 5, 33)
 SH = "/bin/sh"
 
-_Agente = collections.namedtuple("_Agente", "agent_id child_locale env_passthrough exec_users exec_work_dir")
+_AgentStub = collections.namedtuple("_Agente", "agent_id child_locale env_passthrough exec_users exec_work_dir")
 _Cfg = collections.namedtuple("_Cfg", "agent")
 _CfgSnap = collections.namedtuple("_CfgSnap", "interpreters")
 
 
-def _esperar(condicao, prazo=10.0):
+def _wait(condicao, prazo=10.0):
     """So do harness de teste."""
     limite = time.monotonic() + prazo
     while time.monotonic() < limite:
@@ -46,7 +46,7 @@ def _esperar(condicao, prazo=10.0):
     return condicao()
 
 
-def _vivo(pid):
+def _alive(pid):
     try:
         with open("/proc/%d/stat" % pid) as f:
             conteudo = f.read()
@@ -55,7 +55,7 @@ def _vivo(pid):
     return conteudo[conteudo.rindex(")") + 2:].split()[0] != "Z"
 
 
-def _ler(caminho):
+def _read(caminho):
     try:
         with open(caminho) as f:
             return f.read()
@@ -67,9 +67,9 @@ def _ler(caminho):
 class _Base(unittest.TestCase):
 
     def setUp(self):
-        self.raiz = os.path.realpath(tempfile.mkdtemp(prefix="sss_exec_"))
-        self.work = os.path.join(self.raiz, "work")
-        self.logs = os.path.join(self.raiz, "logs")
+        self.root = os.path.realpath(tempfile.mkdtemp(prefix="sss_exec_"))
+        self.work = os.path.join(self.root, "work")
+        self.logs = os.path.join(self.root, "logs")
         os.mkdir(self.work, 0o700)
         os.mkdir(self.logs, 0o750)
         self.execs = []
@@ -81,7 +81,7 @@ class _Base(unittest.TestCase):
                 continue
             ex.phase = None if ex.phase == executor.PHASE_END else ex.phase
             executor.request_stop(ex, time.monotonic(), grace_s=0)
-            _esperar(lambda: executor.advance_stop(ex, time.monotonic()), 5)
+            _wait(lambda: executor.advance_stop(ex, time.monotonic()), 5)
             if ex.process.popen is not None:
                 ex.process.popen.wait(5)
         for p in self.extras:
@@ -90,10 +90,10 @@ class _Base(unittest.TestCase):
             except OSError:
                 pass
             p.wait()
-        for atual, dirs, _arqs in os.walk(self.raiz):
+        for atual, dirs, _arqs in os.walk(self.root):
             for d in dirs:
                 os.chmod(os.path.join(atual, d), 0o700)
-        shutil.rmtree(self.raiz, ignore_errors=True)
+        shutil.rmtree(self.root, ignore_errors=True)
 
     def start(self, comando, ticket_id=1, argv=None, env=None, rotulo=None):
         wd = executor.prepare_directory(self.work, ticket_id)
@@ -106,11 +106,11 @@ class _Base(unittest.TestCase):
     def dir_log(self):
         return os.path.join(self.logs, "dev", "teste_script", "2026", "10", "16", "14", "05")
 
-    def ate_sair(self, ex, prazo=10):
-        self.assertTrue(_esperar(lambda: executor.check(ex) is not None, prazo), "o script nao terminou")
+    def until_exit(self, ex, prazo=10):
+        self.assertTrue(_wait(lambda: executor.check(ex) is not None, prazo), "o script nao terminou")
         return ex.returncode
 
-    def encerrar(self, ex, grace_s=1, prazo=10):
+    def stop(self, ex, grace_s=1, prazo=10):
         """Ciclo do laco do daemon: cada chamada volta logo; o harness so repete ate o grupo acabar."""
         inicio = time.monotonic()
         executor.request_stop(ex, time.monotonic(), grace_s=grace_s)
@@ -121,11 +121,11 @@ class _Base(unittest.TestCase):
             fim = executor.advance_stop(ex, time.monotonic())
             self.assertLess(time.monotonic() - t, 0.5, "avancar_encerramento nao pode bloquear")
             return fim
-        self.assertTrue(_esperar(_passo, prazo), "o grupo nao acabou")
+        self.assertTrue(_wait(_passo, prazo), "o grupo nao acabou")
         return time.monotonic() - inicio
 
 
-class TestLogESaida(_Base):
+class TestLogAndOutput(_Base):
 
     def test_log_por_minuto_rename_e_permissoes(self):
         antiga = os.umask(0o077)
@@ -133,17 +133,17 @@ class TestLogESaida(_Base):
             ex = self.start("echo ola")
         finally:
             os.umask(antiga)
-        self.assertEqual(self.ate_sair(ex), 0)
+        self.assertEqual(self.until_exit(ex), 0)
         final = os.path.join(self.dir_log(), "ticket_1_%d.log" % ex.pid)
         self.assertEqual(ex.log_path, final)
-        self.assertEqual(_ler(final), "ola\n")
+        self.assertEqual(_read(final), "ola\n")
         self.assertFalse(os.path.exists(os.path.join(self.dir_log(), "ticket_1.log.parcial")), "rename atomico")
         self.assertEqual(os.stat(final).st_mode & 0o777, 0o600)
         pasta = self.logs
         for nivel in ("dev", "teste_script", "2026", "10", "16", "14", "05"):
             pasta = os.path.join(pasta, nivel)
             self.assertEqual(os.stat(pasta).st_mode & 0o777, 0o750, pasta)
-        self.encerrar(ex)
+        self.stop(ex)
 
     def test_log_com_o_excl(self):
         fd, caminho = executor.open_log(self.logs, "DEV", "Teste Script", STARTED_AT, 9)
@@ -157,9 +157,9 @@ class TestLogESaida(_Base):
 
     def test_saida_de_2_mb_sem_travar(self):
         ex = self.start("head -c 2097152 /dev/zero | tr '\\000' a")
-        self.assertEqual(self.ate_sair(ex, 20), 0)
+        self.assertEqual(self.until_exit(ex, 20), 0)
         self.assertEqual(os.path.getsize(ex.log_path), 2097152)
-        self.encerrar(ex)
+        self.stop(ex)
 
     def test_abrir_log_exige_ambiente(self):
         for vazio in (None, "", "INTERNAL"):
@@ -169,39 +169,39 @@ class TestLogESaida(_Base):
 
     def test_stdin_nulo(self):
         ex = self.start("cat; echo fim")
-        self.assertEqual(self.ate_sair(ex), 0)
-        self.assertEqual(_ler(ex.log_path), "fim\n")
-        self.encerrar(ex)
+        self.assertEqual(self.until_exit(ex), 0)
+        self.assertEqual(_read(ex.log_path), "fim\n")
+        self.stop(ex)
 
 
-class TestEncerramento(_Base):
+class TestStop(_Base):
 
     def test_neto_morre_com_o_principal_ja_terminado(self):
-        neto = os.path.join(self.raiz, "neto.pid")
+        neto = os.path.join(self.root, "neto.pid")
         ex = self.start("sleep 300 & echo $! > %s" % neto)
-        self.assertEqual(self.ate_sair(ex), 0)
-        pid_neto = int(_ler(neto).strip())
-        self.assertTrue(_vivo(pid_neto))
+        self.assertEqual(self.until_exit(ex), 0)
+        pid_neto = int(_read(neto).strip())
+        self.assertTrue(_alive(pid_neto))
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            self.encerrar(ex)
+            self.stop(ex)
         self.assertIn("NETOS_ENCERRADOS", logs.output[0])
-        self.assertTrue(_esperar(lambda: not _vivo(pid_neto)))
+        self.assertTrue(_wait(lambda: not _alive(pid_neto)))
 
     def test_neto_morre_com_o_principal_vivo(self):
-        neto = os.path.join(self.raiz, "neto.pid")
+        neto = os.path.join(self.root, "neto.pid")
         ex = self.start("sleep 300 & echo $! > %s; sleep 300" % neto)
-        self.assertTrue(_esperar(lambda: _ler(neto).strip().isdigit()))
-        pid_neto = int(_ler(neto).strip())
-        self.encerrar(ex)
-        self.assertFalse(_vivo(ex.pid))
-        self.assertTrue(_esperar(lambda: not _vivo(pid_neto)))
+        self.assertTrue(_wait(lambda: _read(neto).strip().isdigit()))
+        pid_neto = int(_read(neto).strip())
+        self.stop(ex)
+        self.assertFalse(_alive(ex.pid))
+        self.assertTrue(_wait(lambda: not _alive(pid_neto)))
         self.assertEqual(executor.check(ex), -signal.SIGTERM)
 
     def test_grupo_que_ignora_sigterm_morre_dentro_de_grace_mais_1(self):
-        pronto = os.path.join(self.raiz, "pronto")
+        pronto = os.path.join(self.root, "pronto")
         ex = self.start("trap '' TERM; touch %s; sleep 300 & sleep 300" % pronto)
-        self.assertTrue(_esperar(lambda: os.path.exists(pronto)))
-        duracao = self.encerrar(ex, grace_s=1, prazo=5)
+        self.assertTrue(_wait(lambda: os.path.exists(pronto)))
+        duracao = self.stop(ex, grace_s=1, prazo=5)
         self.assertLess(duracao, 2.0)
         self.assertEqual(ex.phase, executor.PHASE_END)
         self.assertEqual(executor.check(ex), -signal.SIGKILL)
@@ -214,7 +214,7 @@ class TestEncerramento(_Base):
             if time.monotonic() >= limite:
                 executor.request_stop(ex, time.monotonic(), grace_s=1)
             time.sleep(0.02)
-        self.assertTrue(_esperar(lambda: executor.advance_stop(ex, time.monotonic())))
+        self.assertTrue(_wait(lambda: executor.advance_stop(ex, time.monotonic())))
         self.assertEqual(executor.check(ex), -signal.SIGTERM)
 
     def test_avancar_sem_pedido(self):
@@ -231,7 +231,7 @@ class TestEncerramento(_Base):
         self.assertIn("ORFAO_SEM_IDENTIDADE", logs.output[0])
         self.assertTrue(ex.no_identity)
         self.assertTrue(executor.advance_stop(ex, time.monotonic() + 100))
-        self.assertTrue(_vivo(ex.pid), "nenhum sinal enviado")
+        self.assertTrue(_alive(ex.pid), "nenhum sinal enviado")
         with self.assertRaises(RuntimeError):
             executor.clean(ex)
         self.assertTrue(os.path.isdir(ex.work_dir_ticket), "pasta preservada (CR-008, R-26)")
@@ -265,7 +265,7 @@ class TestEncerramento(_Base):
             executor.translate_return(0, "WINDOWS")
 
 
-class TestEstadoLocal(_Base):
+class TestLocalState(_Base):
 
     def test_marcadores_spawn_proc_result(self):
         original = os_platform.start_process
@@ -288,7 +288,7 @@ class TestEstadoLocal(_Base):
         self.assertEqual(proc, {"ticket_id": 3, "pid": ex.pid, "pgid": ex.pid, "process_start": ex.identity,
                                 "exec_user": None})
         self.assertIsNotNone(ex.identity)
-        self.encerrar(ex)
+        self.stop(ex)
         self.assertFalse(os.path.exists(os.path.join(ex.work_dir_ticket, executor.RESULT)))
         executor.record_result(ex, "FAILED", "TIMEOUT", -3)
         self.assertEqual(os_platform.read_state(os.path.join(ex.work_dir_ticket, executor.RESULT)),
@@ -323,7 +323,7 @@ class TestEstadoLocal(_Base):
         self.assertEqual(os.stat(os.path.join(wd, "tmp")).st_mode & 0o777, 0o700)
 
     def test_diretorio_que_e_link_e_preservado(self):
-        fora = os.path.join(self.raiz, "fora")
+        fora = os.path.join(self.root, "fora")
         os.mkdir(fora)
         os.symlink(fora, os.path.join(self.work, "ticket_8"))
         with self.assertRaises(executor.PreservedDirectory):
@@ -335,7 +335,7 @@ class TestEstadoLocal(_Base):
         with self.assertRaises(RuntimeError):
             executor.clean(ex)
         self.assertTrue(os.path.isdir(ex.work_dir_ticket))
-        self.encerrar(ex)
+        self.stop(ex)
         executor.clean(ex)
         self.assertFalse(os.path.exists(ex.work_dir_ticket))
 
@@ -348,10 +348,10 @@ class TestEstadoLocal(_Base):
         self.assertFalse(os.path.exists(wd))
 
 
-class TestFalhasDeSpawn(_Base):
+class TestSpawnFailures(_Base):
 
     def test_falha_no_proc_depois_do_popen_real(self):
-        neto = os.path.join(self.raiz, "neto.pid")
+        neto = os.path.join(self.root, "neto.pid")
         original = os_platform.write_state
 
         def _grava(caminho, dados):
@@ -367,11 +367,11 @@ class TestFalhasDeSpawn(_Base):
         self.assertIn(ex.phase, (executor.PHASE_TERM, executor.PHASE_END), "encerramento ja iniciado")
         self.assertFalse(os.path.exists(os.path.join(ex.work_dir_ticket, executor.PROC)))
         # Acompanhada no mapa local ate o grupo acabar (SIGKILL quando o prazo vence).
-        self.assertTrue(_esperar(lambda: executor.advance_stop(ex, time.monotonic() + 60)))
-        self.assertFalse(_vivo(ex.pid))
-        if _ler(neto).strip().isdigit():
-            self.assertTrue(_esperar(lambda: not _vivo(int(_ler(neto).strip()))))
-        self.assertIn("[SSS] falha ao iniciar: OSError (agente srv-01)", _ler(ex.log_path))
+        self.assertTrue(_wait(lambda: executor.advance_stop(ex, time.monotonic() + 60)))
+        self.assertFalse(_alive(ex.pid))
+        if _read(neto).strip().isdigit():
+            self.assertTrue(_wait(lambda: not _alive(int(_read(neto).strip()))))
+        self.assertIn("[SSS] falha ao iniciar: OSError (agente srv-01)", _read(ex.log_path))
 
     def test_falha_antes_do_spawn_fecha_e_renomeia_o_log(self):
         # Revisao F8.0-F8.2 (M2): falha entre open_log e iniciar (ex.: env_builder).
@@ -383,7 +383,7 @@ class TestFalhasDeSpawn(_Base):
         with self.assertRaises(OSError):
             os.fstat(fd)
         self.assertFalse(os.path.exists(parcial))
-        self.assertEqual(_ler(os.path.join(self.dir_log(), "ticket_42_0.log")),
+        self.assertEqual(_read(os.path.join(self.dir_log(), "ticket_42_0.log")),
                          "[SSS] falha ao iniciar: ValueError (agente srv-01)\n")
 
     def test_excecao_que_nao_e_oserror_vira_spawn_error(self):
@@ -397,7 +397,7 @@ class TestFalhasDeSpawn(_Base):
         self.assertEqual(ex.spawn_error_info, "UnicodeEncodeError")
         final = os.path.join(self.dir_log(), "ticket_12_0.log")
         self.assertEqual(ex.log_path, final)
-        self.assertEqual(_ler(final), "[SSS] falha ao iniciar: UnicodeEncodeError (agente srv-linux-prod-01)\n")
+        self.assertEqual(_read(final), "[SSS] falha ao iniciar: UnicodeEncodeError (agente srv-linux-prod-01)\n")
         self.assertFalse(os.path.exists(os.path.join(self.dir_log(), "ticket_12.log.parcial")))
 
     def test_falha_no_marcador_de_spawn_nao_inicia(self):
@@ -448,7 +448,7 @@ class TestFalhasDeSpawn(_Base):
                                                 entrada=("/srv/sss/input/producao", "carga"))["input"],
                          {"base": "/srv/sss/input/producao", "relativo": "carga"})
         self.assertNotIn("input", executor.build_spec(15, ["/bin/true"], {}, {}, "/srv/exec/sssprd"))
-        base = os.path.join(self.raiz, "input", "dev")
+        base = os.path.join(self.root, "input", "dev")
         wd = executor.prepare_directory(self.work, 16)
         fd, _ = executor.open_log(self.logs, "DEV", "Teste Script", STARTED_AT, 16)
         with mock.patch.object(os_platform, "start_process", side_effect=RuntimeError("parar")), \
@@ -462,7 +462,7 @@ class TestSnapshotV4(_Base):
 
     def setUp(self):
         _Base.setUp(self)
-        self.base = os.path.join(self.raiz, "scripts")
+        self.base = os.path.join(self.root, "scripts")
         os.makedirs(os.path.join(self.base, "faturamento"))
         self.script = os.path.join(self.base, "faturamento", "carga.py")
         with open(self.script, "w") as f:
@@ -483,7 +483,7 @@ class TestSnapshotV4(_Base):
         snap, argv, script_real = pc.validate_snapshot(snap_js, _CfgSnap({"PYTHON3": sys.executable}))
         self.assertEqual(argv, [sys.executable, "-I", script_real, "--data", "2026-10-13"])
         wd = executor.prepare_directory(self.work, 21)
-        cfg = _Cfg(_Agente("srv-01", "C.UTF-8", (), (), None))
+        cfg = _Cfg(_AgentStub("srv-01", "C.UTF-8", (), (), None))
         fd, parcial = executor.open_log(self.logs, "DEV", snap["script_nome"], STARTED_AT, 21, snap["script_id"])
         ticket = {"id": 21, "environment": "DEV", "schedule_id": 5, "parent_ticket_id": None, "priority": 3,
                   "started_at": STARTED_AT, "scheduled_at": STARTED_AT}
@@ -495,7 +495,7 @@ class TestSnapshotV4(_Base):
                                         caminho_log=parcial, timeout_seg=60, hostname="host-dev", versao="t")
         ex = executor.start(21, argv, fd, env, wd, None, None, os_platform.DEFAULT_RLIMITS, "SSS-srv-01-21")
         self.execs.append(ex)
-        self.assertEqual(self.ate_sair(ex), 0, _ler(ex.log_path))
+        self.assertEqual(self.until_exit(ex), 0, _read(ex.log_path))
         cwd = os.path.join(wd, "exec")
         with open(os.path.join(cwd, "saida.json")) as f:
             saida = json.load(f)
@@ -510,10 +510,10 @@ class TestSnapshotV4(_Base):
         self.assertEqual(os.path.join(sss["SSS_LOG_DIR"], sss["SSS_LOG_FILE"]), parcial)
         self.assertEqual(os.path.dirname(ex.log_path), sss["SSS_LOG_DIR"])
         self.assertTrue(ex.log_path.startswith(os.path.join(self.logs, "dev", "carga_faturas", "2026")))
-        self.encerrar(ex)
+        self.stop(ex)
 
 
-class TestFonte(unittest.TestCase):
+class TestSource(unittest.TestCase):
 
     def test_executor_sem_espera_pipe_shell_ou_environ(self):
         with open(executor.__file__, encoding="utf-8") as f:

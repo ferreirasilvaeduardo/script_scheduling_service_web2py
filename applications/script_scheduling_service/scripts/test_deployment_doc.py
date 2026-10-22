@@ -12,23 +12,23 @@ import unittest
 
 _SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 APP = os.path.dirname(_SCRIPTS)
-RAIZ = os.path.dirname(os.path.dirname(APP))
-GUIA = os.path.join(APP, "docs", "DEPLOYMENT.md")
+ROOT = os.path.dirname(os.path.dirname(APP))
+GUIDE = os.path.join(APP, "docs", "DEPLOYMENT.md")
 
 
-def _corpo():
-    with io.open(GUIA, encoding="utf-8") as f:
+def _body():
+    with io.open(GUIDE, encoding="utf-8") as f:
         texto = f.read()
     return texto.split("## Apêndice B.", 1)[0]
 
 
-class TestGuiaDeImplantacao(unittest.TestCase):
+class TestDeploymentGuide(unittest.TestCase):
 
     def test_comandos_citados_existem(self):
-        corpo = _corpo()
+        corpo = _body()
         faltando = []
         for nome in sorted(set(re.findall(r"\bbin/([A-Za-z0-9_.-]+\.sh|sss-helper)\b", corpo))):
-            if not os.path.isfile(os.path.join(RAIZ, "bin", nome)):
+            if not os.path.isfile(os.path.join(ROOT, "bin", nome)):
                 faltando.append("bin/" + nome)
         for nome in sorted(set(re.findall(r"\bscripts/([A-Za-z0-9_]+\.py)\b", corpo))):
             if not os.path.isfile(os.path.join(APP, "scripts", nome)):
@@ -39,7 +39,7 @@ class TestGuiaDeImplantacao(unittest.TestCase):
         self.assertEqual(faltando, [])
 
     def test_referencias_internas_existem(self):
-        corpo = _corpo()
+        corpo = _body()
         secoes = set()
         for titulo in re.findall(r"(?m)^#{2,4} ([0-9]+(?:\.[0-9]+)*)\.? ", corpo):
             secoes.add(titulo)
@@ -54,7 +54,7 @@ class TestGuiaDeImplantacao(unittest.TestCase):
         self.assertEqual(invalidas, [])
 
     def test_sem_procedimento_do_fake_no_corpo(self):
-        corpo = _corpo()
+        corpo = _body()
         for termo in ("SSS_DEV_SEED_PASSWORD", "data_backend = FAKE", "skipped=23"):
             self.assertNotIn(termo, corpo)
 

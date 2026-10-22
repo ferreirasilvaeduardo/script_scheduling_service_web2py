@@ -26,14 +26,14 @@ import zipfile
 APP = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUN_SCHEDULER = os.path.join(APP, "scripts", "run_scheduler.py")
 N_TICKETS = 10
-TETO = 2
-MARCA_LONGO = 3017  # sleep exclusivo do script longo, para achar orfaos pelo argv
+CAP = 2
+LONG_MARK = 3017  # sleep exclusivo do script longo, para achar orfaos pelo argv
 
 
-class _DoisAgentesBase(unittest.TestCase):
+class _TwoAgentsBase(unittest.TestCase):
     """Fixture de dois agentes reais (F8.3d, reaproveitada no F8.4e por test_ha_agentes_reais)."""
 
-    PREFIXO_AGENTE = "tst-f83d"
+    AGENT_PREFIX = "tst-f83d"
     CONFIG_EXTRA = {}
 
     @classmethod
@@ -42,7 +42,7 @@ class _DoisAgentesBase(unittest.TestCase):
         from _oracle_test_support import prepare_disposable_schema
         prepare_disposable_schema("agent")
         cls.trc = trc
-        cls.contrato = trc._OracleContrato
+        cls.contrato = trc._OracleContract
         cls.contrato.setUpClass.__func__(cls)
 
     @classmethod
@@ -52,63 +52,63 @@ class _DoisAgentesBase(unittest.TestCase):
     def obter_repo(self, nome):
         return self.contrato.obter_repo(self, nome)
 
-    def _limpar_massa(self):
-        return self.contrato._limpar_massa(self)
+    def _clean_fixtures(self):
+        return self.contrato._clean_fixtures(self)
 
     # ------------------------------------------------------------------ fixture
 
     def setUp(self):
         self.contrato.setUp(self)
-        self.raiz = os.path.realpath(tempfile.mkdtemp(prefix="sss_f83d_"))
-        self.addCleanup(shutil.rmtree, self.raiz, True)
-        self.processos = []
-        self.perfil = None
-        self._massa = self.trc._Massa(self.obter_repo)
+        self.root = os.path.realpath(tempfile.mkdtemp(prefix="sss_f83d_"))
+        self.addCleanup(shutil.rmtree, self.root, True)
+        self.processes = []
+        self.profile = None
+        self._fixtures = self.trc._Fixtures(self.obter_repo)
         self.agents = []
         # Uma limpeza so, mesmo com falha no meio: agentes parados antes de apagar qualquer cadastro.
-        self.addCleanup(self._limpar_tudo)
-        m = self._massa
-        self.amb = m.ambiente("C")
-        scripts_dir = os.path.join(self.raiz, "scripts")
+        self.addCleanup(self._clean_all)
+        m = self._fixtures
+        self.amb = m.environment("C")
+        scripts_dir = os.path.join(self.root, "scripts")
         os.mkdir(scripts_dir, 0o755)
-        self.execucoes = os.path.join(self.raiz, "execucoes.txt")
-        curto = self._arquivo(scripts_dir, "curto.sh",
+        self.execucoes = os.path.join(self.root, "execucoes.txt")
+        curto = self._file(scripts_dir, "curto.sh",
                               "echo \"$SSS_TICKET_ID $SSS_AGENT_ID\" >> %s\n"
                               "echo \"ticket $SSS_TICKET_ID\" > \"$SSS_OUTPUT_DIR/resultado.txt\"\n"
                               "sleep 2\necho fim\n" % self.execucoes)
-        longo = self._arquivo(scripts_dir, "longo.sh", "echo inicio\nsleep %d\n" % MARCA_LONGO)
-        self.scr = m.script("curto", path_file=curto, max_parallel_env=TETO)
+        longo = self._file(scripts_dir, "longo.sh", "echo inicio\nsleep %d\n" % LONG_MARK)
+        self.scr = m.script("curto", path_file=curto, max_parallel_env=CAP)
         self.scr_longo = m.script("longo", path_file=longo, max_parallel_env=1)
         cat, rbac = self.obter_repo("catalog"), self.obter_repo("rbac")
         for s in (self.scr, self.scr_longo):
-            cat.homologation_save(s["id"], [self.amb["id"]], ator=m.ator)
-        self.perfil = perfil = m.perfil("P")
+            cat.homologation_save(s["id"], [self.amb["id"]], ator=m.actor)
+        self.profile = perfil = m.profile("P")
         funcs = [f["id"] for f in rbac.features_list() if f["code"] in ("EXEC_SCRIPT", "VIEW_LOGS", "CANCEL_TICKET")]
-        rbac.matrix_save(perfil["id"], funcs, [self.amb["id"]], [self.scr["id"], self.scr_longo["id"]], ator=m.ator)
+        rbac.matrix_save(perfil["id"], funcs, [self.amb["id"]], [self.scr["id"], self.scr_longo["id"]], ator=m.actor)
         self.login = m.usuario(perfil["id"], "u")["login"]
-        self.usuario_id = [u for u in m.criados["users"]][-1]
-        self.agents = ["%s-%s-a" % (self.PREFIXO_AGENTE, m.suf), "%s-%s-b" % (self.PREFIXO_AGENTE, m.suf)]
+        self.usuario_id = [u for u in m.created["users"]][-1]
+        self.agents = ["%s-%s-a" % (self.AGENT_PREFIX, m.suf), "%s-%s-b" % (self.AGENT_PREFIX, m.suf)]
 
     def tearDown(self):
-        pass  # a limpeza e o _limpar_tudo (addCleanup), depois de derrubar os agentes
+        pass  # a limpeza e o _clean_all (addCleanup), depois de derrubar os agentes
 
-    def _limpar_tudo(self):
-        self._derrubar_agentes()
-        self._limpar_agentes()
-        m = self._massa
+    def _clean_all(self):
+        self._kill_agents()
+        self._clean_agents()
+        m = self._fixtures
         cat, rbac = self.obter_repo("catalog"), self.obter_repo("rbac")
-        if self.perfil is not None:
-            rbac.matrix_save(self.perfil["id"], [], [], [], ator=m.ator)
-        for sid in m.criados["scripts"]:
-            cat.homologation_save(sid, [], ator=m.ator)
+        if self.profile is not None:
+            rbac.matrix_save(self.profile["id"], [], [], [], ator=m.actor)
+        for sid in m.created["scripts"]:
+            cat.homologation_save(sid, [], ator=m.actor)
         # Tickets gerados pelo desdobro das regras da fixture (F8.4e) entram na limpeza antes do usuario.
-        for rid in m.criados["schedules"]:
-            for (tid,) in self._consulta("SELECT id FROM {tck} WHERE schedule_id = :r", r=rid):
-                if tid not in m.criados["tickets"]:
-                    m.anotar("tickets", tid)
-        self._limpar_massa()
+        for rid in m.created["schedules"]:
+            for (tid,) in self._query("SELECT id FROM {tck} WHERE schedule_id = :r", r=rid):
+                if tid not in m.created["tickets"]:
+                    m.note("tickets", tid)
+        self._clean_fixtures()
 
-    def _arquivo(self, pasta, nome, corpo):
+    def _file(self, pasta, nome, corpo):
         caminho = os.path.join(pasta, nome)
         with open(caminho, "w") as f:
             f.write(corpo)
@@ -124,10 +124,10 @@ class _DoisAgentesBase(unittest.TestCase):
         tid = self.obter_repo("tickets").create({
             "script_id": scr["id"], "environment": self.amb["name"], "requested_by": self.login, "status": "PENDING",
             "priority": 2, "submitted_params": self._snapshot(scr)}, [], ator=self.login)
-        return self._massa.anotar("tickets", tid)
+        return self._fixtures.note("tickets", tid)
 
     def _config(self, agente):
-        base = os.path.join(self.raiz, agente)
+        base = os.path.join(self.root, agente)
         pastas = dict((n, os.path.join(base, n)) for n in ("work", "logs", "output", "input"))
         for p in pastas.values():
             os.makedirs(p, 0o750, exist_ok=True)
@@ -146,27 +146,27 @@ class _DoisAgentesBase(unittest.TestCase):
             cp.write(f)
         return caminho, pastas
 
-    def _subir(self, agente):
+    def _start_agent(self, agente):
         caminho, pastas = self._config(agente)
-        saida = open(os.path.join(self.raiz, agente + ".out"), "w")
+        saida = open(os.path.join(self.root, agente + ".out"), "w")
         self.addCleanup(saida.close)
         p = subprocess.Popen([sys.executable, RUN_SCHEDULER, "--config", caminho], cwd=APP, stdout=saida,
                              stderr=subprocess.STDOUT, start_new_session=True)
-        self.processos.append((agente, p, pastas))
+        self.processes.append((agente, p, pastas))
         return p, pastas
 
-    def _derrubar_agentes(self):
-        for agente, p, pastas in self.processos:
+    def _kill_agents(self):
+        for agente, p, pastas in self.processes:
             if p.poll() is None:
                 open(os.path.join(pastas["work"], "sss-%s.stop" % agente), "w").close()
-        for agente, p, _pastas in self.processos:
+        for agente, p, _pastas in self.processes:
             try:
                 p.wait(60)
             except subprocess.TimeoutExpired:
                 os.killpg(p.pid, 9)
                 p.wait(10)
 
-    def _limpar_agentes(self):
+    def _clean_agents(self):
         """Linhas de tbsss_agents dos agentes de teste e a auditoria deles (AGENT_START/AGENT_STOP)."""
         cat = self.obter_repo("catalog")
         conn = cat._obter_conexao()
@@ -184,7 +184,7 @@ class _DoisAgentesBase(unittest.TestCase):
 
     # ------------------------------------------------------------------ leituras
 
-    def _consulta(self, sql, **binds):
+    def _query(self, sql, **binds):
         cat = self.obter_repo("catalog")
         conn = cat._obter_conexao()
         try:
@@ -196,16 +196,16 @@ class _DoisAgentesBase(unittest.TestCase):
             conn.close()
 
     def _tickets(self, ids):
-        linhas = self._consulta("SELECT id, status, status_reason, return_code, agent_id, process_id FROM {tck}"
+        linhas = self._query("SELECT id, status, status_reason, return_code, agent_id, process_id FROM {tck}"
                                 " WHERE script_id IN (:a, :b)", a=self.scr["id"], b=self.scr_longo["id"])
         return dict((r[0], r[1:]) for r in linhas if r[0] in ids)
 
-    def _pastas_de_saida(self, ids):
+    def _output_dirs(self, ids):
         nomes = set("ticket_%d" % t for t in ids)
-        return [os.path.join(r, d) for _a, _p, pastas in self.processos
+        return [os.path.join(r, d) for _a, _p, pastas in self.processes
                 for r, ds, _arqs in os.walk(pastas["output"]) for d in ds if d in nomes]
 
-    def _esperar(self, condicao, prazo, passo=0.2):
+    def _wait(self, condicao, prazo, passo=0.2):
         limite = time.monotonic() + prazo
         while time.monotonic() < limite:
             if condicao():
@@ -215,29 +215,29 @@ class _DoisAgentesBase(unittest.TestCase):
 
 
 @unittest.skipUnless(os.environ.get("SSS_TEST_ORACLE") == "1", "Testes Oracle reais desligados (SSS_TEST_ORACLE=1)")
-class TestConcorrenciaDoisAgentes(_DoisAgentesBase):
+class TestTwoAgentsConcurrency(_TwoAgentsBase):
 
     def test_dois_agentes_teto_saida_cancelamento_e_parada(self):
         curtos = [self._ticket(self.scr) for _i in range(N_TICKETS)]
         longo = self._ticket(self.scr_longo)
         for agente in self.agents:
-            self._subir(agente)
+            self._start_agent(agente)
 
         # 1. Teto entre agentes: polling no banco ate todos os curtos terminarem.
         max_running = 0
         limite = time.monotonic() + 180
         while time.monotonic() < limite:
-            rodando = self._consulta("SELECT COUNT(*) FROM {tck} WHERE script_id = :s AND status = 'RUNNING'",
+            rodando = self._query("SELECT COUNT(*) FROM {tck} WHERE script_id = :s AND status = 'RUNNING'",
                                      s=self.scr["id"])[0][0]
             max_running = max(max_running, rodando)
             estado = self._tickets(set(curtos))
             if all(e[0] in ("SUCCESS", "FAILED", "CANCELLED") for e in estado.values()):
                 break
-            for agente, p, _pastas in self.processos:
+            for agente, p, _pastas in self.processes:
                 self.assertIsNone(p.poll(), "agente %s caiu (codigo %s)" % (agente, p.poll()))
             time.sleep(0.2)
         estado = self._tickets(set(curtos))
-        self.assertLessEqual(max_running, TETO, "teto de %d respeitado entre os dois agentes" % TETO)
+        self.assertLessEqual(max_running, CAP, "teto de %d respeitado entre os dois agentes" % CAP)
         self.assertEqual(sorted(e[:3] for e in estado.values()), [("SUCCESS", "EXIT_OK", 0)] * N_TICKETS)
         donos = dict((tid, e[3]) for tid, e in estado.items())
         self.assertTrue(set(donos.values()) <= set(self.agents))
@@ -251,7 +251,7 @@ class TestConcorrenciaDoisAgentes(_DoisAgentesBase):
         print("\n[F8.3d] distribuicao: %s; maximo RUNNING simultaneos: %d" % (distribuicao, max_running))
 
         # 3. Saida (CR-012): DISPONIVEL para cada ticket, com o zip do proprio ticket e a pasta removida.
-        self.assertTrue(self._esperar(lambda: len(self._consulta(
+        self.assertTrue(self._wait(lambda: len(self._query(
             "SELECT ticket_id FROM {sai} WHERE ticket_id IN (%s) AND state = 'AVAILABLE'"
             % ", ".join(str(t) for t in curtos))) == N_TICKETS, 60), "saidas DISPONIVEL")
         tickets = self.obter_repo("tickets")
@@ -260,42 +260,42 @@ class TestConcorrenciaDoisAgentes(_DoisAgentesBase):
             self.assertEqual((meta["agent_id"], meta["file_count"]), (donos[tid], 1))
             dados = tickets.output_read(tid, 0, meta["size_bytes"])
             self.assertEqual(zipfile.ZipFile(io.BytesIO(dados)).read("resultado.txt"), b"ticket %d\n" % tid)
-        self.assertEqual(self._pastas_de_saida(set(curtos)), [], "pastas de saida dos curtos removidas")
+        self.assertEqual(self._output_dirs(set(curtos)), [], "pastas de saida dos curtos removidas")
 
         # 4. Cancelamento pela web: o agente dono encerra o ticket longo.
-        self.assertTrue(self._esperar(lambda: (self._tickets({longo}).get(longo) or ("",))[0] == "RUNNING"
+        self.assertTrue(self._wait(lambda: (self._tickets({longo}).get(longo) or ("",))[0] == "RUNNING"
                                       and self._tickets({longo})[longo][4] is not None, 60), "longo RUNNING com PID")
         dono_longo = self._tickets({longo})[longo][3]
         self.assertIn(tickets.request_cancel(longo, self.login, "127.0.0.1"), ("SINALIZADO", "CANCELADO"))
-        self.assertTrue(self._esperar(lambda: self._tickets({longo})[longo][0] == "CANCELLED", 60), "cancelado")
+        self.assertTrue(self._wait(lambda: self._tickets({longo})[longo][0] == "CANCELLED", 60), "cancelado")
         self.assertEqual(self._tickets({longo})[longo][1:4], ("CANCEL_USER", -1, dono_longo))
         # A saida do longo ficou vazia: nada gravado e a pasta removida (README §8.13).
-        self.assertTrue(self._esperar(lambda: self._pastas_de_saida({longo}) == [], 30), "pasta vazia removida")
+        self.assertTrue(self._wait(lambda: self._output_dirs({longo}) == [], 30), "pasta vazia removida")
         self.assertIsNone(tickets.output_get(longo))
 
         # 5. Heartbeat e configuracao critica iguais nos dois agentes ativos.
-        agentes = self._consulta("SELECT code, status, heartbeat_at, critical_config FROM {agt}"
+        agentes = self._query("SELECT code, status, heartbeat_at, critical_config FROM {agt}"
                                  " WHERE code IN (:a, :b)", a=self.agents[0], b=self.agents[1])
         self.assertEqual(sorted((r[0], r[1]) for r in agentes), [(a, "ACTIVE") for a in sorted(self.agents)])
-        agora = self._consulta("SELECT SYSDATE FROM DUAL")[0][0]
+        agora = self._query("SELECT SYSDATE FROM DUAL")[0][0]
         for codigo, _st, hb, _cc in agentes:
             self.assertLess((agora - hb).total_seconds(), 60, "heartbeat recente de %s" % codigo)
         self.assertEqual(len(set(r[3] for r in agentes)), 1)
 
         # 6. Parada pelo .stop: os dois saem com 0 e ficam PARADO.
-        for agente, _p, pastas in self.processos:
+        for agente, _p, pastas in self.processes:
             open(os.path.join(pastas["work"], "sss-%s.stop" % agente), "w").close()
-        for agente, p, _pastas in self.processos:
+        for agente, p, _pastas in self.processes:
             self.assertEqual(p.wait(60), 0, "saida de %s" % agente)
-        parados = self._consulta("SELECT code, status FROM {agt} WHERE code IN (:a, :b)",
+        parados = self._query("SELECT code, status FROM {agt} WHERE code IN (:a, :b)",
                                  a=self.agents[0], b=self.agents[1])
         self.assertEqual(sorted(parados), [(a, "STOPPED") for a in sorted(self.agents)])
 
         # 7. Nenhum processo orfao dos scripts do teste.
         ps = subprocess.run(["ps", "-eo", "args"], stdout=subprocess.PIPE).stdout.decode("utf-8", "replace")
         linhas = ps.splitlines()
-        self.assertEqual([l for l in linhas if l.strip() == "sleep %d" % MARCA_LONGO], [], "orfao do script longo")
-        self.assertEqual([l for l in linhas if self.raiz in l and "run_scheduler" in l], [], "agente vivo")
+        self.assertEqual([l for l in linhas if l.strip() == "sleep %d" % LONG_MARK], [], "orfao do script longo")
+        self.assertEqual([l for l in linhas if self.root in l and "run_scheduler" in l], [], "agente vivo")
 
 
 if __name__ == "__main__":

@@ -20,10 +20,10 @@ from schedules_service import SchedulesService
 from ticket_service import TicketService
 
 IP = "10.9.8.7"
-SESSAO_ADMIN = {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0}
+ADMIN_SESSION = {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0}
 
 
-class TestRegistroNosServicos(unittest.TestCase):
+class TestRecordInServices(unittest.TestCase):
 
     def setUp(self):
         patcher = mock.patch.object(security, "ITERATIONS", 1000)
@@ -42,10 +42,10 @@ class TestRegistroNosServicos(unittest.TestCase):
         r = repo_factory.get
         self.r = r
         auth = auth_service.AuthService(r("users"), r("rbac"), r("catalog"), r("audit"), 5, 900, log)
-        self.ctx = auth.revalidate(SESSAO_ADMIN)
+        self.ctx = auth.revalidate(ADMIN_SESSION)
         tickets = r("tickets")
         self.ticket = TicketService(catalogo=r("catalog"), tickets=tickets, log=log)
-        self.servicos = {
+        self.services = {
             "environments": (AdminEnvironmentsService(r("catalog"), r("schedules"), log), 1,
                           lambda: r("catalog").environments_get(1)),
             "profiles": (AdminProfilesService(r("rbac"), r("catalog"), r("users"), log), 2,
@@ -61,7 +61,7 @@ class TestRegistroNosServicos(unittest.TestCase):
                                                 tickets.now, 1461, log)
 
     def test_formularios_de_inclusao_sem_registro_e_de_edicao_com_as_quatro_colunas(self):
-        for nome, (svc, rid, ler) in self.servicos.items():
+        for nome, (svc, rid, ler) in self.services.items():
             self.assertIsNone(svc.form(self.ctx)["registro"], nome)
             self.assertEqual(svc.form(self.ctx, str(rid))["registro"], ui_helpers.registro(ler(), self.ctx), nome)
             self.assertEqual(svc.form(self.ctx, str(rid))["registro"]["created_by"], "SYSTEM:seed", nome)
@@ -77,7 +77,7 @@ class TestRegistroNosServicos(unittest.TestCase):
             registro["created_by"] = "editor.privado"
             registro["updated_by"] = "op.prod"
             registro["updated_at"] = store.now()
-        for nome, (svc, rid, ler) in self.servicos.items():
+        for nome, (svc, rid, ler) in self.services.items():
             registro = svc.form(ctx, str(rid))["registro"]
             self.assertEqual((registro["created_by"], registro["updated_by"]),
                              (u"outra pessoa", u"você"), nome)
@@ -89,7 +89,7 @@ class TestRegistroNosServicos(unittest.TestCase):
         self.assertNotIn("editor.privado", str(detalhe["registro"]))
 
     def test_edicao_pela_tela_grava_o_editor(self):
-        svc, rid, ler = self.servicos["environments"]
+        svc, rid, ler = self.services["environments"]
         form = svc.form(self.ctx, str(rid))
         _id, erros = svc.save(self.ctx, IP, str(rid), {"description": "Editada", "connection": form["connection"],
                                                          "version": form["version"]})

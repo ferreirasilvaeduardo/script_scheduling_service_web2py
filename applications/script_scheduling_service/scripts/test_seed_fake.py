@@ -12,13 +12,13 @@ import recurrence
 import repo_factory
 
 # README §4.3.D, texto exato.
-CATALOGO = {
+CATALOG = {
     "EXEC_SCRIPT": u"Disparar Scripts", "VIEW_LOGS": u"Consultar Logs", "CANCEL_TICKET": u"Cancelar Tickets",
     "MANAGE_USERS": u"Gestão de Usuários", "MANAGE_PROFILES": u"Gestão de Perfis", "MANAGE_ENVIRONMENTS": u"Gestão de Ambientes",
     "MANAGE_SCRIPTS": u"Gestão de Scripts", "MANAGE_PARAMETERS": u"Dicionário de Parâmetros",
     "MANAGE_SCHEDULES": u"Regras de Agendamento", "VIEW_AUDIT": u"Auditoria",
 }
-_PALAVRAS_CREDENCIAL = ("senha", "password", "token", "chave", "api", "secret", "credencial")
+_CREDENTIAL_WORDS = ("senha", "password", "token", "chave", "api", "secret", "credencial")
 
 
 class TestSeedFake(unittest.TestCase):
@@ -37,12 +37,12 @@ class TestSeedFake(unittest.TestCase):
 
     def test_funcionalidades_com_os_nomes_do_readme(self):
         nomes = dict((f["code"], f["name"]) for f in self.store.features.values())
-        self.assertEqual(nomes, CATALOGO)
+        self.assertEqual(nomes, CATALOG)
 
     def test_nenhum_parametro_de_credencial(self):
         for p in self.store.parameters.values():
             texto = (p["code"] + " " + (p.get("label") or "") + " " + (p.get("param_flag") or "")).lower()
-            for palavra in _PALAVRAS_CREDENCIAL:
+            for palavra in _CREDENTIAL_WORDS:
                 self.assertNotIn(palavra, texto, p["code"])
 
     def test_prioridade_1_so_para_admin_e_created_at_nunca_no_futuro(self):
@@ -82,7 +82,7 @@ class TestSeedFake(unittest.TestCase):
         self.assertEqual(ctl["schema_version"], sql_ident.SCHEMA_VERSION)
 
 
-class TestSeedColunasRegistro(unittest.TestCase):
+class TestSeedRecordColumns(unittest.TestCase):
     """Colunas de registro do seed coerentes com o README §10 e §2.5 (CR-006)."""
 
     setUp = TestSeedFake.setUp

@@ -12,7 +12,7 @@ from unittest import mock
 import log_paths
 
 
-class TestPastasLog(unittest.TestCase):
+class TestLogDirs(unittest.TestCase):
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="sss_test_plog_")
@@ -233,14 +233,14 @@ class TestPastasLog(unittest.TestCase):
     # Retencao dos logs de execucao (purge.py, README §11.3; CR-007 R-32; CR-009)
     # -----------------------------------------------------------------------
 
-    def _minuto_exec(self, rel):
+    def _run_minute(self, rel):
         pasta = os.path.join(self.tmp, *rel.split("/"))
         os.makedirs(pasta)
         return pasta
 
     def test_retencao_execucao_referencia_date_ou_datetime(self):
-        limite = self._minuto_exec("prod/carga/2026/09/21/23/59")  # exatamente ref - 30 dias: fica
-        velha = self._minuto_exec("prod/carga/2026/09/20/23/59")
+        limite = self._run_minute("prod/carga/2026/09/21/23/59")  # exatamente ref - 30 dias: fica
+        velha = self._run_minute("prod/carga/2026/09/20/23/59")
         for ref in (datetime.date(2026, 10, 21), datetime.datetime(2026, 10, 21, 0, 0, 1)):
             elegiveis = log_paths.clean_run_retention(self.tmp, 30, ref, dry_run=True)
             self.assertEqual(elegiveis, [velha], ref)
@@ -249,8 +249,8 @@ class TestPastasLog(unittest.TestCase):
         self.assertTrue(os.path.isdir(limite))
 
     def test_retencao_execucao_mantem_running_e_interno(self):
-        running = self._minuto_exec("prod/carga/2026/01/01/10/00")
-        internal = self._minuto_exec("internal/app/2026/01/01/10/00")
+        running = self._run_minute("prod/carga/2026/01/01/10/00")
+        internal = self._run_minute("internal/app/2026/01/01/10/00")
         falhas = []
         removidas = log_paths.clean_run_retention(self.tmp, 30, datetime.date(2026, 10, 21),
                                                         manter=[running + os.sep], falhas=falhas)

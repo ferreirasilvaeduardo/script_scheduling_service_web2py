@@ -17,11 +17,11 @@ import path_guard
 from params_compiler import ParamError, SnapshotError
 
 # UID fictício do agente: o dono dos arquivos de teste é o usuário do teste (CR-007, R-15).
-AGENTE_FALSO = 2 ** 31 - 3
+FAKE_AGENT = 2 ** 31 - 3
 
-AGORA = datetime.datetime(2026, 10, 13, 10, 47, 0, 123456)
-CfgAgente = collections.namedtuple("CfgAgente", ["interpreters"])
-CHAVES_6_5 = {"version", "script_id", "script_nome", "interpreter", "path_file", "param_type", "args",
+NOW = datetime.datetime(2026, 10, 13, 10, 47, 0, 123456)
+AgentCfg = collections.namedtuple("CfgAgente", ["interpreters"])
+KEYS_6_5 = {"version", "script_id", "script_nome", "interpreter", "path_file", "param_type", "args",
               "respostas", "sensiveis", "compilado_em"}
 EXE_PY = "/usr/bin/python3"
 
@@ -42,9 +42,9 @@ def script(tipo_param="NAMED", interpreter="PYTHON3"):
 REAL = "/opt/automacoes/scripts/faturamento/carga_faturas.py"
 
 
-class TestValidarValor(unittest.TestCase):
+class TestValidateValue(unittest.TestCase):
 
-    def _erro(self, p, valor):
+    def _error(self, p, valor):
         with self.assertRaises(ParamError) as ctx:
             pc.validate_value(p, valor)
         self.assertEqual(ctx.exception.codigo_param, p["code"])
@@ -56,31 +56,31 @@ class TestValidarValor(unittest.TestCase):
     def test_nul_e_controle(self):
         for valor in ("a\x00b", "a\x1bb", "a\x7fb", "a\nb", "a\tb", "\x01"):
             with self.subTest(valor=repr(valor)):
-                self._erro(prm("t"), valor)
+                self._error(prm("t"), valor)
 
     def test_strip_antes_de_controle_e_tamanho(self):
         # CR-003 P5 (README §6.2): strip primeiro; controle so nas pontas nao rejeita.
         self.assertEqual(pc.validate_value(prm("t"), "\tabc\n"), "abc")
         self.assertEqual(len(pc.validate_value(prm("t"), "x" * 500 + "  ")), 500)
-        self._erro(prm("t"), "\ta\tb\n")
+        self._error(prm("t"), "\ta\tb\n")
 
     def test_tamanho(self):
         self.assertEqual(len(pc.validate_value(prm("t"), "x" * 500)), 500)
-        self._erro(prm("t"), "x" * 501)
+        self._error(prm("t"), "x" * 501)
 
     def test_tipo_nao_str(self):
-        self._erro(prm("t"), 10)
-        self._erro(prm("n", "NUMBER"), 10)
+        self._error(prm("t"), 10)
+        self._error(prm("n", "NUMBER"), 10)
 
     def test_text_regex_fullmatch(self):
         p = prm("f", regex=r"[0-9]{4}")
         self.assertEqual(pc.validate_value(p, "0001"), "0001")
         # search casaria; fullmatch nao.
-        self._erro(p, "00012")
-        self._erro(p, "x0001")
+        self._error(p, "00012")
+        self._error(p, "x0001")
 
     def test_text_regex_mal_configurada(self):
-        self._erro(prm("f", regex=r"([0-9]"), "1")
+        self._error(prm("f", regex=r"([0-9]"), "1")
 
     def test_number(self):
         p = prm("n", "NUMBER")
@@ -88,7 +88,7 @@ class TestValidarValor(unittest.TestCase):
             self.assertEqual(pc.validate_value(p, ok), ok)
         for ruim in ("1e3", "1.1234567", "1234567890123456789", "+1", "1.", ".5", "abc", "1,5"):
             with self.subTest(valor=ruim):
-                self._erro(p, ruim)
+                self._error(p, ruim)
 
     def test_date(self):
         p = prm("d", "DATE")
@@ -96,19 +96,19 @@ class TestValidarValor(unittest.TestCase):
         self.assertEqual(pc.validate_value(p, "2026-1-5"), "2026-01-05")
         for ruim in ("2026-02-30", "13/10/2026", "2026-10-13 10:00", "x"):
             with self.subTest(valor=ruim):
-                self._erro(p, ruim)
+                self._error(p, ruim)
 
     def test_select(self):
         p = prm("s", "SELECT", opcoes='{"CSV": "Arquivo CSV", "JSON": "Arquivo JSON"}')
         self.assertEqual(pc.validate_value(p, "CSV"), "CSV")
-        self._erro(p, "XML")
-        self._erro(p, "Arquivo CSV")
-        self._erro(p, "csv")
+        self._error(p, "XML")
+        self._error(p, "Arquivo CSV")
+        self._error(p, "csv")
 
     def test_select_opcoes_json_invalido(self):
         for opcoes in ("{nao json", '["CSV"]', "{}", None, '"CSV"'):
             with self.subTest(opcoes=opcoes):
-                e = self._erro(prm("s", "SELECT", opcoes=opcoes), "CSV")
+                e = self._error(prm("s", "SELECT", opcoes=opcoes), "CSV")
                 self.assertIn("administrador", e.mensagem)
 
     def test_checkbox(self):
@@ -118,21 +118,21 @@ class TestValidarValor(unittest.TestCase):
             self.assertIs(pc.validate_value(p, valor), esperado)
         for ruim in ("sim", "yes", "2", 1):
             with self.subTest(valor=ruim):
-                self._erro(p, ruim)
+                self._error(p, ruim)
 
     def test_tipo_componente_desconhecido(self):
-        self._erro(prm("x", "FILE"), "a")
+        self._error(prm("x", "FILE"), "a")
 
     def test_sensivel_nao_ecoa_valor(self):
         segredo = "Segr3d0-Muito-Secreto"
         for p in (prm("k", regex=r"[a-z]+", sensivel="Y"), prm("k", "NUMBER", sensivel="Y"),
                   prm("k", "SELECT", opcoes='{"A":"a"}', sensivel="Y")):
-            e = self._erro(p, segredo)
+            e = self._error(p, segredo)
             self.assertNotIn(segredo, e.mensagem)
             self.assertNotIn(segredo, str(e))
 
 
-class TestRegexCadastro(unittest.TestCase):
+class TestRegistrationRegex(unittest.TestCase):
 
     def test_validas(self):
         for padrao in (r"^[0-9]{4}$", r"[A-Z]{2}-\d+", r"(abc)?x+"):
@@ -181,7 +181,7 @@ class TestRegexCadastro(unittest.TestCase):
         self.assertEqual(pc.validate_value(dict(prm_s, sensitive="N"), "abc"), "abc")
 
 
-class TestCadastroOpcoesEFlag(unittest.TestCase):
+class TestRegistrationOptionsAndFlag(unittest.TestCase):
 
     def test_opcoes_validas_preservam_ordem_e_normalizam(self):
         self.assertEqual(pc.validate_registry_options(' { "Z": " Último ", "A": "Primeiro" } '),
@@ -208,7 +208,7 @@ class TestCadastroOpcoesEFlag(unittest.TestCase):
                 pc.validate_flag(ruim)
 
 
-class TestPrecedencia(unittest.TestCase):
+class TestPrecedence(unittest.TestCase):
 
     def test_ordem_de_precedencia(self):
         v = [prm("a", ordem=1, padrao_sub="sub", padrao="glob")]
@@ -250,12 +250,12 @@ class TestPrecedencia(unittest.TestCase):
         self.assertEqual(list(pc.resolve_answers(v, {}).keys()), ["a", "m", "z"])
 
 
-class TestMontarArgs(unittest.TestCase):
+class TestBuildArgs(unittest.TestCase):
 
     def _args(self, tipo_param, vinculos, respostas):
         return pc.build_args(tipo_param, vinculos, pc.resolve_answers(vinculos, respostas))
 
-    def _erro(self, tipo_param, vinculos, respostas):
+    def _error(self, tipo_param, vinculos, respostas):
         with self.assertRaises(ParamError) as ctx:
             self._args(tipo_param, vinculos, respostas)
         return ctx.exception
@@ -272,7 +272,7 @@ class TestMontarArgs(unittest.TestCase):
     def test_nomeado_curta_valor_com_hifen_rejeitado(self):
         for tipo, valor in (("NUMBER", "-5"), ("TEXT", "-rf")):
             with self.subTest(tipo=tipo):
-                e = self._erro("NAMED", [prm("n", tipo, ordem=1, flag="-n")], {"n": valor})
+                e = self._error("NAMED", [prm("n", tipo, ordem=1, flag="-n")], {"n": valor})
                 self.assertEqual(e.codigo_param, "n")
                 self.assertNotIn(valor, e.mensagem)
 
@@ -287,7 +287,7 @@ class TestMontarArgs(unittest.TestCase):
         self.assertEqual(self._args("NAMED", v, {"b": "x"}), ["--b", "x"])
 
     def test_nomeado_sem_flag(self):
-        e = self._erro("NAMED", [prm("a", ordem=1)], {"a": "x"})
+        e = self._error("NAMED", [prm("a", ordem=1)], {"a": "x"})
         self.assertEqual(e.codigo_param, "a")
 
     def test_sequencial(self):
@@ -304,21 +304,21 @@ class TestMontarArgs(unittest.TestCase):
         for tipo, valor in (("TEXT", "-x"), ("SELECT", "-A")):
             with self.subTest(tipo=tipo):
                 p = prm("t", tipo, ordem=1, opcoes='{"-A": "a"}')
-                e = self._erro("POSITIONAL", [p], {"t": valor})
+                e = self._error("POSITIONAL", [p], {"t": valor})
                 self.assertEqual(e.codigo_param, "t")
         self.assertEqual(self._args("POSITIONAL", [prm("n", "NUMBER", ordem=1)], {"n": "-1.5"}), ["-1.5"])
 
     def test_nenhum(self):
         self.assertEqual(pc.build_args("NONE", [], collections.OrderedDict()), [])
-        e = self._erro("NONE", [prm("a", ordem=1)], {"a": "x"})
+        e = self._error("NONE", [prm("a", ordem=1)], {"a": "x"})
         self.assertIsNone(e.codigo_param)
 
     def test_tipo_param_desconhecido(self):
-        e = self._erro("OUTRO", [prm("a", ordem=1)], {"a": "x"})
+        e = self._error("OUTRO", [prm("a", ordem=1)], {"a": "x"})
         self.assertIsNone(e.codigo_param)
 
 
-class TestMontarArgvAgente(unittest.TestCase):
+class TestBuildAgentArgv(unittest.TestCase):
 
     def test_interpretadores(self):
         self.assertEqual(pc.build_agent_argv("PYTHON3", EXE_PY, "/b/s.py", ["a"]), [EXE_PY, "-I", "/b/s.py", "a"])
@@ -332,7 +332,7 @@ class TestMontarArgvAgente(unittest.TestCase):
                 pc.build_agent_argv(interp, "/x", "/b/s", [])
 
 
-class TestCompilarSnapshot(unittest.TestCase):
+class TestCompileSnapshot(unittest.TestCase):
 
     def _links(self):
         return [prm("data_ref", "DATE", ordem=1, obrigatorio="Y", flag="--data"),
@@ -340,7 +340,7 @@ class TestCompilarSnapshot(unittest.TestCase):
                 prm("modo", "SELECT", ordem=3, flag="--modo", opcoes='{"A":"Ação","B":"Bê"}', padrao="A")]
 
     def test_formato_6_5(self):
-        js, resolvidos, erros = pc.compile_snapshot(script(), self._links()[:1], {"data_ref": "2026-10-13"}, AGORA)
+        js, resolvidos, erros = pc.compile_snapshot(script(), self._links()[:1], {"data_ref": "2026-10-13"}, NOW)
         self.assertEqual(erros, {})
         esperado = {
             "version": 4, "script_id": 12, "script_nome": "carga_faturas", "interpreter": "PYTHON3",
@@ -356,8 +356,8 @@ class TestCompilarSnapshot(unittest.TestCase):
         v = self._links()
         r1 = collections.OrderedDict([("data_ref", "2026-10-13"), ("token", "abc123"), ("modo", "B")])
         r2 = collections.OrderedDict([("modo", "B"), ("token", "abc123"), ("data_ref", "2026-10-13")])
-        js1 = pc.compile_snapshot(script(), v, r1, AGORA)[0]
-        js2 = pc.compile_snapshot(script(), list(reversed(v)), r2, AGORA)[0]
+        js1 = pc.compile_snapshot(script(), v, r1, NOW)[0]
+        js2 = pc.compile_snapshot(script(), list(reversed(v)), r2, NOW)[0]
         self.assertIsNotNone(js1)
         self.assertEqual(js1, js2)
         snap = json.loads(js1)
@@ -365,40 +365,40 @@ class TestCompilarSnapshot(unittest.TestCase):
         self.assertEqual(snap["sensiveis"], ["token"])
 
     def test_utf8_sem_escape(self):
-        js = pc.compile_snapshot(script(), [prm("t", ordem=1, flag="--t")], {"t": "ação"}, AGORA)[0]
+        js = pc.compile_snapshot(script(), [prm("t", ordem=1, flag="--t")], {"t": "ação"}, NOW)[0]
         self.assertIn("ação", js)
 
     def test_respostas_tipadas(self):
         v = [prm("c", "CHECKBOX", ordem=1, flag="--c"), prm("o", ordem=2, flag="--o")]
-        snap = json.loads(pc.compile_snapshot(script(), v, {"c": "1"}, AGORA)[0])
+        snap = json.loads(pc.compile_snapshot(script(), v, {"c": "1"}, NOW)[0])
         self.assertEqual(snap["respostas"], {"c": True, "o": None})
 
     def test_erros_acumulados(self):
         v = self._links() + [prm("n", "NUMBER", ordem=4, flag="-n")]
-        js, resolvidos, erros = pc.compile_snapshot(script(), v, {"token": "a\x00b", "modo": "Z", "n": "-3"}, AGORA)
+        js, resolvidos, erros = pc.compile_snapshot(script(), v, {"token": "a\x00b", "modo": "Z", "n": "-3"}, NOW)
         self.assertIsNone(js)
         self.assertEqual(list(erros.keys()), ["data_ref", "token", "modo", "n"])
         for msg in erros.values():
             self.assertNotIn("a\x00b", msg)
 
     def test_erros_estruturais(self):
-        js, _, erros = pc.compile_snapshot(script("NONE"), [prm("a", ordem=1)], {"a": "x"}, AGORA)
+        js, _, erros = pc.compile_snapshot(script("NONE"), [prm("a", ordem=1)], {"a": "x"}, NOW)
         self.assertIsNone(js)
         self.assertIn(pc.GENERAL_KEY, erros)
         for interp in ("/usr/bin/python3", "PERL", "CMD"):
-            js, _, erros = pc.compile_snapshot(script(interpreter=interp), [], {}, AGORA)
+            js, _, erros = pc.compile_snapshot(script(interpreter=interp), [], {}, NOW)
             self.assertIsNone(js, interp)
             self.assertIn(pc.GENERAL_KEY, erros)
 
     def test_nenhum_sem_vinculos(self):
-        js = pc.compile_snapshot(script("NONE", "BASH"), [], {}, AGORA)[0]
+        js = pc.compile_snapshot(script("NONE", "BASH"), [], {}, NOW)[0]
         snap = json.loads(js)
         self.assertEqual((snap["interpreter"], snap["args"]), ("BASH", []))
 
     def test_argv_para_exibicao(self):
         v = self._links() + [prm("seq", ordem=4, flag="-s", sensivel="Y")]
         snap = json.loads(pc.compile_snapshot(
-            script(), v, {"data_ref": "2026-10-13", "token": "-segredo", "seq": "outro_segredo"}, AGORA)[0])
+            script(), v, {"data_ref": "2026-10-13", "token": "-segredo", "seq": "outro_segredo"}, NOW)[0])
         exib = pc.display_argv(snap)
         # CR-005 D8: caminho completo para todos.
         self.assertEqual(exib, ["PYTHON3", "-I", REAL, "--data", "2026-10-13",
@@ -407,16 +407,16 @@ class TestCompilarSnapshot(unittest.TestCase):
         self.assertIn("-segredo", snap["args"][2])
 
     def test_argv_para_exibicao_sem_sensiveis(self):
-        snap = json.loads(pc.compile_snapshot(script("POSITIONAL", "SH"), [prm("a", ordem=1)], {"a": "x"}, AGORA)[0])
+        snap = json.loads(pc.compile_snapshot(script("POSITIONAL", "SH"), [prm("a", ordem=1)], {"a": "x"}, NOW)[0])
         self.assertEqual(pc.display_argv(snap), ["SH", REAL, "x"])
 
 
 @unittest.skipIf(os.geteuid() == 0, "root sempre passa em os.access(W_OK)")
-class TestValidarSnapshot(unittest.TestCase):
+class TestValidateSnapshot(unittest.TestCase):
 
     def setUp(self):
-        self.raiz = tempfile.mkdtemp(prefix="sss_pc_")
-        self.base = os.path.join(self.raiz, "scripts")
+        self.root = tempfile.mkdtemp(prefix="sss_pc_")
+        self.base = os.path.join(self.root, "scripts")
         os.makedirs(os.path.join(self.base, "faturamento"))
         self.arq = os.path.join(self.base, "faturamento", "carga_faturas.py")
         with open(self.arq, "w") as f:
@@ -424,18 +424,18 @@ class TestValidarSnapshot(unittest.TestCase):
         os.chmod(self.arq, 0o444)
         os.chmod(os.path.join(self.base, "faturamento"), 0o555)
         os.chmod(self.base, 0o555)
-        self.cfg = CfgAgente({"PYTHON3": EXE_PY, "SH": "/bin/sh"})
+        self.cfg = AgentCfg({"PYTHON3": EXE_PY, "SH": "/bin/sh"})
         self.real = os.path.realpath(self.arq)
         v = [prm("data_ref", "DATE", ordem=1, obrigatorio="Y", flag="--data")]
         scr = dict(script(), path_file=self.arq)
-        self.js = pc.compile_snapshot(scr, v, {"data_ref": "2026-10-13"}, AGORA)[0]
+        self.js = pc.compile_snapshot(scr, v, {"data_ref": "2026-10-13"}, NOW)[0]
 
     def tearDown(self):
-        for raiz, _, _ in os.walk(self.raiz):
+        for raiz, _, _ in os.walk(self.root):
             os.chmod(raiz, 0o755)
-        shutil.rmtree(self.raiz)
+        shutil.rmtree(self.root)
 
-    def _alterado(self, **mudancas):
+    def _changed(self, **mudancas):
         snap = json.loads(self.js)
         snap.update(mudancas)
         return json.dumps(snap)
@@ -444,7 +444,7 @@ class TestValidarSnapshot(unittest.TestCase):
         # CR-007, R-32: o snapshot vem do banco; NUL ou controle nos args nunca chegam ao argv.
         for ruim in ("a\x00b", "linha\nnova"):
             with self.subTest(arg=repr(ruim)):
-                self.assertEqual(self._reason(self._alterado(args=["--data", ruim])), "ARGS_INVALIDOS")
+                self.assertEqual(self._reason(self._changed(args=["--data", ruim])), "ARGS_INVALIDOS")
 
     def _reason(self, js, cfg=None):
         with self.assertRaises(SnapshotError) as ctx:
@@ -466,25 +466,25 @@ class TestValidarSnapshot(unittest.TestCase):
     def test_versoes_1_a_3_rejeitadas(self):
         # CR-005: o snapshot v4 traz path_file absoluto; v1 a v3 so existiram em DEV/FAKE.
         for versao in (1, 2, 3):
-            self.assertEqual(self._reason(self._alterado(version=versao)), "VERSAO_NAO_SUPORTADA")
+            self.assertEqual(self._reason(self._changed(version=versao)), "VERSAO_NAO_SUPORTADA")
 
     def test_interpretador_fora_da_allowlist_ou_indisponivel_no_agente(self):
-        self.assertEqual(self._reason(self._alterado(interpreter="/usr/bin/perl")), "INTERPRETADOR_NAO_PERMITIDO")
-        self.assertEqual(self._reason(self._alterado(interpreter="BASH")), "INTERPRETADOR_NAO_DISPONIVEL")
+        self.assertEqual(self._reason(self._changed(interpreter="/usr/bin/perl")), "INTERPRETADOR_NAO_PERMITIDO")
+        self.assertEqual(self._reason(self._changed(interpreter="BASH")), "INTERPRETADOR_NAO_DISPONIVEL")
         # CR-005: POWERSHELL saiu da allowlist (somente POSIX).
-        self.assertEqual(self._reason(self._alterado(interpreter="POWERSHELL")), "INTERPRETADOR_NAO_PERMITIDO")
+        self.assertEqual(self._reason(self._changed(interpreter="POWERSHELL")), "INTERPRETADOR_NAO_PERMITIDO")
 
     def test_args_invalidos(self):
-        self.assertEqual(self._reason(self._alterado(args="--data x")), "ARGS_INVALIDOS")
-        self.assertEqual(self._reason(self._alterado(args=["--n", 1])), "ARGS_INVALIDOS")
+        self.assertEqual(self._reason(self._changed(args="--data x")), "ARGS_INVALIDOS")
+        self.assertEqual(self._reason(self._changed(args=["--n", 1])), "ARGS_INVALIDOS")
 
     def test_path_guard_revalidado_no_agente(self):
-        self.assertEqual(self._reason(self._alterado(path_file="x.py")), "PATH_GUARD_RELATIVE_PATH")
-        self.assertEqual(self._reason(self._alterado(path_file="/opt/../x.py")), "PATH_GUARD_HAS_DOTS")
-        self.assertEqual(self._reason(self._alterado(path_file="/etc/passwd")), "PATH_GUARD_SYSTEM_DIR")
-        self.assertEqual(self._reason(self._alterado(path_file=os.path.join(self.base, "nao_existe.py"))),
+        self.assertEqual(self._reason(self._changed(path_file="x.py")), "PATH_GUARD_RELATIVE_PATH")
+        self.assertEqual(self._reason(self._changed(path_file="/opt/../x.py")), "PATH_GUARD_HAS_DOTS")
+        self.assertEqual(self._reason(self._changed(path_file="/etc/passwd")), "PATH_GUARD_SYSTEM_DIR")
+        self.assertEqual(self._reason(self._changed(path_file=os.path.join(self.base, "nao_existe.py"))),
                          "PATH_GUARD_NOT_FOUND")
-        self.assertEqual(self._reason(self._alterado(path_file=os.path.join(self.base, "faturamento"))),
+        self.assertEqual(self._reason(self._changed(path_file=os.path.join(self.base, "faturamento"))),
                          "PATH_GUARD_NOT_A_FILE")
 
     def test_log_dir_e_work_dir_do_agente(self):
@@ -510,10 +510,10 @@ class TestSeedFake(unittest.TestCase):
     def test_carga_diaria(self):
         scr = self.catalog.scripts_get(1)
         vinculos = self.catalog.script_params_get(1)
-        js, resolvidos, erros = pc.compile_snapshot(scr, vinculos, {}, AGORA)
+        js, resolvidos, erros = pc.compile_snapshot(scr, vinculos, {}, NOW)
         self.assertEqual(erros, {})
         snap = json.loads(js)
-        self.assertEqual(set(snap.keys()), CHAVES_6_5)
+        self.assertEqual(set(snap.keys()), KEYS_6_5)
         self.assertEqual(js, json.dumps(snap, ensure_ascii=False, sort_keys=True))
         self.assertEqual(snap["args"], ["--data-ref", "2026-10-14", "-n", "5000", "--modo", "REAL", "--verbose",
                                         "--documento", "00011122233"])
@@ -526,15 +526,15 @@ class TestSeedFake(unittest.TestCase):
             with self.subTest(script_id=sid):
                 scr = self.catalog.scripts_get(sid)
                 vinculos = self.catalog.script_params_get(sid)
-                js, _, erros = pc.compile_snapshot(scr, vinculos, {}, AGORA)
+                js, _, erros = pc.compile_snapshot(scr, vinculos, {}, NOW)
                 self.assertEqual(erros, {})
-                self.assertEqual(set(json.loads(js).keys()), CHAVES_6_5)
+                self.assertEqual(set(json.loads(js).keys()), KEYS_6_5)
 
     def test_snapshots_do_seed_sao_v4(self):
         tickets = self.repo_factory.get("tickets")
         for tid in (1, 11, 17, 37):
             snap = json.loads(tickets.get(tid)["submitted_params"])
-            self.assertEqual((snap["version"], set(snap.keys())), (4, CHAVES_6_5), tid)
+            self.assertEqual((snap["version"], set(snap.keys())), (4, KEYS_6_5), tid)
             self.assertTrue(snap["path_file"].startswith("/opt/automacoes/scripts/"), tid)
 
 

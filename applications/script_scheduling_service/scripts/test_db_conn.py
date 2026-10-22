@@ -57,10 +57,10 @@ class _FakeConfig(object):
             oracle_client_lib_dir=oracle_client_lib_dir,
         )
         self.agent = collections.namedtuple("AgentConfig", ["agent_id"])(agent_id="srv-teste-01")
-        self.caminho_arquivo = None
+        self.file_path = None
 
 
-class _FakeSegredos(object):
+class _FakeSecrets(object):
     def __init__(self, password="senha_super_secreta", purge_password="senha_purge_123",
                  monitor_user="sss_monitor", monitor_password="senha_mon_123"):
         self.oracle = collections.namedtuple("OracleSecret", ["password"])(password=password)
@@ -86,13 +86,13 @@ class _FakeSegredos(object):
         return self.monitor.password
 
 
-class TestDbConnSelecaoMocks(unittest.TestCase):
+class TestDbConnSelectionMocks(unittest.TestCase):
     """Testes unitarios da logica de selecao de driver com dubles (F7.0)."""
 
     def setUp(self):
         db_conn.reset_selection()
         self.cfg = _FakeConfig(driver_mode="auto")
-        self.segredos = _FakeSegredos(password="teste_pwd_123")
+        self.segredos = _FakeSecrets(password="teste_pwd_123")
 
     def tearDown(self):
         db_conn.reset_selection()
@@ -275,7 +275,7 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
     def setUp(self):
         db_conn.reset_selection()
         self.cfg = _FakeConfig()
-        self.segredos = _FakeSegredos()
+        self.segredos = _FakeSecrets()
 
     def tearDown(self):
         db_conn.reset_selection()
@@ -609,7 +609,7 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
     def test_ausencia_de_senha_em_logs(self):
         """A senha nunca deve aparecer em mensagens de log emitidas por db_conn."""
         senha_super_secreta = "minha_senha_super_secreta_999"
-        seg = _FakeSegredos(password=senha_super_secreta)
+        seg = _FakeSecrets(password=senha_super_secreta)
         with self.assertLogs("sss_db_conn", level="INFO") as cm:
             mock_drv = mock.MagicMock(__name__="oracledb")
             mock_drv.__version__ = "1.4.0"
@@ -680,7 +680,7 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
 class TestOracleTestSupportMocks(unittest.TestCase):
     """Testes unitarios de scripts/_oracle_test_support.py (chave unica SSS_TEST_ORACLE=1) com dubles."""
 
-    _LIGADO = {"SSS_TEST_ORACLE": "1"}
+    _ENABLED = {"SSS_TEST_ORACLE": "1"}
 
     def _cfg(self, owner="openrisow", user="openrisow", sss_env="DEV", dsn="localhost:2424/GFPR"):
         cfg = mock.MagicMock()
@@ -711,7 +711,7 @@ class TestOracleTestSupportMocks(unittest.TestCase):
     def test_variaveis_antigas_recusadas(self):
         """As variaveis da guarda anterior nao sao ignoradas em silencio."""
         for antiga in _oracle_test_support.OLD_VARIABLES:
-            with mock.patch.dict(os.environ, dict(self._LIGADO, **{antiga: "x"}), clear=True):
+            with mock.patch.dict(os.environ, dict(self._ENABLED, **{antiga: "x"}), clear=True):
                 ok, motivo = _oracle_test_support.check_environment_preconditions(cfg=self._cfg())
                 self.assertFalse(ok)
                 self.assertIn(antiga, motivo)
@@ -723,7 +723,7 @@ class TestOracleTestSupportMocks(unittest.TestCase):
 
     def test_precondicoes_do_config(self):
         """DEV obrigatorio, DSN preenchido e owner valido; o data_backend nao importa."""
-        with mock.patch.dict(os.environ, self._LIGADO, clear=True):
+        with mock.patch.dict(os.environ, self._ENABLED, clear=True):
             self.assertEqual(_oracle_test_support.check_environment_preconditions(cfg=self._cfg()), (True, ""))
             for cfg, trecho in ((self._cfg(sss_env="HML"), "DEV"), (self._cfg(dsn=""), "dsn"),
                                 (self._cfg(owner="openrisow;DROP"), "owner"),
@@ -785,7 +785,7 @@ class TestOracleTestSupportMocks(unittest.TestCase):
         import sql_ident
         mock_conn, _cur = self._conn("OPENRISOW", sql_ident.SCHEMA_VERSION)
         cfg = self._cfg()
-        with mock.patch.dict(os.environ, self._LIGADO, clear=True):
+        with mock.patch.dict(os.environ, self._ENABLED, clear=True):
             with mock.patch("sss_config.get_config", return_value=cfg) as obter:
                 with mock.patch("sss_config.load_secrets", return_value=mock.MagicMock()):
                     with mock.patch("db_conn.connect", return_value=mock_conn):
@@ -796,7 +796,7 @@ class TestOracleTestSupportMocks(unittest.TestCase):
 
     def test_preparar_descartavel_recusa_conta_do_owner_sem_conectar(self):
         cfg = self._cfg(owner="SSS_TEST_APP", user="SSS_TEST_APP")
-        with mock.patch.dict(os.environ, self._LIGADO, clear=True):
+        with mock.patch.dict(os.environ, self._ENABLED, clear=True):
             with mock.patch("db_conn.connect") as conectar:
                 with self.assertRaises(_oracle_test_support.SchemaPreconditionError):
                     _oracle_test_support.prepare_disposable_schema("web", cfg=cfg)
@@ -811,12 +811,12 @@ class TestOracleTestSupportMocks(unittest.TestCase):
         conectar.assert_not_called()
 
 
-class TestPrimeiraConexaoNaoEReconexao(unittest.TestCase):
+class TestFirstConnectionIsNotReconnection(unittest.TestCase):
     """F9.1d: a primeira conexao do ConexaoResiliente e INFO 'Conectando'/'Conexao estabelecida'; o WARN
     'Tentando reconexao' fica so para as reconexoes de verdade."""
 
     def test_primeira_conexao_e_depois_reconexao(self):
-        resiliente = db_conn.ResilientConnection(_FakeConfig(), _FakeSegredos(password="x"))
+        resiliente = db_conn.ResilientConnection(_FakeConfig(), _FakeSecrets(password="x"))
         with mock.patch.object(db_conn, "connect", return_value=mock.Mock()):
             with self.assertLogs("sss_db_conn", "INFO") as primeira:
                 self.assertTrue(resiliente.ensure())
@@ -832,14 +832,14 @@ class TestPrimeiraConexaoNaoEReconexao(unittest.TestCase):
                           ("INFO", "Reconexao bem-sucedida (papel=agent)")])
 
     def test_falha_na_primeira_conexao(self):
-        resiliente = db_conn.ResilientConnection(_FakeConfig(), _FakeSegredos(password="x"))
+        resiliente = db_conn.ResilientConnection(_FakeConfig(), _FakeSecrets(password="x"))
         with mock.patch.object(db_conn, "connect", side_effect=RuntimeError("ORA-12541: TNS:no listener")):
             with self.assertLogs("sss_db_conn", "INFO") as logs:
                 self.assertFalse(resiliente.ensure())
         self.assertIn("Falha na tentativa de conexao: ORA-12541", logs.records[-1].getMessage())
 
 
-class TestSondagemComAContaDoPapel(unittest.TestCase):
+class TestProbeWithRoleAccount(unittest.TestCase):
     """F9.1d (ensaio a partir do pacote): a sondagem usa a conta do papel que conecta (monitor, purge), nao a do
     [oracle]; o usuario vai no argv e a senha so pela entrada padrao."""
 
@@ -851,7 +851,7 @@ class TestSondagemComAContaDoPapel(unittest.TestCase):
         processo = mock.Mock(returncode=0)
         processo.communicate.return_value = (b'{"candidato": "thin", "ok": true}', b"")
         with mock.patch.object(db_conn.subprocess, "Popen", return_value=processo) as popen:
-            db_conn.select_driver(_FakeConfig(driver_mode="thin"), _FakeSegredos(password="x"),
+            db_conn.select_driver(_FakeConfig(driver_mode="thin"), _FakeSecrets(password="x"),
                                       usuario="sss_monitor", senha="senha-mon-77")
         cmd = popen.call_args[0][0]
         self.assertEqual(cmd[-2:], ["--user", "sss_monitor"])
@@ -880,7 +880,7 @@ class TestSondagemComAContaDoPapel(unittest.TestCase):
         self.assertEqual(falso.connect.call_args[1]["user"], "sss_monitor")
 
 
-class TestSondarDriverScript(unittest.TestCase):
+class TestProbeDriverScript(unittest.TestCase):
     """Testes unitarios do scripts/probe_driver.py."""
 
     def test_categorizacao_erros(self):

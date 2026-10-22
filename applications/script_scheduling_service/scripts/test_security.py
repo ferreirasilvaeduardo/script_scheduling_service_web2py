@@ -13,39 +13,39 @@ _MODULES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 _RE_FORMATO = re.compile(r"pbkdf2_sha256\$200000\$[0-9a-f]{32}\$[0-9a-f]{64}")
 
 
-def _hash_com_iteracoes(senha, iteracoes):
+def _hash_with_iterations(senha, iteracoes):
     import hashlib
     salt = b"\x01" * 16
     dk = hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), salt, iteracoes)
     return "pbkdf2_sha256$%d$%s$%s" % (iteracoes, salt.hex(), dk.hex())
 
 
-class TestHashSenha(unittest.TestCase):
+class TestPasswordHash(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.senha = u"correta-horse-çã-12"
-        cls.armazenado = security.hash_password(cls.senha)
+        cls.password = u"correta-horse-çã-12"
+        cls.armazenado = security.hash_password(cls.password)
 
     def test_formato(self):
         self.assertTrue(_RE_FORMATO.fullmatch(self.armazenado))
 
     def test_salt_aleatorio(self):
-        self.assertNotEqual(self.armazenado, security.hash_password(self.senha))
+        self.assertNotEqual(self.armazenado, security.hash_password(self.password))
 
     def test_verificacao_certa_e_errada(self):
-        self.assertTrue(security.verify_password(self.senha, self.armazenado))
-        self.assertFalse(security.verify_password(self.senha + "x", self.armazenado))
+        self.assertTrue(security.verify_password(self.password, self.armazenado))
+        self.assertFalse(security.verify_password(self.password + "x", self.armazenado))
         self.assertFalse(security.verify_password("", self.armazenado))
 
     def test_senha_nao_str(self):
         self.assertFalse(security.verify_password(None, self.armazenado))
-        self.assertFalse(security.verify_password(self.senha.encode("utf-8"), self.armazenado))
+        self.assertFalse(security.verify_password(self.password.encode("utf-8"), self.armazenado))
         with self.assertRaises(TypeError):
             security.hash_password(None)
 
     def test_bloqueado_exclamacao(self):
-        self.assertFalse(security.verify_password(self.senha, "!"))
+        self.assertFalse(security.verify_password(self.password, "!"))
         self.assertFalse(security.verify_password("!", "!"))
 
     def test_formatos_invalidos(self):
@@ -60,11 +60,11 @@ class TestHashSenha(unittest.TestCase):
             "$".join([partes[0], partes[1], partes[2], partes[3][:-1] + "g"]),
         ]
         for inv in invalidos:
-            self.assertFalse(security.verify_password(self.senha, inv), inv)
+            self.assertFalse(security.verify_password(self.password, inv), inv)
             self.assertFalse(security.needs_rehash(inv), inv)
 
     def test_iteracoes_antigas_verificam_e_pedem_rehash(self):
-        antigo = _hash_com_iteracoes("senha-antiga-123", 1000)
+        antigo = _hash_with_iterations("senha-antiga-123", 1000)
         self.assertTrue(security.verify_password("senha-antiga-123", antigo))
         self.assertTrue(security.needs_rehash(antigo))
         self.assertFalse(security.needs_rehash(self.armazenado))
@@ -77,7 +77,7 @@ class TestHashSenha(unittest.TestCase):
         self.assertFalse(security.verify_password("qualquer-coisa-123", h))
 
 
-class TestPoliticaSenha(unittest.TestCase):
+class TestPasswordPolicy(unittest.TestCase):
 
     def test_minimo_12(self):
         self.assertEqual(len(security.validate_password_policy("a" * 11)), 1)
@@ -89,7 +89,7 @@ class TestPoliticaSenha(unittest.TestCase):
         self.assertTrue(security.validate_password_policy(""))
 
 
-class TestRetirarSenhas(unittest.TestCase):
+class TestStripPasswords(unittest.TestCase):
 
     def test_remove_de_todas_as_origens(self):
         post_vars = {"login": "admin", "senha": "Segredo-123456", "outra": "x"}
@@ -136,12 +136,12 @@ class TestCsrf(unittest.TestCase):
         self.assertFalse(security.validate_csrf_token(t, u"çãé"))
 
 
-class TestOrigemPermitida(unittest.TestCase):
+class TestAllowedOrigin(unittest.TestCase):
 
-    PERMITIDAS = ["https://sss.empresa.local", "http://127.0.0.1:8000"]
+    ALLOWED = ["https://sss.empresa.local", "http://127.0.0.1:8000"]
 
     def _ok(self, origin, referer=None):
-        return security.is_allowed_origin(origin, referer, self.PERMITIDAS)
+        return security.is_allowed_origin(origin, referer, self.ALLOWED)
 
     def test_origem_igual(self):
         self.assertTrue(self._ok("https://sss.empresa.local"))
@@ -189,7 +189,7 @@ class TestOrigemPermitida(unittest.TestCase):
         self.assertFalse(security.is_allowed_origin("https://sss.empresa.local", None, []))
 
 
-class TestSessaoExpirada(unittest.TestCase):
+class TestSessionExpired(unittest.TestCase):
 
     def test_limites(self):
         self.assertFalse(security.is_session_expired(1000.0, 1000.0 + 1800, 1800))
@@ -270,7 +270,7 @@ class TestCookiesSeguros(unittest.TestCase):
         self.assertIn("Secure", saida)
 
 
-class TestModulosPuros(unittest.TestCase):
+class TestPureModules(unittest.TestCase):
 
     def test_sem_gluon(self):
         for nome in ("security.py", "masking.py"):
@@ -288,7 +288,7 @@ class TestModulosPuros(unittest.TestCase):
 
 
 
-class TestValidarNext(unittest.TestCase):
+class TestValidateNext(unittest.TestCase):
 
     def test_validos(self):
         for v in ("/script_scheduling_service/default/index",
@@ -306,7 +306,7 @@ class TestValidarNext(unittest.TestCase):
             self.assertIsNone(security.validate_next(v), repr(v))
 
 
-class TestIpOrigem(unittest.TestCase):
+class TestClientIp(unittest.TestCase):
 
     def test_sem_proxy(self):
         self.assertEqual(security.client_ip("10.0.0.5", "1.2.3.4", ()), "10.0.0.5")
@@ -327,7 +327,7 @@ class TestIpOrigem(unittest.TestCase):
         self.assertEqual(security.client_ip("::1", None, ()), "::1")
 
 
-class TestCabecalhoReferrer(unittest.TestCase):
+class TestReferrerHeader(unittest.TestCase):
     """Regressao: 'no-referrer' faz o navegador enviar Origin: null e todo POST de formulario vira 403."""
 
     def test_referrer_policy_same_origin(self):

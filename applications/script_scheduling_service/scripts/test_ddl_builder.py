@@ -26,12 +26,12 @@ class TestDdlBuilder(unittest.TestCase):
     def setUp(self):
         self.owner = "openrisow"
         self.prefixo = "tbsss_"
-        self.instrucoes = ddl_builder.build_ddl_statements(self.owner, self.prefixo)
+        self.statements = ddl_builder.build_ddl_statements(self.owner, self.prefixo)
 
     def test_ddl_contem_todos_os_nomes_do_registro(self):
         """O DDL gerado contem todos os nomes de objetos registrados em sql_ident."""
         nomes_esperados = sql_ident.all_identifiers(self.prefixo, incluir_colunas=False)
-        nomes_gerados = set(item.nome for item in self.instrucoes)
+        nomes_gerados = set(item.nome for item in self.statements)
 
         for nome in nomes_esperados:
             self.assertIn(
@@ -50,7 +50,7 @@ class TestDdlBuilder(unittest.TestCase):
             re.compile(r"VARCHAR2\(\d+\)(?! CHAR)", re.IGNORECASE),
         ]
 
-        for item in self.instrucoes:
+        for item in self.statements:
             sql = item.sql
             for padrao in proibidos:
                 self.assertIsNone(
@@ -61,7 +61,7 @@ class TestDdlBuilder(unittest.TestCase):
 
     def test_triggers_bi_e_bu_literais(self):
         """Valida que toda trigger _bi segue o template do AGENTS §4.2 e _bu aplica imutabilidade."""
-        triggers = [item for item in self.instrucoes if item.tipo == "TRIGGER"]
+        triggers = [item for item in self.statements if item.tipo == "TRIGGER"]
         self.assertEqual(len(triggers), 20, "Devem existir 18 triggers _bi e 2 _bu")
 
         bi_triggers = [t for t in triggers if t.nome.endswith("_bi")]
@@ -96,7 +96,7 @@ class TestDdlBuilder(unittest.TestCase):
 
     def test_ordem_estrita_das_fases(self):
         """As fases 1 a 6 respeitam a ordem estrita do README §11.1."""
-        fases = [item.fase for item in self.instrucoes]
+        fases = [item.fase for item in self.statements]
         # Garante que a lista de fases e nao-decrescente
         for i in range(len(fases) - 1):
             self.assertLessEqual(fases[i], fases[i + 1])
@@ -110,18 +110,18 @@ class TestDdlBuilder(unittest.TestCase):
             5: {"INDEX"},
             6: {"TRIGGER"},
         }
-        for item in self.instrucoes:
+        for item in self.statements:
             esperados = tipos_por_fase[item.fase]
             self.assertIn(item.tipo, esperados)
 
     def test_cr005_path_file_e_cks(self):
         """Valida path_file VARCHAR2(500 CHAR) NOT NULL e CKs do CR-005."""
-        tabelas = {item.nome: item.sql for item in self.instrucoes if item.tipo == "TABLE"}
+        tabelas = {item.nome: item.sql for item in self.statements if item.tipo == "TABLE"}
         self.assertIn("path_file VARCHAR2(500 CHAR) NOT NULL", tabelas["tbsss_scripts"])
         self.assertNotIn("pasta_base", tabelas["tbsss_scripts"])
         self.assertNotIn("pastas_base", tabelas["tbsss_agents"])
 
-        constraints = {item.nome: item.sql for item in self.instrucoes if item.tipo == "CONSTRAINT"}
+        constraints = {item.nome: item.sql for item in self.statements if item.tipo == "CONSTRAINT"}
         ck_path = constraints["ck_tbsss_scr_path"]
         self.assertIn("SUBSTR(path_file, 1, 1) = '/'", ck_path)
         self.assertIn("INSTR(path_file, '..') = 0", ck_path)
@@ -133,8 +133,8 @@ class TestDdlBuilder(unittest.TestCase):
 
     def test_cr006_colunas_registro_e_ck_upd(self):
         """Valida que as 15 tabelas (menos auditoria e controle) tem colunas de registro e ck_upd."""
-        tabelas = {item.nome: item.sql for item in self.instrucoes if item.tipo == "TABLE"}
-        constraints = {item.nome: item.sql for item in self.instrucoes if item.tipo == "CONSTRAINT"}
+        tabelas = {item.nome: item.sql for item in self.statements if item.tipo == "TABLE"}
+        constraints = {item.nome: item.sql for item in self.statements if item.tipo == "CONSTRAINT"}
 
         esquema = sql_ident.names(self.prefixo)
         for ent, t in esquema.items():
@@ -160,9 +160,9 @@ class TestDdlBuilder(unittest.TestCase):
 
     def test_cr007_controle_fbi_unico_sha_e_lobs(self):
         """Valida objetos adicionados pelo CR-007 e suporte a SECUREFILE e BASICFILE."""
-        constraints = {item.nome: item.sql for item in self.instrucoes if item.tipo == "CONSTRAINT"}
-        indices = {item.nome: item.sql for item in self.instrucoes if item.tipo == "INDEX"}
-        tabelas = {item.nome: item.sql for item in self.instrucoes if item.tipo == "TABLE"}
+        constraints = {item.nome: item.sql for item in self.statements if item.tipo == "CONSTRAINT"}
+        indices = {item.nome: item.sql for item in self.statements if item.tipo == "INDEX"}
+        tabelas = {item.nome: item.sql for item in self.statements if item.tipo == "TABLE"}
 
         # tbsss_control
         self.assertIn("ck_tbsss_ctl_id", constraints)
@@ -190,8 +190,8 @@ class TestDdlBuilder(unittest.TestCase):
 
     def test_cr008_sessao_epoch_pid_daemon_log_offset(self):
         """Valida campos adicionados e ajustados pelo CR-008."""
-        tabelas = {item.nome: item.sql for item in self.instrucoes if item.tipo == "TABLE"}
-        constraints = {item.nome: item.sql for item in self.instrucoes if item.tipo == "CONSTRAINT"}
+        tabelas = {item.nome: item.sql for item in self.statements if item.tipo == "TABLE"}
+        constraints = {item.nome: item.sql for item in self.statements if item.tipo == "CONSTRAINT"}
 
         # tbsss_users.sessao_epoch e ck
         self.assertIn("session_epoch NUMBER(10) DEFAULT 0 NOT NULL", tabelas["tbsss_users"])
@@ -207,18 +207,18 @@ class TestDdlBuilder(unittest.TestCase):
         self.assertIn("log_offset_chars >= 0", constraints["ck_tbsss_tck_logoff"])
 
 
-class TestGrantsPorPapel(unittest.TestCase):
+class TestGrantsByRole(unittest.TestCase):
     """Testes dos comandos GRANT gerados por papel (README §11.1)."""
 
     def setUp(self):
-        self.papeis = {
+        self.roles = {
             "web": "sss_web",
             "agent": "sss_agente",
             "purge": "sss_purge",
             "monitor": "sss_monitor",
         }
-        self.grants = ddl_builder.build_grants_by_role("openrisow", "tbsss_", self.papeis)
-        self.grants_texto = "\n".join(self.grants)
+        self.grants = ddl_builder.build_grants_by_role("openrisow", "tbsss_", self.roles)
+        self.grants_text = "\n".join(self.grants)
 
     def test_auditoria_protegida_contra_update_e_delete(self):
         """Web e agente nunca tem UPDATE ou DELETE em tbsss_audit (CR-007, D1b)."""
@@ -251,17 +251,17 @@ class TestGrantsPorPapel(unittest.TestCase):
 
     def test_grants_da_saida_do_ticket(self):
         """CR-012: web so le o zip; agente le, inclui e altera (com a sequence); purge e monitor nada."""
-        grants = ddl_builder.build_grants_by_role("openrisow", "tbsss_", dict(self.papeis))
+        grants = ddl_builder.build_grants_by_role("openrisow", "tbsss_", dict(self.roles))
         da_saida = [g for g in grants if "ticket_output" in g]
         self.assertEqual(sorted(da_saida), sorted([
-            "GRANT SELECT ON openrisow.tbsss_ticket_output TO %s;" % self.papeis["web"],
-            "GRANT SELECT, INSERT, UPDATE ON openrisow.tbsss_ticket_output TO %s;" % self.papeis["agent"],
-            "GRANT SELECT ON openrisow.sq_tbsss_ticket_output TO %s;" % self.papeis["agent"],
+            "GRANT SELECT ON openrisow.tbsss_ticket_output TO %s;" % self.roles["web"],
+            "GRANT SELECT, INSERT, UPDATE ON openrisow.tbsss_ticket_output TO %s;" % self.roles["agent"],
+            "GRANT SELECT ON openrisow.sq_tbsss_ticket_output TO %s;" % self.roles["agent"],
         ]))
 
     def test_nunca_concede_a_public(self):
         """O script de implantacao nao concede nada a PUBLIC (tbsss_users guarda senha_hash)."""
-        script = ddl_builder.build_full_deploy_script("openrisow", "tbsss_", papeis_usuarios=self.papeis)
+        script = ddl_builder.build_full_deploy_script("openrisow", "tbsss_", papeis_usuarios=self.roles)
         self.assertNotIn("PUBLIC", script.upper().replace("NENHUM GRANT A PUBLIC", ""))
         self.assertIn("GRANT SELECT ON openrisow.tbsss_agents TO sss_monitor;", script)
         self.assertFalse(hasattr(ddl_builder, "gerar_grants_public"))
@@ -295,7 +295,7 @@ class TestGrantsPorPapel(unittest.TestCase):
         self.assertTrue(any("UPDATE (purge_owner, purge_lease_until) ON openrisow.tbsss_control" in g for g in grants_purge))
 
 
-class TestNormalizacaoExpressaoOracle11g(unittest.TestCase):
+class TestOracle11gExpressionNormalization(unittest.TestCase):
     """Testes de normalizar_expressao com textos reais do Oracle 11gR2 (CR-008, R-14)."""
 
     def test_fbi_texto_real_11g(self):
@@ -372,7 +372,7 @@ class TestInitDbCli(unittest.TestCase):
             cur.close.assert_called_once_with()
 
 
-class TestInitDbConferenciaMock(unittest.TestCase):
+class TestInitDbCheckMock(unittest.TestCase):
     """Testes da conferencia de esquema com conexao simulada."""
 
     def test_conferencia_detecta_divergencia_coluna_ausente(self):
@@ -419,7 +419,7 @@ class TestInitDbConferenciaMock(unittest.TestCase):
         self.assertTrue(any("Objeto invalido" in d for d in divergencias))
 
 
-class TestDdlSeedERollback(unittest.TestCase):
+class TestDdlSeedAndRollback(unittest.TestCase):
     """Testes unitarios da geracao de scripts DML Seed, Rollback e CLI de geracao SQL."""
 
     def setUp(self):

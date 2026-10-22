@@ -14,7 +14,7 @@ import security
 from repo_errors import RepoUnavailable, RepoNotFound
 from ticket_service import LOG_MAX_CHARS, DOWNLOAD_INTERRUPTED_MARKER, InvalidOffset, TicketService
 
-SESSOES = {
+SESSIONS = {
     "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
     "op.hml": {"usuario_id": 3, "login": "op.hml", "perfil_id": 3, "perm_versao": 1, "sessao_epoch": 0},
     "consulta": {"usuario_id": 4, "login": "consulta", "perfil_id": 4, "perm_versao": 1, "sessao_epoch": 0},
@@ -22,23 +22,23 @@ SESSOES = {
 # Seed FAKE: 13 RUNNING (PRODUCAO, op.prod, carga_diaria com documento_cliente sensivel, 8 s/etapa),
 # 17 SUCCESS com log de ~2 MB, 35 FAILED/LOG_LIMIT com log_truncado = 'S'.
 TCK_RUNNING, TCK_GRANDE, TCK_TRUNCADO = 13, 17, 35
-PASSO_13_S = 8
-ETAPAS = 50
-SEGREDO_SEED = "00011122233"
+STEP_13_S = 8
+STAGES = 50
+SEED_SECRET = "00011122233"
 # README §8.10.
 MARKER_TRUNCATED = "[SSS] log truncado no banco; arquivo integral no agente\n"
 
 
-class _Relogio(object):
+class _Clock(object):
 
     def __init__(self, instante):
-        self.instante = instante
+        self.instant = instante
 
     def __call__(self):
-        return self.instante
+        return self.instant
 
-    def avancar(self, segundos):
-        self.instante += datetime.timedelta(seconds=segundos)
+    def advance(self, segundos):
+        self.instant += datetime.timedelta(seconds=segundos)
 
 
 class _BaseLog(unittest.TestCase):
@@ -59,7 +59,7 @@ class _BaseLog(unittest.TestCase):
         self.tickets = repo_factory.get("tickets")
         # Congela o relogio no instante da carga do seed (started_at do RUNNING + 5 min).
         inicio = self.tickets.get(TCK_RUNNING)["started_at"]
-        self.relogio = _Relogio(inicio + datetime.timedelta(minutes=5))
+        self.relogio = _Clock(inicio + datetime.timedelta(minutes=5))
         repo_factory._fake_store.set_clock(self.relogio)
 
         self.log = logging.getLogger("sss_teste_logs")
@@ -68,10 +68,10 @@ class _BaseLog(unittest.TestCase):
         auth = auth_service.AuthService(
             repo_factory.get("users"), repo_factory.get("rbac"), catalogo,
             repo_factory.get("audit"), 5, 900, self.log)
-        self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSOES.items())
+        self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSIONS.items())
         self.svc = TicketService(catalogo, self.tickets, self.log)
 
-    def _log_integral(self, ticket_id):
+    def _full_log(self, ticket_id):
         """Log inteiro lido do repositorio em fatias, pelo contrato (obter nao traz log_output)."""
         partes, offset = [], 0
         while True:
@@ -80,7 +80,7 @@ class _BaseLog(unittest.TestCase):
                 return "".join(partes)
             partes.append(texto)
 
-    def _ler_tudo(self, login, ticket_id):
+    def _read_all(self, login, ticket_id):
         partes = []
         offset = 0
         while True:
@@ -93,7 +93,7 @@ class _BaseLog(unittest.TestCase):
             offset = r["proximo_offset"]
 
 
-class TestLerLogValidacao(_BaseLog):
+class TestReadLogValidation(_BaseLog):
 
     def test_offset_invalido(self):
         for invalido in ("-1", "x", "", "1.5", " 1", "12345678901", None, -1, True, 1.0, ["a"]):
@@ -127,87 +127,87 @@ class TestLerLogValidacao(_BaseLog):
         self.assertTrue(r["terminal"])
 
 
-class TestLerLogConteudo(_BaseLog):
+class TestReadLogContent(_BaseLog):
 
     def test_formato_da_resposta(self):
         r = self.svc.read_log(self.ctx["admin"], "17", "0")
         self.assertEqual(sorted(r), ["proximo_offset", "status", "terminal", "texto", "truncado"])
 
     def test_limite_de_64k_e_reconstrucao_do_log_de_2mb(self):
-        integral = self._log_integral(TCK_GRANDE)
+        integral = self._full_log(TCK_GRANDE)
         self.assertGreaterEqual(len(integral.encode("utf-8")), 2 * 1024 * 1024)
         r = self.svc.read_log(self.ctx["admin"], str(TCK_GRANDE), "0")
         self.assertEqual(len(r["texto"]), LOG_MAX_CHARS)
         self.assertEqual(LOG_MAX_CHARS, 65536)
         self.assertTrue(r["terminal"])
-        texto, ultima = self._ler_tudo("admin", TCK_GRANDE)
+        texto, ultima = self._read_all("admin", TCK_GRANDE)
         self.assertEqual(texto, integral)
         self.assertEqual(ultima["proximo_offset"], len(integral))
         self.assertEqual(ultima["status"], "SUCCESS")
 
     def test_truncado_com_marcador_final(self):
-        texto, ultima = self._ler_tudo("admin", TCK_TRUNCADO)
+        texto, ultima = self._read_all("admin", TCK_TRUNCADO)
         self.assertTrue(ultima["truncado"])
         self.assertTrue(ultima["terminal"])
         self.assertTrue(texto.endswith(MARKER_TRUNCATED))
         self.assertFalse(self.svc.read_log(self.ctx["admin"], "17", "0")["truncado"])
 
     def test_running_cresce_com_o_relogio_e_termina(self):
-        texto1, r1 = self._ler_tudo("admin", TCK_RUNNING)
+        texto1, r1 = self._read_all("admin", TCK_RUNNING)
         self.assertFalse(r1["terminal"])
         self.assertEqual(r1["status"], "RUNNING")
-        etapa_atual = 300 // PASSO_13_S
-        self.assertIn("etapa %d/%d processada" % (etapa_atual, ETAPAS), texto1)
-        self.assertNotIn("etapa %d/%d" % (etapa_atual + 1, ETAPAS), texto1)
+        etapa_atual = 300 // STEP_13_S
+        self.assertIn("etapa %d/%d processada" % (etapa_atual, STAGES), texto1)
+        self.assertNotIn("etapa %d/%d" % (etapa_atual + 1, STAGES), texto1)
 
         # Sem avanco do relogio, nada novo.
         r = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r1["proximo_offset"]))
         self.assertEqual(r["texto"], "")
 
-        self.relogio.avancar(PASSO_13_S)
+        self.relogio.advance(STEP_13_S)
         r2 = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r1["proximo_offset"]))
-        self.assertIn("etapa %d/%d processada" % (etapa_atual + 1, ETAPAS), r2["texto"])
+        self.assertIn("etapa %d/%d processada" % (etapa_atual + 1, STAGES), r2["texto"])
         self.assertFalse(r2["terminal"])
 
-        self.relogio.avancar(ETAPAS * PASSO_13_S)
+        self.relogio.advance(STAGES * STEP_13_S)
         r3 = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r2["proximo_offset"]))
         self.assertTrue(r3["terminal"])
         self.assertEqual(r3["status"], "SUCCESS")
-        self.assertIn("etapa %d/%d processada" % (ETAPAS, ETAPAS), r3["texto"])
+        self.assertIn("etapa %d/%d processada" % (STAGES, STAGES), r3["texto"])
         self.assertIn("Script concluido com retorno 0.", r3["texto"])
         ticket = self.tickets.get(TCK_RUNNING)
         self.assertEqual((ticket["status_reason"], ticket["return_code"]), ("EXIT_OK", 0))
         self.assertEqual(ticket["finished_at"], self.relogio())
 
         # Terminal e imutavel: o log nao cresce mais.
-        self.relogio.avancar(3600)
+        self.relogio.advance(3600)
         r4 = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r3["proximo_offset"]))
         self.assertEqual((r4["texto"], r4["terminal"]), ("", True))
 
     def test_running_com_cancelamento_sinalizado_termina_cancelado(self):
         self.assertEqual(self.tickets.request_cancel(TCK_RUNNING, "admin", "10.0.0.1"), "SINALIZADO")
-        texto, ultima = self._ler_tudo("admin", TCK_RUNNING)
+        texto, ultima = self._read_all("admin", TCK_RUNNING)
         self.assertTrue(ultima["terminal"])
         self.assertEqual(ultima["status"], "CANCELLED")
         self.assertIn("cancelamento", texto)
         self.assertEqual(self.tickets.get(TCK_RUNNING)["status_reason"], "CANCEL_USER")
 
     def test_segredo_mascarado(self):
-        texto, _ = self._ler_tudo("admin", TCK_RUNNING)
+        texto, _ = self._read_all("admin", TCK_RUNNING)
         self.assertIn("conectando com documento_cliente=****", texto)
-        self.assertNotIn(SEGREDO_SEED, texto)
-        self.assertNotIn(SEGREDO_SEED, self._log_integral(TCK_RUNNING))
+        self.assertNotIn(SEED_SECRET, texto)
+        self.assertNotIn(SEED_SECRET, self._full_log(TCK_RUNNING))
 
     def test_html_preservado_como_texto(self):
         # O servidor entrega o texto cru; o escape e responsabilidade do x-text no cliente.
-        texto, _ = self._ler_tudo("admin", TCK_RUNNING)
+        texto, _ = self._read_all("admin", TCK_RUNNING)
         self.assertIn("<script>alert(1)</script>", texto)
 
 
-class TestBlocosLog(_BaseLog):
+class TestLogChunks(_BaseLog):
 
     def test_download_integro_do_log_de_2mb(self):
-        integral = self._log_integral(TCK_GRANDE)
+        integral = self._full_log(TCK_GRANDE)
         tid, blocos = self.svc.log_chunks(self.ctx["admin"], str(TCK_GRANDE))
         self.assertEqual(tid, TCK_GRANDE)
         lista = list(blocos)

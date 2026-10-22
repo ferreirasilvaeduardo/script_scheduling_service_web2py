@@ -25,7 +25,7 @@ if _ROCKET_DIR not in sys.path:
 import rocket3  # noqa: E402
 
 
-class _ArquivoOcioso(object):
+class _IdleFile(object):
     """Socket file de cliente que conecta e nunca envia a linha de requisicao."""
 
     def readline(self, *args):
@@ -35,10 +35,10 @@ class _ArquivoOcioso(object):
         pass
 
 
-class _ConexaoOciosa(object):
+class _IdleConnection(object):
 
     def makefile(self, *args, **kwargs):
-        return _ArquivoOcioso()
+        return _IdleFile()
 
 
 class TestRocketPy36(unittest.TestCase):
@@ -50,11 +50,11 @@ class TestRocketPy36(unittest.TestCase):
     def test_timeout_de_conexao_ociosa_propaga_socket_timeout(self):
         worker = self._worker()
         with self.assertRaises(rocket3.SocketTimeout):
-            worker.run_app(_ConexaoOciosa())
+            worker.run_app(_IdleConnection())
 
     def test_worker_trata_timeout_sem_erro(self):
         worker = self._worker()
-        worker.conn = _ConexaoOciosa()
+        worker.conn = _IdleConnection()
         try:
             worker.run_app(worker.conn)
         except Exception:
@@ -99,7 +99,7 @@ print("SEM_SSL_OK")
 """
 
 
-class TestRocketSemSSL(unittest.TestCase):
+class TestRocketWithoutSSL(unittest.TestCase):
 
     def test_conexao_ociosa_sem_modulo_ssl(self):
         resultado = subprocess.run([sys.executable, "-I", "-c", _SCRIPT_SEM_SSL, _ROCKET_DIR],

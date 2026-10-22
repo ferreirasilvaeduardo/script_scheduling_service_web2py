@@ -16,10 +16,10 @@ import ui_helpers
 from schedules_service import SchedulesService
 from ticket_service import TicketService
 
-SESSAO_ADMIN = {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0}
+ADMIN_SESSION = {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0}
 
 
-class TestAtorVisivel(unittest.TestCase):
+class TestVisibleActor(unittest.TestCase):
 
     def test_regras(self):
         sem = {"login": "op.prod", "features": frozenset(["VIEW_LOGS"])}
@@ -32,7 +32,7 @@ class TestAtorVisivel(unittest.TestCase):
         self.assertEqual(ui_helpers.ator_visivel("admin", {"is_admin": True}), "admin")
 
 
-class TestResponsavelMascarado(unittest.TestCase):
+class TestMaskedOwner(unittest.TestCase):
 
     def setUp(self):
         patcher = mock.patch.object(security, "ITERATIONS", 1000)
@@ -50,23 +50,23 @@ class TestResponsavelMascarado(unittest.TestCase):
         log.propagate = False
         r = repo_factory.get
         auth = auth_service.AuthService(r("users"), r("rbac"), r("catalog"), r("audit"), 5, 900, log)
-        self.admin = auth.revalidate(SESSAO_ADMIN)
+        self.admin = auth.revalidate(ADMIN_SESSION)
         tickets = r("tickets")
         ticket = TicketService(catalogo=r("catalog"), tickets=tickets, log=log)
         self.svc = SchedulesService(r("schedules"), r("catalog"), r("users"), ticket, tickets.now, 1461, log)
         # op.prod com o necessario para ver as regras, mas sem VIEW_AUDIT.
-        self.operador = dict(self.admin, user_id=2, login="op.prod", is_admin=False,
+        self.operator = dict(self.admin, user_id=2, login="op.prod", is_admin=False,
                              features=frozenset(f for f in self.admin["features"] if f != "VIEW_AUDIT"))
 
     def test_lista_e_formulario(self):
-        responsaveis = set(i["responsavel"] for i in self.svc.list(self.operador, {}, 1, 100)["itens"])
+        responsaveis = set(i["responsavel"] for i in self.svc.list(self.operator, {}, 1, 100)["itens"])
         self.assertTrue(responsaveis)
         self.assertTrue(responsaveis <= {u"você", u"outra pessoa"}, responsaveis)
-        self.assertEqual(self.svc.form(self.operador, "2")["regra"]["responsavel"], u"você")
+        self.assertEqual(self.svc.form(self.operator, "2")["regra"]["responsavel"], u"você")
         self.assertEqual(self.svc.form(self.admin, "2")["regra"]["responsavel"], "op.prod")
 
 
-class TestMotivoPausa(unittest.TestCase):
+class TestPauseReason(unittest.TestCase):
 
     def test_traducao_unica(self):
         # CR-008, R-33: a mesma funcao pura na web e no daemon (README §7.5).
@@ -78,7 +78,7 @@ class TestMotivoPausa(unittest.TestCase):
             self.assertEqual(rbac.pause_reason_for(motivo), "NO_PERMISSION")
 
 
-class TestRegistroEsquema(unittest.TestCase):
+class TestSchemaRegistry(unittest.TestCase):
 
     def test_colunas_novas_e_ampliadas(self):
         usr = sql_ident.TABLES["users"]["colunas"]["session_epoch"]

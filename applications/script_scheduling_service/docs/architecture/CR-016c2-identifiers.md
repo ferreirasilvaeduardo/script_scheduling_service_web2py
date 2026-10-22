@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Em andamento**, em blocos. Blocos 1 (base), 2 (repositórios), 3a (regras), 3b (services), 4a (camada de processo), 4b (laço do agente), 4c (helper) e 5a (scripts de linha de comando) concluídos em 2026-10-21 |
+| Status | **Em andamento**, em blocos. Blocos 1 (base), 2 (repositórios), 3a (regras), 3b (services), 4a (camada de processo), 4b (laço do agente), 4c (helper), 5a (scripts de linha de comando) e 5b (testes) concluídos em 2026-10-21; falta a passada final |
 | Origem | Regra do README §2.8 (CR-016): funções, classes, métodos, constantes e variáveis em inglês |
 | Restrições | Sem dependência nova. Python 3.6. Sem mudança de esquema |
 | Blocos | 1 base (`sql_ident`, `sss_config`, `db_conn`, `sss_logging` e formato do log); 2 repositórios e chaves lógicas das entidades; 3 regras (3a) e services (3b); 4 daemon (4a camada de processo, 4b laço do agente, 4c helper); 5 scripts de linha de comando e lançadores (5a) e testes (5b); passada final de parâmetros e variáveis locais |
@@ -2325,3 +2325,537 @@ Os alvos internos do `purge.py` passam a ser os mesmos valores do `--target` (`t
 * Ensaio do pacote: só os lançadores de produção (`sss-helper`, `sss-scheduler.sh`, `sss-stop.sh`, `sss-web.sh`), sem os de DEV e sem testes.
 * Achado e corrigido: `global _modo_atual` em `_oracle_test_support` (a ferramenta por escopo passou a renomear declarações `global`).
 * Para a passada final: as chaves do JSON do `probe_driver` (`candidato`, `versao_servidor`…) são o contrato com o `db_conn` e continuam em português.
+
+## 18. Bloco 5b (testes)
+
+Classes de teste, auxiliares e fakes, funções e constantes de módulo, métodos que não são `test_*` e atributos dos fakes. Os 1.280 nomes `test_*` ficam em português (D16).
+
+Um método ou atributo de teste só mudou quando o mesmo nome não aparece como atributo no código de produção, para não separar um fake do objeto real que ele imita; os bloqueados (`relogio`, `saida`, `segredos`, `fila`, `usuario`…) mudam na passada final, junto com a produção.
+
+### Classes
+
+| Antes | Depois |
+|---|---|
+| `BaseUltimoAdminTest` | `BaseLastAdminTest` |
+| `TestAcessoEAuditoria` | `TestAccessAndAudit` |
+| `TestAcessoEExecutavel` | `TestAccessAndExecutable` |
+| `TestAdminSoPorAdmin` | `TestAdminOnlyByAdmin` |
+| `TestAgendaSemBanco` | `TestAgendaWithoutDb` |
+| `TestAlertaInfo` | `TestAlertInfo` |
+| `TestArquivoRestrito` | `TestRestrictedFile` |
+| `TestAtivoInfo` | `TestActiveInfo` |
+| `TestAtorVisivel` | `TestVisibleActor` |
+| `TestAuditoriaInclusao` | `TestAuditInsert` |
+| `TestAutoprotecao` | `TestSelfProtection` |
+| `TestAvaliarDisparo` | `TestEvaluateTrigger` |
+| `TestBarrasEmpilhadas` | `TestStackedBars` |
+| `TestBlocosLog` | `TestLogChunks` |
+| `TestCabecalhoReferrer` | `TestReferrerHeader` |
+| `TestCadastro` | `TestRegistration` |
+| `TestCadastroOpcoesEFlag` | `TestRegistrationOptionsAndFlag` |
+| `TestCadastroPerfil` | `TestProfileRegistration` |
+| `TestCatalogoRotinas` | `TestRoutineCatalog` |
+| `TestCiclos` | `TestCycles` |
+| `TestClarezaDisparo` | `TestTriggerClarity` |
+| `TestCompilarSnapshot` | `TestCompileSnapshot` |
+| `TestConcorrenciaDoisAgentes` | `TestTwoAgentsConcurrency` |
+| `TestContexto` | `TestContext` |
+| `TestContrasteCores` | `TestColorContrast` |
+| `TestDbConnSelecaoMocks` | `TestDbConnSelectionMocks` |
+| `TestDdlSeedERollback` | `TestDdlSeedAndRollback` |
+| `TestDependencias` | `TestDependencies` |
+| `TestDesativacao` | `TestDeactivation` |
+| `TestDesativacaoComImpacto` | `TestDeactivationWithImpact` |
+| `TestDescrever` | `TestDescribe` |
+| `TestDescricaoMotivo` | `TestReasonDescription` |
+| `TestDesdobro` | `TestExpansion` |
+| `TestDesdobroOracle` | `TestExpansionOracle` |
+| `TestDesempenho` | `TestPerformance` |
+| `TestDublesHelper` | `TestHelperDoubles` |
+| `TestEdicao` | `TestEdit` |
+| `TestEdicaoEUltimoAdmin` | `TestEditAndLastAdmin` |
+| `TestEmpacotar` | `TestPack` |
+| `TestEncerramento` | `TestStop` |
+| `TestEstadoEDiretorios` | `TestStateAndDirectories` |
+| `TestEstadoLocal` | `TestLocalState` |
+| `TestExecucao` | `TestExecution` |
+| `TestExportar` | `TestExport` |
+| `TestFalhasDeSpawn` | `TestSpawnFailures` |
+| `TestFilaNodeOfflineSemBanco` | `TestQueueNodeOfflineWithoutDb` |
+| `TestFiltroLogging` | `TestLoggingFilter` |
+| `TestFiltros` | `TestFilters` |
+| `TestFonte` | `TestSource` |
+| `TestFormatarData` | `TestFormatDate` |
+| `TestFormatarDuracao` | `TestFormatDuration` |
+| `TestGrantsPorPapel` | `TestGrantsByRole` |
+| `TestGuiaDeImplantacao` | `TestDeploymentGuide` |
+| `TestHaDoisAgentes` | `TestHaTwoAgents` |
+| `TestHashSenha` | `TestPasswordHash` |
+| `TestHistoricoScript` | `TestScriptHistory` |
+| `TestHomologacao` | `TestHomologation` |
+| `TestInclusao` | `TestInsert` |
+| `TestInitDbConferenciaMock` | `TestInitDbCheckMock` |
+| `TestIpOrigem` | `TestClientIp` |
+| `TestLacoComSaida` | `TestLoopWithOutput` |
+| `TestLeituraEMascara` | `TestReadAndMask` |
+| `TestLerLogConteudo` | `TestReadLogContent` |
+| `TestLerLogValidacao` | `TestReadLogValidation` |
+| `TestLimites` | `TestLimits` |
+| `TestLinguagemClara` | `TestPlainLanguage` |
+| `TestListaEAcesso` | `TestListAndAccess` |
+| `TestListaPrevia` | `TestPreviewList` |
+| `TestListar` | `TestList` |
+| `TestLogESaida` | `TestLogAndOutput` |
+| `TestLogsLocais` | `TestLocalLogs` |
+| `TestMaquina` | `TestStateMachine` |
+| `TestMascarador` | `TestMasker` |
+| `TestMascaradorFluxo` | `TestStreamMasker` |
+| `TestMatriz` | `TestMatrix` |
+| `TestModulosPuros` | `TestPureModules` |
+| `TestModulosPurosSemGluon` | `TestPureModulesWithoutGluon` |
+| `TestMontarArgs` | `TestBuildArgs` |
+| `TestMontarArgvAgente` | `TestBuildAgentArgv` |
+| `TestMontarMenu` | `TestBuildMenu` |
+| `TestMotivoPausa` | `TestPauseReason` |
+| `TestNeutralizacaoCsv` | `TestCsvNeutralization` |
+| `TestNormalizacaoExpressaoOracle11g` | `TestOracle11gExpressionNormalization` |
+| `TestOracleAgendamentos` | `TestOracleSchedules` |
+| `TestOracleAuditoriaAgentes` | `TestOracleAuditAgents` |
+| `TestOracleCatalogo` | `TestOracleCatalog` |
+| `TestOracleRbacUsuarios` | `TestOracleRbacUsers` |
+| `TestOrigemPermitida` | `TestAllowedOrigin` |
+| `TestPacoteSobeSemODev` | `TestPackageStartsWithoutDev` |
+| `TestPaginacaoInfo` | `TestPaginationInfo` |
+| `TestPainelAgentes` | `TestAgentsDashboard` |
+| `TestParada` | `TestShutdown` |
+| `TestPassos` | `TestSteps` |
+| `TestPastaDeSaida` | `TestOutputDir` |
+| `TestPastasLog` | `TestLogDirs` |
+| `TestPausaRetomada` | `TestPauseResume` |
+| `TestPendencias` | `TestPending` |
+| `TestPermissoes` | `TestPermissions` |
+| `TestPodeExecutar` | `TestCanExecute` |
+| `TestPoliticaSenha` | `TestPasswordPolicy` |
+| `TestPrecedencia` | `TestPrecedence` |
+| `TestPrevalidacao` | `TestPrevalidation` |
+| `TestPrevia` | `TestPreview` |
+| `TestPrimeiraConexaoNaoEReconexao` | `TestFirstConnectionIsNotReconnection` |
+| `TestPrimeiroCampoInvalido` | `TestFirstInvalidField` |
+| `TestPrioridade` | `TestPriority` |
+| `TestProcessos` | `TestProcesses` |
+| `TestProtocolo` | `TestProtocol` |
+| `TestProxima` | `TestNext` |
+| `TestProximaExecucao` | `TestNextRun` |
+| `TestPureza` | `TestPurity` |
+| `TestQuadroRegistro` | `TestRecordPanel` |
+| `TestQuemPode` | `TestWhoCan` |
+| `TestRegexCadastro` | `TestRegistrationRegex` |
+| `TestRegexQuantificadorLargo` | `TestWideQuantifierRegex` |
+| `TestRegistroEsquema` | `TestSchemaRegistry` |
+| `TestRegistroNosServicos` | `TestRecordInServices` |
+| `TestRegressaoFailFast` | `TestFailFastRegression` |
+| `TestRepoFactoryEIntegridade` | `TestRepoFactoryAndIntegrity` |
+| `TestResponsavelMascarado` | `TestMaskedOwner` |
+| `TestResumoInicial` | `TestHomeSummary` |
+| `TestRetirarSenhas` | `TestStripPasswords` |
+| `TestRocketSemSSL` | `TestRocketWithoutSSL` |
+| `TestSaida` | `TestOutput` |
+| `TestSaidaDoTicket` | `TestTicketOutput` |
+| `TestSalvarTipos` | `TestSaveTypes` |
+| `TestSanitizarPagina` | `TestSanitizePage` |
+| `TestSanitizarTamanho` | `TestSanitizeSize` |
+| `TestSaudeAgente` | `TestAgentHealth` |
+| `TestSaudeOracle` | `TestHealthOracle` |
+| `TestSchedulerFilaOracle` | `TestSchedulerQueueOracle` |
+| `TestSchedulerSaidaOracle` | `TestSchedulerOutputOracle` |
+| `TestSeedColunasRegistro` | `TestSeedRecordColumns` |
+| `TestSemBanco` | `TestWithoutDb` |
+| `TestSemHashELink` | `TestNoHashAndLink` |
+| `TestSenhaEBloqueio` | `TestPasswordAndLock` |
+| `TestSensivelETeste` | `TestSensitiveAndTest` |
+| `TestSessaoExpirada` | `TestSessionExpired` |
+| `TestSessaoRevogavel` | `TestRevocableSession` |
+| `TestSinalDeParada` | `TestStopSignal` |
+| `TestSintaxe` | `TestSyntax` |
+| `TestSondagemComAContaDoPapel` | `TestProbeWithRoleAccount` |
+| `TestSondarDriverScript` | `TestProbeDriverScript` |
+| `TestSqlRepoSaude` | `TestSqlRepoHealth` |
+| `TestSubidaOracle` | `TestStartupOracle` |
+| `TestTabelas` | `TestTables` |
+| `TestTemFunc` | `TestHasFeature` |
+| `TestTicketConsulta` | `TestTicketQuery` |
+| `TestTravaParadaPrivilegio` | `TestLockStopPrivilege` |
+| `TestUltimasExecucoes` | `TestLastRuns` |
+| `TestUltimoAdmin` | `TestLastAdmin` |
+| `TestUltimoAdminFake` | `TestLastAdminFake` |
+| `TestUltimoAdminOracle` | `TestLastAdminOracle` |
+| `TestUtilitarios` | `TestUtilities` |
+| `TestValidacao` | `TestValidation` |
+| `TestValidacoesDeCaminho` | `TestPathValidations` |
+| `TestValidacoesTextuais` | `TestTextValidations` |
+| `TestValidarCronComFim` | `TestValidateCronWithEnd` |
+| `TestValidarExecucao` | `TestValidateExecution` |
+| `TestValidarNext` | `TestValidateNext` |
+| `TestValidarRegra` | `TestValidateRule` |
+| `TestValidarSnapshot` | `TestValidateSnapshot` |
+| `TestValidarValor` | `TestValidateValue` |
+| `TestVerificacoes` | `TestChecks` |
+| `TestVerificarAlpineCsp` | `TestCheckAlpineCsp` |
+| `TestVinculos` | `TestLinks` |
+| `_AgendaVazia` | `_EmptyAgenda` |
+| `_ArquivoOcioso` | `_IdleFile` |
+| `_Banco` | `_Db` |
+| `_BasePerfis` | `_BaseProfiles` |
+| `_ClobFalso` | `_FakeClob` |
+| `_ComProcessos` | `_WithProcesses` |
+| `_Conexao` | `_Connection` |
+| `_ConexaoGravadora` | `_RecordingConnection` |
+| `_ConexaoOciosa` | `_IdleConnection` |
+| `_ConexaoRoteirizada` | `_ScriptedConnection` |
+| `_ConnAgora` | `_ConnNow` |
+| `_ConnAnexar` | `_ConnAppend` |
+| `_ConnFalsa` | `_FakeConn` |
+| `_CursorAnexar` | `_CursorAppend` |
+| `_CursorGravador` | `_RecordingCursor` |
+| `_CursorRoteirizado` | `_ScriptedCursor` |
+| `_DoisAgentesBase` | `_TwoAgentsBase` |
+| `_Erro` | `_Error` |
+| `_ErroPrivilegio` | `_PrivilegeError` |
+| `_ErroRede` | `_NetworkError` |
+| `_FakeSegredos` | `_FakeSecrets` |
+| `_Fila` | `_Queue` |
+| `_Massa` | `_Fixtures` |
+| `_OracleContrato` | `_OracleContract` |
+| `_PlatDisco` | `_PlatDisk` |
+| `_Relogio` | `_Clock` |
+| `_RepoFalso` | `_FakeRepo` |
+| `_Tipos` | `_Types` |
+| `_nada` | `_nothing` |
+
+### Funções e constantes de módulo
+
+| Antes | Depois |
+|---|---|
+| `AGENTE` | `AGENT` |
+| `AGENTE_FALSO` | `FAKE_AGENT` |
+| `AGORA` | `NOW` |
+| `AMBIENTE` | `ENVIRONMENT` |
+| `ANTIGA` | `OLD` |
+| `ARQUIVOS` | `FILES` |
+| `ARQUIVOS_EXCECAO_TOKENS` | `TOKEN_EXCEPTION_FILES` |
+| `ATOR` | `ACTOR` |
+| `BLOQUEIO_S` | `LOCKOUT_S` |
+| `CATALOGO` | `CATALOG` |
+| `CHAVES_6_5` | `KEYS_6_5` |
+| `CONFIG_CRITICOS` | `CRITICAL_CONFIG` |
+| `CRITICOS` | `CRITICAL` |
+| `CfgAgente` | `AgentCfg` |
+| `ETAPAS` | `STAGES` |
+| `GRANDE` | `LARGE` |
+| `GUIA` | `GUIDE` |
+| `HOJE` | `TODAY` |
+| `HOMOLOGACOES` | `HOMOLOGATIONS` |
+| `HORIZONTE` | `HORIZON` |
+| `INICIO` | `START` |
+| `LIMIARES` | `THRESHOLDS` |
+| `MARCA_LONGO` | `LONG_MARK` |
+| `MINUTOS` | `MINUTES` |
+| `MODO_ARQ` | `FILE_MODE` |
+| `MODO_DIR` | `DIR_MODE` |
+| `NOVA` | `NEW` |
+| `PADROES_PROIBIDOS` | `FORBIDDEN_PATTERNS` |
+| `PALETA_KYROS` | `KYROS_PALETTE` |
+| `PARES_INDICADOR` | `INDICATOR_PAIRS` |
+| `PARES_TEXTO` | `TEXT_PAIRS` |
+| `PASSO_13_S` | `STEP_13_S` |
+| `PID_INEXISTENTE` | `NONEXISTENT_PID` |
+| `RAIZ` | `ROOT` |
+| `REGRA` | `RULE` |
+| `SEGREDO` | `SECRET` |
+| `SEGREDO_SEED` | `SEED_SECRET` |
+| `SENHA_AMB` | `ENV_PASSWORD` |
+| `SENHA_DEV` | `DEV_PASSWORD` |
+| `SENHA_NOVA` | `NEW_PASSWORD` |
+| `SESSAO_ADMIN` | `ADMIN_SESSION` |
+| `SESSOES` | `SESSIONS` |
+| `SETA` | `ARROW` |
+| `TETO` | `CAP` |
+| `TEXTO_MB` | `MB_TEXT` |
+| `_Agente` | `_AgentStub` |
+| `_COPIA` | `_COPY` |
+| `_FILHO` | `_CHILD` |
+| `_PADRAO` | `_PATTERN` |
+| `_PADROES_12C` | `_PATTERNS_12C` |
+| `_PADROES_COMPILADOS` | `_COMPILED_PATTERNS` |
+| `_PALAVRAS_CREDENCIAL` | `_CREDENTIAL_WORDS` |
+| `_PYTHON_FALSO` | `_FAKE_PYTHON` |
+| `_agente` | `_agent` |
+| `_arvore` | `_tree` |
+| `_blocos` | `_chunks` |
+| `_carregar_helper` | `_load_helper` |
+| `_casa_bruto` | `_raw_match` |
+| `_conteudo` | `_content` |
+| `_corpo` | `_body` |
+| `_criar_arvore` | `_create_tree` |
+| `_dias` | `_days` |
+| `_esperar` | `_wait` |
+| `_fluxo` | `_stream` |
+| `_hash_com_iteracoes` | `_hash_with_iterations` |
+| `_ler` | `_read` |
+| `_ler_csv` | `_read_csv` |
+| `_ler_pid` | `_read_pid` |
+| `_luminancia` | `_luminance` |
+| `_pids_do_longo` | `_long_pids` |
+| `_preparar_banco_real` | `_prepare_real_db` |
+| `_remover` | `_remove` |
+| `_remover_arvore` | `_remove_tree` |
+| `_restaurar_banco_real` | `_restore_real_db` |
+| `_segredos` | `_secrets` |
+| `_sessao` | `_session` |
+| `_vinculo` | `_link` |
+| `_vivo` | `_alive` |
+| `compilar_arquivo_py` | `compile_py_file` |
+| `contraste` | `contrast` |
+| `diaria` | `daily` |
+| `encontrar_arquivos_python` | `find_python_files` |
+| `prox` | `next_run` |
+| `regra` | `rule` |
+| `sem_micro` | `without_micro` |
+| `sequencia` | `sequence` |
+| `verificar_imports_driver_oracle` | `check_oracle_driver_imports` |
+| `verificar_primitivas_so` | `check_os_primitives` |
+| `verificar_tokens_proibidos_em_arquivo` | `check_forbidden_tokens_in_file` |
+| `verificar_urls_externas_em_arquivo` | `check_external_urls_in_file` |
+
+### Métodos (não `test_*`)
+
+| Antes | Depois |
+|---|---|
+| `_acoes` | `_actions` |
+| `_alterado` | `_changed` |
+| `_arquivo` | `_file` |
+| `_auditorias` | `_audits` |
+| `_base_saida` | `_output_base` |
+| `_cancelar_com` | `_cancel_with` |
+| `_carregar` | `_load` |
+| `_cfg_com_log_dir` | `_cfg_with_log_dir` |
+| `_codigo` | `_code` |
+| `_codigos` | `_codes` |
+| `_como_banco` | `_as_db` |
+| `_conferir_alteracao` | `_check_update` |
+| `_conferir_inclusao` | `_check_insert` |
+| `_consulta` | `_query` |
+| `_contar` | *passada final* |
+| `_contar_por_ip` | `_count_by_ip` |
+| `_copiar_e_modificar_ini` | `_copy_and_edit_ini` |
+| `_criar` | `_create` |
+| `_criar_cfg` | `_create_cfg` |
+| `_criar_secrets_temporario` | `_create_temp_secrets` |
+| `_dados` | `_data` |
+| `_dados_agente` | `_agent_data` |
+| `_derrubar_agentes` | `_kill_agents` |
+| `_editar` | `_edit` |
+| `_elegiveis` | `_eligible` |
+| `_errar` | `_fail_login` |
+| `_erro` | `_error` |
+| `_escrever` | `_write` |
+| `_esperar` | `_wait` |
+| `_estado` | `_state` |
+| `_executar` | *passada final* |
+| `_executavel` | `_executable` |
+| `_exportacoes` | `_exports` |
+| `_fila_diagnostico` | `_queue_diagnostics` |
+| `_fixtures_do_seed` | `_seed_fixtures` |
+| `_grupo` | `_group` |
+| `_helper_saida` | `_helper_output` |
+| `_inserir` | `_insert_row` |
+| `_itens` | `_items` |
+| `_ler_log_app` | `_read_app_log` |
+| `_ler_tudo` | `_read_all` |
+| `_limpar` | `_clean` |
+| `_limpar_agentes` | `_clean_agents` |
+| `_limpar_massa` | `_clean_fixtures` |
+| `_limpar_registro` | `_clean_registration` |
+| `_limpar_tudo` | `_clean_all` |
+| `_linha` | *passada final* |
+| `_linhas` | `_lines` |
+| `_log_integral` | `_full_log` |
+| `_minuto` | `_minute` |
+| `_minuto_exec` | `_run_minute` |
+| `_nomes` | `_names` |
+| `_novo_admin_com_usuario` | `_new_admin_with_user` |
+| `_obter_arquivos_sql` | `_get_sql_files` |
+| `_obter_com_ini` | `_get_with_ini` |
+| `_obter_prefixo_config_example` | `_get_config_example_prefix` |
+| `_pacote` | `_package` |
+| `_pasta` | `_dir` |
+| `_pasta_do_ticket` | `_ticket_dir` |
+| `_pastas_de_saida` | `_output_dirs` |
+| `_pastas_invalidas` | `_invalid_dirs` |
+| `_preencher` | `_fill` |
+| `_recusa` | `_refusal` |
+| `_recusada` | `_refused_f` |
+| `_recusado` | `_refused` |
+| `_registrar` | `_register` |
+| `_regra_ok` | `_rule_ok` |
+| `_responder` | `_reply` |
+| `_resumo` | `_summary` |
+| `_rodando` | `_running` |
+| `_rodar` | `_run_loop` |
+| `_salvar` | `_save` |
+| `_salvar_matriz` | `_save_matrix` |
+| `_saude` | `_health` |
+| `_saudes` | `_healths` |
+| `_sem` | `_without` |
+| `_sem_segredo` | `_without_secret` |
+| `_sem_transacao` | `_without_transaction` |
+| `_servico` | `_service` |
+| `_sessao` | `_session` |
+| `_subir` | `_start_agent` |
+| `_ticket_de_outro` | `_other_ticket` |
+| `_ticket_do_agente` | `_agent_ticket` |
+| `_total_tickets` | `_ticket_total` |
+| `_travar` | `_lock` |
+| `_ultimo_logout` | `_last_logout` |
+| `_um` | `_one` |
+| `_versao` | `_version` |
+| `_vinculos_json` | `_links_json` |
+| `agendamento` | `schedule` |
+| `agente` | `agent` |
+| `ambiente` | `environment` |
+| `anexar_bytes` | `append_bytes` |
+| `anotar` | `note` |
+| `arquivo` | `file` |
+| `assertNegado` | `assertDenied` |
+| `assertReprova` | `assertRejects` |
+| `ate_sair` | `until_exit` |
+| `aud_ultima` | `aud_last` |
+| `auditorias` | `audits` |
+| `avancar` | `advance` |
+| `cenario` | `scenario` |
+| `concluido` | `completed` |
+| `construir` | `build` |
+| `contar` | `count` |
+| `drenar` | `drain` |
+| `encerrar` | `stop` |
+| `falha` | `failure` |
+| `grupo` | `group` |
+| `iniciar_tx` | `start_tx` |
+| `parametro` | `parameter` |
+| `perfil` | `profile` |
+| `regra` | `rule` |
+| `rodar` | `run_loop` |
+| `subir` | `start_agent` |
+| `terminado` | `finished` |
+| `tickets_running_do_agente` | *passada final* |
+| `usuario` | *passada final* |
+| `validar` | `validate` |
+
+### Atributos
+
+| Antes | Depois |
+|---|---|
+| `AGENTE` | `AGENT` |
+| `AGORA` | `NOW` |
+| `DIAS` | `DAYS` |
+| `MOTIVOS` | `REASONS` |
+| `ORDEM` | `ORDER` |
+| `PERMITIDAS` | `ALLOWED` |
+| `PREFIXO_AGENTE` | `AGENT_PREFIX` |
+| `TICKET_OUTRO_AMB` | `TICKET_OTHER_ENV` |
+| `TICKET_PROPRIO` | `TICKET_OWN` |
+| `TICKET_TERCEIRO` | `TICKET_THIRD_PARTY` |
+| `_LIGADO` | `_ENABLED` |
+| `_antes` | `_before` |
+| `_cenario` | `_scenario` |
+| `_contagens` | `_counts` |
+| `_espera` | `_wait_s` |
+| `_massa` | `_fixtures` |
+| `_sss_cfg_anterior` | `_previous_sss_cfg` |
+| `_tipos` | *passada final* |
+| `_troca` | `_overrides` |
+| `_uma` | *passada final* |
+| `agente` | `agent` |
+| `agente_ativo` | `active_agent` |
+| `agoras` | `nows` |
+| `ambiente` | `environment` |
+| `ator` | `actor` |
+| `banco` | `db` |
+| `caminho_arquivo` | `file_path` |
+| `carregar` | `load` |
+| `chamadas` | `calls` |
+| `claim_respostas` | `claim_answers` |
+| `commit_incerto_persistiu` | `uncertain_commit_persisted` |
+| `conexoes` | `connections` |
+| `contagem` | `count` |
+| `contagens` | `counts` |
+| `conteudo` | `content` |
+| `criados` | `created` |
+| `disparo` | `trigger` |
+| `divergentes` | `divergent` |
+| `dono` | `owner` |
+| `duplicado` | `duplicated` |
+| `duplicar` | `duplicate` |
+| `encerrou` | `stopped_flag` |
+| `entradas` | `inputs` |
+| `erro` | `error` |
+| `executados` | `executed` |
+| `falhar` | `fail` |
+| `falhar_commit` | `fail_commit` |
+| `falhar_em` | `fail_at` |
+| `falhas` | *passada final* |
+| `falsos` | `fakes` |
+| `fechada` | `closed` |
+| `fechamentos` | `closings` |
+| `fila` | *passada final* |
+| `fora` | `down` |
+| `grants_texto` | `grants_text` |
+| `grupos` | `groups` |
+| `homologacoes` | `homologations` |
+| `homologados` | *passada final* |
+| `horizonte` | *passada final* |
+| `instante` | `instant` |
+| `instrucoes` | `statements` |
+| `limpas` | `cleaned` |
+| `linhas` | `rows` |
+| `mascarados` | `masked` |
+| `monotonico` | `monotonic` |
+| `n_auditoria` | `n_audit` |
+| `node_offline_chamadas` | `node_offline_calls` |
+| `operador` | `operator` |
+| `origem` | *passada final* |
+| `papeis` | `roles` |
+| `pendentes` | `pending` |
+| `perfil` | `profile` |
+| `prefixo` | *passada final* |
+| `processos` | `processes` |
+| `raiz` | `root` |
+| `registro` | *passada final* |
+| `regras` | `rules` |
+| `relogio` | *passada final* |
+| `roteiro` | `script_steps` |
+| `roubar_na_renovacao` | `steal_on_renewal` |
+| `saida` | *passada final* |
+| `segredos` | *passada final* |
+| `senha` | `password` |
+| `servico` | `service` |
+| `servicos` | `services` |
+| `sinais` | `signals` |
+| `sysdate_deslocamento_s` | `sysdate_offset_s` |
+| `temas` | `themes` |
+| `texto` | *passada final* |
+| `tipos` | `types` |
+| `tomadas` | `taken` |
+| `travadas_por_outro` | `locked_by_other` |
+| `travas` | `locks` |
+| `unidade` | `unit` |
+| `usuario` | *passada final* |
+| `usuario_id` | *passada final* |
+| `valor` | `value` |
+| `versao` | `version` |
+
+## 19. Validação do bloco 5b
+
+* Suítes em 3.6.0, 3.6.8 e 3.13.2, bateria Oracle, testes progressivos nos cinco agregados, percurso real das telas e conferência de resíduos.
+* Achados e corrigidos: atribuições no corpo da classe (`ORDEM = …`, `_copiar_e_modificar_ini = OutraClasse.metodo`), que a troca por atributo não alcança; um `getattr` com o nome do atributo vindo de uma tupla de strings em `test_scheduler_ha`. A bateria Oracle pegou ainda o módulo `test_repo_contract` guardado em atributo (`self.trc._Massa`, em sete arquivos), que a ferramenta por escopo não reconhece.
+* Para a passada final: o método de produção `tickets_running_do_agente`, ainda em português.

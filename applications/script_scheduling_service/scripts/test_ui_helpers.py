@@ -21,7 +21,7 @@ def _ids_sprite():
         return set(re.findall(r'<symbol id="([^"]+)"', f.read()))
 
 
-class TestAtivoInfo(unittest.TestCase):
+class TestActiveInfo(unittest.TestCase):
 
     def test_flags(self):
         self.assertEqual(ui_helpers.ativo_info("Y"),
@@ -66,15 +66,15 @@ class TestStatusInfo(unittest.TestCase):
             self.assertIn(ui_helpers.status_info(status)["icone"], ids)
 
 
-class TestDescricaoMotivo(unittest.TestCase):
+class TestReasonDescription(unittest.TestCase):
 
-    MOTIVOS = ("EXIT_OK", "EXIT_ERROR", "KILLED_SIGNAL", "TIMEOUT", "NODE_OFFLINE", "ORPHAN_PROCESS", "FENCED",
+    REASONS = ("EXIT_OK", "EXIT_ERROR", "KILLED_SIGNAL", "TIMEOUT", "NODE_OFFLINE", "ORPHAN_PROCESS", "FENCED",
                "PRECHECK_FAILED", "SPAWN_ERROR", "LOG_LIMIT", "SHUTDOWN", "CANCEL_USER")
 
     def test_catalogo_completo_do_readme(self):
-        textos = [ui_helpers.descricao_motivo(m) for m in self.MOTIVOS]
+        textos = [ui_helpers.descricao_motivo(m) for m in self.REASONS]
         self.assertTrue(all(textos))
-        self.assertEqual(len(set(textos)), len(self.MOTIVOS))
+        self.assertEqual(len(set(textos)), len(self.REASONS))
 
     def test_vazio_e_desconhecido(self):
         self.assertIsNone(ui_helpers.descricao_motivo(None))
@@ -82,7 +82,7 @@ class TestDescricaoMotivo(unittest.TestCase):
         self.assertIn("OWNERSHIP_LOST", ui_helpers.descricao_motivo("OWNERSHIP_LOST"))
 
 
-class TestQuadroRegistro(unittest.TestCase):
+class TestRecordPanel(unittest.TestCase):
     """Quadro Registro (CR-006, README §10): ator em linguagem simples e as duas frases."""
 
     def test_nome_ator(self):
@@ -119,7 +119,7 @@ class TestQuadroRegistro(unittest.TestCase):
         self.assertEqual(ui_helpers.registro(None, {}), dict.fromkeys(ui_helpers.COLUNAS_REGISTRO))
 
 
-class TestFormatarData(unittest.TestCase):
+class TestFormatDate(unittest.TestCase):
 
     def test_formato(self):
         self.assertEqual(ui_helpers.formatar_data(datetime.datetime(2026, 1, 5, 7, 3, 9)),
@@ -129,7 +129,7 @@ class TestFormatarData(unittest.TestCase):
         self.assertEqual(ui_helpers.formatar_data(None), "-")
 
 
-class TestFormatarDuracao(unittest.TestCase):
+class TestFormatDuration(unittest.TestCase):
     T0 = datetime.datetime(2026, 10, 14, 10, 0, 0)
 
     def _dur(self, **delta):
@@ -162,7 +162,7 @@ class TestFormatarDuracao(unittest.TestCase):
         self.assertEqual(self._dur(seconds=-1), "-")
 
 
-class TestSanitizarPagina(unittest.TestCase):
+class TestSanitizePage(unittest.TestCase):
 
     def test_validos(self):
         self.assertEqual(ui_helpers.sanitizar_pagina("3"), 3)
@@ -182,7 +182,7 @@ class TestSanitizarPagina(unittest.TestCase):
         self.assertEqual(ui_helpers.sanitizar_pagina("2", padrao=4), 2)
 
 
-class TestSanitizarTamanho(unittest.TestCase):
+class TestSanitizeSize(unittest.TestCase):
 
     def test_permitidos(self):
         for valor, esperado in (("20", 20), (20, 20), ("50", 50), (50, 50), ("100", 100), (100, 100)):
@@ -200,9 +200,9 @@ class TestSanitizarTamanho(unittest.TestCase):
         self.assertEqual(ui_helpers.sanitizar_tamanho("20", permitidos=(10, 25)), 10)
 
 
-class TestPaginacaoInfo(unittest.TestCase):
+class TestPaginationInfo(unittest.TestCase):
 
-    def _resumo(self, info):
+    def _summary(self, info):
         return (info["pagina"], info["total_paginas"], info["tem_anterior"], info["tem_proxima"],
                 info["anterior"], info["proxima"], info["primeiro_registro"], info["ultimo_registro"])
 
@@ -225,32 +225,32 @@ class TestPaginacaoInfo(unittest.TestCase):
 
     def test_total_zero(self):
         info = ui_helpers.paginacao_info(1, 20, 0)
-        self.assertEqual(self._resumo(info), (1, 1, False, False, 1, 1, 0, 0))
-        self.assertEqual(self._resumo(ui_helpers.paginacao_info(5, 20, 0)), self._resumo(info))
+        self.assertEqual(self._summary(info), (1, 1, False, False, 1, 1, 0, 0))
+        self.assertEqual(self._summary(ui_helpers.paginacao_info(5, 20, 0)), self._summary(info))
 
     def test_pagina_zero_e_negativa(self):
         for pagina in (0, -1, "0", "-3", None, "abc"):
             with self.subTest(pagina=pagina):
-                self.assertEqual(self._resumo(ui_helpers.paginacao_info(pagina, 20, 57)),
+                self.assertEqual(self._summary(ui_helpers.paginacao_info(pagina, 20, 57)),
                                  (1, 3, False, True, 1, 2, 1, 20))
 
     def test_pagina_alem_do_total(self):
-        self.assertEqual(self._resumo(ui_helpers.paginacao_info(99, 20, 57)),
+        self.assertEqual(self._summary(ui_helpers.paginacao_info(99, 20, 57)),
                          (3, 3, True, False, 2, 3, 41, 57))
-        self.assertEqual(self._resumo(ui_helpers.paginacao_info("4", 20, 57))[0], 3)
+        self.assertEqual(self._summary(ui_helpers.paginacao_info("4", 20, 57))[0], 3)
 
     def test_meio(self):
-        self.assertEqual(self._resumo(ui_helpers.paginacao_info(2, 20, 57)),
+        self.assertEqual(self._summary(ui_helpers.paginacao_info(2, 20, 57)),
                          (2, 3, True, True, 1, 3, 21, 40))
 
     def test_ultima_exata(self):
-        self.assertEqual(self._resumo(ui_helpers.paginacao_info(2, 20, 40)),
+        self.assertEqual(self._summary(ui_helpers.paginacao_info(2, 20, 40)),
                          (2, 2, True, False, 1, 2, 21, 40))
         self.assertEqual(ui_helpers.paginacao_info(1, 20, 20)["total_paginas"], 1)
         self.assertEqual(ui_helpers.paginacao_info(1, 20, 21)["total_paginas"], 2)
 
     def test_um_registro(self):
-        self.assertEqual(self._resumo(ui_helpers.paginacao_info(1, 50, 1)),
+        self.assertEqual(self._summary(ui_helpers.paginacao_info(1, 50, 1)),
                          (1, 1, False, False, 1, 1, 1, 1))
 
     def test_tamanho_e_total_invalidos(self):
@@ -267,7 +267,7 @@ class TestPaginacaoInfo(unittest.TestCase):
             "anterior", "proxima", "primeiro_registro", "ultimo_registro"]))
 
 
-class TestPrimeiroCampoInvalido(unittest.TestCase):
+class TestFirstInvalidField(unittest.TestCase):
 
     def test_ordem(self):
         campos = [{"name": "a"}, {"name": "b", "erro": u"Obrigatório."}, {"name": "c", "erro": u"Inválido."}]
@@ -279,7 +279,7 @@ class TestPrimeiroCampoInvalido(unittest.TestCase):
         self.assertIsNone(ui_helpers.primeiro_campo_invalido(None))
 
 
-class TestAlertaInfo(unittest.TestCase):
+class TestAlertInfo(unittest.TestCase):
 
     def test_tipos(self):
         esperados = {
@@ -314,19 +314,19 @@ class TestAlertaInfo(unittest.TestCase):
             self.assertIn(ui_helpers.alerta_info((tipo, "x"))["icone"], ids)
 
 
-class TestMontarMenu(unittest.TestCase):
+class TestBuildMenu(unittest.TestCase):
 
-    def _codigos(self, menu):
+    def _codes(self, menu):
         return [(s["secao"], [i["code"] for i in s["itens"]]) for s in menu]
 
     def test_admin_ve_catalogo_completo_na_ordem(self):
         menu = ui_menu.montar_menu([], True)
-        self.assertEqual(self._codigos(menu), [
+        self.assertEqual(self._codes(menu), [
             ("OPERATION", ["EXEC_SCRIPT", "EXEC_SCRIPT", "VIEW_LOGS"]),
             ("ADMIN", ["MANAGE_USERS", "MANAGE_PROFILES", "MANAGE_ENVIRONMENTS", "MANAGE_SCRIPTS",
                        "MANAGE_PARAMETERS", "MANAGE_SCHEDULES", "VIEW_AUDIT"]),
         ])
-        self.assertEqual(self._codigos(ui_menu.montar_menu(None, "Y")), self._codigos(menu))
+        self.assertEqual(self._codes(ui_menu.montar_menu(None, "Y")), self._codes(menu))
 
     def test_admin_somente_true_ou_s(self):
         for flag in (False, "N", "s", "", None, 1, "True"):
@@ -335,11 +335,11 @@ class TestMontarMenu(unittest.TestCase):
 
     def test_filtra_por_funcionalidade_e_omite_secao_vazia(self):
         menu = ui_menu.montar_menu(["VIEW_LOGS", "MANAGE_SCHEDULES"], False)
-        self.assertEqual(self._codigos(menu), [
+        self.assertEqual(self._codes(menu), [
             ("OPERATION", ["VIEW_LOGS"]),
             ("ADMIN", ["MANAGE_SCHEDULES"]),
         ])
-        self.assertEqual(self._codigos(ui_menu.montar_menu(["EXEC_SCRIPT"], False)),
+        self.assertEqual(self._codes(ui_menu.montar_menu(["EXEC_SCRIPT"], False)),
                          [("OPERATION", ["EXEC_SCRIPT", "EXEC_SCRIPT"])])
 
     def test_codigo_desconhecido_ou_caixa_diferente_ignorado(self):
@@ -381,7 +381,7 @@ class TestMontarMenu(unittest.TestCase):
         self.assertEqual(ui_menu.montar_menu([], True)[0]["itens"][0]["rotulo"], u"Rotinas disponíveis")
 
 
-class TestModulosPurosSemGluon(unittest.TestCase):
+class TestPureModulesWithoutGluon(unittest.TestCase):
 
     def test_nao_importam_gluon(self):
         for nome in ("ui_helpers", "ui_menu"):
@@ -390,10 +390,10 @@ class TestModulosPurosSemGluon(unittest.TestCase):
                 self.assertNotRegex(f.read(), r"^\s*(from|import)\s+gluon", nome)
 
 
-class TestLinguagemClara(unittest.TestCase):
+class TestPlainLanguage(unittest.TestCase):
     """CR-004 U1 (README §2.4.2, §5.2.1)."""
 
-    AGORA = datetime.datetime(2026, 10, 16, 10, 0, 0)
+    NOW = datetime.datetime(2026, 10, 16, 10, 0, 0)
 
     def test_mensagens_padrao_em_duas_partes(self):
         for chave in ui_helpers.MENSAGENS:
@@ -405,39 +405,39 @@ class TestLinguagemClara(unittest.TestCase):
 
     def test_explicacao_por_situacao(self):
         e = ui_helpers.explicacao_ticket
-        futuro = self.AGORA + datetime.timedelta(hours=2)
-        self.assertEqual(e({"status": "PENDING", "scheduled_at": futuro}, self.AGORA)["aconteceu"],
+        futuro = self.NOW + datetime.timedelta(hours=2)
+        self.assertEqual(e({"status": "PENDING", "scheduled_at": futuro}, self.NOW)["aconteceu"],
                          u"Está agendado para começar em 16/10/2026 às 12:00.")
-        self.assertEqual(e({"status": "PENDING", "scheduled_at": self.AGORA}, self.AGORA)["aconteceu"],
+        self.assertEqual(e({"status": "PENDING", "scheduled_at": self.NOW}, self.NOW)["aconteceu"],
                          u"Está na fila, esperando um servidor livre.")
-        rodando = {"status": "RUNNING", "started_at": self.AGORA - datetime.timedelta(minutes=4)}
-        self.assertEqual(e(rodando, self.AGORA)["aconteceu"], u"Está rodando agora. Começou há 4 minutos.")
-        self.assertIn(u"cancelamento foi pedido", e(dict(rodando, cancel_requested="Y"), self.AGORA)["aconteceu"])
-        erro = e({"status": "FAILED", "status_reason": "EXIT_ERROR", "return_code": 3}, self.AGORA)
+        rodando = {"status": "RUNNING", "started_at": self.NOW - datetime.timedelta(minutes=4)}
+        self.assertEqual(e(rodando, self.NOW)["aconteceu"], u"Está rodando agora. Começou há 4 minutos.")
+        self.assertIn(u"cancelamento foi pedido", e(dict(rodando, cancel_requested="Y"), self.NOW)["aconteceu"])
+        erro = e({"status": "FAILED", "status_reason": "EXIT_ERROR", "return_code": 3}, self.NOW)
         self.assertEqual((erro["state"], erro["aconteceu"]),
                          (u"Deu erro", u"O script rodou, mas terminou avisando que algo deu errado (código 3)."))
-        self.assertIn(u"6 horas", e({"status": "FAILED", "status_reason": "TIMEOUT"}, self.AGORA, 21600)["aconteceu"])
-        self.assertIsNone(e({"status": "SUCCESS", "status_reason": "EXIT_OK"}, self.AGORA)["fazer"])
-        self.assertIn("XYZ", e({"status": "FAILED", "status_reason": "XYZ"}, self.AGORA)["aconteceu"])
+        self.assertIn(u"6 horas", e({"status": "FAILED", "status_reason": "TIMEOUT"}, self.NOW, 21600)["aconteceu"])
+        self.assertIsNone(e({"status": "SUCCESS", "status_reason": "EXIT_OK"}, self.NOW)["fazer"])
+        self.assertIn("XYZ", e({"status": "FAILED", "status_reason": "XYZ"}, self.NOW)["aconteceu"])
 
     def test_etapas_do_ticket(self):
         # CR-004 U2 (README §5.7).
-        criado = self.AGORA - datetime.timedelta(minutes=10)
+        criado = self.NOW - datetime.timedelta(minutes=10)
         pend = ui_helpers.etapas_ticket({"status": "PENDING", "created_at": criado,
-                                         "scheduled_at": self.AGORA + datetime.timedelta(hours=1)}, self.AGORA)
+                                         "scheduled_at": self.NOW + datetime.timedelta(hours=1)}, self.NOW)
         self.assertEqual([e["estado"] for e in pend], ["feito", "atual", "pendente", "pendente"])
         self.assertTrue(pend[1]["quando"].startswith(u"agendado para"))
         rod = ui_helpers.etapas_ticket({"status": "RUNNING", "created_at": criado, "scheduled_at": criado,
-                                        "started_at": self.AGORA - datetime.timedelta(minutes=2)}, self.AGORA)
+                                        "started_at": self.NOW - datetime.timedelta(minutes=2)}, self.NOW)
         self.assertEqual([e["estado"] for e in rod], ["feito", "feito", "atual", "pendente"])
         self.assertEqual(rod[2]["quando"], u"há 2 minutos")
         canc = ui_helpers.etapas_ticket({"status": "CANCELLED", "created_at": criado, "scheduled_at": criado,
-                                         "finished_at": self.AGORA}, self.AGORA)
+                                         "finished_at": self.NOW}, self.NOW)
         self.assertEqual([e["estado"] for e in canc], ["feito", "feito", "pulado", "atual"])
         self.assertEqual(canc[2]["quando"], u"não chegou a rodar")
         self.assertTrue(canc[3]["quando"].startswith(u"Cancelado"))
         ok = ui_helpers.etapas_ticket({"status": "SUCCESS", "created_at": criado, "scheduled_at": criado,
-                                       "started_at": criado, "finished_at": self.AGORA}, self.AGORA)
+                                       "started_at": criado, "finished_at": self.NOW}, self.NOW)
         self.assertEqual([e["estado"] for e in ok], ["feito", "feito", "feito", "atual"])
 
     def test_tempo_simples(self):

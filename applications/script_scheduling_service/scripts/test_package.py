@@ -19,16 +19,16 @@ import unittest
 import package as empacotar
 
 APP = empacotar.APP
-SEGREDO = "valor-de-teste-nao-placeholder"
+SECRET = "valor-de-teste-nao-placeholder"
 
 
-class TestEmpacotar(unittest.TestCase):
+class TestPack(unittest.TestCase):
 
     def setUp(self):
-        self.raiz = tempfile.mkdtemp(prefix="sss_test_pacote_")
-        self.addCleanup(shutil.rmtree, self.raiz, True)
-        self.origem = os.path.join(self.raiz, "web2py")
-        self.saida = os.path.join(self.raiz, "dist")
+        self.root = tempfile.mkdtemp(prefix="sss_test_pacote_")
+        self.addCleanup(shutil.rmtree, self.root, True)
+        self.origem = os.path.join(self.root, "web2py")
+        self.saida = os.path.join(self.root, "dist")
         arquivos = {
             "web2py.py": "# web2py\n", "anyserver.py": "# anyserver\n", "routes.py": "# DEV\n",
             "gluon/__init__.py": "", "gluon/main.py": "# main\n", "gluon/tests/test_x.py": "",
@@ -49,10 +49,10 @@ class TestEmpacotar(unittest.TestCase):
             APP + "/work/sss-a.lock": "x", APP + "/docs/DEPLOYMENT.md": "# Implantacao\n",
         }
         for rel, texto in arquivos.items():
-            self._escrever(rel, texto)
+            self._write(rel, texto)
         os.chmod(os.path.join(self.origem, "bin", "sss-helper"), 0o755)
 
-    def _escrever(self, rel, texto):
+    def _write(self, rel, texto):
         caminho = os.path.join(self.origem, *rel.split("/"))
         os.makedirs(os.path.dirname(caminho), exist_ok=True)
         with open(caminho, "w") as f:
@@ -64,21 +64,21 @@ class TestEmpacotar(unittest.TestCase):
         codigo = empacotar.main(["--source", self.origem, "--out-dir", self.saida], saida_texto=texto)
         return codigo, texto.getvalue()
 
-    def _pacote(self):
+    def _package(self):
         return os.path.join(self.saida, "sss-%s.tar.gz" % empacotar.sss_config.SSS_VERSION)
 
-    def _recusado(self, trecho):
+    def _refused(self, trecho):
         codigo, texto = self._main()
         self.assertEqual(codigo, 1, texto)
         self.assertIn(trecho, texto)
-        self.assertNotIn(SEGREDO, texto, "o valor nunca e impresso")
+        self.assertNotIn(SECRET, texto, "o valor nunca e impresso")
         self.assertFalse(os.path.exists(self.saida) and os.listdir(self.saida), "nada gravado")
         return texto
 
     def test_pacote_e_sha256sums(self):
         codigo, texto = self._main()
         self.assertEqual(codigo, 0, texto)
-        pacote = self._pacote()
+        pacote = self._package()
         with open(pacote, "rb") as f:
             dados = f.read()
         with open(os.path.join(self.saida, "SHA256SUMS")) as f:
@@ -112,36 +112,36 @@ class TestEmpacotar(unittest.TestCase):
 
     def test_tar_reprodutivel(self):
         self.assertEqual(self._main()[0], 0)
-        with open(self._pacote(), "rb") as f:
+        with open(self._package(), "rb") as f:
             primeiro = f.read()
         os.utime(os.path.join(self.origem, "web2py.py"), (1, 1))
         self.assertEqual(self._main()[0], 0)
-        with open(self._pacote(), "rb") as f:
+        with open(self._package(), "rb") as f:
             self.assertEqual(f.read(), primeiro)
 
     def test_falha_com_secrets_cfg_na_arvore(self):
-        self._escrever(APP + "/instance/secrets.cfg", "[oracle]\npassword = %s\n" % SEGREDO)
-        texto = self._recusado("instance/secrets.cfg: arquivo de segredos real")
+        self._write(APP + "/instance/secrets.cfg", "[oracle]\npassword = %s\n" % SECRET)
+        texto = self._refused("instance/secrets.cfg: arquivo de segredos real")
         self.assertIn("instance/secrets.cfg:2: password", texto)
 
     def test_exemplo_com_senha_que_nao_e_placeholder(self):
-        self._escrever(APP + "/instance/secrets.cfg.example", "[oracle]\npassword = %s  ; teste\n" % SEGREDO)
-        self._recusado("secrets.cfg.example:2: password com valor que nao e o placeholder CHANGE_ME")
+        self._write(APP + "/instance/secrets.cfg.example", "[oracle]\npassword = %s  ; teste\n" % SECRET)
+        self._refused("secrets.cfg.example:2: password com valor que nao e o placeholder CHANGE_ME")
 
     def test_change_me_so_no_exemplo_de_segredos(self):
-        self._escrever(APP + "/instance/outro.cfg.example", "[x]\npassword = CHANGE_ME\n")
-        self._recusado("instance/outro.cfg.example:2: password")
+        self._write(APP + "/instance/outro.cfg.example", "[x]\npassword = CHANGE_ME\n")
+        self._refused("instance/outro.cfg.example:2: password")
 
     def test_cookie_key_em_ini(self):
-        self._escrever(APP + "/instance/config.ini.example", "[web]\ncookie_key = %s\n" % SEGREDO)
-        self._recusado("config.ini.example:2: cookie_key")
+        self._write(APP + "/instance/config.ini.example", "[web]\ncookie_key = %s\n" % SECRET)
+        self._refused("config.ini.example:2: cookie_key")
 
     def test_bytecode_link_e_outra_aplicacao(self):
-        self._escrever(APP + "/modules/x.pyc", "x")
-        self._escrever(APP + "/modules/__pycache__/y.cpython-36.pyc", "x")
-        self._escrever("applications/admin/controllers/default.py", "x")
+        self._write(APP + "/modules/x.pyc", "x")
+        self._write(APP + "/modules/__pycache__/y.cpython-36.pyc", "x")
+        self._write("applications/admin/controllers/default.py", "x")
         os.symlink("/etc", os.path.join(self.origem, "gluon", "fora"))
-        texto = self._recusado("modules/x.pyc: bytecode")
+        texto = self._refused("modules/x.pyc: bytecode")
         self.assertIn("__pycache__/y.cpython-36.pyc: bytecode", texto)
         self.assertIn("gluon/fora: link simbolico", texto)
 
@@ -152,7 +152,7 @@ class TestEmpacotar(unittest.TestCase):
 
     def test_helper_ausente(self):
         os.remove(os.path.join(self.origem, "bin", "sss-helper"))
-        self._recusado("bin/sss-helper: ausente")
+        self._refused("bin/sss-helper: ausente")
 
     def test_pacote_da_arvore_real_sem_segredo_nem_dev(self):
         # Coleta da propria arvore: as regras de inclusao nunca puxam DEV, testes nem runtime.
@@ -162,7 +162,7 @@ class TestEmpacotar(unittest.TestCase):
         self.assertIn(APP + "/modules/repo_oracle/purge.py", arquivos)
 
 
-class TestPacoteSobeSemODev(unittest.TestCase):
+class TestPackageStartsWithoutDev(unittest.TestCase):
     """F9.1d (ensaio a partir do pacote): o repo_factory importava o repo_fake no topo e a aplicacao nao subia sem
     ele. Nenhum arquivo que vai no pacote importa no nivel do modulo algo que o pacote exclui."""
 

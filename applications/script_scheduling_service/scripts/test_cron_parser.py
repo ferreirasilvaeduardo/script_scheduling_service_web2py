@@ -14,14 +14,14 @@ from cron_parser import CronError
 
 D = datetime.datetime
 # Quinta-feira, com segundos e microssegundos de proposito.
-AGORA = D(2026, 10, 15, 10, 7, 30, 123456)
+NOW = D(2026, 10, 15, 10, 7, 30, 123456)
 
 
-def prox(expr, apos=AGORA, horizonte=cron_parser.DEFAULT_HORIZON):
+def next_run(expr, apos=NOW, horizonte=cron_parser.DEFAULT_HORIZON):
     return cron_parser.parse(expr).next(apos, horizonte)
 
 
-def sequencia(expr, apos, n):
+def sequence(expr, apos, n):
     cron = cron_parser.parse(expr)
     lista = []
     for _ in range(n):
@@ -30,7 +30,7 @@ def sequencia(expr, apos, n):
     return lista
 
 
-def _casa_bruto(campos, t):
+def _raw_match(campos, t):
     """Referencia ingenua (minuto a minuto) para conferir o calculo campo a campo."""
     minutos, horas, dias, meses, dsem, dia_r, dsem_r = campos
     if t.minute not in minutos or t.hour not in horas or t.month not in meses:
@@ -40,7 +40,7 @@ def _casa_bruto(campos, t):
     return (casa_dia or casa_dsem) if (dia_r and dsem_r) else (casa_dia and casa_dsem)
 
 
-class TestSintaxe(unittest.TestCase):
+class TestSyntax(unittest.TestCase):
 
     def test_campos_basicos(self):
         cron = cron_parser.parse('  0,30   8-18/2 1-5,15 */3 1-5 ')
@@ -81,60 +81,60 @@ class TestSintaxe(unittest.TestCase):
         self.assertEqual(cron_parser.parse('0 0 1 1 1' + ' ' * 60).texto, '0 0 1 1 1')
 
 
-class TestProxima(unittest.TestCase):
+class TestNext(unittest.TestCase):
 
     def test_estritamente_maior_e_sem_segundos(self):
-        self.assertEqual(prox('* * * * *'), D(2026, 10, 15, 10, 8))
-        self.assertEqual(prox('* * * * *', D(2026, 10, 15, 10, 8)), D(2026, 10, 15, 10, 9))
-        self.assertEqual(prox('8 10 * * *'), D(2026, 10, 15, 10, 8))
-        self.assertEqual(prox('7 10 * * *'), D(2026, 10, 16, 10, 7))
+        self.assertEqual(next_run('* * * * *'), D(2026, 10, 15, 10, 8))
+        self.assertEqual(next_run('* * * * *', D(2026, 10, 15, 10, 8)), D(2026, 10, 15, 10, 9))
+        self.assertEqual(next_run('8 10 * * *'), D(2026, 10, 15, 10, 8))
+        self.assertEqual(next_run('7 10 * * *'), D(2026, 10, 16, 10, 7))
         for expr in ('*/15 * * * *', '0 0 29 2 *', '30 2 * * 1-5'):
-            r = prox(expr)
+            r = next_run(expr)
             self.assertEqual((r.second, r.microsecond), (0, 0))
 
     def test_passo_15(self):
-        self.assertEqual(sequencia('*/15 * * * *', AGORA, 4),
+        self.assertEqual(sequence('*/15 * * * *', NOW, 4),
                          [D(2026, 10, 15, 10, 15), D(2026, 10, 15, 10, 30), D(2026, 10, 15, 10, 45),
                           D(2026, 10, 15, 11, 0)])
 
     def test_lista_intervalo_passo(self):
-        self.assertEqual(sequencia('0 8-12/2 * * *', AGORA, 3),
+        self.assertEqual(sequence('0 8-12/2 * * *', NOW, 3),
                          [D(2026, 10, 15, 12, 0), D(2026, 10, 16, 8, 0), D(2026, 10, 16, 10, 0)])
-        self.assertEqual(sequencia('5,50 23 * * *', AGORA, 3),
+        self.assertEqual(sequence('5,50 23 * * *', NOW, 3),
                          [D(2026, 10, 15, 23, 5), D(2026, 10, 15, 23, 50), D(2026, 10, 16, 23, 5)])
 
     def test_carry_de_ano(self):
-        self.assertEqual(prox('59 23 31 12 *', D(2026, 12, 31, 23, 59)), D(2027, 12, 31, 23, 59))
-        self.assertEqual(prox('0 0 1 1 *', D(2026, 12, 31, 23, 59, 59)), D(2027, 1, 1, 0, 0))
+        self.assertEqual(next_run('59 23 31 12 *', D(2026, 12, 31, 23, 59)), D(2027, 12, 31, 23, 59))
+        self.assertEqual(next_run('0 0 1 1 *', D(2026, 12, 31, 23, 59, 59)), D(2027, 1, 1, 0, 0))
 
     def test_29_de_fevereiro_so_em_ano_bissexto(self):
-        self.assertEqual(sequencia('0 0 29 2 *', AGORA, 3), [D(2028, 2, 29), D(2032, 2, 29), D(2036, 2, 29)])
+        self.assertEqual(sequence('0 0 29 2 *', NOW, 3), [D(2028, 2, 29), D(2032, 2, 29), D(2036, 2, 29)])
 
     def test_dia_31_pula_meses_curtos(self):
-        self.assertEqual(sequencia('0 0 31 * *', AGORA, 4),
+        self.assertEqual(sequence('0 0 31 * *', NOW, 4),
                          [D(2026, 10, 31), D(2026, 12, 31), D(2027, 1, 31), D(2027, 3, 31)])
 
     def test_domingo_0_e_7_equivalentes(self):
-        self.assertEqual(prox('0 12 * * 0'), D(2026, 10, 18, 12, 0))
-        self.assertEqual(sequencia('0 12 * * 0', AGORA, 5), sequencia('0 12 * * 7', AGORA, 5))
+        self.assertEqual(next_run('0 12 * * 0'), D(2026, 10, 18, 12, 0))
+        self.assertEqual(sequence('0 12 * * 0', NOW, 5), sequence('0 12 * * 7', NOW, 5))
 
     def test_semantica_ou_vixie(self):
         # Dia 1 OU segunda-feira.
-        self.assertEqual(sequencia('0 0 1 * 1', AGORA, 4),
+        self.assertEqual(sequence('0 0 1 * 1', NOW, 4),
                          [D(2026, 10, 19), D(2026, 10, 26), D(2026, 11, 1), D(2026, 11, 2)])
         # Campo iniciado por '*' nao e restrito: vale o E (dias impares que sejam segunda).
-        for data in sequencia('0 0 */2 * 1', AGORA, 6):
+        for data in sequence('0 0 */2 * 1', NOW, 6):
             self.assertEqual((data.day % 2, data.weekday()), (1, 0))
         # So dia da semana restrito.
-        for data in sequencia('0 0 * * 1', AGORA, 4):
+        for data in sequence('0 0 * * 1', NOW, 4):
             self.assertEqual(data.weekday(), 0)
 
     def test_sem_ocorrencia_no_horizonte(self):
-        self.assertIsNone(prox('0 0 30 2 *'))
-        self.assertIsNone(prox('0 0 31 4,6,9,11 *'))
-        self.assertIsNone(prox('0 0 29 2 *', D(2026, 10, 15), horizonte=365))
-        self.assertEqual(prox('0 0 29 2 *', D(2026, 10, 15), horizonte=503), D(2028, 2, 29))
-        self.assertIsNone(prox('0 0 29 2 *', D(2026, 10, 15), horizonte=501))
+        self.assertIsNone(next_run('0 0 30 2 *'))
+        self.assertIsNone(next_run('0 0 31 4,6,9,11 *'))
+        self.assertIsNone(next_run('0 0 29 2 *', D(2026, 10, 15), horizonte=365))
+        self.assertEqual(next_run('0 0 29 2 *', D(2026, 10, 15), horizonte=503), D(2028, 2, 29))
+        self.assertIsNone(next_run('0 0 29 2 *', D(2026, 10, 15), horizonte=501))
 
     def test_confere_com_forca_bruta(self):
         sorteio = random.Random(20261015)
@@ -154,7 +154,7 @@ class TestProxima(unittest.TestCase):
             t = inicio.replace(second=0) + datetime.timedelta(minutes=1)
             esperado = None
             for _ in range(janela):
-                if _casa_bruto(campos, t):
+                if _raw_match(campos, t):
                     esperado = t
                     break
                 t += datetime.timedelta(minutes=1)
@@ -170,12 +170,12 @@ class TestProxima(unittest.TestCase):
                  '0-59/7 0-23/5 1-31/3 1-12/5 0-6/3')
         for expr in exprs:
             cron = cron_parser.parse(expr)
-            segundos = min(timeit.repeat(lambda: cron.next(AGORA), number=5, repeat=3)) / 5
+            segundos = min(timeit.repeat(lambda: cron.next(NOW), number=5, repeat=3)) / 5
             with self.subTest(expr=expr):
                 self.assertLess(segundos, 0.050, '%s levou %.1f ms' % (expr, segundos * 1000))
 
 
-class TestDescrever(unittest.TestCase):
+class TestDescribe(unittest.TestCase):
 
     def test_expressoes_comuns(self):
         casos = (
@@ -207,7 +207,7 @@ class TestDescrever(unittest.TestCase):
                 self.assertTrue(cron_parser.parse(expr).describe())
 
 
-class TestPureza(unittest.TestCase):
+class TestPurity(unittest.TestCase):
 
     def test_sem_now_nem_gluon(self):
         modulos = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'modules')

@@ -32,9 +32,9 @@ from repo_oracle.scheduler_queue import RegistrationLost
 from sss_config import EnvironmentSecret, Secrets
 from _output_memory import RepoOutputMemory
 
-AGENTE_FALSO = 2 ** 31 - 3
+FAKE_AGENT = 2 ** 31 - 3
 AMB = "DEV"
-SENHA_AMB = "SenhaDoAmbiente#2026"
+ENV_PASSWORD = "SenhaDoAmbiente#2026"
 
 _Agent = collections.namedtuple("_Agent", (
     "agent_id", "environments", "work_dir", "interpreters", "exec_users",
@@ -51,45 +51,45 @@ _App = collections.namedtuple("_App", "sss_env")
 _Oracle = collections.namedtuple("_Oracle", "dsn call_timeout_ms owner table_prefix")
 
 
-class _ErroRede(Exception):
+class _NetworkError(Exception):
     def __init__(self):
         Exception.__init__(self, "DPY-4011: the database or network closed the connection")
 
 
-class _ErroPrivilegio(Exception):
+class _PrivilegeError(Exception):
     def __init__(self):
         Exception.__init__(self, "ORA-01031: insufficient privileges")
 
 
-class _Banco(object):
+class _Db(object):
     """Banco em memoria: tickets, scripts, ambiente, homologacao, contexto RBAC e o CLOB do log."""
 
     def __init__(self, raiz):
         self.lock = threading.Lock()
         self.tickets = {}
         self.scripts = {}
-        self.ambiente = {"id": 1, "name": AMB, "description": "Desenvolvimento", "connection": "db:1521/dev", "active": "Y"}
+        self.environment = {"id": 1, "name": AMB, "description": "Desenvolvimento", "connection": "db:1521/dev", "active": "Y"}
         self.homologados = set()
         self.ctx = rbac.user_context({
             "user_id": 9, "login": "ana", "profile_id": 2, "usuario_ativo": "Y", "perfil_ativo": "Y",
             "is_admin": "N", "perm_version": 1, "features": ["EXEC_SCRIPT"], "environments": [AMB],
             "scripts": []})
         self.falhas = collections.defaultdict(list)
-        self.chamadas = collections.defaultdict(int)
-        self.claim_respostas = []
+        self.calls = collections.defaultdict(int)
+        self.claim_answers = []
         self.heartbeats = []
-        self.agente_ativo = True
-        self.encerrou = None
+        self.active_agent = True
+        self.stopped_flag = None
         self.max_running = 0
         self.seq = 100
-        self.unidade = 2
+        self.unit = 2
         # F8.4c: tickets de outro agente que o NODE_OFFLINE deve marcar, chamadas e o deslocamento do SYSDATE.
         self.offline = set()
-        self.node_offline_chamadas = 0
-        self.sysdate_deslocamento_s = 0
+        self.node_offline_calls = 0
+        self.sysdate_offset_s = 0
 
     def _fail(self, metodo):
-        self.chamadas[metodo] += 1
+        self.calls[metodo] += 1
         if self.falhas[metodo]:
             erro = self.falhas[metodo].pop(0)
             if erro is not None:
@@ -131,7 +131,7 @@ class _Banco(object):
 
     def active_environments(self, conn, atendidos):
         self._fail("active_environments")
-        return ([AMB] if self.ambiente["active"] == "Y" and AMB in atendidos else []), []
+        return ([AMB] if self.environment["active"] == "Y" and AMB in atendidos else []), []
 
     def check_config(self, conn, agente_id, criticos, offline):
         self._fail("check_config")
@@ -147,8 +147,8 @@ class _Banco(object):
 
     def claim(self, conn, tid, sid, ambiente, agente_id):
         self._fail("claim")
-        if self.claim_respostas:
-            resposta = self.claim_respostas.pop(0)
+        if self.claim_answers:
+            resposta = self.claim_answers.pop(0)
             if resposta is not None:
                 return resposta
         with self.lock:
@@ -170,7 +170,7 @@ class _Banco(object):
     def execution_context(self, conn, ticket):
         self._fail("execution_context")
         s = self.scripts.get(ticket["script_id"])
-        return {"script": dict(s) if s else None, "environment": dict(self.ambiente),
+        return {"script": dict(s) if s else None, "environment": dict(self.environment),
                 "homologacoes": frozenset({1}) if ticket["script_id"] in self.homologados else frozenset(),
                 "ctx": self.ctx, "agendamento": None}
 
@@ -220,18 +220,18 @@ class _Banco(object):
 
     def heartbeat(self, conn, agente_id, hostname, pid, ids):
         self._fail("heartbeat")
-        if not self.agente_ativo:
+        if not self.active_agent:
             raise RegistrationLost("registro assumido")
         self.heartbeats.append(list(ids))
         perdidos = [i for i in ids if self.tickets[i]["status"] != "RUNNING" or self.tickets[i]["agent_id"] != agente_id]
         return perdidos, self.sysdate()
 
     def sysdate(self):
-        return datetime.datetime.now() + datetime.timedelta(seconds=self.sysdate_deslocamento_s)
+        return datetime.datetime.now() + datetime.timedelta(seconds=self.sysdate_offset_s)
 
     def mark_node_offline(self, conn, agente_id, timeout_s, salto_de_relogio):
         self._fail("mark_node_offline")
-        self.node_offline_chamadas += 1
+        self.node_offline_calls += 1
         if salto_de_relogio(self.sysdate()):
             return None
         marcados = []
@@ -247,13 +247,13 @@ class _Banco(object):
         return 1
 
     def stop_agent(self, conn, agente_id, hostname, pid, modo):
-        self.encerrou = modo
+        self.stopped_flag = modo
         return True
 
     # -- contrato do RepoSchedulerLog
 
     def supplementary_unit(self, conn):
-        return self.unidade
+        return self.unit
 
     def append_chunk(self, conn, tid, agente_id, offset, bloco):
         self._fail("append_chunk")
@@ -263,14 +263,14 @@ class _Banco(object):
         if t["log_offset_chars"] != offset:
             return "ALREADY_WRITTEN"
         t["log"] += bloco
-        t["log_offset_chars"] += log_pump.clob_units(bloco, self.unidade)
+        t["log_offset_chars"] += log_pump.clob_units(bloco, self.unit)
         return "WRITTEN"
 
     def mark_truncated(self, conn, tid, agente_id):
         return True
 
 
-class _AgendaVazia(object):
+class _EmptyAgenda(object):
     """Sem regras vencidas: o desdobro (F8.4b) e testado no test_scheduler_ha."""
 
     def due_rules(self, conn, lote, ult_prox=None, ult_id=0):
@@ -299,20 +299,20 @@ class _Cursor(object):
         pass
 
 
-class _Conexao(object):
+class _Connection(object):
     def __init__(self):
         self.conn = _Conn()
-        self.fora = False
-        self.fechamentos = 0
+        self.down = False
+        self.closings = 0
 
     def ensure(self):
-        return not self.fora
+        return not self.down
 
     def get_connection(self):
-        return None if self.fora else self.conn
+        return None if self.down else self.conn
 
     def close(self):
-        self.fechamentos += 1
+        self.closings += 1
 
     def notify_error(self, exc):
         pass
@@ -322,17 +322,17 @@ class _Conexao(object):
 class _Base(unittest.TestCase):
 
     def setUp(self):
-        self.raiz = os.path.realpath(tempfile.mkdtemp(prefix="sss_laco_"))
-        self.work = os.path.join(self.raiz, "work")
-        self.logs = os.path.join(self.raiz, "logs")
+        self.root = os.path.realpath(tempfile.mkdtemp(prefix="sss_laco_"))
+        self.work = os.path.join(self.root, "work")
+        self.logs = os.path.join(self.root, "logs")
         os.mkdir(self.work, 0o700)
         os.mkdir(self.logs, 0o750)
-        self.banco = _Banco(self.raiz)
-        self.banco.base = os.path.join(self.raiz, "scripts")
-        os.mkdir(self.banco.base)
-        self.connection = _Conexao()
+        self.db = _Db(self.root)
+        self.db.base = os.path.join(self.root, "scripts")
+        os.mkdir(self.db.base)
+        self.connection = _Connection()
         self.stopped = threading.Event()
-        self._espera = threading.Event()
+        self._wait_s = threading.Event()
         self.ag = None
 
     def tearDown(self):
@@ -347,10 +347,10 @@ class _Base(unittest.TestCase):
                     if item.execution.process.popen is not None:
                         item.execution.process.popen.wait(5)
             self.ag.release_resources()
-        for atual, dirs, _arqs in os.walk(self.raiz):
+        for atual, dirs, _arqs in os.walk(self.root):
             for d in dirs:
                 os.chmod(os.path.join(atual, d), 0o700)
-        shutil.rmtree(self.raiz, ignore_errors=True)
+        shutil.rmtree(self.root, ignore_errors=True)
 
     def cfg(self, **mudancas):
         base = dict(agent_id="srv-t", environments=(AMB,), work_dir=self.work,
@@ -365,45 +365,45 @@ class _Base(unittest.TestCase):
         return _Cfg(_Agent(**base), _Log(self.logs, 5 * 1024 * 1024, local), _App("DEV"),
                     _Oracle("db:1521/x", 30000, "OWN_X", "pfx_"), None)
 
-    def subir(self, **mudancas):
-        segredos = Secrets("SenhaOracle#1", None, {AMB: EnvironmentSecret("app_dev", SENHA_AMB)})
+    def start_agent(self, **mudancas):
+        segredos = Secrets("SenhaOracle#1", None, {AMB: EnvironmentSecret("app_dev", ENV_PASSWORD)})
         plat = mudancas.pop("plat", None)
-        with mock.patch.object(sl.os, "geteuid", return_value=AGENTE_FALSO):
+        with mock.patch.object(sl.os, "geteuid", return_value=FAKE_AGENT):
             if getattr(self, "repo_output", None) is None:
-                self.repo_output = RepoOutputMemory(self.banco.tickets)
+                self.repo_output = RepoOutputMemory(self.db.tickets)
             self.ag = sl.Agent(cfg=self.cfg(**mudancas), segredos=segredos, plat=plat, conexao=self.connection,
-                                repo=self.banco, repo_log=self.banco, hostname="host-t", pid=os.getpid(),
-                                repo_saida=self.repo_output, repo_agenda=_AgendaVazia())
+                                repo=self.db, repo_log=self.db, hostname="host-t", pid=os.getpid(),
+                                repo_saida=self.repo_output, repo_agenda=_EmptyAgenda())
             self.ag.initialize()
-        self.ag.prepare_loop(lambda s: self._espera.wait(min(s, 0.02)))
+        self.ag.prepare_loop(lambda s: self._wait_s.wait(min(s, 0.02)))
         return self.ag
 
-    def rodar(self, ate, limite=15):
+    def run_loop(self, ate, limite=15):
         with mock.patch.object(time, "sleep", side_effect=AssertionError("time.sleep dentro do laco")):
             codigo = self.ag.run(self.stopped, ate=ate, limite_s=limite)
         return codigo
 
-    def terminado(self, tid):
-        return lambda: self.banco.tickets[tid]["status"] not in ("PENDING", "RUNNING") and tid not in self.ag.executions
+    def finished(self, tid):
+        return lambda: self.db.tickets[tid]["status"] not in ("PENDING", "RUNNING") and tid not in self.ag.executions
 
     def final(self, tid):
-        t = self.banco.tickets[tid]
+        t = self.db.tickets[tid]
         return t["status"], t["status_reason"], t["return_code"]
 
 
-class TestExecucao(_Base):
+class TestExecution(_Base):
 
     def test_sucesso_com_log_mascarado_e_limpeza(self):
-        sid = self.banco.script("echo inicio\necho \"connection=$PADRAO_VALOR_RUN_CONEXAO_BD\"\necho \"$SSS_TICKET_ID\"\n")
-        tid = self.banco.ticket(sid)
-        self.subir()
-        self.rodar(self.terminado(tid))
+        sid = self.db.script("echo inicio\necho \"connection=$PADRAO_VALOR_RUN_CONEXAO_BD\"\necho \"$SSS_TICKET_ID\"\n")
+        tid = self.db.ticket(sid)
+        self.start_agent()
+        self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
-        t = self.banco.tickets[tid]
+        t = self.db.tickets[tid]
         self.assertNotIn("sha256", t["log"], "CR-011: sem hash")
         self.assertIn("inicio\n", t["log"])
         self.assertIn("connection=****\n", t["log"], "a connect string inteira e segredo do ticket (README §8.10)")
-        self.assertNotIn(SENHA_AMB, t["log"])
+        self.assertNotIn(ENV_PASSWORD, t["log"])
         self.assertIn("%d\n" % tid, t["log"])
         self.assertIsNotNone(t["process_id"])
         self.assertEqual(t["updated_by"], "SYSTEM:srv-t")
@@ -411,83 +411,83 @@ class TestExecucao(_Base):
 
     def test_script_cadastrado_por_link_executa_o_real(self):
         # CR-011: o caminho cadastrado e um link; o agente executa o arquivo real e informa os dois.
-        sid = self.banco.script("echo \"$SSS_SCRIPT_FILE|$SSS_SCRIPT_LINK\"\n")
-        real = self.banco.scripts[sid]["path_file"]
-        os.chmod(self.banco.base, 0o755)
-        link = os.path.join(self.banco.base, "atalho.sh")
+        sid = self.db.script("echo \"$SSS_SCRIPT_FILE|$SSS_SCRIPT_LINK\"\n")
+        real = self.db.scripts[sid]["path_file"]
+        os.chmod(self.db.base, 0o755)
+        link = os.path.join(self.db.base, "atalho.sh")
         os.symlink(real, link)
-        os.chmod(self.banco.base, 0o555)
-        self.banco.scripts[sid]["path_file"] = link
-        tid = self.banco.ticket(sid)
-        self.subir()
-        self.rodar(self.terminado(tid))
+        os.chmod(self.db.base, 0o555)
+        self.db.scripts[sid]["path_file"] = link
+        tid = self.db.ticket(sid)
+        self.start_agent()
+        self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
-        self.assertIn("%s|%s\n" % (real, link), self.banco.tickets[tid]["log"])
+        self.assertIn("%s|%s\n" % (real, link), self.db.tickets[tid]["log"])
 
     def test_cr014_pasta_de_entrada_permanente_por_ambiente_e_script(self):
         # CR-014 (README §8.14): SSS_INPUT_DIR = input_dir/<ambiente>/<script>, criada sob demanda e mantida.
-        entrada = os.path.join(self.raiz, "input")
+        entrada = os.path.join(self.root, "input")
         os.mkdir(entrada, 0o700)
-        sid = self.banco.script('n=$(ls "$SSS_INPUT_DIR" | wc -l)\n'
+        sid = self.db.script('n=$(ls "$SSS_INPUT_DIR" | wc -l)\n'
                                 'echo "dir=$SSS_INPUT_DIR n=$n"\n'
                                 'echo ok > "$SSS_INPUT_DIR/lote_$SSS_TICKET_ID.txt"\n')
-        primeiro = self.banco.ticket(sid)
-        self.subir(input_dir=entrada)
-        self.rodar(self.terminado(primeiro))
-        segundo = self.banco.ticket(sid)
-        self.rodar(self.terminado(segundo))
+        primeiro = self.db.ticket(sid)
+        self.start_agent(input_dir=entrada)
+        self.run_loop(self.finished(primeiro))
+        segundo = self.db.ticket(sid)
+        self.run_loop(self.finished(segundo))
         pasta = os.path.join(entrada, "dev", "script_%d" % sid)
         for tid, n in ((primeiro, 0), (segundo, 1)):
             self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
-            self.assertIn("dir=%s n=%d" % (pasta, n), self.banco.tickets[tid]["log"])
+            self.assertIn("dir=%s n=%d" % (pasta, n), self.db.tickets[tid]["log"])
         self.assertEqual(sorted(os.listdir(pasta)), ["lote_%d.txt" % primeiro, "lote_%d.txt" % segundo],
                          "o SSS nao limpa a pasta de entrada")
         self.assertEqual(os.stat(pasta).st_mode & 0o777, 0o700)
 
     def test_cr014_sem_entrada_dir_sem_variavel(self):
-        tid = self.banco.ticket(self.banco.script('echo "entrada=[${SSS_INPUT_DIR:-}]"\n'))
-        self.subir()
-        self.rodar(self.terminado(tid))
-        self.assertIn("entrada=[]", self.banco.tickets[tid]["log"])
+        tid = self.db.ticket(self.db.script('echo "entrada=[${SSS_INPUT_DIR:-}]"\n'))
+        self.start_agent()
+        self.run_loop(self.finished(tid))
+        self.assertIn("entrada=[]", self.db.tickets[tid]["log"])
 
     def test_exit_error(self):
-        tid = self.banco.ticket(self.banco.script("echo falhou\nexit 3\n"))
-        self.subir()
-        self.rodar(self.terminado(tid))
+        tid = self.db.ticket(self.db.script("echo falhou\nexit 3\n"))
+        self.start_agent()
+        self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid), ("FAILED", "EXIT_ERROR", 3))
 
     def test_timeout_mata_o_neto(self):
-        neto = os.path.join(self.raiz, "neto.pid")
-        tid = self.banco.ticket(self.banco.script("sleep 300 &\necho $! > %s\nsleep 300\n" % neto, timeout=1))
-        self.subir()
-        self.rodar(self.terminado(tid))
+        neto = os.path.join(self.root, "neto.pid")
+        tid = self.db.ticket(self.db.script("sleep 300 &\necho $! > %s\nsleep 300\n" % neto, timeout=1))
+        self.start_agent()
+        self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid), ("FAILED", "TIMEOUT", -3))
         pid_neto = int(open(neto).read().strip())
-        self.assertFalse(_vivo(pid_neto))
+        self.assertFalse(_alive(pid_neto))
 
     def test_cancelamento_durante_a_execucao(self):
-        pronto = os.path.join(self.raiz, "pronto")
-        tid = self.banco.ticket(self.banco.script("touch %s\nsleep 300\n" % pronto))
-        self.subir()
-        self.rodar(lambda: os.path.exists(pronto))
-        self.banco.tickets[tid]["cancel_requested"] = "Y"
-        self.rodar(self.terminado(tid))
+        pronto = os.path.join(self.root, "pronto")
+        tid = self.db.ticket(self.db.script("touch %s\nsleep 300\n" % pronto))
+        self.start_agent()
+        self.run_loop(lambda: os.path.exists(pronto))
+        self.db.tickets[tid]["cancel_requested"] = "Y"
+        self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid), ("CANCELLED", "CANCEL_USER", -1))
 
     def test_cancelamento_entre_o_claim_e_o_spawn(self):
-        tid = self.banco.ticket(self.banco.script("echo nunca\n"))
-        original = self.banco.is_cancel_requested
+        tid = self.db.ticket(self.db.script("echo nunca\n"))
+        original = self.db.is_cancel_requested
         def _pedido(conn, t):
-            self.banco.tickets[t]["cancel_requested"] = "Y"
+            self.db.tickets[t]["cancel_requested"] = "Y"
             return original(conn, t)
-        self.banco.is_cancel_requested = _pedido
-        self.subir()
-        self.rodar(self.terminado(tid))
+        self.db.is_cancel_requested = _pedido
+        self.start_agent()
+        self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid), ("CANCELLED", "CANCEL_USER", -1))
-        self.assertIsNone(self.banco.tickets[tid]["process_id"], "nenhum processo iniciado")
+        self.assertIsNone(self.db.tickets[tid]["process_id"], "nenhum processo iniciado")
 
     def test_processo_que_terminou_antes_do_cancelamento_prevalece(self):
-        self.subir()
+        self.start_agent()
         item = sl._Item(1, None, self.ag.log)
         item.phase = sl._Item.RODANDO
         p = subprocess.Popen(["true"], start_new_session=True)
@@ -500,260 +500,260 @@ class TestExecucao(_Base):
         self.assertEqual(self.ag._result(item), ("SUCCESS", "EXIT_OK", 0))
 
     def test_log_limit(self):
-        tid = self.banco.ticket(self.banco.script("head -c 5000 /dev/zero | tr '\\000' x\nsleep 300\n"))
-        self.subir(max_local_log_size_bytes=2048)
-        self.rodar(self.terminado(tid))
+        tid = self.db.ticket(self.db.script("head -c 5000 /dev/zero | tr '\\000' x\nsleep 300\n"))
+        self.start_agent(max_local_log_size_bytes=2048)
+        self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid), ("FAILED", "LOG_LIMIT", -5))
 
     def test_ownership_lost_na_varredura(self):
-        pronto = os.path.join(self.raiz, "pronto")
-        tid = self.banco.ticket(self.banco.script("touch %s\nsleep 300\n" % pronto))
-        self.subir()
-        self.rodar(lambda: os.path.exists(pronto))
-        pid = self.banco.tickets[tid]["process_id"]
-        self.banco.tickets[tid].update(status="FAILED", status_reason="NODE_OFFLINE", return_code=-2)
+        pronto = os.path.join(self.root, "pronto")
+        tid = self.db.ticket(self.db.script("touch %s\nsleep 300\n" % pronto))
+        self.start_agent()
+        self.run_loop(lambda: os.path.exists(pronto))
+        pid = self.db.tickets[tid]["process_id"]
+        self.db.tickets[tid].update(status="FAILED", status_reason="NODE_OFFLINE", return_code=-2)
         with self.assertLogs("sss_scheduler", "ERROR") as logs:
-            self.rodar(lambda: tid not in self.ag.executions)
+            self.run_loop(lambda: tid not in self.ag.executions)
         self.assertEqual(self.final(tid), ("FAILED", "NODE_OFFLINE", -2), "nenhum status gravado")
         self.assertTrue(any("OWNERSHIP_LOST" in x for x in logs.output))
-        self.assertFalse(_vivo(pid))
+        self.assertFalse(_alive(pid))
 
     def test_teto_paralelo(self):
-        sid = self.banco.script("sleep 0.5\n", max_par=10)
-        tids = [self.banco.ticket(sid) for _ in range(5)]
-        self.subir(max_parallel_jobs=2)
-        self.rodar(lambda: all(self.terminado(t)() for t in tids), limite=30)
-        self.assertEqual(self.banco.max_running, 2)
+        sid = self.db.script("sleep 0.5\n", max_par=10)
+        tids = [self.db.ticket(sid) for _ in range(5)]
+        self.start_agent(max_parallel_jobs=2)
+        self.run_loop(lambda: all(self.finished(t)() for t in tids), limite=30)
+        self.assertEqual(self.db.max_running, 2)
         self.assertEqual([self.final(t)[0] for t in tids], ["SUCCESS"] * 5)
 
     def test_lock_no_claim_tenta_de_novo(self):
-        tid = self.banco.ticket(self.banco.script("echo ok\n"))
-        self.banco.claim_respostas = [(False, "LOCK", "ORA-30006"), (False, "TETO", None)]
-        self.subir()
+        tid = self.db.ticket(self.db.script("echo ok\n"))
+        self.db.claim_answers = [(False, "LOCK", "ORA-30006"), (False, "TETO", None)]
+        self.start_agent()
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            self.rodar(self.terminado(tid))
+            self.run_loop(self.finished(tid))
         avisos = [r.getMessage() for r in logs.records if "pulado" in r.getMessage()]
         self.assertEqual(len(avisos), 1, "WARN so no LOCK, nao no TETO (README §13, CR-007 R-32)")
         self.assertIn("claim do ticket %d pulado: linha do script" % tid, avisos[0])
         self.assertIn("(ORA-30006, FOR UPDATE WAIT 5)", avisos[0])
         self.assertFalse([r for r in logs.records if "pulado" in r.getMessage() and r.exc_info], "sem stack trace")
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
-        self.assertGreaterEqual(self.banco.chamadas["claim"], 3)
+        self.assertGreaterEqual(self.db.calls["claim"], 3)
 
 
-class TestPrevalidacao(_Base):
+class TestPrevalidation(_Base):
 
-    def _recusa(self, tid, codigo, **subir):
-        self.subir(**subir)
-        self.rodar(self.terminado(tid))
+    def _refusal(self, tid, codigo, **subir):
+        self.start_agent(**subir)
+        self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid), ("FAILED", "PRECHECK_FAILED", -4))
-        self.assertIn("[SSS] pre-validacao recusada: %s (agente srv-t)" % codigo, self.banco.tickets[tid]["log"])
-        self.assertIsNone(self.banco.tickets[tid]["process_id"])
+        self.assertIn("[SSS] pre-validacao recusada: %s (agente srv-t)" % codigo, self.db.tickets[tid]["log"])
+        self.assertIsNone(self.db.tickets[tid]["process_id"])
 
     def test_cr014_script_dentro_da_entrada_ou_da_saida_e_pasta_do_sss(self):
         # CR-014: o usuario de execucao grava em input_dir e output_dir; um script ali poderia ser trocado.
         for chave in ("input_dir", "output_dir"):
-            pasta = os.path.join(self.raiz, chave)
+            pasta = os.path.join(self.root, chave)
             os.mkdir(pasta, 0o700)
-            sid = self.banco.script("echo nao deveria rodar\n")
+            sid = self.db.script("echo nao deveria rodar\n")
             caminho = os.path.join(pasta, "s%d.sh" % sid)
-            os.rename(self.banco.scripts[sid]["path_file"], caminho)
-            self.banco.scripts[sid]["path_file"] = caminho
-            tid = self.banco.ticket(sid)
-            self._recusa(tid, "SSS_DIR", **{chave: pasta})
+            os.rename(self.db.scripts[sid]["path_file"], caminho)
+            self.db.scripts[sid]["path_file"] = caminho
+            tid = self.db.ticket(sid)
+            self._refusal(tid, "SSS_DIR", **{chave: pasta})
             self.ag.release_resources()
 
     def test_snapshots_antigos(self):
-        sid = self.banco.script("echo x\n")
-        tids = [self.banco.ticket(sid, version=versao) for versao in (1, 2, 3)]
-        self.subir()
-        self.rodar(lambda: all(self.terminado(t)() for t in tids))
+        sid = self.db.script("echo x\n")
+        tids = [self.db.ticket(sid, version=versao) for versao in (1, 2, 3)]
+        self.start_agent()
+        self.run_loop(lambda: all(self.finished(t)() for t in tids))
         for tid in tids:
             self.assertEqual(self.final(tid), ("FAILED", "PRECHECK_FAILED", -4))
-            self.assertIn("[SSS] pre-validacao recusada: VERSAO_NAO_SUPORTADA", self.banco.tickets[tid]["log"])
+            self.assertIn("[SSS] pre-validacao recusada: VERSAO_NAO_SUPORTADA", self.db.tickets[tid]["log"])
 
     def test_interpretador_nao_mapeado(self):
         # O script e BASH, mas este agente so mapeia SH; a fila de teste entrega o ticket mesmo assim.
-        tid = self.banco.ticket(self.banco.script("echo x\n", interpreter="BASH"))
-        self.banco.candidates = lambda conn, a, i, lote, env: [
-            {"id": tid, "script_id": self.banco.tickets[tid]["script_id"], "environment": AMB}
-        ] if self.banco.tickets[tid]["status"] == "PENDING" else []
-        self._recusa(tid, "INTERPRETADOR_NAO_DISPONIVEL")
+        tid = self.db.ticket(self.db.script("echo x\n", interpreter="BASH"))
+        self.db.candidates = lambda conn, a, i, lote, env: [
+            {"id": tid, "script_id": self.db.tickets[tid]["script_id"], "environment": AMB}
+        ] if self.db.tickets[tid]["status"] == "PENDING" else []
+        self._refusal(tid, "INTERPRETADOR_NAO_DISPONIVEL")
 
     def test_caminho_inexistente(self):
-        sid = self.banco.script("echo x\n")
-        t1 = self.banco.ticket(sid, path_file=os.path.join(self.banco.base, "nao.sh"))
-        self._recusa(t1, "NOT_FOUND")
+        sid = self.db.script("echo x\n")
+        t1 = self.db.ticket(sid, path_file=os.path.join(self.db.base, "nao.sh"))
+        self._refusal(t1, "NOT_FOUND")
 
     def test_cadastro_mudou(self):
-        sid = self.banco.script("echo x\n")
-        outro = self.banco.script("echo y\n")
-        tid = self.banco.ticket(sid, path_file=self.banco.scripts[outro]["path_file"])
-        self._recusa(tid, "CADASTRO_MUDOU")
+        sid = self.db.script("echo x\n")
+        outro = self.db.script("echo y\n")
+        tid = self.db.ticket(sid, path_file=self.db.scripts[outro]["path_file"])
+        self._refusal(tid, "CADASTRO_MUDOU")
 
     def test_sem_permissao(self):
-        sid = self.banco.script("echo x\n")
-        tid = self.banco.ticket(sid)
-        self.banco.ctx = dict(self.banco.ctx, scripts=frozenset())
-        self._recusa(tid, "NO_PERMISSION")
+        sid = self.db.script("echo x\n")
+        tid = self.db.ticket(sid)
+        self.db.ctx = dict(self.db.ctx, scripts=frozenset())
+        self._refusal(tid, "NO_PERMISSION")
 
     def test_script_inativo(self):
-        tid = self.banco.ticket(self.banco.script("echo x\n", active="N"))
-        self._recusa(tid, "SCRIPT_INACTIVE")
+        tid = self.db.ticket(self.db.script("echo x\n", active="N"))
+        self._refusal(tid, "SCRIPT_INACTIVE")
 
     def test_nao_homologado(self):
-        tid = self.banco.ticket(self.banco.script("echo x\n", homologar=False))
-        self._recusa(tid, "NAO_HOMOLOGADO")
+        tid = self.db.ticket(self.db.script("echo x\n", homologar=False))
+        self._refusal(tid, "NAO_HOMOLOGADO")
 
     def test_erro_de_rede_antes_do_spawn_devolve(self):
-        tid = self.banco.ticket(self.banco.script("echo x\n"))
-        self.banco.falhas["execution_context"] = [_ErroRede()]
-        self.subir()
-        self.rodar(self.terminado(tid))
+        tid = self.db.ticket(self.db.script("echo x\n"))
+        self.db.falhas["execution_context"] = [_NetworkError()]
+        self.start_agent()
+        self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0), "devolvido e executado no ciclo seguinte")
-        self.assertGreaterEqual(self.banco.chamadas["return_to_queue"], 1)
+        self.assertGreaterEqual(self.db.calls["return_to_queue"], 1)
 
     def test_erro_de_banco_nao_transitorio_e_precheck(self):
-        tid = self.banco.ticket(self.banco.script("echo x\n"))
-        self.banco.falhas["execution_context"] = [_ErroPrivilegio()]
-        self.subir()
+        tid = self.db.ticket(self.db.script("echo x\n"))
+        self.db.falhas["execution_context"] = [_PrivilegeError()]
+        self.start_agent()
         with self.assertLogs("sss_scheduler", "ERROR"):
-            self.rodar(self.terminado(tid))
+            self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid), ("FAILED", "PRECHECK_FAILED", -4))
-        self.assertIn("[SSS] ERRO_BANCO: ORA-01031", self.banco.tickets[tid]["log"])
+        self.assertIn("[SSS] ERRO_BANCO: ORA-01031", self.db.tickets[tid]["log"])
 
 
-class TestPendencias(_Base):
+class TestPending(_Base):
 
     def test_finalizacao_pendente_ate_gravar(self):
-        tid = self.banco.ticket(self.banco.script("echo ok\n"))
-        self.banco.falhas["finalize"] = [_ErroRede(), _ErroRede()]
-        self.subir()
+        tid = self.db.ticket(self.db.script("echo ok\n"))
+        self.db.falhas["finalize"] = [_NetworkError(), _NetworkError()]
+        self.start_agent()
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            self.rodar(self.terminado(tid))
+            self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
-        self.assertEqual(self.banco.chamadas["finalize"], 3)
+        self.assertEqual(self.db.calls["finalize"], 3)
         self.assertTrue(any("finalizacao pendente" in x for x in logs.output))
 
     def test_pid_pendente_recebe_heartbeat(self):
-        pronto = os.path.join(self.raiz, "pronto")
-        tid = self.banco.ticket(self.banco.script("touch %s\nsleep 1\n" % pronto))
-        self.banco.falhas["register_pid"] = [_ErroRede()]
-        self.subir()
-        self.rodar(self.terminado(tid))
+        pronto = os.path.join(self.root, "pronto")
+        tid = self.db.ticket(self.db.script("touch %s\nsleep 1\n" % pronto))
+        self.db.falhas["register_pid"] = [_NetworkError()]
+        self.start_agent()
+        self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid)[0], "SUCCESS")
-        self.assertIsNotNone(self.banco.tickets[tid]["process_id"])
-        self.assertTrue(any(tid in ids for ids in self.banco.heartbeats))
+        self.assertIsNotNone(self.db.tickets[tid]["process_id"])
+        self.assertTrue(any(tid in ids for ids in self.db.heartbeats))
 
     def test_posse_perdida_no_registrar_pid(self):
-        tid = self.banco.ticket(self.banco.script("sleep 300\n"))
-        original = self.banco.register_pid
+        tid = self.db.ticket(self.db.script("sleep 300\n"))
+        original = self.db.register_pid
         def _perdeu(conn, t, *a):
-            self.banco.tickets[t]["agent_id"] = "outro"
+            self.db.tickets[t]["agent_id"] = "outro"
             return original(conn, t, *a)
-        self.banco.register_pid = _perdeu
-        self.subir()
+        self.db.register_pid = _perdeu
+        self.start_agent()
         with self.assertLogs("sss_scheduler", "ERROR"):
-            self.rodar(lambda: tid not in self.ag.executions and self.banco.chamadas["own_sweep"] > 0)
-        self.assertEqual(self.banco.tickets[tid]["status"], "RUNNING", "nenhum status gravado pelo agente")
+            self.run_loop(lambda: tid not in self.ag.executions and self.db.calls["own_sweep"] > 0)
+        self.assertEqual(self.db.tickets[tid]["status"], "RUNNING", "nenhum status gravado pelo agente")
 
     def test_falha_no_proc_depois_do_spawn_e_spawn_error(self):
-        tid = self.banco.ticket(self.banco.script("sleep 300\n"))
+        tid = self.db.ticket(self.db.script("sleep 300\n"))
         original = os_platform.write_state
         def _grava(caminho, dados):
             if caminho.endswith(executor.PROC):
                 raise OSError(28, "No space left on device")
             return original(caminho, dados)
-        self.subir()
+        self.start_agent()
         with mock.patch.object(os_platform, "write_state", side_effect=_grava), \
                 self.assertLogs("sss_scheduler", "ERROR"):
-            self.rodar(self.terminado(tid))
+            self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid), ("FAILED", "SPAWN_ERROR", -4))
-        self.assertEqual(self.banco.chamadas["register_pid"], 0)
-        self.assertIn("[SSS] falha ao iniciar: OSError (agente srv-t)", self.banco.tickets[tid]["log"])
+        self.assertEqual(self.db.calls["register_pid"], 0)
+        self.assertIn("[SSS] falha ao iniciar: OSError (agente srv-t)", self.db.tickets[tid]["log"])
 
     def test_reconciliacao_de_ticket_fora_do_mapa(self):
-        sid = self.banco.script("echo x\n")
-        sem_pid, com_pid = self.banco.ticket(sid), self.banco.ticket(sid)
-        self.subir()
+        sid = self.db.script("echo x\n")
+        sem_pid, com_pid = self.db.ticket(sid), self.db.ticket(sid)
+        self.start_agent()
         for tid, pid in ((sem_pid, None), (com_pid, 4242)):
-            self.banco.tickets[tid].update(status="RUNNING", agent_id="srv-t", process_id=pid)
-        self.banco.candidates = lambda *a: []
-        self.rodar(lambda: self.banco.tickets[com_pid]["status"] == "FAILED"
-                   and self.banco.tickets[sem_pid]["status"] == "PENDING")
+            self.db.tickets[tid].update(status="RUNNING", agent_id="srv-t", process_id=pid)
+        self.db.candidates = lambda *a: []
+        self.run_loop(lambda: self.db.tickets[com_pid]["status"] == "FAILED"
+                   and self.db.tickets[sem_pid]["status"] == "PENDING")
         self.assertEqual(self.final(com_pid), ("FAILED", "ORPHAN_PROCESS", -2))
 
 
-class TestCiclos(_Base):
+class TestCycles(_Base):
 
     def test_heartbeat_sem_tickets_e_instante_de_referencia(self):
-        self.subir()
+        self.start_agent()
         instantes = []
-        original = self.banco.heartbeat
+        original = self.db.heartbeat
         def _hb(*a):
             instantes.append(self.ag.clock())
             time_ = original(*a)
             return time_
-        self.banco.heartbeat = _hb
-        self.rodar(lambda: len(instantes) >= 2)
-        self.assertEqual(self.banco.heartbeats[-1], [])
+        self.db.heartbeat = _hb
+        self.run_loop(lambda: len(instantes) >= 2)
+        self.assertEqual(self.db.heartbeats[-1], [])
         self.assertLessEqual(self.ag.last_hb_ok, instantes[-1], "R-09: o instante e o de antes do UPDATE")
 
     def test_registro_perdido_sai_com_codigo_proprio(self):
-        self.subir()
-        self.banco.agente_ativo = False
+        self.start_agent()
+        self.db.active_agent = False
         with self.assertLogs("sss_scheduler", "CRITICAL"):
-            self.assertEqual(self.rodar(lambda: False, limite=5), sl.EXIT_REGISTRATION_LOST)
+            self.assertEqual(self.run_loop(lambda: False, limite=5), sl.EXIT_REGISTRATION_LOST)
 
     def test_disco_baixo_sem_claim(self):
-        tid = self.banco.ticket(self.banco.script("echo x\n"))
-        plat = _PlatDisco()
-        self.subir(plat=plat, log_dir_min_free_mb=1024)
+        tid = self.db.ticket(self.db.script("echo x\n"))
+        plat = _PlatDisk()
+        self.start_agent(plat=plat, log_dir_min_free_mb=1024)
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            self.rodar(lambda: False, limite=0.5)
-        self.assertEqual(self.banco.tickets[tid]["status"], "PENDING")
-        self.assertEqual(self.banco.chamadas["candidates"], 0)
+            self.run_loop(lambda: False, limite=0.5)
+        self.assertEqual(self.db.tickets[tid]["status"], "PENDING")
+        self.assertEqual(self.db.calls["candidates"], 0)
         self.assertEqual(len([x for x in logs.output if "DISCO_LOG" in x]), 1, "uma vez por minuto")
 
     def test_pump_com_tres_tickets_verbosos(self):
-        sid = self.banco.script("i=0\nwhile [ $i -lt 400 ]; do echo \"linha $i $SSS_TICKET_ID xxxxxxxxxxxxxxxxxxxxxxxxxx\"; "
+        sid = self.db.script("i=0\nwhile [ $i -lt 400 ]; do echo \"linha $i $SSS_TICKET_ID xxxxxxxxxxxxxxxxxxxxxxxxxx\"; "
                                 "i=$((i+1)); done\n", max_par=5)
-        tids = [self.banco.ticket(sid) for _ in range(3)]
-        self.subir()
-        self.rodar(lambda: all(self.terminado(t)() for t in tids), limite=30)
+        tids = [self.db.ticket(sid) for _ in range(3)]
+        self.start_agent()
+        self.run_loop(lambda: all(self.finished(t)() for t in tids), limite=30)
         for t in tids:
-            self.assertEqual(self.banco.tickets[t]["log"].count("linha "), 400)
+            self.assertEqual(self.db.tickets[t]["log"].count("linha "), 400)
 
     def test_parada_pelo_stop(self):
-        pronto = os.path.join(self.raiz, "pronto")
-        tid = self.banco.ticket(self.banco.script("touch %s\nsleep 300\n" % pronto))
-        self.subir()
-        self.rodar(lambda: os.path.exists(pronto))
+        pronto = os.path.join(self.root, "pronto")
+        tid = self.db.ticket(self.db.script("touch %s\nsleep 300\n" % pronto))
+        self.start_agent()
+        self.run_loop(lambda: os.path.exists(pronto))
         open(os.path.join(self.work, "sss-srv-t.stop"), "w").close()
-        self.assertEqual(self.rodar(lambda: False, limite=15), 0)
+        self.assertEqual(self.run_loop(lambda: False, limite=15), 0)
         self.assertEqual(self.final(tid), ("FAILED", "SHUTDOWN", -6))
-        self.assertEqual(self.banco.encerrou, "TERMINATE")
+        self.assertEqual(self.db.stopped_flag, "TERMINATE")
         self.assertFalse(os.path.exists(os.path.join(self.work, "sss-srv-t.stop")))
 
     def test_sem_banco_o_processo_segue_acompanhado(self):
-        tid = self.banco.ticket(self.banco.script("sleep 300\n", timeout=1))
-        self.subir()
-        self.rodar(lambda: self.banco.tickets[tid]["process_id"] is not None)
-        self.connection.fora = True
-        self.rodar(lambda: self.ag.executions[tid].phase != sl._Item.RODANDO, limite=10)
-        self.connection.fora = False
-        self.rodar(self.terminado(tid))
+        tid = self.db.ticket(self.db.script("sleep 300\n", timeout=1))
+        self.start_agent()
+        self.run_loop(lambda: self.db.tickets[tid]["process_id"] is not None)
+        self.connection.down = True
+        self.run_loop(lambda: self.ag.executions[tid].phase != sl._Item.RODANDO, limite=10)
+        self.connection.down = False
+        self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid), ("FAILED", "TIMEOUT", -3))
 
 
-class _PlatDisco(object):
+class _PlatDisk(object):
     def __getattr__(self, nome):
         if nome == "free_space_mb":
             return lambda caminho: 10
         return getattr(os_platform, nome)
 
 
-def _vivo(pid):
+def _alive(pid):
     try:
         with open("/proc/%d/stat" % pid) as f:
             conteudo = f.read()

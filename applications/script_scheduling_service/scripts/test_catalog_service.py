@@ -13,7 +13,7 @@ import repo_factory
 import security
 from ticket_service import TicketService
 
-SESSOES = {
+SESSIONS = {
     "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
     "op.hml": {"usuario_id": 3, "login": "op.hml", "perfil_id": 3, "perm_versao": 1, "sessao_epoch": 0},
 }
@@ -39,16 +39,16 @@ class _Base(unittest.TestCase):
         log.propagate = False
         auth = auth_service.AuthService(repo_factory.get("users"), repo_factory.get("rbac"), self.catalog,
                                         repo_factory.get("audit"), 5, 900, log)
-        self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSOES.items())
+        self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSIONS.items())
         self.svc = TicketService(self.catalog, self.tickets, log)
 
-    def _sem(self, login, *funcs):
+    def _without(self, login, *funcs):
         ctx = dict(self.ctx[login])
         ctx["features"] = frozenset(ctx["features"] - set(funcs))
         return ctx
 
 
-class TestUltimasExecucoes(_Base):
+class TestLastRuns(_Base):
 
     def test_contrato_ultimo_por_script_no_escopo(self):
         todos = self.tickets.list(pagina=1, tamanho=100)["itens"]
@@ -67,7 +67,7 @@ class TestUltimasExecucoes(_Base):
         self.assertEqual(self.tickets.last_runs([], None), {})
 
 
-class TestCatalogoRotinas(_Base):
+class TestRoutineCatalog(_Base):
 
     def test_cartoes_iguais_ao_disparo_e_ultima_no_escopo(self):
         ctx = self.ctx["op.hml"]
@@ -83,7 +83,7 @@ class TestCatalogoRotinas(_Base):
                     self.assertTrue(c["ultima"]["quando"].startswith(u"há "))
 
     def test_sem_ver_logs_so_os_proprios(self):
-        ctx = self._sem("op.hml", "VIEW_LOGS")
+        ctx = self._without("op.hml", "VIEW_LOGS")
         for g in self.svc.routine_catalog(ctx):
             for c in g["cartoes"]:
                 if c["ultima"]:
@@ -95,11 +95,11 @@ class TestCatalogoRotinas(_Base):
         self.assertIn({"rotulo": u"Data de Referencia", "required": True}, perguntas)
 
     def test_sem_exec_script_vazio(self):
-        self.assertEqual(self.svc.routine_catalog(self._sem("op.hml", "EXEC_SCRIPT")), [])
+        self.assertEqual(self.svc.routine_catalog(self._without("op.hml", "EXEC_SCRIPT")), [])
 
 
 
-class TestHistoricoScript(_Base):
+class TestScriptHistory(_Base):
     """CR-004 U7 (README §5.8)."""
 
     def test_contrato_sem_lob_ordenado_e_limitado(self):
@@ -130,15 +130,15 @@ class TestHistoricoScript(_Base):
         with self.assertRaises(RepoNotFound):
             self.svc.script_history(self.ctx["op.hml"], "5")  # backup_extra: inativo
         with self.assertRaises(RepoNotFound):
-            self.svc.script_history(self._sem("op.hml", "EXEC_SCRIPT"), "1")
+            self.svc.script_history(self._without("op.hml", "EXEC_SCRIPT"), "1")
 
     def test_escopo_sem_ver_logs_so_os_proprios(self):
-        h = self.svc.script_history(self._sem("op.hml", "VIEW_LOGS"), "1")
+        h = self.svc.script_history(self._without("op.hml", "VIEW_LOGS"), "1")
         desde = self.tickets.now() - datetime.timedelta(days=30)
         self.assertEqual(h["total"], len(self.tickets.script_history(1, desde, None, "op.hml")))
 
 
-class TestBarrasEmpilhadas(unittest.TestCase):
+class TestStackedBars(unittest.TestCase):
 
     def test_geometria(self):
         import ui_helpers

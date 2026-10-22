@@ -19,13 +19,13 @@ import path_guard
 import os_platform
 from os_platform import posix
 
-PID_INEXISTENTE = 2 ** 31 - 2
+NONEXISTENT_PID = 2 ** 31 - 2
 
 _Stat = collections.namedtuple("_Stat", "st_uid st_mode")
 _Pw = collections.namedtuple("_Pw", "pw_name pw_uid")
 
 
-def _esperar(condicao, prazo=10.0):
+def _wait(condicao, prazo=10.0):
     limite = time.monotonic() + prazo
     while time.monotonic() < limite:
         if condicao():
@@ -34,7 +34,7 @@ def _esperar(condicao, prazo=10.0):
     return condicao()
 
 
-def _conteudo(caminho):
+def _content(caminho):
     try:
         with open(caminho) as f:
             return f.read().strip()
@@ -42,12 +42,12 @@ def _conteudo(caminho):
         return ""
 
 
-def _ler_pid(caminho, prazo=10.0):
-    _esperar(lambda: _conteudo(caminho).isdigit(), prazo)
-    return int(_conteudo(caminho))
+def _read_pid(caminho, prazo=10.0):
+    _wait(lambda: _content(caminho).isdigit(), prazo)
+    return int(_content(caminho))
 
 
-def _vivo(pid):
+def _alive(pid):
     """Vivo e nao zumbi (o zumbi ainda responde a kill(pid, 0))."""
     try:
         with open("/proc/%d/stat" % pid) as f:
@@ -57,16 +57,16 @@ def _vivo(pid):
     return conteudo[conteudo.rindex(")") + 2:].split()[0] != "Z"
 
 
-class _ComProcessos(unittest.TestCase):
+class _WithProcesses(unittest.TestCase):
     """Garante que nenhum grupo iniciado pelo teste sobrevive (criterio de aceite: sem 'sleep 300')."""
 
     def setUp(self):
-        self.raiz = tempfile.mkdtemp(prefix="sss_plat_")
-        self.grupos = []
+        self.root = tempfile.mkdtemp(prefix="sss_plat_")
+        self.groups = []
         self.popens = []
 
     def tearDown(self):
-        for pgid in self.grupos:
+        for pgid in self.groups:
             try:
                 os.killpg(pgid, signal.SIGKILL)
             except OSError:
@@ -77,45 +77,45 @@ class _ComProcessos(unittest.TestCase):
             except OSError:
                 pass
             p.wait()
-        for atual, dirs, _arqs in os.walk(self.raiz):
+        for atual, dirs, _arqs in os.walk(self.root):
             for d in dirs:
                 os.chmod(os.path.join(atual, d), 0o700)
-        shutil.rmtree(self.raiz, ignore_errors=True)
+        shutil.rmtree(self.root, ignore_errors=True)
 
     def start(self, codigo, cwd=None):
         """Script Python em grupo proprio pela plataforma (DEV, sem usuario de execucao)."""
-        log = open(os.path.join(self.raiz, "log_%d.txt" % len(self.grupos)), "wb")
+        log = open(os.path.join(self.root, "log_%d.txt" % len(self.groups)), "wb")
         try:
-            proc = os_platform.start_process({"argv": [sys.executable, "-c", codigo], "cwd": cwd or self.raiz,
+            proc = os_platform.start_process({"argv": [sys.executable, "-c", codigo], "cwd": cwd or self.root,
                                                 "env": {}}, log.fileno())
         finally:
             log.close()
-        self.grupos.append(proc.pgid)
+        self.groups.append(proc.pgid)
         self.popens.append(proc.popen)
         return proc
 
 
 @unittest.skipIf(os.geteuid() == 0, "root sinaliza qualquer processo")
-class TestProcessos(_ComProcessos):
+class TestProcesses(_WithProcesses):
 
     def test_sinalizar_nao_bloqueia_com_processo_que_ignora_sigterm(self):
-        pronto = os.path.join(self.raiz, "pronto")
+        pronto = os.path.join(self.root, "pronto")
         proc = self.start("import signal,time\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
                             "open(%r,'w').write('1')\ntime.sleep(300)\n" % pronto)
-        self.assertTrue(_esperar(lambda: os.path.exists(pronto)))
+        self.assertTrue(_wait(lambda: os.path.exists(pronto)))
         inicio = time.monotonic()
         self.assertTrue(os_platform.signal_group(proc, signal.SIGTERM))
         self.assertLess(time.monotonic() - inicio, 0.5)
         time.sleep(0.2)
         self.assertTrue(os_platform.group_alive(proc))
         self.assertTrue(os_platform.signal_group(proc, signal.SIGKILL))
-        self.assertTrue(_esperar(lambda: not os_platform.group_alive(proc)))
+        self.assertTrue(_wait(lambda: not os_platform.group_alive(proc)))
 
     def test_neto_vivo_depois_do_lider_e_ciclo_nao_bloqueante(self):
-        neto_pid = os.path.join(self.raiz, "neto.pid")
+        neto_pid = os.path.join(self.root, "neto.pid")
         proc = self.start("import subprocess\np = subprocess.Popen(['sleep', '300'])\n"
                             "open(%r,'w').write(str(p.pid))\n" % neto_pid)
-        neto = _ler_pid(neto_pid)
+        neto = _read_pid(neto_pid)
         proc.popen.wait(10)
         self.assertTrue(os_platform.group_alive(proc), "o neto continua no grupo depois da saida do lider")
         # Ciclo do executor (F8.1): SIGTERM, consultas sem esperar, SIGKILL se preciso.
@@ -132,7 +132,7 @@ class TestProcessos(_ComProcessos):
                 estado = "KILL"
             time.sleep(0.05)
         self.assertFalse(os_platform.group_alive(proc))
-        self.assertFalse(_vivo(neto))
+        self.assertFalse(_alive(neto))
         self.assertFalse(os_platform.signal_group(proc, signal.SIGTERM), "ESRCH = grupo vazio")
 
     def test_identidade_estavel_e_diferente_para_outro_pid(self):
@@ -145,9 +145,9 @@ class TestProcessos(_ComProcessos):
         self.assertTrue(os_platform.process_exists(proc.pid))
 
     def test_pid_inexistente(self):
-        self.assertFalse(os_platform.process_exists(PID_INEXISTENTE))
-        self.assertIsNone(os_platform.process_identity(PID_INEXISTENTE))
-        self.assertIsNone(os_platform.reopen_group({"pid": PID_INEXISTENTE, "process_start": 1}))
+        self.assertFalse(os_platform.process_exists(NONEXISTENT_PID))
+        self.assertIsNone(os_platform.process_identity(NONEXISTENT_PID))
+        self.assertIsNone(os_platform.reopen_group({"pid": NONEXISTENT_PID, "process_start": 1}))
 
     def test_starttime_com_parenteses_no_nome_do_comando(self):
         campos = ["Y"] + [str(i) for i in range(4, 60)]
@@ -158,7 +158,7 @@ class TestProcessos(_ComProcessos):
         proc = self.start("import time\ntime.sleep(300)\n")
         falso = os_platform.Process(proc.pid, proc.identity + 1)
         self.assertFalse(os_platform.signal_group(falso, signal.SIGTERM))
-        self.assertTrue(_vivo(proc.pid))
+        self.assertTrue(_alive(proc.pid))
 
     def test_reabrir_grupo(self):
         proc = self.start("import time\ntime.sleep(300)\n")
@@ -172,25 +172,25 @@ class TestProcessos(_ComProcessos):
         self.assertIn("ORFAO_SEM_IDENTIDADE", logs.output[0])
         self.assertTrue(sem.no_identity)
         self.assertFalse(os_platform.signal_group(sem, signal.SIGKILL), "sem identidade nunca recebe sinal")
-        self.assertTrue(_vivo(proc.pid))
+        self.assertTrue(_alive(proc.pid))
 
     def test_encerrar_ticket_dev_so_na_pasta_do_ticket(self):
-        pasta = os.path.join(self.raiz, "exec", "ticket_7")
+        pasta = os.path.join(self.root, "exec", "ticket_7")
         os.makedirs(os.path.join(pasta, "tmp"))
-        neto_pid = os.path.join(self.raiz, "neto.pid")
+        neto_pid = os.path.join(self.root, "neto.pid")
         dentro = self.start("import subprocess,time,os\nos.chdir('tmp')\n"
                               "p = subprocess.Popen(['sleep', '300'])\n"
                               "open(%r,'w').write(str(p.pid))\ntime.sleep(300)\n" % neto_pid, cwd=pasta)
-        neto = _ler_pid(neto_pid)
-        vizinha = os.path.join(self.raiz, "exec", "ticket_70")
+        neto = _read_pid(neto_pid)
+        vizinha = os.path.join(self.root, "exec", "ticket_70")
         os.makedirs(vizinha)
         fora = self.start("import time\ntime.sleep(300)\n", cwd=vizinha)
-        self.assertEqual(os_platform.stop_ticket(os.path.join(self.raiz, "exec"), 7, None, 2), "OK")
-        self.assertTrue(_esperar(lambda: not _vivo(dentro.pid) and not _vivo(neto)))
-        self.assertTrue(_vivo(fora.pid), "processo do mesmo usuario fora da pasta do ticket")
+        self.assertEqual(os_platform.stop_ticket(os.path.join(self.root, "exec"), 7, None, 2), "OK")
+        self.assertTrue(_wait(lambda: not _alive(dentro.pid) and not _alive(neto)))
+        self.assertTrue(_alive(fora.pid), "processo do mesmo usuario fora da pasta do ticket")
 
     def test_iniciar_processo_aplica_umask_limites_e_entrada_nula(self):
-        saida = os.path.join(self.raiz, "saida.txt")
+        saida = os.path.join(self.root, "saida.txt")
         proc = self.start("import os,resource,sys\nm = os.umask(0)\n"
                             "open(%r,'w').write('%%o %%d %%d %%r' %% (m, resource.getrlimit(resource.RLIMIT_CORE)[0],"
                             " resource.getrlimit(resource.RLIMIT_NOFILE)[0], sys.stdin.read()))\n" % saida)
@@ -200,7 +200,7 @@ class TestProcessos(_ComProcessos):
         self.assertFalse(os_platform.group_alive(proc))
 
 
-class TestDublesHelper(unittest.TestCase):
+class TestHelperDoubles(unittest.TestCase):
     """Usuario de execucao: o Popen e o do sudo + helper (dubles, sem sudo real)."""
 
     def setUp(self):
@@ -269,13 +269,13 @@ class TestDublesHelper(unittest.TestCase):
                 os_platform.stop_ticket("/srv/exec/exec1", 9, "exec1", 10)
 
 
-class TestPastaDeSaida(unittest.TestCase):
+class TestOutputDir(unittest.TestCase):
     """CR-012 (README §8.13): fora de DEV pelo sudo + helper (dubles); em DEV a copia do pacote, real."""
 
     def setUp(self):
-        self.raiz = os.path.realpath(tempfile.mkdtemp(prefix="sss_saida_"))
-        self.addCleanup(shutil.rmtree, self.raiz, True)
-        self.base = os.path.join(self.raiz, "output", "producao")
+        self.root = os.path.realpath(tempfile.mkdtemp(prefix="sss_saida_"))
+        self.addCleanup(shutil.rmtree, self.root, True)
+        self.base = os.path.join(self.root, "output", "producao")
         self.rel = "carga/2026/10/20/14/05/ticket_5"
 
     def test_argv_do_helper_com_e_sem_usuario(self):
@@ -323,7 +323,7 @@ class TestPastaDeSaida(unittest.TestCase):
         self.assertEqual(os_platform.create_output_dir(self.base, self.rel), pasta, "idempotente")
         with open(os.path.join(pasta, "r.txt"), "w") as f:
             f.write("resultado")
-        destino = os.path.join(self.raiz, "output.zip")
+        destino = os.path.join(self.root, "output.zip")
         fd = os.open(destino, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         try:
             proc = os_platform.start_pack(self.base, self.rel, 1048576, 10, fd)
@@ -337,7 +337,7 @@ class TestPastaDeSaida(unittest.TestCase):
         self.assertEqual(os_platform.purge_output(self.base, 7), 0)
 
     def test_cr014_dev_cria_a_entrada_e_preserva_a_existente(self):
-        base = os.path.join(self.raiz, "input", "producao")
+        base = os.path.join(self.root, "input", "producao")
         pasta = os_platform.create_input_dir(base, "carga")
         self.assertEqual((pasta, os.stat(pasta).st_mode & 0o777), (os.path.join(base, "carga"), 0o700))
         with open(os.path.join(pasta, "lote.csv"), "w") as f:
@@ -346,7 +346,7 @@ class TestPastaDeSaida(unittest.TestCase):
         self.assertEqual(os_platform.create_input_dir(base, "carga"), pasta, "idempotente")
         self.assertEqual(os.stat(pasta).st_mode & 0o777, 0o750, "a existente fica como esta")
         self.assertEqual(os.listdir(pasta), ["lote.csv"], "conteudo permanente")
-        fora = os.path.join(self.raiz, "fora_entrada")
+        fora = os.path.join(self.root, "fora_entrada")
         os.mkdir(fora)
         os.symlink(fora, os.path.join(base, "ligada"))
         with self.assertRaises(RuntimeError):
@@ -354,7 +354,7 @@ class TestPastaDeSaida(unittest.TestCase):
 
     def test_dev_recusa_link_no_caminho(self):
         os.makedirs(self.base)
-        fora = os.path.join(self.raiz, "fora")
+        fora = os.path.join(self.root, "fora")
         os.mkdir(fora)
         os.symlink(fora, os.path.join(self.base, "carga"))
         with self.assertRaises(RuntimeError):
@@ -368,25 +368,25 @@ class TestPastaDeSaida(unittest.TestCase):
         os.chmod(self.base, 0o770)
         self.assertEqual(len(os_platform.validate_output_dirs([(self.base, eu)])), 1)
         os.chmod(self.base, 0o700)
-        link = os.path.join(self.raiz, "link")
+        link = os.path.join(self.root, "link")
         os.symlink(self.base, link)
-        falhas = os_platform.validate_output_dirs([(link, eu), (os.path.join(self.raiz, "nada"), eu),
+        falhas = os_platform.validate_output_dirs([(link, eu), (os.path.join(self.root, "nada"), eu),
                                                   (self.base, "usuario_que_nao_existe_sss")])
         self.assertEqual(len(falhas), 3, falhas)
         with mock.patch.object(posix.pwd, "getpwnam", return_value=_Pw("exec1", os.geteuid() + 1)):
             self.assertEqual(len(os_platform.validate_output_dirs([(self.base, "exec1")])), 1, "dono diferente")
 
 
-class TestTravaParadaPrivilegio(unittest.TestCase):
+class TestLockStopPrivilege(unittest.TestCase):
 
     def setUp(self):
-        self.raiz = tempfile.mkdtemp(prefix="sss_plat_")
+        self.root = tempfile.mkdtemp(prefix="sss_plat_")
 
     def tearDown(self):
-        shutil.rmtree(self.raiz, ignore_errors=True)
+        shutil.rmtree(self.root, ignore_errors=True)
 
     def test_segunda_trava_falha(self):
-        caminho = os.path.join(self.raiz, "agente.lock")
+        caminho = os.path.join(self.root, "agente.lock")
         trava = os_platform.lock_instance(caminho)
         try:
             # Outro processo (flock e por descricao de arquivo aberto).
@@ -413,40 +413,40 @@ class TestTravaParadaPrivilegio(unittest.TestCase):
                 flag = threading.Event()
                 os_platform.install_stop_handler(flag)
                 os.kill(os.getpid(), sinal)
-                self.assertTrue(_esperar(flag.is_set, 2))
+                self.assertTrue(_wait(flag.is_set, 2))
         finally:
             signal.signal(signal.SIGTERM, antigos[0])
             signal.signal(signal.SIGINT, antigos[1])
 
 
-class TestEstadoEDiretorios(unittest.TestCase):
+class TestStateAndDirectories(unittest.TestCase):
 
     def setUp(self):
-        self.raiz = tempfile.mkdtemp(prefix="sss_plat_")
+        self.root = tempfile.mkdtemp(prefix="sss_plat_")
 
     def tearDown(self):
-        shutil.rmtree(self.raiz, ignore_errors=True)
+        shutil.rmtree(self.root, ignore_errors=True)
 
     def test_gravar_e_ler_estado_atomicos(self):
         for nome in (".sss_spawn", ".sss_proc", ".sss_result"):
-            caminho = os.path.join(self.raiz, nome)
+            caminho = os.path.join(self.root, nome)
             self.assertIsNone(os_platform.read_state(caminho))
             os_platform.write_state(caminho, {"ticket_id": 5, "fase": nome})
             os_platform.write_state(caminho, {"ticket_id": 5, "fase": nome, "v": 2})
             self.assertEqual(os_platform.read_state(caminho), {"ticket_id": 5, "fase": nome, "v": 2})
             self.assertEqual(os.stat(caminho).st_mode & 0o777, 0o600)
-        self.assertEqual(sorted(os.listdir(self.raiz)), [".sss_proc", ".sss_result", ".sss_spawn"])
+        self.assertEqual(sorted(os.listdir(self.root)), [".sss_proc", ".sss_result", ".sss_spawn"])
 
     def test_gravar_estado_com_falha_nao_deixa_temporario_nem_troca_o_anterior(self):
-        caminho = os.path.join(self.raiz, ".sss_proc")
+        caminho = os.path.join(self.root, ".sss_proc")
         os_platform.write_state(caminho, {"pid": 1})
         with self.assertRaises(TypeError):
             os_platform.write_state(caminho, {"pid": object()})
         self.assertEqual(os_platform.read_state(caminho), {"pid": 1})
-        self.assertEqual(os.listdir(self.raiz), [".sss_proc"])
+        self.assertEqual(os.listdir(self.root), [".sss_proc"])
 
     def test_criar_dir_trabalho_0700(self):
-        caminho = os.path.join(self.raiz, "work", "ticket_1")
+        caminho = os.path.join(self.root, "work", "ticket_1")
         old = os.umask(0)
         try:
             os_platform.create_work_dir(caminho)
@@ -461,25 +461,25 @@ class TestEstadoEDiretorios(unittest.TestCase):
         sv.assert_called_once_with("/srv/sss")
 
     def test_caminho_final(self):
-        alvo = os.path.join(self.raiz, "alvo")
+        alvo = os.path.join(self.root, "alvo")
         os.mkdir(alvo)
-        os.symlink(alvo, os.path.join(self.raiz, "link"))
-        self.assertEqual(os_platform.final_path(os.path.join(self.raiz, "link")), os.path.realpath(alvo))
+        os.symlink(alvo, os.path.join(self.root, "link"))
+        self.assertEqual(os_platform.final_path(os.path.join(self.root, "link")), os.path.realpath(alvo))
 
     @unittest.skipIf(os.geteuid() == 0, "root sempre tem escrita")
     def test_validar_dir_restrito(self):
-        self.assertIsNone(os_platform.validate_restricted_dir(self.raiz))
-        os.chmod(self.raiz, 0o750)
-        self.assertIsNone(os_platform.validate_restricted_dir(self.raiz), "0750 aceito (log_dir)")
+        self.assertIsNone(os_platform.validate_restricted_dir(self.root))
+        os.chmod(self.root, 0o750)
+        self.assertIsNone(os_platform.validate_restricted_dir(self.root), "0750 aceito (log_dir)")
         self.assertEqual(os_platform.validate_restricted_dir("relativo/x"), "RELATIVE_PATH")
         self.assertEqual(os_platform.validate_restricted_dir("/usr/local/sss"), "SYSTEM_DIR")
-        os.symlink("/etc", os.path.join(self.raiz, "etc_link"))
-        self.assertEqual(os_platform.validate_restricted_dir(os.path.join(self.raiz, "etc_link")), "SYSTEM_DIR")
-        self.assertEqual(os_platform.validate_restricted_dir(os.path.join(self.raiz, "nao")), "NOT_FOUND")
-        arq = os.path.join(self.raiz, "arq")
+        os.symlink("/etc", os.path.join(self.root, "etc_link"))
+        self.assertEqual(os_platform.validate_restricted_dir(os.path.join(self.root, "etc_link")), "SYSTEM_DIR")
+        self.assertEqual(os_platform.validate_restricted_dir(os.path.join(self.root, "nao")), "NOT_FOUND")
+        arq = os.path.join(self.root, "arq")
         open(arq, "w").close()
         self.assertEqual(os_platform.validate_restricted_dir(arq), "NAO_E_DIRETORIO")
-        so_leitura = os.path.join(self.raiz, "ro")
+        so_leitura = os.path.join(self.root, "ro")
         os.mkdir(so_leitura, 0o500)
         try:
             self.assertEqual(os_platform.validate_restricted_dir(so_leitura), "SEM_ESCRITA")
@@ -488,11 +488,11 @@ class TestEstadoEDiretorios(unittest.TestCase):
 
 
 @unittest.skipIf(os.geteuid() == 0, "root sempre passa em os.access(W_OK)")
-class TestValidacoesDeCaminho(unittest.TestCase):
+class TestPathValidations(unittest.TestCase):
 
     def setUp(self):
-        self.raiz = os.path.realpath(tempfile.mkdtemp(prefix="sss_plat_"))
-        self.base = os.path.join(self.raiz, "scripts")
+        self.root = os.path.realpath(tempfile.mkdtemp(prefix="sss_plat_"))
+        self.base = os.path.join(self.root, "scripts")
         os.makedirs(os.path.join(self.base, "sub"))
         self.script = os.path.join(self.base, "sub", "ok.py")
         with open(self.script, "w") as f:
@@ -501,50 +501,50 @@ class TestValidacoesDeCaminho(unittest.TestCase):
         os.chmod(self.script, 0o444)
         os.chmod(os.path.join(self.base, "sub"), 0o555)
         os.chmod(self.base, 0o555)
-        os.chmod(self.raiz, 0o555)
+        os.chmod(self.root, 0o555)
 
     def tearDown(self):
-        for atual, dirs, _arqs in os.walk(self.raiz):
+        for atual, dirs, _arqs in os.walk(self.root):
             os.chmod(atual, 0o700)
             for d in dirs:
                 os.chmod(os.path.join(atual, d), 0o700)
-        os.chmod(self.raiz, 0o700)
+        os.chmod(self.root, 0o700)
         os.chmod(self.base, 0o700)
-        shutil.rmtree(self.raiz, ignore_errors=True)
+        shutil.rmtree(self.root, ignore_errors=True)
 
-    def validar(self, caminho):
+    def validate(self, caminho):
         return os_platform.validate_script_path(caminho)
 
     def test_script_valido(self):
-        self.assertIsNone(self.validar(self.script))
+        self.assertIsNone(self.validate(self.script))
 
     def test_link_simbolico_vale_o_arquivo_real(self):
         # CR-011: o link e aceito e as checagens valem para o destino.
-        self.assertIsNone(self.validar(os.path.join(self.base, "link.py")))
+        self.assertIsNone(self.validate(os.path.join(self.base, "link.py")))
         os.chmod(self.script, 0o666)
-        self.assertEqual(self.validar(os.path.join(self.base, "link.py")), "GROUP_OTHER_WRITABLE",
+        self.assertEqual(self.validate(os.path.join(self.base, "link.py")), "GROUP_OTHER_WRITABLE",
                          "modo conferido no arquivo real")
 
     def test_sem_acesso(self):
         os.chmod(os.path.join(self.base, "sub"), 0o000)
-        self.assertEqual(self.validar(self.script), "NO_ACCESS")
+        self.assertEqual(self.validate(self.script), "NO_ACCESS")
 
     def test_so_o_arquivo_e_conferido(self):
         # CR-011 (S2): pasta gravavel nao e conferida; o arquivo gravavel por grupo ou outros e recusado.
         os.chmod(os.path.join(self.base, "sub"), 0o777)
-        self.assertIsNone(self.validar(self.script))
+        self.assertIsNone(self.validate(self.script))
         os.chmod(self.script, 0o464)
-        self.assertEqual(self.validar(self.script), "GROUP_OTHER_WRITABLE")
+        self.assertEqual(self.validate(self.script), "GROUP_OTHER_WRITABLE")
 
     def test_ciclo_de_links(self):
         os.chmod(self.base, 0o755)
         os.symlink("ciclo_b", os.path.join(self.base, "ciclo_a"))
         os.symlink("ciclo_a", os.path.join(self.base, "ciclo_b"))
-        self.assertEqual(self.validar(os.path.join(self.base, "ciclo_a")), "NOT_FOUND")
+        self.assertEqual(self.validate(os.path.join(self.base, "ciclo_a")), "NOT_FOUND")
 
     def test_inexistente_e_nao_arquivo(self):
-        self.assertEqual(self.validar(os.path.join(self.base, "nao.py")), "NOT_FOUND")
-        self.assertEqual(self.validar(os.path.join(self.base, "sub")), "NOT_A_FILE")
+        self.assertEqual(self.validate(os.path.join(self.base, "nao.py")), "NOT_FOUND")
+        self.assertEqual(self.validate(os.path.join(self.base, "sub")), "NOT_A_FILE")
 
     def test_interpretador_pelo_validar_executavel(self):
         real = os_platform.validate_interpreter_executable("/bin/sh")
@@ -556,7 +556,7 @@ class TestValidacoesDeCaminho(unittest.TestCase):
             os_platform.validate_interpreter_executable("bin/sh")
 
 
-class TestArquivoRestrito(unittest.TestCase):
+class TestRestrictedFile(unittest.TestCase):
 
     def setUp(self):
         fd, self.path = tempfile.mkstemp(prefix="sss_plat_")
@@ -579,7 +579,7 @@ class TestArquivoRestrito(unittest.TestCase):
         self.assertEqual(os_platform.validate_restricted_file(os.path.dirname(self.path))[0], "NAO_REGULAR")
 
 
-class TestValidarExecucao(unittest.TestCase):
+class TestValidateExecution(unittest.TestCase):
     """Dubles do helper (stat), dos usuarios (pwd) e do sudo -n -l."""
 
     HELPER = "/opt/sss/bin/sss-helper"
@@ -595,7 +595,7 @@ class TestValidarExecucao(unittest.TestCase):
         self.users = {"exec1": _Pw("exec1", self.UID_EXEC), "root": _Pw("root", 0),
                          "agente": _Pw("agente", os.geteuid())}
         self.sudo = {"exec1": (0, "%s\n" % self.HELPER)}
-        self.chamadas = []
+        self.calls = []
 
     def _stat(self, caminho, *a, **k):
         if caminho in self.stats:
@@ -606,43 +606,43 @@ class TestValidarExecucao(unittest.TestCase):
         return self.users[nome]
 
     def _executar(self, argv):
-        self.chamadas.append(argv)
+        self.calls.append(argv)
         return self.sudo.get(argv[4], (1, "Sorry, user may not run sudo"))
 
-    def validar(self, usuarios=("exec1",)):
+    def validate(self, usuarios=("exec1",)):
         with mock.patch.object(posix.os, "stat", side_effect=self._stat), \
                 mock.patch.object(posix.pwd, "getpwnam", side_effect=self._getpwnam):
             return os_platform.validate_execution([("PROD", u) for u in usuarios], self.EXEC,
                                                helper=self.HELPER, executar=self._executar, usuario_agente="agente")
 
     def test_tudo_certo(self):
-        self.assertEqual(self.validar(), [])
-        self.assertEqual(self.chamadas, [["/usr/bin/sudo", "-n", "-l", "-u", "exec1", self.HELPER]])
+        self.assertEqual(self.validate(), [])
+        self.assertEqual(self.calls, [["/usr/bin/sudo", "-n", "-l", "-u", "exec1", self.HELPER]])
 
     def test_helper(self):
         self.stats[self.HELPER] = _Stat(1000, 0o100755)
-        self.assertIn("nao pertence ao root", " ".join(self.validar()))
+        self.assertIn("nao pertence ao root", " ".join(self.validate()))
         self.stats[self.HELPER] = _Stat(0, 0o100775)
-        self.assertIn("modo 0755", " ".join(self.validar()))
+        self.assertIn("modo 0755", " ".join(self.validate()))
         self.stats[self.HELPER] = _Stat(0, 0o100755)
         self.stats["/opt/sss/bin"] = _Stat(0, 0o040775)
-        self.assertIn("so do root", " ".join(self.validar()))
+        self.assertIn("so do root", " ".join(self.validate()))
         del self.stats[self.HELPER]
-        self.assertIn("nao encontrado", " ".join(self.validar()))
+        self.assertIn("nao encontrado", " ".join(self.validate()))
 
     def test_usuarios_invalidos(self):
-        self.assertIn("nao existe", " ".join(self.validar(usuarios=("fantasma",))))
-        self.assertIn("nao pode ser root", " ".join(self.validar(usuarios=("root",))))
-        self.assertIn("proprio usuario do agente", " ".join(self.validar(usuarios=("agente",))))
+        self.assertIn("nao existe", " ".join(self.validate(usuarios=("fantasma",))))
+        self.assertIn("nao pode ser root", " ".join(self.validate(usuarios=("root",))))
+        self.assertIn("proprio usuario do agente", " ".join(self.validate(usuarios=("agente",))))
 
     def test_sudo_sem_regra_e_pasta(self):
         self.sudo["exec1"] = (0, "/usr/bin/outro\n")
-        self.assertIn("sem a regra do helper", " ".join(self.validar()))
+        self.assertIn("sem a regra do helper", " ".join(self.validate()))
         self.sudo["exec1"] = (0, self.HELPER)
         self.stats[os.path.join(self.EXEC, "exec1")] = _Stat(self.UID_EXEC, 0o040750)
-        self.assertIn("modo 0700", " ".join(self.validar()))
+        self.assertIn("modo 0700", " ".join(self.validate()))
         del self.stats[os.path.join(self.EXEC, "exec1")]
-        self.assertIn("nao existe", " ".join(self.validar()))
+        self.assertIn("nao existe", " ".join(self.validate()))
 
 
 class TestInterface(unittest.TestCase):

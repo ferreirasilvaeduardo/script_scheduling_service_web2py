@@ -2,11 +2,11 @@
 """Testes progressivos para os repositorios Oracle 11gR2 (F7.3).
 
 Executa a validacao do agregado ativo selecionado por SSS_TEST_REPO_AGREGADO:
-1. RBAC_USUARIOS -> TestOracleRbacUsuarios
-2. CATALOGO -> TestOracleCatalogo
+1. RBAC_USUARIOS -> TestOracleRbacUsers
+2. CATALOGO -> TestOracleCatalog
 3. TICKETS -> TestOracleTickets
-4. AGENDAMENTOS -> TestOracleAgendamentos
-5. AUDITORIA_AGENTES -> TestOracleAuditoriaAgentes
+4. AGENDAMENTOS -> TestOracleSchedules
+5. AUDITORIA_AGENTES -> TestOracleAuditAgents
 """
 import datetime
 import os
@@ -33,7 +33,7 @@ from repo_users import RepoUsers
 from gluon import current
 
 
-def _preparar_banco_real(cls):
+def _prepare_real_db(cls):
     """Valida o banco real (modo descartavel ou compartilhado) antes de qualquer DML.
 
     Com banco real, o cfg validado vai para current.sss_cfg durante a classe (os repositorios Oracle
@@ -41,23 +41,23 @@ def _preparar_banco_real(cls):
     """
     cls.tem_banco_real = _oracle_test_support.real_db_configured()
     cls._tinha_sss_cfg = hasattr(current, "sss_cfg")
-    cls._sss_cfg_anterior = getattr(current, "sss_cfg", None)
+    cls._previous_sss_cfg = getattr(current, "sss_cfg", None)
     if cls.tem_banco_real:
         cls.cfg = _oracle_test_support.prepare_disposable_schema("web")
         current.sss_cfg = cls.cfg
     repo_factory.configure({"app": {"data_backend": "ORACLE", "sss_env": "DEV"}})
 
 
-def _restaurar_banco_real(cls):
+def _restore_real_db(cls):
     repo_factory.configure(None)
     repo_factory.reset_singletons()
     if cls._tinha_sss_cfg:
-        current.sss_cfg = cls._sss_cfg_anterior
+        current.sss_cfg = cls._previous_sss_cfg
     elif hasattr(current, "sss_cfg"):
         delattr(current, "sss_cfg")
 
 
-class TestOracleRbacUsuarios(unittest.TestCase):
+class TestOracleRbacUsers(unittest.TestCase):
     """Testes de conformidade e integridade para o agregado RBAC_USUARIOS no Oracle."""
 
     @classmethod
@@ -66,11 +66,11 @@ class TestOracleRbacUsuarios(unittest.TestCase):
         if agregado != "RBAC_USUARIOS":
             raise unittest.SkipTest("Execucao restrita ao agregado RBAC_USUARIOS (atual: %s)" % agregado)
 
-        _preparar_banco_real(cls)
+        _prepare_real_db(cls)
 
     @classmethod
     def tearDownClass(cls):
-        _restaurar_banco_real(cls)
+        _restore_real_db(cls)
 
     def setUp(self):
         repo_factory.reset_singletons()
@@ -101,11 +101,11 @@ class TestOracleRbacUsuarios(unittest.TestCase):
         linha = tuple(1 if c in ("id", "profile_id") else ("Y" if c == "active" else
                       ("tst.x" if c == "login" else (0 if c in ("failed_attempts", "session_epoch") else None)))
                       for c in mod._COLS_USER)
-        conn = _ConexaoRoteirizada([("FOR UPDATE OF u.active WAIT 5", 1, [linha + ("Y", "N")]), ("UPDATE", 1, []),
+        conn = _ScriptedConnection([("FOR UPDATE OF u.active WAIT 5", 1, [linha + ("Y", "N")]), ("UPDATE", 1, []),
                                     ("SELECT", 1, [linha])])
         with mock.patch.object(self.usr, "_obter_conexao", return_value=conn):
             self.usr.update(1, {"name": "Novo nome"}, ator="ana")
-        upd = [sql for sql, _b in conn.executados if sql.startswith("UPDATE")]
+        upd = [sql for sql, _b in conn.executed if sql.startswith("UPDATE")]
         self.assertTrue(upd and ":locked_until" not in upd[0])
         self.assertEqual(conn.commits, 1)
 
@@ -205,20 +205,20 @@ class TestOracleRbacUsuarios(unittest.TestCase):
                 conn.close()
 
 
-class _CursorGravador(object):
+class _RecordingCursor(object):
     """Cursor de mentira: registra o SQL e devolve as linhas programadas, sem banco."""
 
     def __init__(self, linhas=None, uma=None):
-        self.executados = []
-        self._linhas = list(linhas or [])
+        self.executed = []
+        self._lines = list(linhas or [])
         self._uma = uma
         self.rowcount = 1
 
     def execute(self, sql, binds=None):
-        self.executados.append((sql, binds))
+        self.executed.append((sql, binds))
 
     def fetchall(self):
-        return list(self._linhas)
+        return list(self._lines)
 
     def fetchone(self):
         return self._uma
@@ -227,7 +227,7 @@ class _CursorGravador(object):
         pass
 
 
-class _ConexaoGravadora(object):
+class _RecordingConnection(object):
     def __init__(self, cursor):
         self.cursor_ = cursor
 
@@ -238,7 +238,7 @@ class _ConexaoGravadora(object):
         pass
 
 
-class TestOracleCatalogo(unittest.TestCase):
+class TestOracleCatalog(unittest.TestCase):
     """Testes de conformidade e integridade para o agregado CATALOGO no Oracle (passo 2 do F7.3)."""
 
     @classmethod
@@ -247,11 +247,11 @@ class TestOracleCatalogo(unittest.TestCase):
         if agregado != "CATALOGO":
             raise unittest.SkipTest("Execucao restrita ao agregado CATALOGO (atual: %s)" % agregado)
 
-        _preparar_banco_real(cls)
+        _prepare_real_db(cls)
 
     @classmethod
     def tearDownClass(cls):
-        _restaurar_banco_real(cls)
+        _restore_real_db(cls)
 
     def setUp(self):
         repo_factory.reset_singletons()
@@ -344,27 +344,27 @@ class TestOracleCatalogo(unittest.TestCase):
 
     def test_scripts_executaveis_uma_consulta_por_perfil_ou_admin(self):
         """Uma unica consulta: EXISTS em perfil_scr/perfil_amb pelo perfil_id, ou o atalho do admin."""
-        cur = _CursorGravador()
-        with mock.patch.object(self.cat, "_obter_conexao", return_value=_ConexaoGravadora(cur)):
+        cur = _RecordingCursor()
+        with mock.patch.object(self.cat, "_obter_conexao", return_value=_RecordingConnection(cur)):
             self.cat.executable_scripts({"is_admin": False, "profile_id": 7,
                                           "features": frozenset(["EXEC_SCRIPT"])})
             self.cat.executable_scripts({"is_admin": True})
-        self.assertEqual(len(cur.executados), 2)
-        sql_perfil, binds_perfil = cur.executados[0]
+        self.assertEqual(len(cur.executed), 2)
+        sql_perfil, binds_perfil = cur.executed[0]
         self.assertIn(self.cat.qualify_table("profile_script"), sql_perfil)
         self.assertIn(self.cat.qualify_table("profile_env"), sql_perfil)
         self.assertEqual(binds_perfil, {"profile_id": 7})
-        sql_admin, binds_admin = cur.executados[1]
+        sql_admin, binds_admin = cur.executed[1]
         self.assertNotIn(self.cat.qualify_table("profile_script"), sql_admin)
         self.assertIn(self.cat.qualify_table("script_env"), sql_admin)
         self.assertIsNone(binds_admin)
 
     def test_filtro_de_trecho_escapa_curingas(self):
         """'%' e '_' digitados no filtro sao literais (paridade com o 'in' do FAKE), sempre por bind."""
-        cur = _CursorGravador(uma=(0,))
-        with mock.patch.object(self.cat, "_obter_conexao", return_value=_ConexaoGravadora(cur)):
+        cur = _RecordingCursor(uma=(0,))
+        with mock.patch.object(self.cat, "_obter_conexao", return_value=_RecordingConnection(cur)):
             self.cat.scripts_list(filtros={"name": "carga_10%"})
-        sql_conta, binds = cur.executados[0]
+        sql_conta, binds = cur.executed[0]
         self.assertIn("ROWNUM <= 10001", sql_conta)
         self.assertIn("ESCAPE", sql_conta)
         self.assertEqual(binds["nome_f"], "%carga\\_10\\%%")
@@ -372,7 +372,7 @@ class TestOracleCatalogo(unittest.TestCase):
 
     # ------------------------------------------------------------- banco real
 
-    def _limpar(self, ids):
+    def _clean(self, ids):
         """Remove somente os registros criados por este teste, em transacao propria."""
         conn = self.cat._obter_conexao()
         restantes = []
@@ -518,16 +518,16 @@ class TestOracleCatalogo(unittest.TestCase):
             self.assertIn(scr["id"], executaveis)
             self.assertNotIn(outro["id"], executaveis)
         finally:
-            self._limpar(ids)
+            self._clean(ids)
 
 
-class _CursorRoteirizado(object):
+class _ScriptedCursor(object):
     """Cursor de mentira que responde por trecho do SQL: roteiro = [(trecho, rowcount, linhas)]."""
 
     def __init__(self, conexao):
         self._conexao = conexao
         self.rowcount = 0
-        self._linhas = []
+        self._lines = []
 
     def execute(self, sql, binds=None):
         # Como o python-oracledb (DPY-4008): tipo declarado para bind que nao existe no SQL.
@@ -535,44 +535,44 @@ class _CursorRoteirizado(object):
             if ":" + nome not in sql:
                 raise RuntimeError("DPY-4008: no bind placeholder named \":%s\" was found in the SQL text" % nome)
         self._tipos = {}
-        self._conexao.executados.append((sql, binds))
+        self._conexao.executed.append((sql, binds))
         if ".NEXTVAL FROM DUAL" in sql:
             self._conexao.seq += 1
-            self.rowcount, self._linhas = 1, [(self._conexao.seq,)]
+            self.rowcount, self._lines = 1, [(self._conexao.seq,)]
             return
-        for trecho, rowcount, linhas in self._conexao.roteiro:
+        for trecho, rowcount, linhas in self._conexao.script_steps:
             if trecho in sql:
-                self.rowcount, self._linhas = rowcount, list(linhas)
+                self.rowcount, self._lines = rowcount, list(linhas)
                 return
-        self.rowcount, self._linhas = 0, []
+        self.rowcount, self._lines = 0, []
 
     def setinputsizes(self, **tipos):
         self._tipos = tipos
 
     def fetchone(self):
-        return self._linhas[0] if self._linhas else None
+        return self._lines[0] if self._lines else None
 
     def fetchall(self):
-        return list(self._linhas)
+        return list(self._lines)
 
     def fetchmany(self, n):
-        lote, self._linhas = self._linhas[:n], self._linhas[n:]
+        lote, self._lines = self._lines[:n], self._lines[n:]
         return lote
 
     def close(self):
         pass
 
 
-class _ConexaoRoteirizada(object):
+class _ScriptedConnection(object):
     def __init__(self, roteiro):
-        self.roteiro = roteiro
-        self.executados = []
+        self.script_steps = roteiro
+        self.executed = []
         self.seq = 1000
         self.commits = 0
         self.rollbacks = 0
 
     def cursor(self):
-        return _CursorRoteirizado(self)
+        return _ScriptedCursor(self)
 
     def commit(self):
         self.commits += 1
@@ -583,8 +583,8 @@ class _ConexaoRoteirizada(object):
     def close(self):
         pass
 
-    def auditorias(self):
-        return [b for sql, b in self.executados if sql.startswith("INSERT INTO") and "audit" in sql]
+    def audits(self):
+        return [b for sql, b in self.executed if sql.startswith("INSERT INTO") and "audit" in sql]
 
 
 class TestOracleTickets(unittest.TestCase):
@@ -595,11 +595,11 @@ class TestOracleTickets(unittest.TestCase):
         agregado = os.environ.get("SSS_TEST_REPO_AGREGADO")
         if agregado != "TICKETS":
             raise unittest.SkipTest("Execucao restrita ao agregado TICKETS (atual: %s)" % agregado)
-        _preparar_banco_real(cls)
+        _prepare_real_db(cls)
 
     @classmethod
     def tearDownClass(cls):
-        _restaurar_banco_real(cls)
+        _restore_real_db(cls)
 
     def setUp(self):
         repo_factory.reset_singletons()
@@ -662,8 +662,8 @@ class TestOracleTickets(unittest.TestCase):
                 with self.assertRaises(repo_errors.RepoViolation):
                     self.tck.request_cancel(1, ator, "127.0.0.1")
 
-    def _cancelar_com(self, roteiro):
-        conn = _ConexaoRoteirizada(roteiro)
+    def _cancel_with(self, roteiro):
+        conn = _ScriptedConnection(roteiro)
         with mock.patch.object(self.tck, "_obter_conexao", return_value=conn):
             retorno = self.tck.request_cancel(7, "ana", "10.0.0.1")
         return retorno, conn
@@ -687,41 +687,41 @@ class TestOracleTickets(unittest.TestCase):
              "CANCELADO", u"resultado: cancelado"),
         )
         for roteiro, esperado, detalhe in casos:
-            retorno, conn = self._cancelar_com(roteiro)
+            retorno, conn = self._cancel_with(roteiro)
             self.assertEqual(retorno, esperado)
-            auds = conn.auditorias()
+            auds = conn.audits()
             self.assertEqual(len(auds), 1)
             self.assertEqual((auds[0]["action"], auds[0]["detail"], auds[0]["actor"], auds[0]["entity_id"]),
                              ("TICKET_CANCEL", detalhe, "ana", 7))
             self.assertEqual((conn.commits, conn.rollbacks), (1, 0))
 
     def test_cancelamento_de_ticket_inexistente(self):
-        conn = _ConexaoRoteirizada([])
+        conn = _ScriptedConnection([])
         with mock.patch.object(self.tck, "_obter_conexao", return_value=conn):
             with self.assertRaises(repo_errors.RepoNotFound):
                 self.tck.request_cancel(7, "ana", "10.0.0.1")
-        self.assertEqual(conn.auditorias(), [])
+        self.assertEqual(conn.audits(), [])
         self.assertEqual((conn.commits, conn.rollbacks), (0, 1))
 
     def test_criar_sem_gravacao_parcial_com_fk_ausente(self):
         """FK conferida antes de qualquer INSERT: nada e gravado e a transacao e desfeita."""
         roteiro = [("WHERE id = :id", 1, [(1,)]), ("WHERE name = :name", 0, [])]
-        conn = _ConexaoRoteirizada(roteiro)
+        conn = _ScriptedConnection(roteiro)
         with mock.patch.object(self.tck, "_obter_conexao", return_value=conn):
             with self.assertRaises(repo_errors.RepoViolation) as ctx:
                 self.tck.create({"script_id": 1, "environment": "NAO_EXISTE", "requested_by": "ana"}, [])
         self.assertEqual(ctx.exception.constraint, "fk_tbsss_tck_env")
-        self.assertFalse([s for s, _b in conn.executados if s.startswith("INSERT")])
+        self.assertFalse([s for s, _b in conn.executed if s.startswith("INSERT")])
         self.assertEqual(conn.rollbacks, 1)
 
     def test_listar_filtros_por_bind_e_escopo_vazio(self):
         """Status e escopo por IN de placeholders; escopo vazio nao devolve nada; datas como bind."""
-        conn = _ConexaoRoteirizada([("SELECT COUNT(*)", 1, [(0,)])])
+        conn = _ScriptedConnection([("SELECT COUNT(*)", 1, [(0,)])])
         with mock.patch.object(self.tck, "_obter_conexao", return_value=conn):
             self.tck.list({"status": ["RUNNING", "PENDING"], "origem": "manual",
                              "criado_inicio": datetime.datetime(2026, 1, 1)}, escopo_ambientes=["HML", "PROD"])
             self.tck.list({}, escopo_ambientes=[])
-        sql, binds = conn.executados[0]
+        sql, binds = conn.executed[0]
         self.assertIn("ROWNUM <= 10001", sql)
         self.assertIn("status IN (:s0, :s1)", sql)
         self.assertIn("environment IN (:e0, :e1)", sql)
@@ -729,11 +729,11 @@ class TestOracleTickets(unittest.TestCase):
         self.assertIn("created_at >= :criado_inicio", sql)
         self.assertNotIn("RUNNING", sql)
         self.assertEqual((binds["s0"], binds["s1"], binds["e0"]), ("PENDING", "RUNNING", "HML"))
-        self.assertIn("1 = 0", conn.executados[2][0])
+        self.assertIn("1 = 0", conn.executed[2][0])
 
     # ------------------------------------------------------------- banco real
 
-    def _fixtures_do_seed(self):
+    def _seed_fixtures(self):
         """Cadastros existentes (somente leitura): um script, um ambiente, um parametro e um login."""
         c = self.tck._obter_conexao()
         try:
@@ -755,7 +755,7 @@ class TestOracleTickets(unittest.TestCase):
             self.skipTest("Seed do catalogo ausente no banco real (implante o 01_deploy_sss.sql)")
         return script_id, ambiente, prm1, prm2, login
 
-    def _limpar(self, ids, marca_ip):
+    def _clean(self, ids, marca_ip):
         """Remove so os tickets criados por este teste (respostas em cascata) e, no modo compartilhado,
         a auditoria deles; falha se sobrar algo."""
         c = self.tck._obter_conexao()
@@ -779,7 +779,7 @@ class TestOracleTickets(unittest.TestCase):
         if restantes:
             self.fail("Limpeza incompleta: %d ticket(s) com ip_origem %s" % (restantes, marca_ip))
 
-    def _contar_por_ip(self, marca_ip):
+    def _count_by_ip(self, marca_ip):
         c = self.tck._obter_conexao()
         try:
             cur = c.cursor()
@@ -797,7 +797,7 @@ class TestOracleTickets(unittest.TestCase):
         if not self.tem_banco_real:
             self.skipTest("Banco descartavel real nao configurado (marcado como NAO TESTADO)")
         n = self.tck.constraint_name
-        script_id, ambiente, prm1, prm2, login = self._fixtures_do_seed()
+        script_id, ambiente, prm1, prm2, login = self._seed_fixtures()
         marca_ip = "tst-%s" % datetime.datetime.now().strftime("%H%M%S%f")
         base = {"script_id": script_id, "environment": ambiente, "requested_by": login, "source_ip": marca_ip,
                 "submitted_params": '{"args": ["--x"]}'}
@@ -817,7 +817,7 @@ class TestOracleTickets(unittest.TestCase):
             self.assertEqual([r["answer_value"] for r in self.tck.answers(t1)], ["a", "b"])
 
             # 2. FKs e UK: nenhuma linha gravada em caso de violacao.
-            antes = self._contar_por_ip(marca_ip)
+            antes = self._count_by_ip(marca_ip)
             for dados, resp, ck in (
                 (dict(base, script_id=999999999), [], n("fk", "tickets", "scr")),
                 (dict(base, environment="NAO_EXISTE_TST"), [], n("fk", "tickets", "env")),
@@ -829,7 +829,7 @@ class TestOracleTickets(unittest.TestCase):
                 with self.assertRaises(repo_errors.RepoViolation) as ctx:
                     self.tck.create(dados, resp)
                 self.assertEqual(ctx.exception.constraint, ck)
-            self.assertEqual(self._contar_por_ip(marca_ip), antes)
+            self.assertEqual(self._count_by_ip(marca_ip), antes)
 
             # 3. Cancelamento nos quatro resultados (README §5.6) e o residuo PENDING com 'S' (CR-008, R-02).
             self.assertEqual(self.tck.request_cancel(t1, "teste_tck", marca_ip), "CANCELADO")
@@ -883,10 +883,10 @@ class TestOracleTickets(unittest.TestCase):
             self.assertEqual(sorted(hist[0]), ["created_at", "finished_at", "id", "started_at", "status",
                                                "status_reason"])
         finally:
-            self._limpar(ids, marca_ip)
+            self._clean(ids, marca_ip)
 
 
-class TestOracleAgendamentos(unittest.TestCase):
+class TestOracleSchedules(unittest.TestCase):
     """Testes de conformidade e integridade para o agregado AGENDAMENTOS no Oracle (passo 4 do F7.3)."""
 
     @classmethod
@@ -894,11 +894,11 @@ class TestOracleAgendamentos(unittest.TestCase):
         agregado = os.environ.get("SSS_TEST_REPO_AGREGADO")
         if agregado != "AGENDAMENTOS":
             raise unittest.SkipTest("Execucao restrita ao agregado AGENDAMENTOS (atual: %s)" % agregado)
-        _preparar_banco_real(cls)
+        _prepare_real_db(cls)
 
     @classmethod
     def tearDownClass(cls):
-        _restaurar_banco_real(cls)
+        _restore_real_db(cls)
 
     def setUp(self):
         repo_factory.reset_singletons()
@@ -966,27 +966,27 @@ class TestOracleAgendamentos(unittest.TestCase):
 
     def test_pausar_sem_linha_afetada_e_conflito(self):
         """Regra existente, mas nao ativa (ou com outra next_run): RepoConflict e ROLLBACK."""
-        conn = _ConexaoRoteirizada([("WHERE id = :id AND active = 'Y'", 0, []), ("SELECT id FROM", 1, [(7,)])])
+        conn = _ScriptedConnection([("WHERE id = :id AND active = 'Y'", 0, []), ("SELECT id FROM", 1, [(7,)])])
         with mock.patch.object(self.agd, "_obter_conexao", return_value=conn):
             with self.assertRaises(repo_errors.RepoConflict):
                 self.agd.pause(7, "MANUAL", antiga_data=datetime.datetime(2026, 1, 1, 8, 0, 0, 123456), ator="ana")
         self.assertEqual((conn.commits, conn.rollbacks), (0, 1))
-        self.assertEqual(conn.auditorias(), [])
+        self.assertEqual(conn.audits(), [])
 
     def test_listar_escopo_vazio_e_filtros_por_bind(self):
-        conn = _ConexaoRoteirizada([("SELECT COUNT(*)", 1, [(0,)])])
+        conn = _ScriptedConnection([("SELECT COUNT(*)", 1, [(0,)])])
         with mock.patch.object(self.agd, "_obter_conexao", return_value=conn):
             self.agd.list({"active": "Y", "name": "50%_x"}, escopo_ambientes=["HML"])
             self.agd.list({}, escopo_ambientes=[])
-        sql, binds = conn.executados[0]
+        sql, binds = conn.executed[0]
         self.assertIn("environment IN (:e0)", sql)
         self.assertIn("ROWNUM <= 10001", sql)
         self.assertEqual(binds["nome_f"], "%50\\%\\_x%")
-        self.assertIn("1 = 0", conn.executados[2][0])
+        self.assertIn("1 = 0", conn.executed[2][0])
 
     # ------------------------------------------------------------- banco real
 
-    def _fixtures_do_seed(self):
+    def _seed_fixtures(self):
         c = self.agd._obter_conexao()
         try:
             cur = c.cursor()
@@ -1005,7 +1005,7 @@ class TestOracleAgendamentos(unittest.TestCase):
             self.skipTest("Seed do catalogo ausente no banco real (implante o 01_deploy_sss.sql)")
         return script_id, ambiente, usuario_id, login
 
-    def _limpar(self, agd_ids, tck_ids, marca):
+    def _clean(self, agd_ids, tck_ids, marca):
         """Remove so os registros criados por este teste e, no modo compartilhado, a auditoria deles."""
         compartilhado = _oracle_test_support.schema_mode() == _oracle_test_support.SHARED_MODE
         tck = repo_factory.get("tickets")
@@ -1051,7 +1051,7 @@ class TestOracleAgendamentos(unittest.TestCase):
         """Ciclo no Oracle: CRUD, CKs e FKs sem gravacao parcial, pausa otimista, microssegundos e ocorrencia."""
         if not self.tem_banco_real:
             self.skipTest("Testes Oracle reais desligados (marcado como NAO TESTADO)")
-        script_id, ambiente, usuario_id, login = self._fixtures_do_seed()
+        script_id, ambiente, usuario_id, login = self._seed_fixtures()
         marca = "TST_AGD_%s" % datetime.datetime.now().strftime("%H%M%S%f")
         agora = self.agd.now() if hasattr(self.agd, "now") else repo_factory.get("tickets").now()
         amanha = agora + datetime.timedelta(days=1)
@@ -1136,10 +1136,10 @@ class TestOracleAgendamentos(unittest.TestCase):
                                           "schedule_id": r1["id"], "scheduled_at": ocorrencia}, []))
             self.assertEqual(ctx.exception.constraint, tck.constraint_name("ix", "tickets", "occur"))
         finally:
-            self._limpar(agd_ids, tck_ids, marca)
+            self._clean(agd_ids, tck_ids, marca)
 
 
-class TestOracleAuditoriaAgentes(unittest.TestCase):
+class TestOracleAuditAgents(unittest.TestCase):
     """Testes de conformidade e integridade para o agregado AUDITORIA_AGENTES no Oracle (passo 5 do F7.3)."""
 
     @classmethod
@@ -1147,11 +1147,11 @@ class TestOracleAuditoriaAgentes(unittest.TestCase):
         agregado = os.environ.get("SSS_TEST_REPO_AGREGADO")
         if agregado != "AUDITORIA_AGENTES":
             raise unittest.SkipTest("Execucao restrita ao agregado AUDITORIA_AGENTES (atual: %s)" % agregado)
-        _preparar_banco_real(cls)
+        _prepare_real_db(cls)
 
     @classmethod
     def tearDownClass(cls):
-        _restaurar_banco_real(cls)
+        _restore_real_db(cls)
 
     def setUp(self):
         repo_factory.reset_singletons()
@@ -1210,19 +1210,19 @@ class TestOracleAuditoriaAgentes(unittest.TestCase):
             base.write_audit(mock.MagicMock(), "t", "s", {"actor": None, "action": "X"}, "tbsss_scripts", 1)
 
     def test_listar_e_iterar_por_bind_com_periodo_e_id_max(self):
-        conn = _ConexaoRoteirizada([("SELECT COUNT(*)", 1, [(0,)])])
+        conn = _ScriptedConnection([("SELECT COUNT(*)", 1, [(0,)])])
         filtros = {"actor": "Ana_1", "start_date": datetime.datetime(2026, 1, 1),
                    "end_date": datetime.datetime(2026, 1, 31, 23, 59, 59), "id_max": 99, "source_ip": "10.%"}
         with mock.patch.object(self.aud, "_obter_conexao", return_value=conn):
             self.aud.list(filtros)
             list(self.aud.iterate(filtros, limite=5))
-        sql, binds = conn.executados[0]
+        sql, binds = conn.executed[0]
         for trecho in ("LOWER(actor) LIKE :ator_f ESCAPE", "created_at >= :start_date", "created_at <= :end_date",
                        "id <= :id_max", "ROWNUM <= 10001"):
             self.assertIn(trecho, sql)
         self.assertNotIn("TRUNC", sql)
         self.assertEqual((binds["ator_f"], binds["ip_f"]), ("%ana\\_1%", "%10.\\%%"))
-        sql_it, binds_it = conn.executados[-1]
+        sql_it, binds_it = conn.executed[-1]
         self.assertIn("WHERE ROWNUM <= :limite", sql_it)
         self.assertEqual(binds_it["limite"], 5)
 

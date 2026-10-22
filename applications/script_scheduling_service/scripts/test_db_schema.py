@@ -37,7 +37,7 @@ from sql_ident import (
 class TestDbSchema(unittest.TestCase):
     """Bateria de testes de schema do modelo Oracle 11gR2."""
 
-    def _obter_prefixo_config_example(self):
+    def _get_config_example_prefix(self):
         """Le table_prefix diretamente de instance/config.ini.example."""
         app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         cfg_path = os.path.join(app_dir, "instance", "config.ini.example")
@@ -113,7 +113,7 @@ class TestDbSchema(unittest.TestCase):
 
     def test_limite_30_caracteres_config_example_e_pior_caso(self):
         """Valida len <= 30 para prefixo do config.ini.example e pior caso (8 chars)."""
-        prefixo_cfg = self._obter_prefixo_config_example()
+        prefixo_cfg = self._get_config_example_prefix()
         prefixos_para_testar = [prefixo_cfg, "abcdefg_"]
 
         for pref in prefixos_para_testar:

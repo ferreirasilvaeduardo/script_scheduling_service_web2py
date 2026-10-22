@@ -22,14 +22,14 @@ from admin_users_service import AdminUsersService
 from params_compiler import ParamError
 
 IP = "10.8.8.8"
-SENHA_DEV = "senha-dev-de-teste-123"
-SENHA_NOVA = "Nova-Senha-Forte-2026"
-AGORA = datetime.datetime(2026, 10, 17, 9, 0, 0)
+DEV_PASSWORD = "senha-dev-de-teste-123"
+NEW_PASSWORD = "Nova-Senha-Forte-2026"
+NOW = datetime.datetime(2026, 10, 17, 9, 0, 0)
 U_ADMIN, U_OPPROD, U_OPHML = 1, 2, 3
 P_ADMIN, P_OPPROD, P_CONSULTA = 1, 2, 4
 
 
-def _sessao(uid, login, perfil_id):
+def _session(uid, login, perfil_id):
     return {"usuario_id": uid, "login": login, "perfil_id": perfil_id, "perm_versao": 1, "sessao_epoch": 0}
 
 
@@ -39,7 +39,7 @@ class _Base(unittest.TestCase):
         patcher = mock.patch.object(security, "ITERATIONS", 1000)
         patcher.start()
         self.addCleanup(patcher.stop)
-        env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: SENHA_DEV})
+        env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: DEV_PASSWORD})
         env.start()
         self.addCleanup(env.stop)
         repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
@@ -53,20 +53,20 @@ class _Base(unittest.TestCase):
         self.log.addHandler(logging.NullHandler())
         self.log.propagate = False
         self.auth = auth_service.AuthService(self.users, self.rbac_repo, repo_factory.get("catalog"),
-                                             self.audit, 5, 900, self.log, relogio=lambda: AGORA)
-        self.ctx = {"admin": self.auth.revalidate(_sessao(U_ADMIN, "admin", P_ADMIN)),
-                    "op.prod": self.auth.revalidate(_sessao(U_OPPROD, "op.prod", P_OPPROD))}
+                                             self.audit, 5, 900, self.log, relogio=lambda: NOW)
+        self.ctx = {"admin": self.auth.revalidate(_session(U_ADMIN, "admin", P_ADMIN)),
+                    "op.prod": self.auth.revalidate(_session(U_OPPROD, "op.prod", P_OPPROD))}
         # Gestor sem perfil de administrador, com as funcionalidades de cadastro (CR-008, F-05).
         self.ctx["gestor"] = dict(self.ctx["op.prod"], features=frozenset(["MANAGE_USERS", "MANAGE_PROFILES"]))
-        self.svc_usr = AdminUsersService(self.users, self.rbac_repo, self.log, relogio=lambda: AGORA)
+        self.svc_usr = AdminUsersService(self.users, self.rbac_repo, self.log, relogio=lambda: NOW)
         self.svc_per = AdminProfilesService(self.rbac_repo, repo_factory.get("catalog"), self.users, self.log)
 
 
-class TestAdminSoPorAdmin(_Base):
+class TestAdminOnlyByAdmin(_Base):
 
     def test_gestor_nao_cria_usuario_admin(self):
         dados = {"login": "novo.admin", "name": "Novo", "profile_id": str(P_ADMIN),
-                 "senha": SENHA_NOVA, "confirmacao": SENHA_NOVA}
+                 "senha": NEW_PASSWORD, "confirmacao": NEW_PASSWORD}
         uid, erros = self.svc_usr.save(self.ctx["gestor"], IP, None, dados)
         self.assertEqual((uid, erros), (None, {"profile_id": usr_mod.MSG_ADMIN_ONLY}))
         self.assertIsNone(self.users.get_by_login("novo.admin"))
@@ -83,7 +83,7 @@ class TestAdminSoPorAdmin(_Base):
         _id, erros = self.svc_usr.save(self.ctx["gestor"], IP, str(U_ADMIN),
                                          {"name": "Outro", "profile_id": str(P_ADMIN), "version": form["version"]})
         self.assertEqual(erros, {GENERAL_FIELD: usr_mod.MSG_ADMIN_ONLY})
-        for acao in (lambda: self.svc_usr.reset_password(self.ctx["gestor"], IP, str(U_ADMIN), SENHA_NOVA, SENHA_NOVA),
+        for acao in (lambda: self.svc_usr.reset_password(self.ctx["gestor"], IP, str(U_ADMIN), NEW_PASSWORD, NEW_PASSWORD),
                      lambda: self.svc_usr.unlock(self.ctx["gestor"], IP, str(U_ADMIN)),
                      lambda: self.svc_usr.toggle_active(self.ctx["gestor"], IP, str(U_ADMIN), form["version"])):
             with self.assertRaises(OperationDenied) as cm:
@@ -93,7 +93,7 @@ class TestAdminSoPorAdmin(_Base):
         self.assertEqual((admin["active"], admin["session_epoch"]), ("Y", 0))
 
     def test_gestor_altera_usuario_comum_e_admin_altera_admin(self):
-        self.assertEqual(self.svc_usr.reset_password(self.ctx["gestor"], IP, str(U_OPHML), SENHA_NOVA, SENHA_NOVA), {})
+        self.assertEqual(self.svc_usr.reset_password(self.ctx["gestor"], IP, str(U_OPHML), NEW_PASSWORD, NEW_PASSWORD), {})
         form = self.svc_usr.form(self.ctx["admin"], str(U_OPHML))
         _id, erros = self.svc_usr.save(self.ctx["admin"], IP, str(U_OPHML),
                                          {"name": form["name"], "profile_id": str(P_ADMIN), "version": form["version"]})
@@ -120,15 +120,15 @@ class TestAdminSoPorAdmin(_Base):
         self.assertEqual(erros, {})
 
 
-class TestSessaoRevogavel(_Base):
+class TestRevocableSession(_Base):
 
     def _epoch(self, uid):
         return self.users.get_by_id(uid)["session_epoch"]
 
     def test_eventos_que_revogam(self):
-        sessao = _sessao(U_OPHML, "op.hml", 3)
+        sessao = _session(U_OPHML, "op.hml", 3)
         self.assertIsNotNone(self.auth.revalidate(sessao))
-        self.svc_usr.reset_password(self.ctx["admin"], IP, str(U_OPHML), SENHA_NOVA, SENHA_NOVA)
+        self.svc_usr.reset_password(self.ctx["admin"], IP, str(U_OPHML), NEW_PASSWORD, NEW_PASSWORD)
         self.assertEqual(self._epoch(U_OPHML), 1)
         self.assertIsNone(self.auth.revalidate(sessao))
         sessao["sessao_epoch"] = 1
@@ -143,7 +143,7 @@ class TestSessaoRevogavel(_Base):
         self.assertEqual(self._epoch(U_OPHML), 2)
 
     def test_logout_derruba_todas_as_sessoes_e_audita(self):
-        outra = _sessao(U_OPPROD, "op.prod", P_OPPROD)
+        outra = _session(U_OPPROD, "op.prod", P_OPPROD)
         self.auth.logout(self.ctx["op.prod"], IP)
         self.assertEqual(self._epoch(U_OPPROD), 1)
         self.assertIsNone(self.auth.revalidate(outra))
@@ -155,16 +155,16 @@ class TestSessaoRevogavel(_Base):
         self.assertIsNone(u.get("updated_by"), "logout e rotina tecnica, sem updated_*")
 
     def test_troca_da_propria_senha_mantem_a_sessao_nova(self):
-        self.users.set_password(U_OPPROD, security.hash_password(SENHA_DEV), AGORA, ator="teste")
+        self.users.set_password(U_OPPROD, security.hash_password(DEV_PASSWORD), NOW, ator="teste")
         epoch = self._epoch(U_OPPROD)
-        resultado, erros = self.auth.change_password(self.ctx["op.prod"], IP, SENHA_DEV, SENHA_NOVA, SENHA_NOVA)
+        resultado, erros = self.auth.change_password(self.ctx["op.prod"], IP, DEV_PASSWORD, NEW_PASSWORD, NEW_PASSWORD)
         self.assertEqual((resultado, erros), ("OK", {}))
         self.assertEqual(self.auth.session_epoch(U_OPPROD), epoch + 1)
-        self.assertIsNotNone(self.auth.revalidate(dict(_sessao(U_OPPROD, "op.prod", P_OPPROD), sessao_epoch=epoch + 1)))
-        self.assertIsNone(self.auth.revalidate(dict(_sessao(U_OPPROD, "op.prod", P_OPPROD), sessao_epoch=epoch)))
+        self.assertIsNotNone(self.auth.revalidate(dict(_session(U_OPPROD, "op.prod", P_OPPROD), sessao_epoch=epoch + 1)))
+        self.assertIsNone(self.auth.revalidate(dict(_session(U_OPPROD, "op.prod", P_OPPROD), sessao_epoch=epoch)))
 
     def test_sessao_sem_epoch_e_encerrada(self):
-        sessao = _sessao(U_OPPROD, "op.prod", P_OPPROD)
+        sessao = _session(U_OPPROD, "op.prod", P_OPPROD)
         del sessao["sessao_epoch"]
         self.assertIsNone(self.auth.revalidate(sessao))
 
@@ -175,22 +175,22 @@ class TestSessaoRevogavel(_Base):
         self.assertTrue(security.is_session_expired(None, agora, 12 * 3600))
 
 
-class TestRegexQuantificadorLargo(unittest.TestCase):
+class TestWideQuantifierRegex(unittest.TestCase):
 
-    def _recusada(self, padrao):
+    def _refused_f(self, padrao):
         with self.assertRaises(ParamError):
             params_compiler.validate_registry_regex(padrao)
 
     def test_largo_conta_como_ilimitado(self):
-        self._recusada(r"\w{0,100}\w{0,100}\w{0,100}x")
-        self._recusada(r"\w*\w{0,11}\w+x")
+        self._refused_f(r"\w{0,100}\w{0,100}\w{0,100}x")
+        self._refused_f(r"\w*\w{0,11}\w+x")
         params_compiler.validate_registry_regex(r"\w{0,100}\w{0,100}x")
         params_compiler.validate_registry_regex(r"^\d{1,11}$")
         params_compiler.validate_registry_regex(r"^[A-Z]{2}\d{0,10}$")
 
     def test_teto_de_escolhas_com_ilimitado(self):
-        self._recusada(r"\w*" + r"\d{0,10}" * 4 + "x")
-        self._recusada(r"\d?\d?\d?\d?\w*")
+        self._refused_f(r"\w*" + r"\d{0,10}" * 4 + "x")
+        self._refused_f(r"\d?\d?\d?\d?\w*")
         params_compiler.validate_registry_regex(r"\w*" + r"\d{0,10}" * 3 + "x")
         params_compiler.validate_registry_regex(r"\w{0,10}" * 6 + "x")
 

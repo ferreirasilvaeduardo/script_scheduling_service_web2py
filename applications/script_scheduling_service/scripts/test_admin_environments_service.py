@@ -18,13 +18,13 @@ from admin_crud import GENERAL_FIELD, AccessDenied
 from repo_errors import RepoConflict, RepoNotFound
 
 IP = "10.9.8.7"
-SESSOES = {
+SESSIONS = {
     "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
     "op.prod": {"usuario_id": 2, "login": "op.prod", "perfil_id": 2, "perm_versao": 1, "sessao_epoch": 0},
 }
 # Seed FAKE: PRODUCAO (id 1) com os agendamentos 1 e 3 ativos e o 5 inativo; HOMOLOGACAO (id 2).
 AMB_PRODUCAO, AMB_HOMOLOGACAO = 1, 2
-SETA = u" → "
+ARROW = u" → "
 
 
 class _Base(unittest.TestCase):
@@ -49,12 +49,12 @@ class _Base(unittest.TestCase):
         auth = auth_service.AuthService(
             repo_factory.get("users"), repo_factory.get("rbac"), self.catalog, self.audit,
             5, 900, self.log)
-        self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSOES.items())
+        self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSIONS.items())
         self.svc = AdminEnvironmentsService(self.catalog, repo_factory.get("schedules"), self.log)
         # O seed ja tem auditorias de environments: so contam as gravadas pelo teste.
         self.aud_base = max([a["id"] for a in self.audit.list(pagina=1, tamanho=1000)["itens"]] or [0])
 
-    def _auditorias(self, acao):
+    def _audits(self, acao):
         return [a for a in self.audit.list(filtros={"action": acao}, pagina=1, tamanho=100)["itens"]
                 if a["entity"] == "tbsss_environments" and a["id"] > self.aud_base]
 
@@ -63,7 +63,7 @@ class _Base(unittest.TestCase):
                                {"name": name, "description": description, "connection": connection})
 
 
-class TestInclusao(_Base):
+class TestInsert(_Base):
 
     def test_identificador_com_espacos_e_descricao_com_controle_recusados(self):
         # CR-003 C2 (README §10): identificador nao recebe strip; texto livre recusa controle.
@@ -76,7 +76,7 @@ class TestInclusao(_Base):
         # CR-003 P6 (README §4.4): so os campos preenchidos.
         _id, erros = self._insert(name="QA_03", description="", connection="")
         self.assertEqual(erros, {})
-        self.assertEqual(self._auditorias("CREATE")[0]["detail"], "name: QA_03")
+        self.assertEqual(self._audits("CREATE")[0]["detail"], "name: QA_03")
 
     def test_inclusao_com_auditoria(self):
         aid, erros = self._insert()
@@ -84,7 +84,7 @@ class TestInclusao(_Base):
         amb = self.catalog.environments_get(aid)
         self.assertEqual((amb["name"], amb["description"], amb["connection"], amb["active"]),
                          ("QA_01", "Ambiente de QA", "db-qa.local:1521/svc", "Y"))
-        aud = self._auditorias("CREATE")
+        aud = self._audits("CREATE")
         self.assertEqual(len(aud), 1)
         self.assertEqual((aud[0]["actor"], aud[0]["source_ip"], aud[0]["entity_id"]), ("admin", IP, aid))
         self.assertIn("name: QA_01", aud[0]["detail"])
@@ -102,14 +102,14 @@ class TestInclusao(_Base):
         aid, erros = self._insert(name="PRODUCAO")
         self.assertIsNone(aid)
         self.assertEqual(erros, {"name": svc_mod.MSG_NAME_DUPLICATE})
-        self.assertEqual(self._auditorias("CREATE"), [])
+        self.assertEqual(self._audits("CREATE"), [])
 
     def test_nome_interno_reservado(self):
         # CR-009: 'internal' e a pasta de log sem ambiente (logs da aplicacao).
         aid, erros = self._insert(name="INTERNAL")
         self.assertIsNone(aid)
         self.assertEqual(erros, {"name": svc_mod.MSG_NAME_RESERVED})
-        self.assertEqual(self._auditorias("CREATE"), [])
+        self.assertEqual(self._audits("CREATE"), [])
         aid, erros = self._insert(name="INTERNAL_2")
         self.assertEqual(erros, {})
         self.assertIsNotNone(aid)
@@ -128,7 +128,7 @@ class TestInclusao(_Base):
             aid, erros = self._insert(connection=dsn)
             self.assertIsNone(aid)
             self.assertEqual(erros, {"connection": svc_mod.MSG_CONNECTION_CREDENTIAL})
-        self.assertEqual(self._auditorias("CREATE"), [])
+        self.assertEqual(self._audits("CREATE"), [])
 
     def test_dsn_e_descricao_invalidos(self):
         _aid, erros = self._insert(connection="host:porta/svc")
@@ -145,12 +145,12 @@ class TestInclusao(_Base):
             self.assertEqual(svc_mod.validate_connection(ruim), svc_mod.MSG_CONNECTION_INVALID, ruim)
 
 
-class TestEdicao(_Base):
+class TestEdit(_Base):
 
     def _form(self, aid=AMB_HOMOLOGACAO):
         return self.svc.form(self.ctx["admin"], str(aid))
 
-    def _salvar(self, form, **mudancas):
+    def _save(self, form, **mudancas):
         dados = {"name": form["name"], "description": form["description"], "connection": form["connection"],
                  "version": form["version"]}
         dados.update(mudancas)
@@ -159,36 +159,36 @@ class TestEdicao(_Base):
     def test_alteracao_auditada_campo_antigo_novo(self):
         form = self._form()
         antigo = form["connection"]
-        _id, erros = self._salvar(form, description="Nova descricao", connection="db-hml2.local:1521/svc")
+        _id, erros = self._save(form, description="Nova descricao", connection="db-hml2.local:1521/svc")
         self.assertEqual(erros, {})
         amb = self.catalog.environments_get(AMB_HOMOLOGACAO)
         self.assertEqual((amb["description"], amb["connection"]), ("Nova descricao", "db-hml2.local:1521/svc"))
-        aud = self._auditorias("UPDATE")
+        aud = self._audits("UPDATE")
         self.assertEqual(len(aud), 1)
-        self.assertIn(u"connection: %s%sdb-hml2.local:1521/svc" % (antigo, SETA), aud[0]["detail"])
+        self.assertIn(u"connection: %s%sdb-hml2.local:1521/svc" % (antigo, ARROW), aud[0]["detail"])
         self.assertIn(u"description: ", aud[0]["detail"])
         self.assertEqual(aud[0]["entity_id"], AMB_HOMOLOGACAO)
 
     def test_tentativa_de_alterar_nome_e_ignorada(self):
         form = self._form()
-        _id, erros = self._salvar(form, name="OUTRO_NOME", description="x")
+        _id, erros = self._save(form, name="OUTRO_NOME", description="x")
         self.assertEqual(erros, {})
         self.assertEqual(self.catalog.environments_get(AMB_HOMOLOGACAO)["name"], "HOMOLOGACAO")
-        self.assertNotIn("name", self._auditorias("UPDATE")[0]["detail"])
+        self.assertNotIn("name", self._audits("UPDATE")[0]["detail"])
 
     def test_sem_mudanca_nao_audita(self):
-        _id, erros = self._salvar(self._form())
+        _id, erros = self._save(self._form())
         self.assertEqual(erros, {})
-        self.assertEqual(self._auditorias("UPDATE"), [])
+        self.assertEqual(self._audits("UPDATE"), [])
 
     def test_edicao_concorrente_gera_conflito(self):
         aba1 = self._form()
         aba2 = self._form()
-        self.assertEqual(self._salvar(aba2, description="Salva pela aba 2")[1], {})
-        _id, erros = self._salvar(aba1, description="Salva pela aba 1")
+        self.assertEqual(self._save(aba2, description="Salva pela aba 2")[1], {})
+        _id, erros = self._save(aba1, description="Salva pela aba 1")
         self.assertEqual(erros, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
         self.assertEqual(self.catalog.environments_get(AMB_HOMOLOGACAO)["description"], "Salva pela aba 2")
-        self.assertEqual(len(self._auditorias("UPDATE")), 1)
+        self.assertEqual(len(self._audits("UPDATE")), 1)
 
     def test_conflito_entre_leitura_e_escrita_e_detectado_pelo_repositorio(self):
         form = self._form()
@@ -201,18 +201,18 @@ class TestEdicao(_Base):
             return lido
 
         with mock.patch.object(self.catalog, "environments_get", side_effect=obter_e_concorrer):
-            _id, erros = self._salvar(form, description="Minha")
+            _id, erros = self._save(form, description="Minha")
         self.assertEqual(erros, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
         self.assertEqual(self.catalog.environments_get(AMB_HOMOLOGACAO)["description"], "Concorrente")
-        self.assertEqual(self._auditorias("UPDATE"), [])
+        self.assertEqual(self._audits("UPDATE"), [])
 
     def test_versao_ausente_ou_adulterada_gera_conflito(self):
         for versao in (None, "", "0" * 64):
-            _id, erros = self._salvar(self._form(), version=versao, description="x")
+            _id, erros = self._save(self._form(), version=versao, description="x")
             self.assertEqual(erros, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
 
     def test_dsn_com_credencial_na_edicao(self):
-        _id, erros = self._salvar(self._form(), connection="app/senha@db:1521/svc")
+        _id, erros = self._save(self._form(), connection="app/senha@db:1521/svc")
         self.assertEqual(erros, {"connection": svc_mod.MSG_CONNECTION_CREDENTIAL})
         self.assertNotIn("@", self.catalog.environments_get(AMB_HOMOLOGACAO)["connection"])
 
@@ -224,7 +224,7 @@ class TestEdicao(_Base):
                 self.svc.save(self.ctx["admin"], IP, aid, {"version": "x"})
 
 
-class TestDesativacao(_Base):
+class TestDeactivation(_Base):
 
     def test_formulario_mostra_agendamentos_ativos(self):
         self.assertEqual(self.svc.form(self.ctx["admin"], str(AMB_PRODUCAO))["agendamentos_ativos"], 2)
@@ -233,16 +233,16 @@ class TestDesativacao(_Base):
         form = self.svc.form(self.ctx["admin"], str(AMB_PRODUCAO))
         alterado = self.svc.toggle_active(self.ctx["admin"], IP, str(AMB_PRODUCAO), form["version"])
         self.assertEqual(alterado["active"], "N")
-        aud = self._auditorias("DEACTIVATE")
+        aud = self._audits("DEACTIVATE")
         self.assertEqual(len(aud), 1)
         # CR-003 C6: o impacto tambem conta os scripts homologados no ambiente.
         self.assertEqual(aud[0]["detail"],
-                         u"active: Y%sN; agendamentos ativos afetados: 2; scripts homologados afetados: 4" % SETA)
+                         u"active: Y%sN; agendamentos ativos afetados: 2; scripts homologados afetados: 4" % ARROW)
 
         form = self.svc.form(self.ctx["admin"], str(AMB_PRODUCAO))
         self.assertEqual(self.svc.toggle_active(self.ctx["admin"], IP, str(AMB_PRODUCAO), form["version"])["active"], "Y")
-        aud = self._auditorias("UPDATE")
-        self.assertEqual(aud[0]["detail"], u"active: N%sY" % SETA)
+        aud = self._audits("UPDATE")
+        self.assertEqual(aud[0]["detail"], u"active: N%sY" % ARROW)
 
     def test_alternar_com_versao_antiga_gera_conflito(self):
         form = self.svc.form(self.ctx["admin"], str(AMB_PRODUCAO))
@@ -252,7 +252,7 @@ class TestDesativacao(_Base):
         self.assertEqual(self.catalog.environments_get(AMB_PRODUCAO)["active"], "N")
 
 
-class TestAcessoEAuditoria(_Base):
+class TestAccessAndAudit(_Base):
 
     def test_perfil_sem_cad_ambientes(self):
         ctx = self.ctx["op.prod"]

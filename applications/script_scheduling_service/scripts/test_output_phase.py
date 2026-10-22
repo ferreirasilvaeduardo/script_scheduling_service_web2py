@@ -17,7 +17,7 @@ import output_phase
 from _output_memory import RepoOutputMemory
 from repo_oracle import scheduler_output
 
-AGENTE = "srv-t"
+AGENT = "srv-t"
 
 
 class _Conn(object):
@@ -51,24 +51,24 @@ class _Plat(object):
     OUTPUT_TOO_MANY_BYTES = 8
 
     def __init__(self, conteudo=None, rc=0):
-        self.conteudo = conteudo
+        self.content = conteudo
         self.rc = rc
-        self.sinais = []
-        self.limpas = []
+        self.signals = []
+        self.cleaned = []
         self.proc = None
 
     def start_pack(self, base, relativo, max_bytes, max_arquivos, fd, usuario):
-        if self.conteudo is not None:
-            os.write(fd, self.conteudo)
+        if self.content is not None:
+            os.write(fd, self.content)
         self.proc = _Proc(None)
         return self.proc
 
     def signal_group(self, processo, sinal):
-        self.sinais.append(sinal)
+        self.signals.append(sinal)
         return True
 
     def clean_output(self, base, relativo, usuario):
-        self.limpas.append((base, relativo, usuario))
+        self.cleaned.append((base, relativo, usuario))
 
 
 def _zip(arquivos):
@@ -79,7 +79,7 @@ def _zip(arquivos):
     return buf.getvalue()
 
 
-class TestMaquina(unittest.TestCase):
+class TestStateMachine(unittest.TestCase):
 
     def setUp(self):
         import tempfile
@@ -87,7 +87,7 @@ class TestMaquina(unittest.TestCase):
         self.work = tempfile.mkdtemp(prefix="sss_fase_")
         self.addCleanup(shutil.rmtree, self.work, True)
         self.output = output_phase.Output(7, "/s/producao", "carga/2026/10/20/14/05/ticket_7", None, self.work)
-        self.repo = RepoOutputMemory({7: {"agent_id": AGENTE}})
+        self.repo = RepoOutputMemory({7: {"agent_id": AGENT}})
         self.conn = _Conn()
 
     def _pack(self, plat, rc):
@@ -102,16 +102,16 @@ class TestMaquina(unittest.TestCase):
         self._pack(plat, 0)
         self.assertEqual((self.output.result, self.output.file_count), (output_phase.ZIP, 2))
         self.assertEqual(self.output.size, len(conteudo))
-        self.assertIsNone(output_phase.log_line(self.output, AGENTE, 10, 1048576))
+        self.assertIsNone(output_phase.log_line(self.output, AGENT, 10, 1048576))
         voltas = 0
         while True:
             voltas += 1
-            desfecho = output_phase.write(self.output, self.conn, self.repo, AGENTE)
+            desfecho = output_phase.write(self.output, self.conn, self.repo, AGENT)
             if desfecho != output_phase.CONTINUE:
                 break
         self.assertEqual(desfecho, output_phase.DONE)
         self.assertEqual(voltas, 2, "5 MiB em partes de 1 MiB, ate 4 por volta")
-        linha = self.repo.linhas[7]
+        linha = self.repo.rows[7]
         self.assertEqual((linha["state"], linha["file_count"], linha["content"]), ("AVAILABLE", 2, conteudo))
         self.assertTrue(output_phase.should_remove_dir(self.output))
 
@@ -119,34 +119,34 @@ class TestMaquina(unittest.TestCase):
         for rc, esperado in ((6, (output_phase.EMPTY, None)), (7, (output_phase.EXCEEDED, "FILES")),
                              (8, (output_phase.EXCEEDED, "BYTES")), (4, (output_phase.FAILED, "ERROR"))):
             self.output = output_phase.Output(7, "/s/p", "c/2026/10/20/14/05/ticket_7", None, self.work)
-            self.repo = RepoOutputMemory({7: {"agent_id": AGENTE}})
-            with self.assertLogs("sss_scheduler", "WARNING") if rc == 4 else _nada():
+            self.repo = RepoOutputMemory({7: {"agent_id": AGENT}})
+            with self.assertLogs("sss_scheduler", "WARNING") if rc == 4 else _nothing():
                 self._pack(_Plat(b""), rc)
             self.assertEqual((self.output.result, self.output.reason), esperado, rc)
-            self.assertEqual(output_phase.write(self.output, self.conn, self.repo, AGENTE), output_phase.DONE)
+            self.assertEqual(output_phase.write(self.output, self.conn, self.repo, AGENT), output_phase.DONE)
             if rc == 6:
-                self.assertEqual(self.repo.linhas, {}, "pasta vazia nao grava linha")
+                self.assertEqual(self.repo.rows, {}, "pasta vazia nao grava linha")
                 self.assertTrue(output_phase.should_remove_dir(self.output))
             else:
-                self.assertEqual(self.repo.linhas[7]["state"], esperado[0])
+                self.assertEqual(self.repo.rows[7]["state"], esperado[0])
                 self.assertFalse(output_phase.should_remove_dir(self.output), "a pasta fica no disco")
-        self.assertEqual(output_phase.log_line(self.output, AGENTE, 10, 1048576),
+        self.assertEqual(output_phase.log_line(self.output, AGENT, 10, 1048576),
                          "saida nao empacotada: falha (agente srv-t)")
         s = output_phase.Output(7, "/s", "c/2026/10/20/14/05/ticket_7", None, self.work)
         s.result, s.reason = output_phase.EXCEEDED, "BYTES"
-        self.assertEqual(output_phase.log_line(s, AGENTE, 1000, 20 * 1024 * 1024),
+        self.assertEqual(output_phase.log_line(s, AGENT, 1000, 20 * 1024 * 1024),
                          "saida nao empacotada: excede o limite de 20 MiB (agente srv-t)")
         s.reason = "FILES"
-        self.assertIn("1000 arquivos", output_phase.log_line(s, AGENTE, 1000, 20 * 1024 * 1024))
+        self.assertIn("1000 arquivos", output_phase.log_line(s, AGENT, 1000, 20 * 1024 * 1024))
 
     def test_prazo_encerra_o_helper_sem_esperar(self):
         plat = _Plat(b"")
         output_phase.start_pack(self.output, plat, 1048576, 10, 0.0)
         with self.assertLogs("sss_scheduler", "WARNING"):
             self.assertFalse(output_phase.advance_pack(self.output, plat, output_phase.PACK_DEADLINE_S + 1))
-        self.assertEqual(plat.sinais, [signal.SIGKILL])
+        self.assertEqual(plat.signals, [signal.SIGKILL])
         self.assertFalse(output_phase.advance_pack(self.output, plat, output_phase.PACK_DEADLINE_S + 2))
-        self.assertEqual(plat.sinais, [signal.SIGKILL], "um sinal so")
+        self.assertEqual(plat.signals, [signal.SIGKILL], "um sinal so")
         plat.proc.popen.rc = -9
         self.assertTrue(output_phase.advance_pack(self.output, plat, output_phase.PACK_DEADLINE_S + 3))
         self.assertEqual((self.output.result, self.output.reason), (output_phase.FAILED, "DEADLINE"))
@@ -164,40 +164,40 @@ class TestMaquina(unittest.TestCase):
         plat = _Plat(_zip({"a": b"1"}))
         self._pack(plat, 0)
         self.repo.tickets[7]["agent_id"] = "outro"
-        self.assertEqual(output_phase.write(self.output, self.conn, self.repo, AGENTE), output_phase.OWNERSHIP_LOST)
+        self.assertEqual(output_phase.write(self.output, self.conn, self.repo, AGENT), output_phase.OWNERSHIP_LOST)
         # COMMIT do concluir sem resposta: a linha ja esta DISPONIVEL deste agente -> CONCLUIDA.
-        self.repo.tickets[7]["agent_id"] = AGENTE
-        self.repo.linhas[7] = {"state": "AVAILABLE", "agent_id": AGENTE}
-        self.assertEqual(output_phase.write(self.output, self.conn, self.repo, AGENTE), output_phase.DONE)
+        self.repo.tickets[7]["agent_id"] = AGENT
+        self.repo.rows[7] = {"state": "AVAILABLE", "agent_id": AGENT}
+        self.assertEqual(output_phase.write(self.output, self.conn, self.repo, AGENT), output_phase.DONE)
 
     def test_erro_de_banco_rollback_e_retomada(self):
         conteudo = _zip({"a.txt": os.urandom(3 * 1024 * 1024)})
         self._pack(_Plat(conteudo), 0)
         self.repo.falhas = [("append_chunk", RuntimeError("ORA-03113"))]
         with self.assertRaises(RuntimeError):
-            output_phase.write(self.output, self.conn, self.repo, AGENTE)
+            output_phase.write(self.output, self.conn, self.repo, AGENT)
         self.assertEqual(self.conn.rollbacks, 1)
-        self.assertEqual(output_phase.write(self.output, self.conn, self.repo, AGENTE), output_phase.DONE)
-        self.assertEqual(self.repo.linhas[7]["content"], conteudo)
+        self.assertEqual(output_phase.write(self.output, self.conn, self.repo, AGENT), output_phase.DONE)
+        self.assertEqual(self.repo.rows[7]["content"], conteudo)
         # Divergencia de offset: recomeca do inicio (o iniciar zera a gravacao deste agente).
         self.output.started, self.output.offset = True, 0
-        self.repo.linhas[7] = {"state": "WRITING", "agent_id": AGENTE, "content": b"xx"}
+        self.repo.rows[7] = {"state": "WRITING", "agent_id": AGENT, "content": b"xx"}
         with self.assertRaises(scheduler_output.OutputOffsetMismatch):
-            output_phase.write(self.output, self.conn, self.repo, AGENTE)
+            output_phase.write(self.output, self.conn, self.repo, AGENT)
         self.assertFalse(self.output.started)
-        self.assertEqual(output_phase.write(self.output, self.conn, self.repo, AGENTE), output_phase.DONE)
-        self.assertEqual(self.repo.linhas[7]["content"], conteudo)
+        self.assertEqual(output_phase.write(self.output, self.conn, self.repo, AGENT), output_phase.DONE)
+        self.assertEqual(self.repo.rows[7]["content"], conteudo)
 
     def test_abandonar_encerra_o_helper(self):
         plat = _Plat(b"")
         output_phase.start_pack(self.output, plat, 1, 1, 0.0)
         output_phase.abandon(self.output, plat)
-        self.assertEqual(plat.sinais, [signal.SIGKILL])
+        self.assertEqual(plat.signals, [signal.SIGKILL])
         self.assertEqual(self.output.result, output_phase.ABANDONED)
         self.assertFalse(output_phase.should_remove_dir(self.output))
 
 
-class _nada(object):
+class _nothing(object):
     def __enter__(self):
         return self
 
@@ -210,95 +210,95 @@ class _nada(object):
 import test_scheduler_claim as tsc  # noqa: E402
 
 
-class TestLacoComSaida(tsc._Base):
+class TestLoopWithOutput(tsc._Base):
 
     def setUp(self):
         tsc._Base.setUp(self)
-        self.output_dir = os.path.join(self.raiz, "saida")
+        self.output_dir = os.path.join(self.root, "saida")
         os.mkdir(self.output_dir, 0o755)
-        self.repo_output = RepoOutputMemory(self.banco.tickets)
+        self.repo_output = RepoOutputMemory(self.db.tickets)
 
-    def subir(self, **mudancas):
+    def start_agent(self, **mudancas):
         mudancas.setdefault("output_dir", self.output_dir)
         mudancas.setdefault("output_max_files", 5)
         mudancas.setdefault("output_max_bytes", 1048576)
-        return tsc._Base.subir(self, **mudancas)
+        return tsc._Base.start_agent(self, **mudancas)
 
-    def _pasta_do_ticket(self, tid):
+    def _ticket_dir(self, tid):
         for raiz, dirs, _arqs in os.walk(self.output_dir):
             if "ticket_%d" % tid in dirs:
                 return os.path.join(raiz, "ticket_%d" % tid)
         return None
 
-    def concluido(self, tid):
-        return lambda: self.terminado(tid)() and tid not in self.ag.outputs
+    def completed(self, tid):
+        return lambda: self.finished(tid)() and tid not in self.ag.outputs
 
     def test_saida_disponivel_e_pasta_removida(self):
-        sid = self.banco.script("echo resultado > \"$SSS_OUTPUT_DIR/r.txt\"\nmkdir \"$SSS_OUTPUT_DIR/sub\"\n"
+        sid = self.db.script("echo resultado > \"$SSS_OUTPUT_DIR/r.txt\"\nmkdir \"$SSS_OUTPUT_DIR/sub\"\n"
                                 "echo x > \"$SSS_OUTPUT_DIR/sub/y.csv\"\necho fim\n")
-        tid = self.banco.ticket(sid)
-        self.subir()
-        self.rodar(self.concluido(tid))
+        tid = self.db.ticket(sid)
+        self.start_agent()
+        self.run_loop(self.completed(tid))
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
-        linha = self.repo_output.linhas[tid]
+        linha = self.repo_output.rows[tid]
         self.assertEqual((linha["state"], linha["file_count"]), ("AVAILABLE", 2))
         z = zipfile.ZipFile(io.BytesIO(linha["content"]))
         self.assertEqual(sorted(z.namelist()), ["r.txt", "sub/y.csv"])
-        self.assertIsNone(self._pasta_do_ticket(tid), "pasta removida depois do zip gravado")
-        self.assertNotIn("saida nao empacotada", self.banco.tickets[tid]["log"])
+        self.assertIsNone(self._ticket_dir(tid), "pasta removida depois do zip gravado")
+        self.assertNotIn("saida nao empacotada", self.db.tickets[tid]["log"])
         self.assertFalse(os.path.exists(os.path.join(self.work, "ticket_%d" % tid)), "work_dir limpo no fim")
 
     def test_sem_arquivos_nada_e_gravado(self):
-        tid = self.banco.ticket(self.banco.script("echo \"[$SSS_OUTPUT_DIR]\"\n"))
-        self.subir()
-        self.rodar(self.concluido(tid))
+        tid = self.db.ticket(self.db.script("echo \"[$SSS_OUTPUT_DIR]\"\n"))
+        self.start_agent()
+        self.run_loop(self.completed(tid))
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
-        self.assertNotIn(tid, self.repo_output.linhas)
-        self.assertIsNone(self._pasta_do_ticket(tid))
-        self.assertIn("[%s/" % self.output_dir, self.banco.tickets[tid]["log"])
+        self.assertNotIn(tid, self.repo_output.rows)
+        self.assertIsNone(self._ticket_dir(tid))
+        self.assertIn("[%s/" % self.output_dir, self.db.tickets[tid]["log"])
 
     def test_excesso_nao_muda_o_resultado_e_mantem_a_pasta(self):
-        sid = self.banco.script("for i in 1 2 3 4 5 6; do echo $i > \"$SSS_OUTPUT_DIR/f$i\"; done\nexit 3\n")
-        tid = self.banco.ticket(sid)
-        self.subir()
+        sid = self.db.script("for i in 1 2 3 4 5 6; do echo $i > \"$SSS_OUTPUT_DIR/f$i\"; done\nexit 3\n")
+        tid = self.db.ticket(sid)
+        self.start_agent()
         with self.assertLogs("sss_scheduler", "WARNING"):
-            self.rodar(self.concluido(tid))
+            self.run_loop(self.completed(tid))
         self.assertEqual(self.final(tid), ("FAILED", "EXIT_ERROR", 3), "o resultado do script prevalece")
-        self.assertEqual((self.repo_output.linhas[tid]["state"], self.repo_output.linhas[tid]["reason"]),
+        self.assertEqual((self.repo_output.rows[tid]["state"], self.repo_output.rows[tid]["reason"]),
                          ("EXCEEDED", "FILES"))
         self.assertIn("[SSS] saida nao empacotada: excede o limite de 5 arquivos (agente srv-t)\n",
-                      self.banco.tickets[tid]["log"])
-        pasta = self._pasta_do_ticket(tid)
+                      self.db.tickets[tid]["log"])
+        pasta = self._ticket_dir(tid)
         self.assertEqual(len(os.listdir(pasta)), 6, "a pasta fica no disco do agente")
 
     def test_sem_saida_dir_sem_variavel(self):
-        tid = self.banco.ticket(self.banco.script("echo \"[${SSS_OUTPUT_DIR:-ausente}]\"\n"))
-        self.subir(output_dir=None)
-        self.rodar(self.terminado(tid))
-        self.assertIn("[ausente]", self.banco.tickets[tid]["log"])
-        self.assertEqual(self.repo_output.linhas, {})
+        tid = self.db.ticket(self.db.script("echo \"[${SSS_OUTPUT_DIR:-ausente}]\"\n"))
+        self.start_agent(output_dir=None)
+        self.run_loop(self.finished(tid))
+        self.assertIn("[ausente]", self.db.tickets[tid]["log"])
+        self.assertEqual(self.repo_output.rows, {})
 
     def test_erro_de_banco_na_gravacao_e_refeito(self):
-        tid = self.banco.ticket(self.banco.script("echo r > \"$SSS_OUTPUT_DIR/r.txt\"\n"))
+        tid = self.db.ticket(self.db.script("echo r > \"$SSS_OUTPUT_DIR/r.txt\"\n"))
         self.repo_output.falhas = [("start", RuntimeError("ORA-03113"))]
-        self.subir()
+        self.start_agent()
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            self.rodar(self.concluido(tid))
+            self.run_loop(self.completed(tid))
         self.assertTrue(any("gravacao da saida pendente" in l for l in logs.output))
-        self.assertEqual(self.repo_output.linhas[tid]["state"], "AVAILABLE")
+        self.assertEqual(self.repo_output.rows[tid]["state"], "AVAILABLE")
 
     def test_parada_abandona_e_startup_marca_falhou(self):
-        tid = self.banco.ticket(self.banco.script("echo r > \"$SSS_OUTPUT_DIR/r.txt\"\n"))
+        tid = self.db.ticket(self.db.script("echo r > \"$SSS_OUTPUT_DIR/r.txt\"\n"))
         self.repo_output.falhas = [("append_chunk", RuntimeError("ORA-03113"))] * 50
-        self.subir()
+        self.start_agent()
         with self.assertLogs("sss_scheduler", "WARNING"):
-            self.rodar(lambda: self.terminado(tid)() and tid in self.repo_output.linhas)
-            self.assertEqual(self.repo_output.linhas[tid]["state"], "WRITING")
+            self.run_loop(lambda: self.finished(tid)() and tid in self.repo_output.rows)
+            self.assertEqual(self.repo_output.rows[tid]["state"], "WRITING")
             self.ag.stop_all("TERMINATE")
         self.assertEqual(self.ag.outputs, {})
-        self.assertIsNotNone(self._pasta_do_ticket(tid), "pasta fica no disco")
+        self.assertIsNotNone(self._ticket_dir(tid), "pasta fica no disco")
         self.assertEqual(self.repo_output.fail_agent_writing(None, "srv-t"), 1)
-        self.assertEqual(self.repo_output.linhas[tid]["state"], "FAILED")
+        self.assertEqual(self.repo_output.rows[tid]["state"], "FAILED")
 
 
 if __name__ == "__main__":

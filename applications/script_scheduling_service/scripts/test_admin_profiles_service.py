@@ -20,7 +20,7 @@ from admin_profiles_service import AdminProfilesService
 from repo_errors import RepoConflict, RepoNotFound
 
 IP = "10.7.7.7"
-SESSOES = {
+SESSIONS = {
     "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
     "op.prod": {"usuario_id": 2, "login": "op.prod", "perfil_id": 2, "perm_versao": 1, "sessao_epoch": 0},
     "consulta": {"usuario_id": 4, "login": "consulta", "perfil_id": 4, "perm_versao": 1, "sessao_epoch": 0},
@@ -51,26 +51,26 @@ class _Base(unittest.TestCase):
         self.log.propagate = False
         auth = auth_service.AuthService(self.users, self.rbac_repo, repo_factory.get("catalog"),
                                         self.audit, 5, 900, self.log)
-        self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSOES.items())
+        self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSIONS.items())
         self.ctx["gestor"] = dict(self.ctx["op.prod"], features=frozenset(["MANAGE_PROFILES"]))
         self.ctx["admin_externo"] = dict(self.ctx["admin"], profile_id=999)
         self.svc = AdminProfilesService(self.rbac_repo, repo_factory.get("catalog"), self.users, self.log)
         self.aud_base = max([a["id"] for a in self.audit.list(pagina=1, tamanho=1000)["itens"]] or [0])
 
-    def _auditorias(self, acao):
+    def _audits(self, acao):
         return [a for a in self.audit.list(filtros={"action": acao}, pagina=1, tamanho=100)["itens"]
                 if a["entity"] == "tbsss_profiles" and a["id"] > self.aud_base]
 
     def _form(self, perfil_id, ator="admin"):
         return self.svc.form(self.ctx[ator], str(perfil_id))
 
-    def _dados(self, form, **mudancas):
+    def _data(self, form, **mudancas):
         dados = {"name": form["name"], "description": form["description"], "is_admin": form["is_admin"],
                  "version": form["version"]}
         dados.update(mudancas)
         return dados
 
-    def _novo_admin_com_usuario(self):
+    def _new_admin_with_user(self):
         novo_id, erros = self.svc.save(self.ctx["admin"], IP, None, {"name": "ADMIN_RESERVA", "is_admin": "Y"})
         self.assertEqual(erros, {})
         u = self.users.get_by_login("op.hml")
@@ -78,13 +78,13 @@ class _Base(unittest.TestCase):
         return novo_id
 
 
-class TestCadastro(_Base):
+class TestRegistration(_Base):
 
     def test_inclusao_duplicado_e_invalidos(self):
         novo_id, erros = self.svc.save(self.ctx["admin"], IP, None, {"name": "OPERADOR_X", "description": "Teste"})
         self.assertEqual(erros, {})
         self.assertEqual(self.rbac_repo.profiles_get(novo_id)["name"], "OPERADOR_X")
-        self.assertEqual(len(self._auditorias("CREATE")), 1)
+        self.assertEqual(len(self._audits("CREATE")), 1)
         _id, erros = self.svc.save(self.ctx["admin"], IP, None, {"name": "OPERADOR_X"})
         self.assertEqual(erros, {"name": perfis_mod.MSG_NAME_DUPLICATE})
         _id, erros = self.svc.save(self.ctx["admin"], IP, None, {"name": "minusculo"})
@@ -93,7 +93,7 @@ class TestCadastro(_Base):
     def test_conflito_pela_versao_e_pelo_esperado(self):
         form = self._form(PERFIL_CONSULTA)
         self.rbac_repo.profiles_update(PERFIL_CONSULTA, {"description": "mudou por outro"}, ator="teste")
-        _id, erros = self.svc.save(self.ctx["admin"], IP, str(PERFIL_CONSULTA), self._dados(form, description="minha"))
+        _id, erros = self.svc.save(self.ctx["admin"], IP, str(PERFIL_CONSULTA), self._data(form, description="minha"))
         self.assertEqual(erros, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
         form = self._form(PERFIL_CONSULTA)
         original = self.rbac_repo.profiles_update
@@ -104,7 +104,7 @@ class TestCadastro(_Base):
             return original(*args, **kwargs)
         with mock.patch.object(self.rbac_repo, "profiles_update", side_effect=corrida):
             _id, erros = self.svc.save(self.ctx["admin"], IP, str(PERFIL_CONSULTA),
-                                         self._dados(form, description="minha"))
+                                         self._data(form, description="minha"))
         self.assertEqual(erros, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
         self.assertEqual(self.rbac_repo.profiles_get(PERFIL_CONSULTA)["description"], "corrida")
 
@@ -115,7 +115,7 @@ class TestCadastro(_Base):
             self.svc.form(self.ctx["admin"], "999")
 
 
-class TestDesativacaoComImpacto(_Base):
+class TestDeactivationWithImpact(_Base):
 
     def test_formulario_lista_os_usuarios_afetados(self):
         # CR-003 P4: o modal mostra os logins (README §4.3.B.1).
@@ -137,56 +137,56 @@ class TestDesativacaoComImpacto(_Base):
         form = self._form(PERFIL_CONSULTA)
         alterado = self.svc.toggle_active(self.ctx["admin"], IP, str(PERFIL_CONSULTA), form["version"])
         self.assertEqual(alterado["active"], "N")
-        aud = self._auditorias("DEACTIVATE")
+        aud = self._audits("DEACTIVATE")
         self.assertEqual(len(aud), 1)
         self.assertIn(u"usuários ativos afetados: 1", aud[0]["detail"])
 
 
-class TestAutoprotecao(_Base):
+class TestSelfProtection(_Base):
     """CR-003 P4 / D10: o usuario logado nao tira o is_admin nem desativa o proprio perfil."""
 
     def test_nao_remove_is_admin_do_proprio_perfil_mesmo_com_outro_admin(self):
-        self._novo_admin_com_usuario()
+        self._new_admin_with_user()
         form = self._form(PERFIL_ADMIN)
-        _id, erros = self.svc.save(self.ctx["admin"], IP, str(PERFIL_ADMIN), self._dados(form, is_admin=None))
+        _id, erros = self.svc.save(self.ctx["admin"], IP, str(PERFIL_ADMIN), self._data(form, is_admin=None))
         self.assertEqual(erros, {GENERAL_FIELD: perfis_mod.MSG_SELF_ADMIN})
         self.assertEqual(self.rbac_repo.profiles_get(PERFIL_ADMIN)["is_admin"], "Y")
-        self.assertEqual(self._auditorias("UPDATE"), [])
+        self.assertEqual(self._audits("UPDATE"), [])
 
     def test_nao_desativa_o_proprio_perfil_mesmo_com_outro_admin(self):
-        self._novo_admin_com_usuario()
+        self._new_admin_with_user()
         form = self._form(PERFIL_ADMIN)
         with self.assertRaises(OperationDenied) as cm:
             self.svc.toggle_active(self.ctx["admin"], IP, str(PERFIL_ADMIN), form["version"])
         self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_SELF_DEACTIVATE)
         self.assertEqual(self.rbac_repo.profiles_get(PERFIL_ADMIN)["active"], "Y")
-        self.assertEqual(self._auditorias("DEACTIVATE"), [])
+        self.assertEqual(self._audits("DEACTIVATE"), [])
 
     def test_outro_editor_pode_quando_ha_outro_admin(self):
-        self._novo_admin_com_usuario()
+        self._new_admin_with_user()
         form = self._form(PERFIL_ADMIN)
-        _id, erros = self.svc.save(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), self._dados(form, is_admin=None))
+        _id, erros = self.svc.save(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), self._data(form, is_admin=None))
         self.assertEqual(erros, {})
         self.assertEqual(self.rbac_repo.profiles_get(PERFIL_ADMIN)["is_admin"], "N")
 
     def test_editar_o_proprio_perfil_sem_tirar_admin_e_permitido(self):
         form = self._form(PERFIL_ADMIN)
-        _id, erros = self.svc.save(self.ctx["admin"], IP, str(PERFIL_ADMIN), self._dados(form, description="Nova"))
+        _id, erros = self.svc.save(self.ctx["admin"], IP, str(PERFIL_ADMIN), self._data(form, description="Nova"))
         self.assertEqual(erros, {})
         self.assertEqual(self.rbac_repo.profiles_get(PERFIL_ADMIN)["description"], "Nova")
 
 
 
-class TestQuemPode(_Base):
+class TestWhoCan(_Base):
     """CR-004 U8 (README §4.3.B.2)."""
 
-    def _nomes(self, lista):
+    def _names(self, lista):
         return dict((p["name"], p) for p in lista)
 
     def test_por_script_bate_com_pode_executar(self):
         import rbac
         q = self.svc.who_can(self.ctx["admin"], script_id="1")
-        perfis = self._nomes(q["profiles"])
+        perfis = self._names(q["profiles"])
         self.assertEqual(perfis["ADMINISTRATOR"]["reason"], u"administrador")
         # Cada perfil listado tem um usuario cujo contexto can_execute no ambiente indicado.
         catalogo = self.svc._catalogo
@@ -205,9 +205,9 @@ class TestQuemPode(_Base):
         amb = [a for a in self.svc._catalogo.environments_list(pagina=1, tamanho=50)["itens"]
                if a["name"] == "HOMOLOGACAO"][0]
         q = self.svc.who_can(self.ctx["admin"], ambiente_id=str(amb["id"]))
-        self.assertIn("READ_ONLY", self._nomes(q["inativos"]))
-        self.assertNotIn("READ_ONLY", self._nomes(q["profiles"]))
-        self.assertTrue(self._nomes(q["profiles"])["ADMINISTRATOR"]["detalhes"])
+        self.assertIn("READ_ONLY", self._names(q["inativos"]))
+        self.assertNotIn("READ_ONLY", self._names(q["profiles"]))
+        self.assertTrue(self._names(q["profiles"])["ADMINISTRATOR"]["detalhes"])
 
     def test_script_inativo_avisa_e_acesso(self):
         self.svc._catalogo.scripts_update(5, {"active": "N"}, ator="teste")

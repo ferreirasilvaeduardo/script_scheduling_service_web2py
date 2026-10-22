@@ -43,93 +43,93 @@ from repo_tickets import RepoTickets
 from repo_users import RepoUsers
 
 
-class _Massa(object):
+class _Fixtures(object):
     """Dados proprios de um teste, criados pelos repositorios (sem depender do seed do FAKE).
 
     Os nomes levam um sufixo unico; os IDs criados ficam anotados por entidade, na ordem de
     remocao (tickets antes de agendamentos, usuarios antes de perfis, scripts antes de parametros).
     """
 
-    ORDEM = ("tickets", "schedules", "users", "profiles", "scripts", "parameters", "environments")
+    ORDER = ("tickets", "schedules", "users", "profiles", "scripts", "parameters", "environments")
 
     def __init__(self, obter_repo):
         self._r = obter_repo
         self.suf = "%08d" % (int(time.time() * 1000000) % 100000000)
-        self.ator = "tst" + self.suf
-        self.criados = collections.OrderedDict((ent, []) for ent in self.ORDEM)
-        self._cenario = None
+        self.actor = "tst" + self.suf
+        self.created = collections.OrderedDict((ent, []) for ent in self.ORDER)
+        self._scenario = None
 
-    def anotar(self, entidade, id):
-        self.criados[entidade].append(id)
+    def note(self, entidade, id):
+        self.created[entidade].append(id)
         return id
 
-    def ambiente(self, rotulo="A", **extra):
+    def environment(self, rotulo="A", **extra):
         dados = dict({"name": "TST_%s_%s" % (self.suf, rotulo), "description": "Ambiente de teste"}, **extra)
-        amb = self._r("catalog").environments_insert(dados, ator=self.ator)
-        self.anotar("environments", amb["id"])
+        amb = self._r("catalog").environments_insert(dados, ator=self.actor)
+        self.note("environments", amb["id"])
         return amb
 
-    def perfil(self, rotulo="P", **extra):
+    def profile(self, rotulo="P", **extra):
         per = self._r("rbac").profiles_insert(dict({"name": "TST_%s_%s" % (self.suf, rotulo), "is_admin": "N"}, **extra),
-                                             ator=self.ator)
-        self.anotar("profiles", per["id"])
+                                             ator=self.actor)
+        self.note("profiles", per["id"])
         return per
 
     def usuario(self, perfil_id, rotulo="u", **extra):
         dados = dict({"login": "tst.%s.%s" % (self.suf, rotulo), "name": "Usuario de teste",
                       "password_hash": "pbkdf2_sha256$1$00$00", "profile_id": perfil_id, "active": "Y"}, **extra)
-        u = self._r("users").insert(dados, ator=self.ator)
-        self.anotar("users", u["id"])
+        u = self._r("users").insert(dados, ator=self.actor)
+        self.note("users", u["id"])
         return u
 
-    def parametro(self, rotulo="a", **extra):
+    def parameter(self, rotulo="a", **extra):
         dados = dict({"code": "tst_%s_%s" % (self.suf, rotulo), "label": "Parametro %s" % rotulo,
                       "component_type": "TEXT", "param_flag": "--tst%s%s" % (self.suf, rotulo)}, **extra)
-        prm = self._r("catalog").parameters_insert(dados, ator=self.ator)
-        self.anotar("parameters", prm["id"])
+        prm = self._r("catalog").parameters_insert(dados, ator=self.actor)
+        self.note("parameters", prm["id"])
         return prm
 
     def script(self, rotulo="s", **extra):
         dados = dict({"name": "tst_scr_%s_%s" % (self.suf, rotulo), "interpreter": "SH", "param_type": "NAMED",
                       "path_file": "/opt/tst/%s_%s.sh" % (self.suf, rotulo)}, **extra)
-        scr = self._r("catalog").scripts_insert(dados, ator=self.ator)
-        self.anotar("scripts", scr["id"])
+        scr = self._r("catalog").scripts_insert(dados, ator=self.actor)
+        self.note("scripts", scr["id"])
         return scr
 
-    def agendamento(self, script_id, environment, user_id, rotulo="r", **extra):
+    def schedule(self, script_id, environment, user_id, rotulo="r", **extra):
         dados = dict({"name": "TST %s %s" % (self.suf, rotulo), "script_id": script_id, "environment": environment,
                       "user_id": user_id, "priority": 2, "recurrence_type": "DAILY",
                       "run_time": "03:00", "params_json": "{}",
                       "start_date": datetime.datetime(2026, 1, 15, 10, 0),
                       "next_run_at": datetime.datetime(2030, 1, 16, 3, 0)}, **extra)
-        regra = self._r("schedules").insert(dados, ator=self.ator)
-        self.anotar("schedules", regra["id"])
+        regra = self._r("schedules").insert(dados, ator=self.actor)
+        self.note("schedules", regra["id"])
         return regra
 
     def ticket(self, respostas=(), actor=None, **dados):
         tid = self._r("tickets").create(dados, list(respostas), ator=actor)
-        return self.anotar("tickets", tid)
+        return self.note("tickets", tid)
 
-    def cenario(self):
+    def scenario(self):
         """Dois ambientes, um perfil comum com dois usuarios, dois parametros com flag e um script
         NOMEADO homologado no primeiro ambiente, com os dois parametros vinculados."""
-        if self._cenario is None:
+        if self._scenario is None:
             c = {}
-            c["amb1"], c["amb2"] = self.ambiente("A"), self.ambiente("B")
-            c["perfil"] = self.perfil("P")
+            c["amb1"], c["amb2"] = self.environment("A"), self.environment("B")
+            c["perfil"] = self.profile("P")
             c["u1"], c["u2"] = self.usuario(c["perfil"]["id"], "u1"), self.usuario(c["perfil"]["id"], "u2")
-            c["prm_a"], c["prm_b"] = self.parametro("a"), self.parametro("b")
+            c["prm_a"], c["prm_b"] = self.parameter("a"), self.parameter("b")
             c["scr"] = self.script("s")
             cat = self._r("catalog")
-            cat.homologation_save(c["scr"]["id"], [c["amb1"]["id"]], ator=self.ator)
+            cat.homologation_save(c["scr"]["id"], [c["amb1"]["id"]], ator=self.actor)
             cat.script_params_save(c["scr"]["id"], [
                 {"parameter_id": c["prm_a"]["id"], "sort_order": 1, "required": "Y"},
-                {"parameter_id": c["prm_b"]["id"], "sort_order": 2, "required": "N"}], ator=self.ator)
+                {"parameter_id": c["prm_b"]["id"], "sort_order": 2, "required": "N"}], ator=self.actor)
             c["login"] = c["u1"]["login"]
             c["ticket_base"] = {"script_id": c["scr"]["id"], "environment": c["amb1"]["name"],
                                 "requested_by": c["login"], "status": "PENDING", "priority": 2}
-            self._cenario = c
-        return self._cenario
+            self._scenario = c
+        return self._scenario
 
 
 class BaseRepoContractTest(object):
@@ -142,9 +142,9 @@ class BaseRepoContractTest(object):
 
     @property
     def m(self):
-        if getattr(self, "_massa", None) is None:
-            self._massa = _Massa(self.obter_repo)
-        return self._massa
+        if getattr(self, "_fixtures", None) is None:
+            self._fixtures = _Fixtures(self.obter_repo)
+        return self._fixtures
 
     def cn(self, tipo, entidade, sufixo):
         """Nome da constraint/indice/trigger com o prefixo do repositorio em uso (FAKE: tbsss_)."""
@@ -155,14 +155,14 @@ class BaseRepoContractTest(object):
         return self.obter_repo("audit").list(
             filtros={"action": acao, "entity": entidade, "entity_id": entidade_id}, pagina=1, tamanho=1)["total"]
 
-    def aud_ultima(self, acao, entidade, entidade_id):
+    def aud_last(self, acao, entidade, entidade_id):
         return self.obter_repo("audit").list(
             filtros={"action": acao, "entity": entidade, "entity_id": entidade_id}, pagina=1, tamanho=1)["itens"][0]
 
     def test_ocorrencia_duplicada_recusada_sem_alterar_ticket(self):
-        c = self.m.cenario()
+        c = self.m.scenario()
         tickets = self.obter_repo("tickets")
-        regra = self.m.agendamento(c["scr"]["id"], c["amb1"]["name"], c["u1"]["id"])
+        regra = self.m.schedule(c["scr"]["id"], c["amb1"]["name"], c["u1"]["id"])
         dados = {"script_id": c["scr"]["id"], "environment": c["amb1"]["name"], "requested_by": c["login"],
                  "schedule_id": regra["id"], "scheduled_at": datetime.datetime(2030, 1, 2)}
         primeiro_id = self.m.ticket(actor="teste", **dados)
@@ -177,7 +177,7 @@ class BaseRepoContractTest(object):
 
     def test_01_crud_ambientes(self):
         cat = self.obter_repo("catalog")
-        amb = self.m.ambiente("CRUD", connection="db-teste.local:1521/svc")
+        amb = self.m.environment("CRUD", connection="db-teste.local:1521/svc")
         self.assertIsNotNone(amb.get("id"))
         self.assertEqual(cat.environments_get(amb["id"])["name"], amb["name"])
         alterado = cat.environments_update(amb["id"], {"description": "Descricao alterada", "active": "N"}, ator="teste")
@@ -187,7 +187,7 @@ class BaseRepoContractTest(object):
         self.assertEqual(lista["itens"][0]["id"], amb["id"])
 
     def test_02_uk_duplicada_ambiente_perfil_script_usuario(self):
-        c = self.m.cenario()
+        c = self.m.scenario()
         cat, rbac, usr = self.obter_repo("catalog"), self.obter_repo("rbac"), self.obter_repo("users")
         with self.assertRaises(RepoViolation) as ctx:
             cat.environments_insert({"name": c["amb1"]["name"], "connection": "db-prod2.local:1521/svc"}, ator="teste")
@@ -215,13 +215,13 @@ class BaseRepoContractTest(object):
             cat.environments_insert({"name": "TST_%s_ARROBA" % self.m.suf, "connection": "usr:pwd@host:1521/svc"},
                                   ator="teste")
         self.assertEqual(ctx.exception.constraint, self.cn("ck", "environments", "connection"))
-        amb = self.m.ambiente("ARR")
+        amb = self.m.environment("ARR")
         with self.assertRaises(RepoViolation) as ctx:
             cat.environments_update(amb["id"], {"connection": "app@host/svc"}, ator="teste")
         self.assertEqual(ctx.exception.constraint, self.cn("ck", "environments", "connection"))
 
     def test_04_imutabilidade_nome_ambiente_e_login_usuario(self):
-        c = self.m.cenario()
+        c = self.m.scenario()
         with self.assertRaises(RepoViolation) as ctx:
             self.obter_repo("catalog").environments_update(c["amb1"]["id"], {"name": "TST_%s_NOVO" % self.m.suf},
                                                           ator="teste")
@@ -232,14 +232,14 @@ class BaseRepoContractTest(object):
 
     def test_04b_ambiente_alteracao_condicional_e_auditoria_na_mesma_operacao(self):
         cat = self.obter_repo("catalog")
-        amb = self.m.ambiente("AUD")
+        amb = self.m.environment("AUD")
         lido = {"description": amb["description"], "connection": amb["connection"], "active": amb["active"]}
         alterado = cat.environments_update(amb["id"], {"description": "Contrato"}, esperado=lido,
                                          auditoria={"actor": "admin", "ip": "10.0.0.1", "action": "UPDATE",
                                                     "detail": "description: x -> Contrato"})
         self.assertEqual(alterado["description"], "Contrato")
         self.assertEqual(self.aud_total("UPDATE", "tbsss_environments", amb["id"]), 1)
-        self.assertEqual(self.aud_ultima("UPDATE", "tbsss_environments", amb["id"])["actor"], "admin")
+        self.assertEqual(self.aud_last("UPDATE", "tbsss_environments", amb["id"])["actor"], "admin")
 
         # 'lido' ficou obsoleto: o UPDATE condicional perde, nada muda e nada e auditado.
         with self.assertRaises(RepoConflict):
@@ -255,12 +255,12 @@ class BaseRepoContractTest(object):
 
         novo = cat.environments_insert({"name": "TST_%s_CAUD" % self.m.suf, "connection": "ALIAS"},
                                      auditoria={"actor": "admin", "ip": None, "action": "CREATE", "detail": "y"})
-        self.m.anotar("environments", novo["id"])
+        self.m.note("environments", novo["id"])
         self.assertEqual(self.aud_total("CREATE", "tbsss_environments", novo["id"]), 1)
 
     def test_04c_perfil_conflito_e_matriz_condicional(self):
-        """Conflito sem incremento e matriz condicional (o ultimo admin fica em TestUltimoAdmin*)."""
-        c = self.m.cenario()
+        """Conflito sem incremento e matriz condicional (o ultimo admin fica em TestLastAdmin*)."""
+        c = self.m.scenario()
         rbac = self.obter_repo("rbac")
         per = c["perfil"]
         func_ids = [f["id"] for f in rbac.features_list()][:2]
@@ -288,8 +288,8 @@ class BaseRepoContractTest(object):
         self.assertEqual(self.aud_total("PERM_UPDATE", "tbsss_profiles", per["id"]), 1)
 
     def test_04d_usuario_conflito_auditoria_login_e_filtro_bloqueio(self):
-        """Conflito, auditoria, login e filtro de bloqueio (o ultimo admin fica em TestUltimoAdmin*)."""
-        c = self.m.cenario()
+        """Conflito, auditoria, login e filtro de bloqueio (o ultimo admin fica em TestLastAdmin*)."""
+        c = self.m.scenario()
         usr = self.obter_repo("users")
         alvo = c["u2"]
         with self.assertRaises(RepoConflict):
@@ -324,7 +324,7 @@ class BaseRepoContractTest(object):
         self.assertNotIn(c["u1"]["login"], [u["login"] for u in bloqueados["itens"]])
 
     def test_04e_parametro_dependencias_atomicas_qtd_scripts_e_auditoria(self):
-        c = self.m.cenario()
+        c = self.m.scenario()
         cat = self.obter_repo("catalog")
         prm = cat.parameters_list(filtros={"code": c["prm_a"]["code"]})["itens"][0]
         self.assertEqual(prm["qtd_scripts"], len(cat.parameter_links(prm["id"])))
@@ -342,7 +342,7 @@ class BaseRepoContractTest(object):
         novo = cat.parameters_insert({"code": "tst_%s_novo" % self.m.suf, "label": "Contrato",
                                        "component_type": "TEXT"},
                                       auditoria={"actor": "admin", "ip": None, "action": "CREATE", "detail": "x"})
-        self.m.anotar("parameters", novo["id"])
+        self.m.note("parameters", novo["id"])
         self.assertEqual(self.aud_total("CREATE", "tbsss_parameters", novo["id"]), 1)
         # Sem vinculo, tipo e flag mudam e a desativacao passa.
         alterado = cat.parameters_update(novo["id"], {"component_type": "NUMBER", "param_flag": "--n",
@@ -351,7 +351,7 @@ class BaseRepoContractTest(object):
                          ("NUMBER", "--n", "N"))
 
     def test_04f_script_regras_de_tipo_param_homologacao_e_vinculos_condicionais(self):
-        c = self.m.cenario()
+        c = self.m.scenario()
         cat = self.obter_repo("catalog")
         scr = cat.scripts_list(filtros={"name": c["scr"]["name"]})["itens"][0]
         self.assertEqual(scr["qtd_parametros"], len(cat.script_params_get(scr["id"])))
@@ -364,7 +364,7 @@ class BaseRepoContractTest(object):
         with self.assertRaises(RepoConflict):
             cat.scripts_update(scr["id"], {"description": "x"}, esperado={"description": "outra"}, ator="teste")
 
-        sem_flag = self.m.parametro("semflag", param_flag=None)
+        sem_flag = self.m.parameter("semflag", param_flag=None)
         with self.assertRaises(RepoViolation) as ctx:
             cat.script_params_save(scr["id"], [{"parameter_id": sem_flag["id"], "sort_order": 1, "required": "N"}],
                                      ator="teste")
@@ -385,7 +385,7 @@ class BaseRepoContractTest(object):
         self.assertEqual(self.aud_total("UPDATE", "tbsss_scripts", scr["id"]), 2)
 
     def test_05_cascata_associacao(self):
-        c = self.m.cenario()
+        c = self.m.scenario()
         cat, rbac = self.obter_repo("catalog"), self.obter_repo("rbac")
         sid = c["scr"]["id"]
         cat.homologation_save(sid, [c["amb1"]["id"]], ator="teste")
@@ -402,7 +402,7 @@ class BaseRepoContractTest(object):
         self.assertGreater(rbac.profiles_get(p["id"])["perm_version"], v_antes)
 
     def test_06_solicitar_cancelamento_nos_tres_retornos(self):
-        c = self.m.cenario()
+        c = self.m.scenario()
         tck = self.obter_repo("tickets")
         tid_pend = self.m.ticket(**c["ticket_base"])
         self.assertEqual(tck.request_cancel(tid_pend, "admin", "10.0.0.1"), "CANCELADO")
@@ -415,9 +415,9 @@ class BaseRepoContractTest(object):
         self.assertEqual((t3["status"], t3["cancel_requested"]), ("RUNNING", "Y"))
 
     def test_07_transicao_concorrente_perdida_gerando_repo_conflito(self):
-        c = self.m.cenario()
+        c = self.m.scenario()
         agd = self.obter_repo("schedules")
-        regra = self.m.agendamento(c["scr"]["id"], c["amb1"]["name"], c["u1"]["id"])
+        regra = self.m.schedule(c["scr"]["id"], c["amb1"]["name"], c["u1"]["id"])
         data_correta = regra["next_run_at"]
         with self.assertRaises(RepoConflict):
             agd.pause(regra["id"], motivo="MANUAL", antiga_data=data_correta + datetime.timedelta(days=10),
@@ -430,7 +430,7 @@ class BaseRepoContractTest(object):
 
     def test_06b_fks_e_limites_de_auditoria(self):
         """CR-003 P8 (README §2.5): FKs, UK de ticket_resp e limites da auditoria, sem gravacao parcial."""
-        c = self.m.cenario()
+        c = self.m.scenario()
         tck, agd, aud = self.obter_repo("tickets"), self.obter_repo("schedules"), self.obter_repo("audit")
         base = c["ticket_base"]
         meus = lambda: tck.list(filtros={"requested_by": c["login"]}, pagina=1, tamanho=1)["total"]  # noqa: E731
@@ -454,7 +454,7 @@ class BaseRepoContractTest(object):
                                     ({"user_id": 999999999}, self.cn("fk", "schedules", "usr")),
                                     ({"environment": "NAO_EXISTE_TST"}, self.cn("fk", "schedules", "env"))):
             with self.assertRaises(RepoViolation) as ctx:
-                self.m.agendamento(**dict({"script_id": c["scr"]["id"], "environment": c["amb1"]["name"],
+                self.m.schedule(**dict({"script_id": c["scr"]["id"], "environment": c["amb1"]["name"],
                                            "user_id": c["u1"]["id"]}, **mudanca))
             self.assertEqual(ctx.exception.constraint, constraint)
 
@@ -465,7 +465,7 @@ class BaseRepoContractTest(object):
         aud.register("a" * 40, None, "UPDATE", "tbsss_environments", amb_id, "d" * 1000)
 
     def test_07b_agendamento_cks_condicional_e_auditoria_na_mesma_operacao(self):
-        c = self.m.cenario()
+        c = self.m.scenario()
         agd = self.obter_repo("schedules")
         inicio = datetime.datetime(2026, 1, 15, 10, 0)
         base = {"name": "TST %s CK" % self.m.suf, "script_id": c["scr"]["id"], "environment": c["amb1"]["name"],
@@ -489,16 +489,16 @@ class BaseRepoContractTest(object):
         for extra, constraint in violacoes:
             with self.assertRaises(RepoViolation) as cm:
                 agd.insert(dict(base, **extra),
-                            auditoria={"actor": self.m.ator, "ip": None, "action": "CREATE", "detail": "x"})
+                            auditoria={"actor": self.m.actor, "ip": None, "action": "CREATE", "detail": "x"})
             self.assertEqual(cm.exception.constraint, constraint, extra)
         self.assertEqual(minhas(), total_regras)
         self.assertEqual(self.obter_repo("audit").list(
-            filtros={"action": "CREATE", "actor": self.m.ator}, pagina=1, tamanho=1)["total"], 0)
+            filtros={"action": "CREATE", "actor": self.m.actor}, pagina=1, tamanho=1)["total"], 0)
 
         novo = agd.insert(base, auditoria={"actor": "admin", "ip": "10.0.0.1", "action": "CREATE",
                                             "detail": "name: Contrato AGD"})
-        self.m.anotar("schedules", novo["id"])
-        self.assertEqual(self.aud_ultima("CREATE", "tbsss_schedules", novo["id"])["actor"], "admin")
+        self.m.note("schedules", novo["id"])
+        self.assertEqual(self.aud_last("CREATE", "tbsss_schedules", novo["id"])["actor"], "admin")
 
         lido = {"name": novo["name"], "user_id": c["u1"]["id"], "next_run_at": novo["next_run_at"]}
         alterado = agd.update(novo["id"], {"name": "TST %s CK2" % self.m.suf, "user_id": c["u2"]["id"]},
@@ -516,7 +516,7 @@ class BaseRepoContractTest(object):
 
         agd.pause(novo["id"], "MANUAL", antiga_data=novo["next_run_at"],
                    auditoria={"actor": "admin", "ip": "10.0.0.2", "action": "SCHEDULE_PAUSE", "detail": "p"})
-        pausa = self.aud_ultima("SCHEDULE_PAUSE", "tbsss_schedules", novo["id"])
+        pausa = self.aud_last("SCHEDULE_PAUSE", "tbsss_schedules", novo["id"])
         self.assertEqual((pausa["actor"], pausa["source_ip"]), ("admin", "10.0.0.2"))
 
         pausado = {"active": "N", "pause_reason": "MANUAL", "next_run_at": novo["next_run_at"]}
@@ -531,7 +531,7 @@ class BaseRepoContractTest(object):
         self.assertEqual(self.aud_total("UPDATE", "tbsss_schedules", novo["id"]), 2)
 
     def test_08_perm_versao_incrementando(self):
-        c = self.m.cenario()
+        c = self.m.scenario()
         rbac, usr = self.obter_repo("rbac"), self.obter_repo("users")
         p = c["perfil"]
         v0 = rbac.profiles_get(p["id"])["perm_version"]
@@ -546,7 +546,7 @@ class BaseRepoContractTest(object):
         self.assertGreaterEqual(rbac.profiles_get(p["id"])["perm_version"], v2 + 1)
 
     def test_09_paginacao_estavel_e_deterministica(self):
-        c = self.m.cenario()
+        c = self.m.scenario()
         tck = self.obter_repo("tickets")
         for _ in range(25):
             self.m.ticket(**c["ticket_base"])
@@ -562,7 +562,7 @@ class BaseRepoContractTest(object):
                          [i["id"] for i in tck.list(filtros=filtros, pagina=1, tamanho=10)["itens"]])
 
     def test_10_escopo_ambientes_na_listagem_tickets(self):
-        c = self.m.cenario()
+        c = self.m.scenario()
         tck = self.obter_repo("tickets")
         for _ in range(3):
             self.m.ticket(**c["ticket_base"])
@@ -577,7 +577,7 @@ class BaseRepoContractTest(object):
         self.assertEqual(tck.list(filtros=filtros, escopo_ambientes=[], pagina=1, tamanho=50)["total"], 0)
 
     def test_11_log_ler_incremental(self):
-        c = self.m.cenario()
+        c = self.m.scenario()
         tck = self.obter_repo("tickets")
         log = "".join("linha %02d do log\n" % i for i in range(10))
         tid = self.m.ticket(**dict(c["ticket_base"], status="RUNNING", log_output=log,
@@ -591,72 +591,72 @@ class BaseRepoContractTest(object):
     # Colunas de registro (CR-006, README §10, AGENTS §4.15)
     # ------------------------------------------------------------------
 
-    def _conferir_inclusao(self, reg, ator):
+    def _check_insert(self, reg, ator):
         self.assertEqual(reg["created_by"], ator)
         self.assertIsNotNone(reg["created_at"])
         self.assertIsNone(reg["updated_at"])
         self.assertIsNone(reg["updated_by"])
 
-    def _conferir_alteracao(self, antes, depois, ator):
+    def _check_update(self, antes, depois, ator):
         self.assertEqual(depois["updated_by"], ator)
         self.assertIsNotNone(depois["updated_at"])
         self.assertGreaterEqual(depois["updated_at"], depois["created_at"])
         self.assertEqual((depois["created_at"], depois["created_by"]), (antes["created_at"], antes["created_by"]))
 
     def test_12_registro_inclusao_e_alteracao_nos_cadastros(self):
-        c = self.m.cenario()
+        c = self.m.scenario()
         cat, rbac, usr, agd = (self.obter_repo(n) for n in ("catalog", "rbac", "users", "schedules"))
         aud = {"actor": "carla", "ip": "10.0.0.9", "action": "UPDATE", "detail": "registro"}
         suf = self.m.suf
 
         amb = cat.environments_insert({"name": "TST_%s_REG" % suf, "description": "d"}, ator="ana")
-        self.m.anotar("environments", amb["id"])
-        self._conferir_inclusao(amb, "ana")
-        self._conferir_alteracao(amb, cat.environments_update(amb["id"], {"description": "e"}, ator="bia"), "bia")
-        self._conferir_alteracao(amb, cat.environments_update(amb["id"], {"description": "f"}, auditoria=aud), "carla")
+        self.m.note("environments", amb["id"])
+        self._check_insert(amb, "ana")
+        self._check_update(amb, cat.environments_update(amb["id"], {"description": "e"}, ator="bia"), "bia")
+        self._check_update(amb, cat.environments_update(amb["id"], {"description": "f"}, auditoria=aud), "carla")
         self.assertEqual(cat.environments_get(amb["id"])["updated_by"], "carla")
 
         scr = cat.scripts_insert({"name": "tst_%s_reg" % suf, "interpreter": "SH",
                                    "path_file": "/opt/tst/%s_reg.sh" % suf, "param_type": "NONE"}, ator="ana")
-        self.m.anotar("scripts", scr["id"])
-        self._conferir_inclusao(scr, "ana")
-        self._conferir_alteracao(scr, cat.scripts_update(scr["id"], {"active": "N"}, ator="bia"), "bia")
+        self.m.note("scripts", scr["id"])
+        self._check_insert(scr, "ana")
+        self._check_update(scr, cat.scripts_update(scr["id"], {"active": "N"}, ator="bia"), "bia")
 
         prm = cat.parameters_insert({"code": "tst_%s_reg" % suf, "label": "Reg", "component_type": "TEXT"},
                                      ator="ana")
-        self.m.anotar("parameters", prm["id"])
-        self._conferir_inclusao(prm, "ana")
-        self._conferir_alteracao(prm, cat.parameters_update(prm["id"], {"label": "Outro"}, ator="bia"), "bia")
+        self.m.note("parameters", prm["id"])
+        self._check_insert(prm, "ana")
+        self._check_update(prm, cat.parameters_update(prm["id"], {"label": "Outro"}, ator="bia"), "bia")
 
         per = rbac.profiles_insert({"name": "TST_%s_REG" % suf}, ator="ana")
-        self.m.anotar("profiles", per["id"])
-        self._conferir_inclusao(per, "ana")
-        self._conferir_alteracao(per, rbac.profiles_update(per["id"], {"description": "x"}, ator="bia"), "bia")
+        self.m.note("profiles", per["id"])
+        self._check_insert(per, "ana")
+        self._check_update(per, rbac.profiles_update(per["id"], {"description": "x"}, ator="bia"), "bia")
 
         u = usr.insert({"login": "tst.%s.reg" % suf, "name": "Reg", "password_hash": "h", "profile_id": per["id"]},
                         ator="ana")
-        self.m.anotar("users", u["id"])
-        self._conferir_inclusao(u, "ana")
-        self._conferir_alteracao(u, usr.update(u["id"], {"name": "Reg 2"}, ator="bia"), "bia")
-        self._conferir_alteracao(u, usr.set_password(u["id"], "hash-novo", ator="dora"), "dora")
-        self._conferir_alteracao(u, usr.unlock(u["id"], ator="eva"), "eva")
+        self.m.note("users", u["id"])
+        self._check_insert(u, "ana")
+        self._check_update(u, usr.update(u["id"], {"name": "Reg 2"}, ator="bia"), "bia")
+        self._check_update(u, usr.set_password(u["id"], "hash-novo", ator="dora"), "dora")
+        self._check_update(u, usr.unlock(u["id"], ator="eva"), "eva")
 
         regra = agd.insert({"name": "TST %s REG" % suf, "script_id": c["scr"]["id"], "environment": c["amb1"]["name"],
                              "user_id": c["u1"]["id"], "priority": 2, "recurrence_type": "DAILY",
                              "run_time": "03:00", "params_json": "{}",
                              "start_date": datetime.datetime(2026, 1, 15, 10, 0),
                              "next_run_at": datetime.datetime(2030, 1, 16, 3, 0)}, ator="ana")
-        self.m.anotar("schedules", regra["id"])
-        self._conferir_inclusao(regra, "ana")
+        self.m.note("schedules", regra["id"])
+        self._check_insert(regra, "ana")
         editada = agd.update(regra["id"], {"name": "TST %s REG2" % suf, "user_id": c["u2"]["id"]}, ator="op.hml")
-        self._conferir_alteracao(regra, editada, "op.hml")
+        self._check_update(regra, editada, "op.hml")
         self.assertEqual(editada["created_by"], "ana", "o criador original nunca muda (R-g)")
         pausada = agd.pause(regra["id"], "MANUAL", antiga_data=editada["next_run_at"], ator="bia")
-        self._conferir_alteracao(regra, pausada, "bia")
-        self._conferir_alteracao(regra, agd.resume(regra["id"], editada["next_run_at"], ator="carla"), "carla")
+        self._check_update(regra, pausada, "bia")
+        self._check_update(regra, agd.resume(regra["id"], editada["next_run_at"], ator="carla"), "carla")
 
     def test_12b_ator_obrigatorio_e_limitado_sem_gravacao_parcial(self):
-        c = self.m.cenario()
+        c = self.m.scenario()
         cat, usr, tck = self.obter_repo("catalog"), self.obter_repo("users"), self.obter_repo("tickets")
         for ator in (None, "", "x" * 41):
             with self.assertRaises(RepoViolation):
@@ -673,11 +673,11 @@ class BaseRepoContractTest(object):
             tck.request_cancel(tid, None, "10.0.0.1")
         self.assertEqual(tck.get(tid)["status"], "PENDING")
         amb40 = cat.environments_insert({"name": "TST_%s_ATOR40" % self.m.suf}, ator="y" * 40)
-        self.m.anotar("environments", amb40["id"])
+        self.m.note("environments", amb40["id"])
         self.assertEqual(amb40["created_by"], "y" * 40)
 
     def test_12c_rotina_tecnica_do_login_nao_grava_updated(self):
-        c = self.m.cenario()
+        c = self.m.scenario()
         usr = self.obter_repo("users")
         antes = usr.get_by_login(c["login"])
         usr.register_login_failure(c["login"], bloqueio_s=60)
@@ -688,18 +688,18 @@ class BaseRepoContractTest(object):
         self.assertEqual(depois["failed_attempts"], 0)
 
     def test_12d_tickets_criacao_e_cancelamento(self):
-        c = self.m.cenario()
+        c = self.m.scenario()
         tck = self.obter_repo("tickets")
         base = dict(c["ticket_base"], requested_by=c["u2"]["login"])
         tid = self.m.ticket([{"parameter_id": c["prm_a"]["id"], "answer_value": "2026-10-17"}], **base)
         t = tck.get(tid)
-        self._conferir_inclusao(t, c["u2"]["login"])
+        self._check_insert(t, c["u2"]["login"])
         self.assertEqual([r["created_by"] for r in tck.answers(tid)], [c["u2"]["login"]])
         tid_agd = self.m.ticket(actor="SYSTEM:agt-host01", **base)
-        self._conferir_inclusao(tck.get(tid_agd), "SYSTEM:agt-host01")
+        self._check_insert(tck.get(tid_agd), "SYSTEM:agt-host01")
 
         self.assertEqual(tck.request_cancel(tid, "admin", "10.0.0.1"), "CANCELADO")
-        self._conferir_alteracao(t, tck.get(tid), "admin")
+        self._check_update(t, tck.get(tid), "admin")
         self.assertEqual(tck.request_cancel(tid, "outro", "10.0.0.1"), "TERMINAL")
         self.assertEqual(tck.get(tid)["updated_by"], "admin", "solicitacao sem efeito nao altera o registro")
 
@@ -710,7 +710,7 @@ class BaseRepoContractTest(object):
         self.assertEqual(tck.get(tid_run)["updated_by"], "admin")
 
 
-class BaseUltimoAdminTest(object):
+class BaseLastAdminTest(object):
     """Protecao do ultimo administrador (README §4.3.B): exige que nao haja outro admin ativo no banco.
 
     Roda no FAKE e no Oracle so com owner descartavel (SSS_TEST_*): num owner compartilhado ha admins
@@ -779,7 +779,7 @@ class TestRepoContractFake(unittest.TestCase, BaseRepoContractTest):
 
     # Vinculos por diferenca (CR-006, R-f): o contrato nao le as linhas de vinculo, entao o FAKE e
     # inspecionado direto; no Oracle, o F7.3 confere com SELECT nas tabelas de associacao.
-    def _linhas(self, tabela, **filtro):
+    def _lines(self, tabela, **filtro):
         store = self.obter_repo("catalog")._store
         return dict((tuple(v[c] for c in sorted(v) if c not in ("id", "created_at", "created_by",
                                                                   "updated_at", "updated_by")), v)
@@ -791,12 +791,12 @@ class TestRepoContractFake(unittest.TestCase, BaseRepoContractTest):
         rbac = self.obter_repo("rbac")
         sid = 1
         homolog = cat.homologation_get(sid)
-        antes = self._linhas("script_env", script_id=sid)
+        antes = self._lines("script_env", script_id=sid)
         scr_antes = cat.scripts_get(sid)
         cat.homologation_save(sid, homolog, ator="sem-mudanca")
         self.assertEqual(cat.scripts_get(sid)["updated_by"], scr_antes["updated_by"])
         cat.homologation_save(sid, homolog + [3], ator="ana")
-        depois = self._linhas("script_env", script_id=sid)
+        depois = self._lines("script_env", script_id=sid)
         for chave, linha in antes.items():
             self.assertEqual((depois[chave]["created_at"], depois[chave]["created_by"]),
                              (linha["created_at"], linha["created_by"]))
@@ -805,22 +805,22 @@ class TestRepoContractFake(unittest.TestCase, BaseRepoContractTest):
         self.assertEqual(cat.scripts_get(sid)["updated_by"], "ana")
 
         matriz = rbac.matrix_get(4)
-        antes = self._linhas("profile_env", profile_id=4)
+        antes = self._lines("profile_env", profile_id=4)
         rbac.matrix_save(4, matriz["funcs"], matriz["ambs"], matriz["scrs"] + [5], ator="bia")
-        depois = self._linhas("profile_env", profile_id=4)
+        depois = self._lines("profile_env", profile_id=4)
         self.assertEqual(depois, antes, "dimensao sem mudanca fica intacta")
         self.assertEqual(rbac.profiles_get(4)["updated_by"], "bia")
-        self.assertEqual([v["created_by"] for k, v in self._linhas("profile_script", profile_id=4).items()
+        self.assertEqual([v["created_by"] for k, v in self._lines("profile_script", profile_id=4).items()
                           if v["script_id"] == 5], ["bia"])
 
         vinculos = cat.script_params_get(sid)
         self.assertGreaterEqual(len(vinculos), 2)
-        antes = dict((v["parameter_id"], v) for v in self._linhas("script_param", script_id=sid).values())
+        antes = dict((v["parameter_id"], v) for v in self._lines("script_param", script_id=sid).values())
         trocados = [dict(parameter_id=v["parameter_id"], sort_order=v["sort_order"], required=v["required"],
                          default_value_override=v.get("default_value_override")) for v in vinculos]
         trocados[0]["sort_order"], trocados[1]["sort_order"] = trocados[1]["sort_order"], trocados[0]["sort_order"]
         cat.script_params_save(sid, trocados, ator="carla")
-        depois = dict((v["parameter_id"], v) for v in self._linhas("script_param", script_id=sid).values())
+        depois = dict((v["parameter_id"], v) for v in self._lines("script_param", script_id=sid).values())
         for pid, linha in antes.items():
             self.assertEqual((depois[pid]["created_at"], depois[pid]["created_by"]),
                              (linha["created_at"], linha["created_by"]))
@@ -842,14 +842,14 @@ class TestRepoContractFake(unittest.TestCase, BaseRepoContractTest):
         self.assertEqual(depois["created_by"], antes["created_by"])
 
 
-class _OracleContrato(object):
+class _OracleContract(object):
     """Preparo e limpeza comuns as classes da bateria contra o Oracle real (SSS_TEST_ORACLE=1)."""
 
     @classmethod
     def setUpClass(cls):
         from _oracle_test_support import prepare_disposable_schema
         cls._tinha_sss_cfg = hasattr(current, "sss_cfg")
-        cls._sss_cfg_anterior = getattr(current, "sss_cfg", None)
+        cls._previous_sss_cfg = getattr(current, "sss_cfg", None)
         cls.oracle_cfg = prepare_disposable_schema("web")
         current.sss_cfg = cls.oracle_cfg
 
@@ -861,27 +861,27 @@ class _OracleContrato(object):
         from repo_oracle import base as base_oracle
         base_oracle.discard_pools()
         if cls._tinha_sss_cfg:
-            current.sss_cfg = cls._sss_cfg_anterior
+            current.sss_cfg = cls._previous_sss_cfg
         elif hasattr(current, "sss_cfg"):
             delattr(current, "sss_cfg")
 
     def setUp(self):
         repo_factory.configure({"app": {"sss_env": "DEV"}})
         repo_factory.reset_singletons()
-        self._massa = None
+        self._fixtures = None
 
     def tearDown(self):
-        self._limpar_massa()
+        self._clean_fixtures()
 
     def obter_repo(self, nome):
         return repo_factory.get(nome)
 
-    def _limpar_massa(self):
+    def _clean_fixtures(self):
         """Remove so os registros criados pelo teste, em ordem de dependencia; no modo compartilhado,
         tambem a auditoria deles (README §2.5). Limpeza incompleta falha o teste com os IDs restantes."""
         import _oracle_test_support
-        massa = getattr(self, "_massa", None)
-        if massa is None or not any(massa.criados.values()):
+        massa = getattr(self, "_fixtures", None)
+        if massa is None or not any(massa.created.values()):
             return
         repo = self.obter_repo("catalog")
         compartilhado = _oracle_test_support.schema_mode() == _oracle_test_support.SHARED_MODE
@@ -891,7 +891,7 @@ class _OracleContrato(object):
         try:
             cur = conn.cursor()
             try:
-                for entidade, ids in massa.criados.items():
+                for entidade, ids in massa.created.items():
                     tabela = repo.qualify_table(entidade)
                     for rid in ids:
                         cur.execute("DELETE FROM " + tabela + " WHERE id = :id", {"id": rid})
@@ -899,7 +899,7 @@ class _OracleContrato(object):
                             cur.execute("DELETE FROM " + tab_aud + " WHERE entity = :ent AND entity_id = :id",
                                         {"ent": "tbsss_" + sql_ident.physical(entidade), "id": rid})
                 conn.commit()
-                for entidade, ids in massa.criados.items():
+                for entidade, ids in massa.created.items():
                     tabela = repo.qualify_table(entidade)
                     for rid in ids:
                         cur.execute("SELECT id FROM " + tabela + " WHERE id = :id", {"id": rid})
@@ -914,11 +914,11 @@ class _OracleContrato(object):
 
 
 @unittest.skipUnless(os.environ.get("SSS_TEST_ORACLE") == "1", "Testes Oracle reais desligados (SSS_TEST_ORACLE=1)")
-class TestRepoContractOracle(_OracleContrato, unittest.TestCase, BaseRepoContractTest):
+class TestRepoContractOracle(_OracleContract, unittest.TestCase, BaseRepoContractTest):
     """Executa a mesma bateria contra o Oracle do config.ini, com dados proprios de cada teste."""
 
 
-class TestUltimoAdminFake(unittest.TestCase, BaseUltimoAdminTest):
+class TestLastAdminFake(unittest.TestCase, BaseLastAdminTest):
     """Protecao do ultimo administrador no FAKE (seed com um unico admin ativo)."""
 
     def setUp(self):
@@ -930,19 +930,19 @@ class TestUltimoAdminFake(unittest.TestCase, BaseUltimoAdminTest):
 
 
 @unittest.skipUnless(os.environ.get("SSS_TEST_ORACLE") == "1", "Testes Oracle reais desligados (SSS_TEST_ORACLE=1)")
-class TestUltimoAdminOracle(_OracleContrato, unittest.TestCase, BaseUltimoAdminTest):
+class TestLastAdminOracle(_OracleContract, unittest.TestCase, BaseLastAdminTest):
     """Protecao do ultimo administrador no Oracle: so com owner descartavel (o teste e dono do banco)."""
 
     @classmethod
     def setUpClass(cls):
-        super(TestUltimoAdminOracle, cls).setUpClass()
+        super(TestLastAdminOracle, cls).setUpClass()
         import _oracle_test_support
         if _oracle_test_support.schema_mode() != _oracle_test_support.DISPOSABLE_MODE:
             raise unittest.SkipTest("Owner compartilhado: ha administradores reais; a protecao do ultimo admin "
                                     "so e exercida no FAKE e com owner SSS_TEST_* (README §2.5)")
 
 
-class TestRepoFactoryEIntegridade(unittest.TestCase):
+class TestRepoFactoryAndIntegrity(unittest.TestCase):
     """Testes especificos da fabrica e regras estruturais do AGENTS.md."""
 
     def tearDown(self):
@@ -1097,17 +1097,17 @@ class TestRepoFactoryEIntegridade(unittest.TestCase):
         self.assertNotEqual(u2["name"], "Mutacao Indevida Externa")
 
 
-class TestRegressaoFailFast(unittest.TestCase):
+class TestFailFastRegression(unittest.TestCase):
     """Regressao: fabrica sem padrao silencioso e FAKE sem coercao silenciosa de entrada."""
 
     def setUp(self):
-        self._sss_cfg_anterior = getattr(current, "sss_cfg", None)
+        self._previous_sss_cfg = getattr(current, "sss_cfg", None)
         current.sss_cfg = None
         repo_factory.configure(None)
         repo_factory.reset_singletons()
 
     def tearDown(self):
-        current.sss_cfg = self._sss_cfg_anterior
+        current.sss_cfg = self._previous_sss_cfg
         repo_factory.configure(None)
         repo_factory.reset_singletons()
 

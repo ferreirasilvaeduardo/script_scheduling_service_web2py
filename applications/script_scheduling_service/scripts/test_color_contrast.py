@@ -13,7 +13,7 @@ CSS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
 _RE_TOKEN = re.compile(r"--(sss-[a-z0-9-]+):\s*(#[0-9a-fA-F]{6})\s*;")
 
 # Pares (texto, fundo) efetivamente usados pela interface.
-PARES_TEXTO = (
+TEXT_PAIRS = (
     ("sss-text", "sss-bg"), ("sss-text", "sss-surface"), ("sss-text", "sss-surface-alt"),
     ("sss-text-muted", "sss-surface"), ("sss-text-muted", "sss-bg"),
     ("sss-accent-text", "sss-accent"), ("sss-accent-text", "sss-accent-hover"),
@@ -25,14 +25,14 @@ PARES_TEXTO = (
     ("sss-status-success-fg", "sss-status-success-bg"), ("sss-status-failed-fg", "sss-status-failed-bg"),
     ("sss-status-cancelled-fg", "sss-status-cancelled-bg"), ("sss-status-unknown-fg", "sss-status-unknown-bg"),
 )
-PARES_INDICADOR = (
+INDICATOR_PAIRS = (
     ("sss-focus", "sss-surface"), ("sss-focus", "sss-bg"), ("sss-header-focus", "sss-header-bg"),
     ("sss-header-faixa", "sss-header-bg"),
 )
-PALETA_KYROS = {"#4daf9a", "#68d8bd", "#38977f", "#5f0684", "#831fb2", "#430463", "#faba00", "#ffce55", "#f8a600"}
+KYROS_PALETTE = {"#4daf9a", "#68d8bd", "#38977f", "#5f0684", "#831fb2", "#430463", "#faba00", "#ffce55", "#f8a600"}
 
 
-def _luminancia(hexa):
+def _luminance(hexa):
     canais = []
     for i in (1, 3, 5):
         c = int(hexa[i:i + 2], 16) / 255.0
@@ -40,13 +40,13 @@ def _luminancia(hexa):
     return 0.2126 * canais[0] + 0.7152 * canais[1] + 0.0722 * canais[2]
 
 
-def contraste(a, b):
+def contrast(a, b):
     """Razao de contraste WCAG entre duas cores #rrggbb."""
-    la, lb = sorted((_luminancia(a), _luminancia(b)), reverse=True)
+    la, lb = sorted((_luminance(a), _luminance(b)), reverse=True)
     return (la + 0.05) / (lb + 0.05)
 
 
-def _blocos():
+def _chunks():
     with open(CSS, encoding="utf-8") as f:
         css = f.read()
     ini = css.index(":root {")
@@ -57,37 +57,37 @@ def _blocos():
     return {"claro": claro, "escuro": tokens_escuro}
 
 
-class TestContrasteCores(unittest.TestCase):
+class TestColorContrast(unittest.TestCase):
 
     def setUp(self):
-        self.temas = _blocos()
+        self.themes = _chunks()
 
     def test_formula(self):
-        self.assertAlmostEqual(contraste("#000000", "#ffffff"), 21.0, places=2)
-        self.assertAlmostEqual(contraste("#ffffff", "#ffffff"), 1.0, places=2)
+        self.assertAlmostEqual(contrast("#000000", "#ffffff"), 21.0, places=2)
+        self.assertAlmostEqual(contrast("#ffffff", "#ffffff"), 1.0, places=2)
         # Fato que orienta a paleta: azul esverdeado sobre branco nao serve para texto.
-        self.assertLess(contraste("#4daf9a", "#ffffff"), 4.5)
+        self.assertLess(contrast("#4daf9a", "#ffffff"), 4.5)
 
     def test_texto_aa(self):
-        for tema, tokens in self.temas.items():
-            for fg, bg in PARES_TEXTO:
+        for tema, tokens in self.themes.items():
+            for fg, bg in TEXT_PAIRS:
                 with self.subTest(tema=tema, par=(fg, bg)):
-                    r = contraste(tokens[fg], tokens[bg])
+                    r = contrast(tokens[fg], tokens[bg])
                     self.assertGreaterEqual(r, 4.5, "%s: %s %s / %s %s = %.2f" % (
                         tema, fg, tokens[fg], bg, tokens[bg], r))
 
     def test_indicadores_nao_textuais(self):
-        for tema, tokens in self.temas.items():
-            for fg, bg in PARES_INDICADOR:
+        for tema, tokens in self.themes.items():
+            for fg, bg in INDICATOR_PAIRS:
                 with self.subTest(tema=tema, par=(fg, bg)):
-                    self.assertGreaterEqual(contraste(tokens[fg], tokens[bg]), 3.0)
+                    self.assertGreaterEqual(contrast(tokens[fg], tokens[bg]), 3.0)
 
     def test_cores_principais_sao_da_paleta_kyros(self):
-        for tema, tokens in self.temas.items():
+        for tema, tokens in self.themes.items():
             for token in ("sss-accent", "sss-header-faixa", "sss-header-ativo-bg", "sss-banner-bg"):
                 with self.subTest(tema=tema, token=token):
-                    self.assertIn(tokens[token].lower(), PALETA_KYROS)
-        claro = self.temas["claro"]
+                    self.assertIn(tokens[token].lower(), KYROS_PALETTE)
+        claro = self.themes["claro"]
         self.assertEqual((claro["sss-marca-verde"], claro["sss-marca-roxo"], claro["sss-marca-amarelo"]),
                          ("#4daf9a", "#5f0684", "#faba00"))
 

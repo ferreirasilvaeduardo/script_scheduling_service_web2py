@@ -13,45 +13,45 @@ from path_guard import Code, PathGuardError
 
 
 
-MODO_ARQ = 0o444
-MODO_DIR = 0o555
+FILE_MODE = 0o444
+DIR_MODE = 0o555
 
 
 @unittest.skipIf(os.geteuid() == 0, "root sempre passa em os.access(W_OK)")
 class TestResolver(unittest.TestCase):
 
     def setUp(self):
-        self.raiz = tempfile.mkdtemp(prefix="sss_pg_")
-        self.base = os.path.join(self.raiz, "scripts")
-        self.fora = os.path.join(self.raiz, "fora.py")
+        self.root = tempfile.mkdtemp(prefix="sss_pg_")
+        self.base = os.path.join(self.root, "scripts")
+        self.down = os.path.join(self.root, "fora.py")
         os.makedirs(os.path.join(self.base, "sub", "fundo"))
         for p in (os.path.join(self.base, "sub", "ok.py"),
                   os.path.join(self.base, "sub", "fundo", "ok.sh"),
-                  self.fora):
+                  self.down):
             with open(p, "w") as f:
                 f.write("print(1)\n")
-        os.symlink(self.fora, os.path.join(self.base, "link_fora.py"))
+        os.symlink(self.down, os.path.join(self.base, "link_fora.py"))
         os.symlink(os.path.join(self.base, "sub", "ok.py"), os.path.join(self.base, "link_ok.py"))
         os.symlink("/etc/hostname", os.path.join(self.base, "link_etc.py"))
         os.symlink("/usr", os.path.join(self.base, "link_usr"))
         os.symlink(os.path.join(self.base, "sub"), os.path.join(self.base, "link_sub"))
         os.symlink("ciclo_b", os.path.join(self.base, "ciclo_a"))
         os.symlink("ciclo_a", os.path.join(self.base, "ciclo_b"))
-        self._travar(self.base)
+        self._lock(self.base)
 
     def tearDown(self):
-        os.chmod(self.raiz, 0o755)
-        for raiz, dirs, files in os.walk(self.raiz):
+        os.chmod(self.root, 0o755)
+        for raiz, dirs, files in os.walk(self.root):
             os.chmod(raiz, 0o755)
-        shutil.rmtree(self.raiz)
+        shutil.rmtree(self.root)
 
-    def _travar(self, topo):
+    def _lock(self, topo):
         for raiz, dirs, files in os.walk(topo):
-            os.chmod(raiz, MODO_DIR)
+            os.chmod(raiz, DIR_MODE)
             for f in files:
                 p = os.path.join(raiz, f)
                 if not os.path.islink(p):
-                    os.chmod(p, MODO_ARQ)
+                    os.chmod(p, FILE_MODE)
 
     def _p(self, rel):
         return os.path.join(self.base, rel)
@@ -59,7 +59,7 @@ class TestResolver(unittest.TestCase):
     def _resolver(self, rel, dirs_sss=()):
         return path_guard.resolve(self._p(rel), dirs_sss)
 
-    def _codigo(self, rel, **kw):
+    def _code(self, rel, **kw):
         with self.assertRaises(PathGuardError) as ctx:
             self._resolver(rel, **kw)
         return ctx.exception.code
@@ -77,11 +77,11 @@ class TestResolver(unittest.TestCase):
     def test_link_para_destino_inseguro_e_recusado(self):
         # CR-011 (S2): vale o arquivo real; gravavel por grupo ou outros e recusado, mesmo via link.
         self.assertTrue(self._resolver("link_fora.py"), "destino fora da arvore, mas nao gravavel: aceito")
-        os.chmod(self.fora, 0o666)
-        self.assertEqual(self._codigo("link_fora.py"), Code.GROUP_OTHER_WRITABLE)
+        os.chmod(self.down, 0o666)
+        self.assertEqual(self._code("link_fora.py"), Code.GROUP_OTHER_WRITABLE)
 
     def test_ciclo_de_links(self):
-        self.assertEqual(self._codigo("ciclo_a"), Code.NOT_FOUND)
+        self.assertEqual(self._code("ciclo_a"), Code.NOT_FOUND)
 
     def test_pastas_do_sistema_digitadas_e_via_symlink(self):
         for caminho in ("/etc/passwd", "/usr/bin/python3", "/bin/sh", "/root/x.py", "/proc/self/status"):
@@ -89,8 +89,8 @@ class TestResolver(unittest.TestCase):
                 with self.assertRaises(PathGuardError) as ctx:
                     path_guard.resolve(caminho)
                 self.assertEqual(ctx.exception.code, Code.SYSTEM_DIR)
-        self.assertEqual(self._codigo("link_etc.py"), Code.SYSTEM_DIR)
-        self.assertEqual(self._codigo("link_usr/bin/env"), Code.SYSTEM_DIR)
+        self.assertEqual(self._code("link_etc.py"), Code.SYSTEM_DIR)
+        self.assertEqual(self._code("link_usr/bin/env"), Code.SYSTEM_DIR)
 
     def test_prefixo_irmao_nao_e_pasta_do_sistema(self):
         # /usrx e /etcetera nao estao dentro de /usr e /etc (componente, nao prefixo de texto).
@@ -101,29 +101,29 @@ class TestResolver(unittest.TestCase):
                 self.assertEqual(ctx.exception.code, Code.NOT_FOUND)
 
     def test_dentro_de_log_dir_ou_work_dir(self):
-        self.assertEqual(self._codigo("sub/ok.py", dirs_sss=(self._p("sub"),)), Code.SSS_DIR)
-        self.assertEqual(self._codigo("sub/fundo/ok.sh", dirs_sss=("/var/x", self._p("sub/fundo"))),
+        self.assertEqual(self._code("sub/ok.py", dirs_sss=(self._p("sub"),)), Code.SSS_DIR)
+        self.assertEqual(self._code("sub/fundo/ok.sh", dirs_sss=("/var/x", self._p("sub/fundo"))),
                          Code.SSS_DIR)
         self.assertTrue(self._resolver("sub/ok.py", dirs_sss=(self._p("sub/fundo"),)))
 
     def test_inexistente_e_diretorio(self):
-        self.assertEqual(self._codigo("inexistente.py"), Code.NOT_FOUND)
-        self.assertEqual(self._codigo("sub"), Code.NOT_A_FILE)
+        self.assertEqual(self._code("inexistente.py"), Code.NOT_FOUND)
+        self.assertEqual(self._code("sub"), Code.NOT_A_FILE)
 
     def test_gravavel_por_grupo_ou_outros_so_no_arquivo(self):
         # CR-011 (S2): o ambiente controla o conteudo; o SSS confere so o proprio arquivo, nao as pastas.
         arq = self._p("sub/fundo/ok.sh")
         for bit in (0o020, 0o002):
-            os.chmod(arq, MODO_ARQ | bit)
+            os.chmod(arq, FILE_MODE | bit)
             try:
-                self.assertEqual(self._codigo("sub/fundo/ok.sh"), Code.GROUP_OTHER_WRITABLE, oct(bit))
+                self.assertEqual(self._code("sub/fundo/ok.sh"), Code.GROUP_OTHER_WRITABLE, oct(bit))
             finally:
-                os.chmod(arq, MODO_ARQ)
+                os.chmod(arq, FILE_MODE)
         os.chmod(self._p("sub/fundo"), 0o777)
         try:
             self.assertTrue(self._resolver("sub/fundo/ok.sh"), "pasta gravavel nao e conferida")
         finally:
-            os.chmod(self._p("sub/fundo"), MODO_DIR)
+            os.chmod(self._p("sub/fundo"), DIR_MODE)
 
     def test_dono_e_indiferente(self):
         # Sem script_owner_uids (CR-011): o arquivo do proprio usuario, sem escrita de grupo/outros, e aceito.
@@ -131,23 +131,23 @@ class TestResolver(unittest.TestCase):
 
 
 @unittest.skipIf(os.geteuid() == 0, "root sempre passa nas checagens de acesso")
-class TestAcessoEExecutavel(unittest.TestCase):
+class TestAccessAndExecutable(unittest.TestCase):
     """NO_ACCESS e o executavel do interpretador (CR-011, S3)."""
 
     setUp = TestResolver.setUp
     tearDown = TestResolver.tearDown
-    _travar = TestResolver._travar
+    _lock = TestResolver._lock
     _p = TestResolver._p
-    _codigo = TestResolver._codigo
+    _code = TestResolver._code
     _resolver = TestResolver._resolver
 
     def test_sem_acesso_e_diferente_de_nao_encontrado(self):
         fundo = self._p("sub/fundo")
         os.chmod(fundo, 0o000)
         try:
-            self.assertEqual(self._codigo("sub/fundo/ok.sh"), Code.NO_ACCESS)
+            self.assertEqual(self._code("sub/fundo/ok.sh"), Code.NO_ACCESS)
         finally:
-            os.chmod(fundo, MODO_DIR)
+            os.chmod(fundo, DIR_MODE)
 
     def test_executavel_do_interpretador(self):
         sh = os.path.realpath("/bin/sh")
@@ -163,7 +163,7 @@ class TestAcessoEExecutavel(unittest.TestCase):
                 self.assertEqual(ctx.exception.code, Code.INTERPRETADOR_INSEGURO)
 
 
-class TestValidacoesTextuais(unittest.TestCase):
+class TestTextValidations(unittest.TestCase):
 
     def test_validar_cadastro(self):
         path_guard.validate_registration("/opt/automacoes/scripts/faturamento/carga_faturas.py")

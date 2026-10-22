@@ -14,14 +14,14 @@ import security
 from permissions_service import PermissionsService
 from ticket_service import TicketService
 
-SESSOES = {
+SESSIONS = {
     "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
     "op.hml": {"usuario_id": 3, "login": "op.hml", "perfil_id": 3, "perm_versao": 1, "sessao_epoch": 0},
     "consulta": {"usuario_id": 4, "login": "consulta", "perfil_id": 4, "perm_versao": 1, "sessao_epoch": 0},
 }
 
 
-class TestPermissoes(unittest.TestCase):
+class TestPermissions(unittest.TestCase):
 
     def setUp(self):
         patcher = mock.patch.object(security, "ITERATIONS", 1000)
@@ -41,11 +41,11 @@ class TestPermissoes(unittest.TestCase):
         log.propagate = False
         auth = auth_service.AuthService(repo_factory.get("users"), self.rbac_repo, self.catalog,
                                         repo_factory.get("audit"), 5, 900, log)
-        self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSOES.items())
+        self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSIONS.items())
         disparo = TicketService(self.catalog, repo_factory.get("tickets"), log)
         self.svc = PermissionsService(self.rbac_repo, self.catalog, disparo, log)
-        self.disparo = disparo
-        self.n_auditoria = repo_factory.get("audit").list(pagina=1, tamanho=1)["total"]
+        self.trigger = disparo
+        self.n_audit = repo_factory.get("audit").list(pagina=1, tamanho=1)["total"]
 
     def test_admin_ve_frase_e_todas_as_telas(self):
         d = self.svc.build(self.ctx["admin"])
@@ -67,7 +67,7 @@ class TestPermissoes(unittest.TestCase):
     def test_scripts_e_ambientes_iguais_aos_do_disparo(self):
         ctx = self.ctx["op.hml"]
         d = self.svc.build(ctx)
-        esperado = sorted(s["id"] for g in self.disparo.available_scripts(ctx) for s in g["scripts"])
+        esperado = sorted(s["id"] for g in self.trigger.available_scripts(ctx) for s in g["scripts"])
         self.assertEqual(sorted(s["id"] for s in d["scripts"]), esperado)
         for s in d["scripts"]:
             self.assertTrue(s["environments"])
@@ -97,7 +97,7 @@ class TestPermissoes(unittest.TestCase):
 
     def test_nao_grava_nem_audita(self):
         self.svc.build(self.ctx["op.hml"])
-        self.assertEqual(repo_factory.get("audit").list(pagina=1, tamanho=1)["total"], self.n_auditoria)
+        self.assertEqual(repo_factory.get("audit").list(pagina=1, tamanho=1)["total"], self.n_audit)
 
 
 if __name__ == "__main__":

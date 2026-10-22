@@ -20,7 +20,7 @@ class TestSSSLogging(unittest.TestCase):
         self.tmp_dir = tempfile.mkdtemp(prefix="sss_test_logging_")
         self.addCleanup(shutil.rmtree, self.tmp_dir, True)
 
-    def _criar_cfg(self, log_dir, max_bytes=1048576, retention_days=30, level="INFO"):
+    def _create_cfg(self, log_dir, max_bytes=1048576, retention_days=30, level="INFO"):
         logging_dict = {
             "log_dir": log_dir,
             "level": level,
@@ -40,7 +40,7 @@ class TestSSSLogging(unittest.TestCase):
     def test_handler_cria_caminho_por_minuto_e_permissoes(self):
         """CR-005 D6 e CR-009: log em log_dir/internal/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log com 0750 e 0640."""
         log_dir = os.path.join(self.tmp_dir, "logs")
-        cfg = self._criar_cfg(log_dir)
+        cfg = self._create_cfg(log_dir)
 
         logger = sss_logging.configure("sss_web", cfg)
         self.addCleanup(lambda: [h.close() for h in list(logger.handlers)])
@@ -201,7 +201,7 @@ class TestSSSLogging(unittest.TestCase):
         os.makedirs(log_dir)
         umask_antiga = os.umask(0o077)
         try:
-            logger = sss_logging.configure("sss_web", self._criar_cfg(log_dir))
+            logger = sss_logging.configure("sss_web", self._create_cfg(log_dir))
         finally:
             os.umask(umask_antiga)
         self.addCleanup(lambda: [h.close() for h in list(logger.handlers)])
@@ -217,7 +217,7 @@ class TestSSSLogging(unittest.TestCase):
     def test_agent_id_aparece_nas_linhas(self):
         """Regressao do R4: o agent_id do config.ini entra em [agent=...] (README §13)."""
         log_dir = os.path.join(self.tmp_dir, "logs")
-        logger = sss_logging.configure("sss_web", self._criar_cfg(log_dir))
+        logger = sss_logging.configure("sss_web", self._create_cfg(log_dir))
         self.addCleanup(lambda: [h.close() for h in list(logger.handlers)])
         logger.info("linha sem contexto")
         sss_logging.get_adapter(logger, agent="agt-explicito", ticket=7, action="CLAIM").info("com contexto")
@@ -233,7 +233,7 @@ class TestSSSLogging(unittest.TestCase):
         antiga = os.path.join(log_dir, "internal", "app", "2000", "01", "01", "00", "00")
         os.makedirs(antiga)
         with mock.patch("log_paths.shutil.rmtree", side_effect=PermissionError(13, "Permission denied")):
-            logger = sss_logging.configure("sss_web", self._criar_cfg(log_dir))
+            logger = sss_logging.configure("sss_web", self._create_cfg(log_dir))
         self.addCleanup(lambda: [h.close() for h in list(logger.handlers)])
         logger.info("primeira linha")
         logger.handlers[0].flush()
@@ -249,7 +249,7 @@ class TestSSSLogging(unittest.TestCase):
     def test_reconfigurar_idempotente_nao_duplica_handlers(self):
         """Chamar configurar() varias vezes nao acumula AppLogRotatingHandler."""
         log_dir = os.path.join(self.tmp_dir, "logs")
-        cfg = self._criar_cfg(log_dir)
+        cfg = self._create_cfg(log_dir)
 
         logger1 = sss_logging.configure("sss_web", cfg)
         self.assertEqual(len(logger1.handlers), 1)

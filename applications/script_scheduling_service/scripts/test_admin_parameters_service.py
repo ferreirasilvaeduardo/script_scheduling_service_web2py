@@ -17,7 +17,7 @@ from admin_parameters_service import AdminParametersService
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 IP = "10.3.3.3"
-SESSOES = {
+SESSIONS = {
     "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
     "op.prod": {"usuario_id": 2, "login": "op.prod", "perfil_id": 2, "perm_versao": 1, "sessao_epoch": 0},
 }
@@ -47,13 +47,13 @@ class _Base(unittest.TestCase):
         self.log.propagate = False
         auth = auth_service.AuthService(repo_factory.get("users"), repo_factory.get("rbac"), self.catalog,
                                         self.audit, 5, 900, self.log)
-        self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSOES.items())
+        self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSIONS.items())
         # Gestor: perfil nao admin com MANAGE_PARAMETERS (como se a matriz o concedesse).
         self.ctx["gestor"] = dict(self.ctx["op.prod"], features=frozenset(["MANAGE_PARAMETERS"]))
         self.svc = AdminParametersService(self.catalog, self.log)
         self.aud_base = max([a["id"] for a in self.audit.list(pagina=1, tamanho=1000)["itens"]] or [0])
 
-    def _auditorias(self, acao):
+    def _audits(self, acao):
         return [a for a in self.audit.list(filtros={"action": acao}, pagina=1, tamanho=100)["itens"]
                 if a["entity"] == "tbsss_parameters" and a["id"] > self.aud_base]
 
@@ -62,7 +62,7 @@ class _Base(unittest.TestCase):
         dados.update(mudancas)
         return self.svc.save(self.ctx[actor], IP, None, dados)
 
-    def _editar(self, pid, actor="admin", **mudancas):
+    def _edit(self, pid, actor="admin", **mudancas):
         f = self.svc.form(self.ctx[actor], str(pid))
         dados = dict((k, f[k]) for k in ("param_flag", "label", "description", "component_type", "options_json",
                                           "default_value", "validation_regex", "version"))
@@ -71,15 +71,15 @@ class _Base(unittest.TestCase):
         return self.svc.save(self.ctx[actor], IP, str(pid), dados)
 
 
-class TestCadastro(_Base):
+class TestRegistration(_Base):
 
     def test_sensivel_nunca_volta_a_nao_sensivel(self):
         # CR-007, R-20 (README §6.2): respostas ja gravadas passariam a aparecer em claro.
-        self._editar(P_CHAVE_API, default_value="tok-guardado-1234")
-        _pid, erros = self._editar(P_CHAVE_API, sensitive="N")
+        self._edit(P_CHAVE_API, default_value="tok-guardado-1234")
+        _pid, erros = self._edit(P_CHAVE_API, sensitive="N")
         self.assertEqual(erros["sensitive"], prm_mod.MSG_SENSITIVE_ONE_WAY)
-        self._editar(P_CHAVE_API, remover_padrao="Y")
-        _pid, erros = self._editar(P_CHAVE_API, sensitive="N")
+        self._edit(P_CHAVE_API, remover_padrao="Y")
+        _pid, erros = self._edit(P_CHAVE_API, sensitive="N")
         self.assertEqual(erros["sensitive"], prm_mod.MSG_SENSITIVE_ONE_WAY)
         self.assertEqual(self.catalog.parameters_get(P_CHAVE_API)["sensitive"], "Y")
 
@@ -88,13 +88,13 @@ class TestCadastro(_Base):
         self.assertEqual(erros, {"label": admin_crud.MSG_CONTROL_CHARS})
         pid, erros = self._insert(description="Descricao do parametro")
         self.assertEqual(erros, {})
-        self.assertIn("description: Descricao do parametro", self._auditorias("CREATE")[0]["detail"])
+        self.assertIn("description: Descricao do parametro", self._audits("CREATE")[0]["detail"])
 
     def test_versao_nao_deriva_do_valor_sensivel(self):
         # CR-003 P1: a versao vai ao HTML; um sha256 sem sal do segredo permitiria adivinha-lo.
-        self._editar(P_CHAVE_API, default_value="segredo-numero-um-111")
+        self._edit(P_CHAVE_API, default_value="segredo-numero-um-111")
         v1 = self.svc.form(self.ctx["admin"], str(P_CHAVE_API))["version"]
-        self._editar(P_CHAVE_API, default_value="segredo-numero-dois-222")
+        self._edit(P_CHAVE_API, default_value="segredo-numero-dois-222")
         f = self.svc.form(self.ctx["admin"], str(P_CHAVE_API))
         self.assertEqual(f["version"], v1)
         self.assertNotIn("segredo-numero-dois-222", repr(f))
@@ -104,7 +104,7 @@ class TestCadastro(_Base):
 
     def test_versao_muda_com_valor_nao_sensivel(self):
         v1 = self.svc.form(self.ctx["admin"], str(P_DESCRICAO_LOTE))["version"]
-        self._editar(P_DESCRICAO_LOTE, default_value="lote-a")
+        self._edit(P_DESCRICAO_LOTE, default_value="lote-a")
         self.assertNotEqual(self.svc.form(self.ctx["admin"], str(P_DESCRICAO_LOTE))["version"], v1)
 
     def test_sensivel_de_vazio_para_preenchido_gera_conflito(self):
@@ -131,7 +131,7 @@ class TestCadastro(_Base):
             self.assertEqual(erros, {}, dados["code"])
             self.assertEqual(self.catalog.parameters_get(pid)["default_value"], padrao)
         self.assertEqual(self.catalog.parameters_get(pid)["param_flag"], "--active")
-        self.assertEqual(len(self._auditorias("CREATE")), 5)
+        self.assertEqual(len(self._audits("CREATE")), 5)
 
     def test_codigo_invalido_ou_duplicado(self):
         for codigo in ("Data", "a-b", "x" * 31, ""):
@@ -176,30 +176,30 @@ class TestCadastro(_Base):
         _pid, erros = self._insert(actor="gestor", validation_regex="[0-9]+")
         self.assertEqual(erros, {"validation_regex": prm_mod.MSG_REGEX_ADMIN_ONLY})
         # Editar outros campos preserva a regex gravada; tentar trocar a regex ou o tipo e negado.
-        _pid, erros = self._editar(P_FILIAL, actor="gestor", label="Filial (4 digitos)")
+        _pid, erros = self._edit(P_FILIAL, actor="gestor", label="Filial (4 digitos)")
         self.assertEqual(erros, {})
         self.assertEqual(self.catalog.parameters_get(P_FILIAL)["validation_regex"], "^[0-9]{4}$")
-        _pid, erros = self._editar(P_FILIAL, actor="gestor", validation_regex="[0-9]+")
+        _pid, erros = self._edit(P_FILIAL, actor="gestor", validation_regex="[0-9]+")
         self.assertEqual(erros, {"validation_regex": prm_mod.MSG_REGEX_ADMIN_ONLY})
-        _pid, erros = self._editar(P_DESCRICAO_LOTE, actor="admin", validation_regex="[A-Za-z ]+")
+        _pid, erros = self._edit(P_DESCRICAO_LOTE, actor="admin", validation_regex="[A-Za-z ]+")
         self.assertEqual(erros, {})
 
     def test_codigo_imutavel_na_edicao(self):
-        _pid, erros = self._editar(P_DESCRICAO_LOTE, code="outro_codigo", label="Lote")
+        _pid, erros = self._edit(P_DESCRICAO_LOTE, code="outro_codigo", label="Lote")
         self.assertEqual(erros, {})
         self.assertEqual(self.catalog.parameters_get(P_DESCRICAO_LOTE)["code"], "descricao_lote")
 
 
-class TestDependencias(_Base):
+class TestDependencies(_Base):
 
     def test_troca_de_tipo_com_vinculo_bloqueada_com_scripts(self):
-        _pid, erros = self._editar(P_DATA_REF, component_type="TEXT")
+        _pid, erros = self._edit(P_DATA_REF, component_type="TEXT")
         self.assertIn("carga_diaria", erros["component_type"])
         self.assertIn("relatorio_mensal", erros["component_type"])
         self.assertEqual(self.catalog.parameters_get(P_DATA_REF)["component_type"], "DATE")
 
     def test_troca_de_flag_com_script_nomeado_bloqueada(self):
-        _pid, erros = self._editar(P_DATA_REF, param_flag="--data")
+        _pid, erros = self._edit(P_DATA_REF, param_flag="--data")
         self.assertIn("carga_diaria", erros["param_flag"])
         self.assertNotIn("relatorio_mensal", erros["param_flag"])
 
@@ -209,7 +209,7 @@ class TestDependencias(_Base):
             self.svc.toggle_active(self.ctx["admin"], IP, str(P_DATA_REF), f["version"])
         self.assertIn("carga_diaria", cm.exception.mensagem)
         self.assertEqual(self.catalog.parameters_get(P_DATA_REF)["active"], "Y")
-        self.assertEqual(self._auditorias("DEACTIVATE"), [])
+        self.assertEqual(self._audits("DEACTIVATE"), [])
 
     def test_desativacao_sem_vinculo_e_reativacao(self):
         pid, _ = self._insert()
@@ -230,27 +230,27 @@ class TestDependencias(_Base):
 
     def test_conflito_de_edicao(self):
         f = self.svc.form(self.ctx["admin"], str(P_DESCRICAO_LOTE))
-        self._editar(P_DESCRICAO_LOTE, label="Primeira")
+        self._edit(P_DESCRICAO_LOTE, label="Primeira")
         dados = dict((k, f[k]) for k in ("param_flag", "description", "component_type", "options_json",
                                           "default_value", "validation_regex", "version", "sensitive"))
         _pid, erros = self.svc.save(self.ctx["admin"], IP, str(P_DESCRICAO_LOTE), dict(dados, label="Segunda"))
         self.assertEqual(erros, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
 
 
-class TestSensivelETeste(_Base):
+class TestSensitiveAndTest(_Base):
 
     def test_padrao_sensivel_e_so_de_escrita_e_mascarado_na_auditoria(self):
-        _pid, erros = self._editar(P_CHAVE_API, default_value="tok-padrao-secreto-1")
+        _pid, erros = self._edit(P_CHAVE_API, default_value="tok-padrao-secreto-1")
         self.assertEqual(erros, {})
         self.assertEqual(self.catalog.parameters_get(P_CHAVE_API)["default_value"], "tok-padrao-secreto-1")
         f = self.svc.form(self.ctx["admin"], str(P_CHAVE_API))
         self.assertEqual((f["default_value"], f["tem_padrao"]), ("", True))
         # Em branco mantem; marcar remover apaga.
-        _pid, erros = self._editar(P_CHAVE_API, label="Token da API")
+        _pid, erros = self._edit(P_CHAVE_API, label="Token da API")
         self.assertEqual(self.catalog.parameters_get(P_CHAVE_API)["default_value"], "tok-padrao-secreto-1")
-        _pid, erros = self._editar(P_CHAVE_API, remover_padrao="Y")
+        _pid, erros = self._edit(P_CHAVE_API, remover_padrao="Y")
         self.assertIsNone(self.catalog.parameters_get(P_CHAVE_API)["default_value"])
-        detalhes = " | ".join(a["detail"] for a in self._auditorias("UPDATE"))
+        detalhes = " | ".join(a["detail"] for a in self._audits("UPDATE"))
         self.assertNotIn("tok-padrao-secreto-1", detalhes)
         self.assertIn("****", detalhes)
         pagina = self.svc.list(self.ctx["admin"], {"code": "documento_cliente"}, 1, 20)

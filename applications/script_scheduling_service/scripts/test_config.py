@@ -33,9 +33,9 @@ class TestConfig(unittest.TestCase):
         self.example_ini = os.path.join(self.app_dir, "instance", "config.ini.example")
 
         # masking.py ainda nao existe; o substituto registra o que carregar_segredos entrega.
-        self.mascarados = []
+        self.masked = []
         masking_stub = types.ModuleType("masking")
-        masking_stub.register_secret = self.mascarados.append
+        masking_stub.register_secret = self.masked.append
         patcher = mock.patch.dict(sys.modules, {"masking": masking_stub})
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -44,7 +44,7 @@ class TestConfig(unittest.TestCase):
         if os.path.exists(self.tmp_dir):
             shutil.rmtree(self.tmp_dir)
 
-    def _copiar_e_modificar_ini(self, alteracoes=None, secoes_remover=None, chaves_remover=None):
+    def _copy_and_edit_ini(self, alteracoes=None, secoes_remover=None, chaves_remover=None):
         """Gera arquivo temporario config.ini a partir do exemplo com modificacoes."""
         cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
         with open(self.example_ini, "r", encoding="utf-8") as f:
@@ -72,7 +72,7 @@ class TestConfig(unittest.TestCase):
             cp.write(f)
         return caminho_dest
 
-    def _criar_secrets_temporario(self, modo=0o600, incluir_oracle=True, tokens=None):
+    def _create_temp_secrets(self, modo=0o600, incluir_oracle=True, tokens=None):
         """Cria secrets.cfg com valores pseudo-aleatorios (secrets.token_hex)."""
         if tokens is None:
             tokens = {
@@ -195,7 +195,7 @@ class TestConfig(unittest.TestCase):
 
     def test_chave_ausente(self):
         """Verifica rejeicao fail-fast quando chave obrigatoria esta ausente."""
-        ini = self._copiar_e_modificar_ini(chaves_remover=[("oracle", "call_timeout_ms")])
+        ini = self._copy_and_edit_ini(chaves_remover=[("oracle", "call_timeout_ms")])
         with self.assertRaises(sss_config.ConfigError) as ctx:
             sss_config.load(ini)
         self.assertEqual(ctx.exception.section, "oracle")
@@ -203,14 +203,14 @@ class TestConfig(unittest.TestCase):
 
     def test_secao_ausente(self):
         """Verifica rejeicao fail-fast quando secao inteira esta ausente."""
-        ini = self._copiar_e_modificar_ini(secoes_remover=["retention"])
+        ini = self._copy_and_edit_ini(secoes_remover=["retention"])
         with self.assertRaises(sss_config.ConfigError) as ctx:
             sss_config.load(ini)
         self.assertEqual(ctx.exception.section, "retention")
 
     def test_chave_desconhecida(self):
         """Verifica rejeicao de chave desconhecida no config.ini."""
-        ini = self._copiar_e_modificar_ini(alteracoes={"oracle": {"chave_fantasma": "123"}})
+        ini = self._copy_and_edit_ini(alteracoes={"oracle": {"chave_fantasma": "123"}})
         with self.assertRaises(sss_config.ConfigError) as ctx:
             sss_config.load(ini)
         self.assertEqual(ctx.exception.section, "oracle")
@@ -218,7 +218,7 @@ class TestConfig(unittest.TestCase):
 
         # Chaves legadas driver e use_thick_mode removidas no F7.0
         for chave_legada, val in (("driver", "oracledb"), ("use_thick_mode", "true")):
-            ini_leg = self._copiar_e_modificar_ini(alteracoes={"oracle": {chave_legada: val}})
+            ini_leg = self._copy_and_edit_ini(alteracoes={"oracle": {chave_legada: val}})
             with self.assertRaises(sss_config.ConfigError) as ctx_leg:
                 sss_config.load(ini_leg)
             self.assertEqual(ctx_leg.exception.section, "oracle")
@@ -226,7 +226,7 @@ class TestConfig(unittest.TestCase):
 
     def test_secao_desconhecida(self):
         """Verifica rejeicao de secao nao documentada no config.ini."""
-        ini = self._copiar_e_modificar_ini(alteracoes={"secao_estranha": {"foo": "bar"}})
+        ini = self._copy_and_edit_ini(alteracoes={"secao_estranha": {"foo": "bar"}})
         with self.assertRaises(sss_config.ConfigError) as ctx:
             sss_config.load(ini)
         self.assertEqual(ctx.exception.section, "secao_estranha")
@@ -234,36 +234,36 @@ class TestConfig(unittest.TestCase):
     def test_tipo_invalido(self):
         """Verifica rejeicao de valores com tipo incompativel."""
         # int invalido
-        ini_int = self._copiar_e_modificar_ini(alteracoes={"oracle": {"pool_min": "um"}})
+        ini_int = self._copy_and_edit_ini(alteracoes={"oracle": {"pool_min": "um"}})
         with self.assertRaises(sss_config.ConfigError):
             sss_config.load(ini_int)
 
         # driver_mode invalido
-        ini_modo = self._copiar_e_modificar_ini(alteracoes={"oracle": {"driver_mode": "invalido"}})
+        ini_modo = self._copy_and_edit_ini(alteracoes={"oracle": {"driver_mode": "invalido"}})
         with self.assertRaises(sss_config.ConfigError):
             sss_config.load(ini_modo)
 
         # enum invalido
-        ini_enum = self._copiar_e_modificar_ini(alteracoes={"app": {"sss_env": "STAGING"}})
+        ini_enum = self._copy_and_edit_ini(alteracoes={"app": {"sss_env": "STAGING"}})
         with self.assertRaises(sss_config.ConfigError):
             sss_config.load(ini_enum)
 
         # Chaves removidas no CR-011: recusadas com orientacao, nunca ignoradas.
         for chave in ("script_owner_uids", "ambientes_exigem_hash"):
-            ini = self._copiar_e_modificar_ini(alteracoes={"agent": {chave: "0"}})
+            ini = self._copy_and_edit_ini(alteracoes={"agent": {chave: "0"}})
             with self.assertRaises(sss_config.ConfigError) as ctx:
                 sss_config.load(ini)
             self.assertIn("apague a linha %s" % chave, str(ctx.exception))
 
         # CR-015a: chaves com nome em ingles; a antiga e recusada com o nome novo, nunca aceita.
         for (secao, antiga), nova in sss_config.RENAMED_KEYS.items():
-            ini = self._copiar_e_modificar_ini(alteracoes={secao: {antiga: "1"}})
+            ini = self._copy_and_edit_ini(alteracoes={secao: {antiga: "1"}})
             with self.assertRaises(sss_config.ConfigError) as ctx:
                 sss_config.load(ini)
             self.assertIn("%s passou a se chamar %s" % (antiga, nova), str(ctx.exception))
 
         # CR-016b: a secao [retencao] antiga e recusada com o nome novo.
-        ini = self._copiar_e_modificar_ini()
+        ini = self._copy_and_edit_ini()
         with open(ini, encoding="utf-8") as f:
             texto = f.read().replace("[retention]", "[retencao]")
         with open(ini, "w", encoding="utf-8") as f:
@@ -275,32 +275,32 @@ class TestConfig(unittest.TestCase):
     def test_fora_da_faixa(self):
         """Verifica rejeicao de valores fora das faixas minimas/maximas."""
         # pool_min < 1
-        ini = self._copiar_e_modificar_ini(alteracoes={"oracle": {"pool_min": "0"}})
+        ini = self._copy_and_edit_ini(alteracoes={"oracle": {"pool_min": "0"}})
         with self.assertRaises(sss_config.ConfigError):
             sss_config.load(ini)
 
         # max_parallel_jobs > 999
-        ini2 = self._copiar_e_modificar_ini(alteracoes={"agent": {"max_parallel_jobs": "1000"}})
+        ini2 = self._copy_and_edit_ini(alteracoes={"agent": {"max_parallel_jobs": "1000"}})
         with self.assertRaises(sss_config.ConfigError):
             sss_config.load(ini2)
 
         # app_log_max_bytes < 1024
-        ini3 = self._copiar_e_modificar_ini(alteracoes={"logging": {"app_log_max_bytes": "500"}})
+        ini3 = self._copy_and_edit_ini(alteracoes={"logging": {"app_log_max_bytes": "500"}})
         with self.assertRaises(sss_config.ConfigError):
             sss_config.load(ini3)
 
         # app_log_retention_days < 1
-        ini_ret_min = self._copiar_e_modificar_ini(alteracoes={"logging": {"app_log_retention_days": "0"}})
+        ini_ret_min = self._copy_and_edit_ini(alteracoes={"logging": {"app_log_retention_days": "0"}})
         with self.assertRaises(sss_config.ConfigError):
             sss_config.load(ini_ret_min)
 
         # app_log_retention_days > 3650
-        ini_ret_max = self._copiar_e_modificar_ini(alteracoes={"logging": {"app_log_retention_days": "3651"}})
+        ini_ret_max = self._copy_and_edit_ini(alteracoes={"logging": {"app_log_retention_days": "3651"}})
         with self.assertRaises(sss_config.ConfigError):
             sss_config.load(ini_ret_max)
 
         # app_log_backups sai no CR-005 e passa a ser recusada como desconhecida
-        ini_antigo = self._copiar_e_modificar_ini(alteracoes={"logging": {"app_log_backups": "10"}})
+        ini_antigo = self._copy_and_edit_ini(alteracoes={"logging": {"app_log_backups": "10"}})
         with self.assertRaises(sss_config.ConfigError) as ctx_antigo:
             sss_config.load(ini_antigo)
         self.assertEqual(ctx_antigo.exception.key, "app_log_backups")
@@ -308,7 +308,7 @@ class TestConfig(unittest.TestCase):
     def test_cada_invariante(self):
         """Verifica a validacao de cada invariante de integridade operacional."""
         # 1. max_parallel_jobs <= max_parallel_hard_limit
-        ini1 = self._copiar_e_modificar_ini(alteracoes={
+        ini1 = self._copy_and_edit_ini(alteracoes={
             "agent": {"max_parallel_jobs": "33", "max_parallel_hard_limit": "32"}
         })
         with self.assertRaises(sss_config.ConfigError) as ctx1:
@@ -316,7 +316,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(ctx1.exception.key, "max_parallel_jobs")
 
         # 2. fence_timeout_s * 2 <= node_offline_timeout_s
-        ini2 = self._copiar_e_modificar_ini(alteracoes={
+        ini2 = self._copy_and_edit_ini(alteracoes={
             "agent": {"fence_timeout_s": "100", "node_offline_timeout_s": "180"}
         })
         with self.assertRaises(sss_config.ConfigError) as ctx2:
@@ -324,7 +324,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(ctx2.exception.key, "fence_timeout_s")
 
         # 3. heartbeat_interval_s * 3 <= fence_timeout_s
-        ini3 = self._copiar_e_modificar_ini(alteracoes={
+        ini3 = self._copy_and_edit_ini(alteracoes={
             "agent": {"heartbeat_interval_s": "31", "fence_timeout_s": "90"}
         })
         with self.assertRaises(sss_config.ConfigError) as ctx3:
@@ -332,7 +332,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(ctx3.exception.key, "heartbeat_interval_s")
 
         # 4. pool_min <= pool_max
-        ini4 = self._copiar_e_modificar_ini(alteracoes={
+        ini4 = self._copy_and_edit_ini(alteracoes={
             "oracle": {"pool_min": "5", "pool_max": "4"}
         })
         with self.assertRaises(sss_config.ConfigError) as ctx4:
@@ -342,7 +342,7 @@ class TestConfig(unittest.TestCase):
     def test_data_backend_removida(self):
         """F7.3: a aplicacao usa sempre o Oracle; a chave antiga e recusada com mensagem clara."""
         for valor in ("FAKE", "ORACLE"):
-            ini = self._copiar_e_modificar_ini(alteracoes={"app": {"data_backend": valor}})
+            ini = self._copy_and_edit_ini(alteracoes={"app": {"data_backend": valor}})
             with self.assertRaises(sss_config.ConfigError) as ctx:
                 sss_config.load(ini)
             self.assertEqual(ctx.exception.key, "data_backend")
@@ -351,11 +351,11 @@ class TestConfig(unittest.TestCase):
     def test_prefixo_comeca_com_letra(self):
         """CR-003 P2: prefixo iniciado por digito ou _ geraria nome Oracle invalido."""
         for prefixo in ("1x_", "_x", "9"):
-            ini = self._copiar_e_modificar_ini(alteracoes={"oracle": {"table_prefix": prefixo}})
+            ini = self._copy_and_edit_ini(alteracoes={"oracle": {"table_prefix": prefixo}})
             with self.assertRaises(sss_config.ConfigError) as ctx:
                 sss_config.load(ini)
             self.assertEqual(ctx.exception.key, "table_prefix", prefixo)
-        ini_ok = self._copiar_e_modificar_ini(alteracoes={"oracle": {"table_prefix": "a1_"}})
+        ini_ok = self._copy_and_edit_ini(alteracoes={"oracle": {"table_prefix": "a1_"}})
         self.assertEqual(sss_config.load(ini_ok).oracle.table_prefix, "a1_")
 
     def test_pastas_base_recusadas(self):
@@ -363,7 +363,7 @@ class TestConfig(unittest.TestCase):
         for chave, valor in (("base_script_dirs", "ROTINAS=/opt/automacoes/scripts"),
                              ("base_script_dir", "/opt/automacoes/scripts"),
                              ("script_owner_sids", "S-1-5-32-544")):
-            ini = self._copiar_e_modificar_ini(alteracoes={"agent": {chave: valor}})
+            ini = self._copy_and_edit_ini(alteracoes={"agent": {chave: valor}})
             with self.assertRaises(sss_config.ConfigError, msg=chave) as ctx:
                 sss_config.load(ini)
             self.assertEqual(ctx.exception.key, chave)
@@ -371,20 +371,20 @@ class TestConfig(unittest.TestCase):
 
     def test_login_max_tentativas_cabe_em_number_2(self):
         """CR-003 P2: tentativas_falha e NUMBER(2), entao o teto e 99."""
-        ini_100 = self._copiar_e_modificar_ini(alteracoes={"web": {"login_max_attempts": "100"}})
+        ini_100 = self._copy_and_edit_ini(alteracoes={"web": {"login_max_attempts": "100"}})
         with self.assertRaises(sss_config.ConfigError) as ctx:
             sss_config.load(ini_100)
         self.assertEqual(ctx.exception.key, "login_max_attempts")
-        ini_99 = self._copiar_e_modificar_ini(alteracoes={"web": {"login_max_attempts": "99"}})
+        ini_99 = self._copy_and_edit_ini(alteracoes={"web": {"login_max_attempts": "99"}})
         self.assertEqual(sss_config.load(ini_99).web.login_max_attempts, 99)
 
-    def _obter_com_ini(self, ini, nome_log="sss_web"):
+    def _get_with_ini(self, ini, nome_log="sss_web"):
         sss_config.reset_config_cache()
         self.addCleanup(sss_config.reset_config_cache)
         with mock.patch.object(sss_config, "default_config_path", return_value=ini):
             return sss_config.get_config(nome_log)
 
-    def _ler_log_app(self, log_dir, nome_log):
+    def _read_app_log(self, log_dir, nome_log):
         """CR-005 D6: o CRITICAL inicial fica em log_dir/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log."""
         esperado = "%s_%d.log" % (nome_log, os.getpid())
         achados = []
@@ -404,26 +404,26 @@ class TestConfig(unittest.TestCase):
         """CR-003 P2: CRITICAL com secao, chave e motivo no log da aplicacao quando log_dir e utilizavel."""
         log_dir = os.path.join(self.tmp_dir, "logs")
         os.makedirs(log_dir)
-        ini = self._copiar_e_modificar_ini(alteracoes={"logging": {"log_dir": log_dir},
+        ini = self._copy_and_edit_ini(alteracoes={"logging": {"log_dir": log_dir},
                                                        "web": {"login_max_attempts": "100"}})
         with self.assertRaises(sss_config.ConfigError):
-            self._obter_com_ini(ini)
-        conteudo = self._ler_log_app(log_dir, "sss_web")
+            self._get_with_ini(ini)
+        conteudo = self._read_app_log(log_dir, "sss_web")
         self.assertIn(" CRITICAL ", conteudo)
         self.assertIn("login_max_attempts", conteudo)
         self.assertIn("[action=INICIO]", conteudo)
         # Falha repetida no mesmo minuto e processo (nova requisicao) vai para o mesmo arquivo.
         with self.assertRaises(sss_config.ConfigError):
-            self._obter_com_ini(ini)
-        self.assertEqual(self._ler_log_app(log_dir, "sss_web").count(" CRITICAL "), 2)
+            self._get_with_ini(ini)
+        self.assertEqual(self._read_app_log(log_dir, "sss_web").count(" CRITICAL "), 2)
 
     def test_configuracao_invalida_sem_log_dir_vai_para_stderr(self):
         """CR-003 P2: sem log_dir utilizavel, o CRITICAL vai para o stderr no mesmo formato."""
-        ini = self._copiar_e_modificar_ini(alteracoes={"logging": {"log_dir": os.path.join(self.tmp_dir, "nao", "existe")},
+        ini = self._copy_and_edit_ini(alteracoes={"logging": {"log_dir": os.path.join(self.tmp_dir, "nao", "existe")},
                                                        "oracle": {"table_prefix": "1x_"}})
         with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
             with self.assertRaises(sss_config.ConfigError):
-                self._obter_com_ini(ini)
+                self._get_with_ini(ini)
         self.assertIn(" CRITICAL ", err.getvalue())
         self.assertIn("table_prefix", err.getvalue())
 
@@ -431,22 +431,22 @@ class TestConfig(unittest.TestCase):
         """CR-003 P2: falha em secrets.cfg vira CRITICAL sem nenhum valor de segredo."""
         log_dir = os.path.join(self.tmp_dir, "logs")
         os.makedirs(log_dir)
-        caminho, tokens = self._criar_secrets_temporario(modo=0o644)
-        ini = self._copiar_e_modificar_ini(alteracoes={"logging": {"log_dir": log_dir},
+        caminho, tokens = self._create_temp_secrets(modo=0o644)
+        ini = self._copy_and_edit_ini(alteracoes={"logging": {"log_dir": log_dir},
                                                        "secrets": {"secrets_file": caminho}})
-        self._obter_com_ini(ini)
+        self._get_with_ini(ini)
         sss_config.reset_secrets_cache()
         self.addCleanup(sss_config.reset_secrets_cache)
         with self.assertRaises(sss_config.ConfigError):
             sss_config.get_secrets("sss_web")
-        conteudo = self._ler_log_app(log_dir, "sss_web")
+        conteudo = self._read_app_log(log_dir, "sss_web")
         self.assertIn(" CRITICAL ", conteudo)
         for valor in tokens.values():
             self.assertNotIn(valor, conteudo)
 
     def test_prefixo_de_9_caracteres(self):
         """Verifica restricao de regex de table_prefix (max 8 chars)."""
-        ini_9 = self._copiar_e_modificar_ini(alteracoes={
+        ini_9 = self._copy_and_edit_ini(alteracoes={
             "oracle": {"table_prefix": "tbsss_123"}  # 9 caracteres
         })
         with self.assertRaises(sss_config.ConfigError) as ctx:
@@ -454,14 +454,14 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(ctx.exception.key, "table_prefix")
 
         # Teste com owner invalido (iniciando com digito)
-        ini_owner = self._copiar_e_modificar_ini(alteracoes={
+        ini_owner = self._copy_and_edit_ini(alteracoes={
             "oracle": {"owner": "1_invalido"}
         })
         with self.assertRaises(sss_config.ConfigError):
             sss_config.load(ini_owner)
 
         # Teste com agent_id contendo caractere proibido
-        ini_agent = self._copiar_e_modificar_ini(alteracoes={
+        ini_agent = self._copy_and_edit_ini(alteracoes={
             "agent": {"agent_id": "srv linux prod"}
         })
         with self.assertRaises(sss_config.ConfigError):
@@ -469,16 +469,16 @@ class TestConfig(unittest.TestCase):
 
         # init_db e seed sao atores reservados do sistema (CR-006, README §8.12)
         for reservado in ("init_db", "seed"):
-            ini_res = self._copiar_e_modificar_ini(alteracoes={"agent": {"agent_id": reservado}})
+            ini_res = self._copy_and_edit_ini(alteracoes={"agent": {"agent_id": reservado}})
             with self.assertRaises(sss_config.ConfigError) as ctx_res:
                 sss_config.load(ini_res)
             self.assertEqual(ctx_res.exception.key, "agent_id")
-        ini_ok = self._copiar_e_modificar_ini(alteracoes={"agent": {"agent_id": "seed01"}})
+        ini_ok = self._copy_and_edit_ini(alteracoes={"agent": {"agent_id": "seed01"}})
         self.assertEqual(sss_config.load(ini_ok).agent.agent_id, "seed01")
 
     def test_env_passthrough_com_ld_preload(self):
         """Verifica rejeicao de variaveis perigosas bloqueadas no passthrough."""
-        ini_preload = self._copiar_e_modificar_ini(alteracoes={
+        ini_preload = self._copy_and_edit_ini(alteracoes={
             "agent": {"env_passthrough": "ORACLE_HOME,LD_PRELOAD"}
         })
         with self.assertRaises(sss_config.ConfigError) as ctx:
@@ -487,7 +487,7 @@ class TestConfig(unittest.TestCase):
         self.assertIn("LD_PRELOAD", str(ctx.exception))
 
         # Teste com PYTHONPATH
-        ini_py = self._copiar_e_modificar_ini(alteracoes={
+        ini_py = self._copy_and_edit_ini(alteracoes={
             "agent": {"env_passthrough": "PYTHONPATH"}
         })
         with self.assertRaises(sss_config.ConfigError):
@@ -495,7 +495,7 @@ class TestConfig(unittest.TestCase):
 
     def test_secrets_modo_0644(self):
         """Verifica que secrets.cfg com permissoes inseguras (ex: 0644) e rejeitado."""
-        caminho_sec, _ = self._criar_secrets_temporario(modo=0o644)
+        caminho_sec, _ = self._create_temp_secrets(modo=0o644)
         with self.assertRaises(sss_config.ConfigError) as ctx:
             sss_config.load_secrets(caminho_sec)
         self.assertIn("permissoes inseguras", str(ctx.exception))
@@ -507,7 +507,7 @@ class TestConfig(unittest.TestCase):
 
     def test_repr_segredos_sem_valores(self):
         """Verifica que repr() e str() de Segredos nunca vazam credenciais."""
-        caminho_sec, tokens = self._criar_secrets_temporario(modo=0o600)
+        caminho_sec, tokens = self._create_temp_secrets(modo=0o600)
         segredos = sss_config.load_secrets(caminho_sec)
 
         repr_str = repr(segredos)
@@ -536,7 +536,7 @@ class TestConfig(unittest.TestCase):
 
     def test_secrets_dev_fake_sem_oracle(self):
         """Verifica que [oracle] e opcional no secrets.cfg somente em DEV com FAKE."""
-        caminho_sec, tokens = self._criar_secrets_temporario(modo=0o600, incluir_oracle=False)
+        caminho_sec, tokens = self._create_temp_secrets(modo=0o600, incluir_oracle=False)
 
         # Em DEV e FAKE -> sucesso
         seg_dev = sss_config.load_secrets(caminho_sec, sss_env="DEV", data_backend="FAKE")
@@ -549,24 +549,24 @@ class TestConfig(unittest.TestCase):
 
     def test_segredos_carregados_sao_registrados_no_masking(self):
         """Regressao: todo segredo carregado e entregue a masking.register_secret (AGENTS §3.3)."""
-        caminho_sec, tokens = self._criar_secrets_temporario(modo=0o600)
+        caminho_sec, tokens = self._create_temp_secrets(modo=0o600)
         sss_config.load_secrets(caminho_sec)
-        self.assertEqual(sorted(self.mascarados), sorted(tokens.values()))
+        self.assertEqual(sorted(self.masked), sorted(tokens.values()))
 
-        del self.mascarados[:]
-        caminho_sec, tokens = self._criar_secrets_temporario(modo=0o600, incluir_oracle=False)
+        del self.masked[:]
+        caminho_sec, tokens = self._create_temp_secrets(modo=0o600, incluir_oracle=False)
         sss_config.load_secrets(caminho_sec, sss_env="DEV", data_backend="FAKE")
-        self.assertEqual(sorted(self.mascarados),
+        self.assertEqual(sorted(self.masked),
                          sorted([tokens["cookie_key"], tokens["prod_pwd"], tokens["hml_pwd"]]))
 
     def test_carga_de_segredos_sem_masking_falha(self):
         """Regressao: sem masking.py a carga falha, em vez de seguir sem mascaramento."""
-        caminho_sec, _ = self._criar_secrets_temporario(modo=0o600)
+        caminho_sec, _ = self._create_temp_secrets(modo=0o600)
         with mock.patch.dict(sys.modules, {"masking": None}):
             with self.assertRaises(ImportError):
                 sss_config.load_secrets(caminho_sec)
 
-    def _cfg_com_log_dir(self, log_dir):
+    def _cfg_with_log_dir(self, log_dir):
         cfg = sss_config.load(self.example_ini)
         return cfg._replace(logging=cfg.logging._replace(log_dir=log_dir))
 
@@ -575,7 +575,7 @@ class TestConfig(unittest.TestCase):
         log_dir = os.path.join(self.tmp_dir, "logs_novos")
         umask_anterior = os.umask(0o077)
         try:
-            logger = sss_logging.configure("teste_umask", self._cfg_com_log_dir(log_dir))
+            logger = sss_logging.configure("teste_umask", self._cfg_with_log_dir(log_dir))
         finally:
             os.umask(umask_anterior)
         for h in list(logger.handlers):
@@ -588,7 +588,7 @@ class TestConfig(unittest.TestCase):
         log_dir = os.path.join(self.tmp_dir, "logs_chmod")
         with mock.patch("sss_logging.os.chmod", side_effect=PermissionError(1, "Operation not permitted")):
             with self.assertRaises(OSError):
-                sss_logging.configure("teste_chmod", self._cfg_com_log_dir(log_dir))
+                sss_logging.configure("teste_chmod", self._cfg_with_log_dir(log_dir))
 
     def test_formato_log_readme_13(self):
         """Valida que o log gerado segue fielmente o formato do README §13."""
@@ -662,140 +662,140 @@ class TestConfigCR007(unittest.TestCase):
 
     setUp = TestConfig.setUp
     tearDown = TestConfig.tearDown
-    _copiar_e_modificar_ini = TestConfig._copiar_e_modificar_ini
-    _criar_secrets_temporario = TestConfig._criar_secrets_temporario
+    _copy_and_edit_ini = TestConfig._copy_and_edit_ini
+    _create_temp_secrets = TestConfig._create_temp_secrets
 
-    def _carregar(self, **alteracoes):
-        return sss_config.load(self._copiar_e_modificar_ini(alteracoes=alteracoes))
+    def _load(self, **alteracoes):
+        return sss_config.load(self._copy_and_edit_ini(alteracoes=alteracoes))
 
-    def _recusa(self, chave, **alteracoes):
+    def _refusal(self, chave, **alteracoes):
         with self.assertRaises(sss_config.ConfigError) as ctx:
-            self._carregar(**alteracoes)
+            self._load(**alteracoes)
         self.assertEqual(ctx.exception.key, chave, str(ctx.exception))
         return ctx.exception
 
     def test_padroes_das_chaves_novas(self):
-        cfg = self._carregar()
+        cfg = self._load()
         self.assertEqual(cfg.agent.exec_users, ())
         self.assertIsNone(cfg.agent.exec_work_dir)
         self.assertEqual(cfg.agent.queue_aging_min, 60)
         self.assertIsNone(cfg.retention.purge_user)
 
     def test_prefixo_so_minusculas_e_agent_id_purge_reservado(self):
-        self._recusa("table_prefix", oracle={"table_prefix": "TBSSS_"})
-        self._recusa("agent_id", agent={"agent_id": "purge"})
-        self.assertEqual(self._carregar(agent={"agent_id": "purge01"}).agent.agent_id, "purge01")
+        self._refusal("table_prefix", oracle={"table_prefix": "TBSSS_"})
+        self._refusal("agent_id", agent={"agent_id": "purge"})
+        self.assertEqual(self._load(agent={"agent_id": "purge01"}).agent.agent_id, "purge01")
 
     def test_faixas_novas(self):
         # CR-008, R-32: minimo de 1461 dias (cobre o 29/02).
-        self._recusa("cron_horizon_days", agent={"cron_horizon_days": "1460"})
-        self.assertEqual(self._carregar(agent={"cron_horizon_days": "1461"}).agent.cron_horizon_days, 1461)
-        self.assertEqual(self._carregar().agent.log_dir_min_free_mb, 1024)
-        self.assertEqual(self._carregar(agent={"log_dir_min_free_mb": "0"}).agent.log_dir_min_free_mb, 0)
-        self._recusa("log_dir_min_free_mb", agent={"log_dir_min_free_mb": "-1"})
-        self._recusa("max_log_size_bytes", logging={"max_log_size_bytes": str(64 * 1024 * 1024 + 1)})
-        self._recusa("audit_retention_days", retention={"audit_retention_days": "364"})
-        self._recusa("audit_retention_days", retention={"audit_retention_days": "400", "ticket_retention_days": "500"})
-        self._recusa("queue_aging_min", agent={"queue_aging_min": "1441"})
-        self.assertEqual(self._carregar(agent={"queue_aging_min": "0"}).agent.queue_aging_min, 0)
+        self._refusal("cron_horizon_days", agent={"cron_horizon_days": "1460"})
+        self.assertEqual(self._load(agent={"cron_horizon_days": "1461"}).agent.cron_horizon_days, 1461)
+        self.assertEqual(self._load().agent.log_dir_min_free_mb, 1024)
+        self.assertEqual(self._load(agent={"log_dir_min_free_mb": "0"}).agent.log_dir_min_free_mb, 0)
+        self._refusal("log_dir_min_free_mb", agent={"log_dir_min_free_mb": "-1"})
+        self._refusal("max_log_size_bytes", logging={"max_log_size_bytes": str(64 * 1024 * 1024 + 1)})
+        self._refusal("audit_retention_days", retention={"audit_retention_days": "364"})
+        self._refusal("audit_retention_days", retention={"audit_retention_days": "400", "ticket_retention_days": "500"})
+        self._refusal("queue_aging_min", agent={"queue_aging_min": "1441"})
+        self.assertEqual(self._load(agent={"queue_aging_min": "0"}).agent.queue_aging_min, 0)
 
     def test_pasta_de_saida(self):
         # CR-012 (README §8.13): opcional, com limites e sem sobrepor as pastas do SSS.
-        cfg = self._carregar()
+        cfg = self._load()
         self.assertIsNone(cfg.agent.output_dir)
         self.assertEqual((cfg.agent.output_max_bytes, cfg.agent.output_max_files), (20971520, 1000))
         self.assertEqual(cfg.logging.output_retention_days, 7)
         base = os.path.dirname(cfg.agent.work_dir)
-        ok = self._carregar(agent={"output_dir": os.path.join(base, "saida_teste")})
+        ok = self._load(agent={"output_dir": os.path.join(base, "saida_teste")})
         self.assertEqual(ok.agent.output_dir, os.path.join(base, "saida_teste"))
-        self._recusa("output_dir", agent={"output_dir": "relativa/output"})
-        self._recusa("output_dir", agent={"output_dir": os.path.join(cfg.agent.work_dir, "output")})
-        self._recusa("output_dir", agent={"output_dir": os.path.join(cfg.logging.log_dir, "output")})
-        self._recusa("output_dir", agent={"output_dir": os.path.dirname(cfg.logging.log_dir)})
-        self._recusa("output_dir", agent={"output_dir": os.path.join(base, "s"),
+        self._refusal("output_dir", agent={"output_dir": "relativa/output"})
+        self._refusal("output_dir", agent={"output_dir": os.path.join(cfg.agent.work_dir, "output")})
+        self._refusal("output_dir", agent={"output_dir": os.path.join(cfg.logging.log_dir, "output")})
+        self._refusal("output_dir", agent={"output_dir": os.path.dirname(cfg.logging.log_dir)})
+        self._refusal("output_dir", agent={"output_dir": os.path.join(base, "s"),
                                          "exec_work_dir": os.path.join(base, "s", "exec")})
         # CR-014 (README §8.14): input_dir opcional, sem sobrepor as pastas do SSS nem a de saida.
         self.assertIsNone(cfg.agent.input_dir)
-        ok = self._carregar(agent={"input_dir": os.path.join(base, "entrada_teste")})
+        ok = self._load(agent={"input_dir": os.path.join(base, "entrada_teste")})
         self.assertEqual(ok.agent.input_dir, os.path.join(base, "entrada_teste"))
-        self._recusa("input_dir", agent={"input_dir": "relativa/input"})
-        self._recusa("input_dir", agent={"input_dir": os.path.join(cfg.agent.work_dir, "input")})
-        self._recusa("input_dir", agent={"input_dir": os.path.join(cfg.logging.log_dir, "input")})
-        self._recusa("input_dir", agent={"input_dir": os.path.dirname(cfg.logging.log_dir)})
-        self._recusa("input_dir", agent={"input_dir": os.path.join(base, "s", "input"),
+        self._refusal("input_dir", agent={"input_dir": "relativa/input"})
+        self._refusal("input_dir", agent={"input_dir": os.path.join(cfg.agent.work_dir, "input")})
+        self._refusal("input_dir", agent={"input_dir": os.path.join(cfg.logging.log_dir, "input")})
+        self._refusal("input_dir", agent={"input_dir": os.path.dirname(cfg.logging.log_dir)})
+        self._refusal("input_dir", agent={"input_dir": os.path.join(base, "s", "input"),
                                            "output_dir": os.path.join(base, "s")})
         for chave, ruins, bons in (("output_max_bytes", ("1048575", "209715201"), ("1048576", "209715200")),
                                    ("output_max_files", ("0", "10001"), ("1", "10000"))):
             for v in ruins:
-                self._recusa(chave, agent={chave: v})
+                self._refusal(chave, agent={chave: v})
             for v in bons:
-                self.assertEqual(getattr(self._carregar(agent={chave: v}).agent, chave), int(v))
-        self._recusa("output_retention_days", logging={"output_retention_days": "0"})
-        self._recusa("output_retention_days", logging={"output_retention_days": "366"})
+                self.assertEqual(getattr(self._load(agent={chave: v}).agent, chave), int(v))
+        self._refusal("output_retention_days", logging={"output_retention_days": "0"})
+        self._refusal("output_retention_days", logging={"output_retention_days": "366"})
 
     def test_invariantes_i3_e_i4(self):
         # I3: heartbeat + 2*call <= fence (10 + 2*41 = 92 > 90).
-        self._recusa("fence_timeout_s", oracle={"call_timeout_ms": "41000"})
+        self._refusal("fence_timeout_s", oracle={"call_timeout_ms": "41000"})
         # I4: fence + call + kill + 2 <= offline (90 + 30 + 60 + 2 = 182 > 180).
-        self._recusa("node_offline_timeout_s", agent={"kill_grace_s": "60"})
+        self._refusal("node_offline_timeout_s", agent={"kill_grace_s": "60"})
         self.assertEqual(sss_config.call_timeout_s(30001), 31)
-        self._carregar()  # o exemplo atende I3 = 70 <= 90 e I4 = 127 <= 180
+        self._load()  # o exemplo atende I3 = 70 <= 90 e I4 = 127 <= 180
 
     def test_usuarios_execucao_e_exec_work_dir(self):
-        cfg = self._carregar(agent={"exec_users": "PRODUCAO=sssprd, HOMOLOGACAO=ssshml"})
+        cfg = self._load(agent={"exec_users": "PRODUCAO=sssprd, HOMOLOGACAO=ssshml"})
         self.assertEqual(cfg.agent.exec_users, (("PRODUCAO", "sssprd"), ("HOMOLOGACAO", "ssshml")))
-        self._recusa("exec_users", agent={"exec_users": "PRODUCAO=root"})
-        self._recusa("exec_users", agent={"exec_users": "OUTRO=sssx"})
-        self._recusa("exec_users", agent={"exec_users": "PRODUCAO"})
-        self._recusa("exec_users", agent={"exec_users": "PRODUCAO=a,PRODUCAO=b"})
+        self._refusal("exec_users", agent={"exec_users": "PRODUCAO=root"})
+        self._refusal("exec_users", agent={"exec_users": "OUTRO=sssx"})
+        self._refusal("exec_users", agent={"exec_users": "PRODUCAO"})
+        self._refusal("exec_users", agent={"exec_users": "PRODUCAO=a,PRODUCAO=b"})
         # Fora de DEV: todo ambiente atendido precisa de usuario e exec_work_dir e obrigatoria.
         base = {"sss_env": "HML"}
         ret = {"purge_user": "sss_purge"}
-        self._recusa("exec_users", app=base, retention=ret, agent={"exec_users": "PRODUCAO=sssprd"})
-        self._recusa("exec_work_dir", app=base, retention=ret,
+        self._refusal("exec_users", app=base, retention=ret, agent={"exec_users": "PRODUCAO=sssprd"})
+        self._refusal("exec_work_dir", app=base, retention=ret,
                      agent={"exec_users": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml"})
-        self._recusa("exec_work_dir", app=base, retention=ret,
+        self._refusal("exec_work_dir", app=base, retention=ret,
                      agent={"exec_users": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml",
                             "exec_work_dir": "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work/exec"})
-        cfg = self._carregar(app=base, retention=ret, agent={"exec_users": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml",
+        cfg = self._load(app=base, retention=ret, agent={"exec_users": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml",
                                                             "exec_work_dir": "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec"})
         self.assertEqual(cfg.agent.exec_work_dir, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec")
 
     def test_purge_user(self):
         """Vazio em DEV = purge desligado; fora de DEV e obrigatorio; nunca igual a conta ou ao owner."""
-        self.assertFalse(self._carregar().retention.purge_user)
-        self._recusa("purge_user", retention={"purge_user": "SSS_WEB"})
-        self._recusa("purge_user", retention={"purge_user": "openrisow"})
-        self.assertEqual(self._carregar(retention={"purge_user": "sss_purge"}).retention.purge_user, "sss_purge")
+        self.assertFalse(self._load().retention.purge_user)
+        self._refusal("purge_user", retention={"purge_user": "SSS_WEB"})
+        self._refusal("purge_user", retention={"purge_user": "openrisow"})
+        self.assertEqual(self._load(retention={"purge_user": "sss_purge"}).retention.purge_user, "sss_purge")
         agent = {"exec_users": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml",
                  "exec_work_dir": "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec"}
-        self._recusa("purge_user", app={"sss_env": "HML"}, agent=agent)
+        self._refusal("purge_user", app={"sss_env": "HML"}, agent=agent)
 
     def test_cr008_user_diferente_do_owner_fora_de_dev(self):
         ret = {"purge_user": "sss_purge"}
         agent = {"exec_users": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml", "exec_work_dir": "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec"}
-        self._recusa("user", app={"sss_env": "HML"}, retention=ret, agent=agent,
+        self._refusal("user", app={"sss_env": "HML"}, retention=ret, agent=agent,
                      oracle={"user": "OPENRISOW"})
-        cfg = self._carregar(app={"sss_env": "DEV"}, retention=ret,
+        cfg = self._load(app={"sss_env": "DEV"}, retention=ret,
                              oracle={"user": "openrisow"})
         self.assertEqual(cfg.oracle.user, "openrisow")
 
     def test_cr008_sessao_max_horas(self):
-        self.assertEqual(self._carregar().web.session_max_hours, 12)
-        self.assertEqual(self._carregar(web={"session_max_hours": "168"}).web.session_max_hours, 168)
+        self.assertEqual(self._load().web.session_max_hours, 12)
+        self.assertEqual(self._load(web={"session_max_hours": "168"}).web.session_max_hours, 168)
         for valor in ("0", "169", "x"):
-            self._recusa("session_max_hours", web={"session_max_hours": valor})
+            self._refusal("session_max_hours", web={"session_max_hours": valor})
 
     def test_env_passthrough_lista_de_bloqueio_e_chaves_fixas(self):
         for var in ("BASH_FUNC_x%%", "LD_DEBUG", "MALLOC_ARENA_MAX", "GLIBC_TUNABLES", "PS4", "PATH", "LC_ALL",
                     "SSS_TICKET_ID", "PYTHONIOENCODING", "PADRAO_VALOR_RUN_CONEXAO_BD", "lang"):
-            self._recusa("env_passthrough", agent={"env_passthrough": "ORACLE_HOME," + var})
-        cfg = self._carregar(agent={"env_passthrough": "ORACLE_HOME,LD_LIBRARY_PATH,NLS_LANG,TNS_ADMIN"})
+            self._refusal("env_passthrough", agent={"env_passthrough": "ORACLE_HOME," + var})
+        cfg = self._load(agent={"env_passthrough": "ORACLE_HOME,LD_LIBRARY_PATH,NLS_LANG,TNS_ADMIN"})
         self.assertIn("LD_LIBRARY_PATH", cfg.agent.env_passthrough)
 
     def test_ambientes_atendidos_cabem_na_coluna(self):
         nomes = ",".join("AMBIENTE_%04d_XXXXXXXXXXXXX" % i for i in range(40))
-        self._recusa("environments", agent={"environments": nomes})
+        self._refusal("environments", agent={"environments": nomes})
 
     def _secrets(self, secoes):
         caminho = os.path.join(self.tmp_dir, "secrets_papel.cfg")
@@ -821,7 +821,7 @@ class TestConfigCR007(unittest.TestCase):
         seg = sss_config.load_secrets(self._secrets(agente), sss_env="PROD", data_backend="ORACLE", papel="agent")
         self.assertIsNone(seg.cookie_key)
         self.assertEqual(seg.purge_password, "senha-prg-123")
-        self.assertIn("senha-prg-123", self.mascarados)
+        self.assertIn("senha-prg-123", self.masked)
         self.assertNotIn("senha-prg-123", repr(seg))
         # Secao de outro papel: recusada em HML/PROD, so WARN em DEV.
         with self.assertRaises(sss_config.ConfigError):
@@ -840,7 +840,7 @@ class TestConfigCR007(unittest.TestCase):
         seg_mon = sss_config.load_secrets(self._secrets(monitor), sss_env="PROD", data_backend="ORACLE", papel="monitor")
         self.assertEqual(seg_mon.monitor_user, "sss_monitor")
         self.assertEqual(seg_mon.monitor_password, "senha-mon-123")
-        self.assertIn("senha-mon-123", self.mascarados)
+        self.assertIn("senha-mon-123", self.masked)
         self.assertNotIn("senha-mon-123", repr(seg_mon))
         # F9.1b (README §4.1): no servidor do agente, as secoes dos outros papeis sao ignoradas, sem masking.
         outros = [("oracle", {"password": "senha-agt-999"}), ("purge", {"password": "senha-prg-999"}),
@@ -849,7 +849,7 @@ class TestConfigCR007(unittest.TestCase):
                                                data_backend="ORACLE", papel="monitor")
         self.assertEqual((seg_mon.monitor_user, seg_mon.oracle_password, seg_mon.environments), ("sss_monitor", None, {}))
         for valor in ("senha-agt-999", "senha-prg-999", "senha-amb-999"):
-            self.assertNotIn(valor, self.mascarados)
+            self.assertNotIn(valor, self.masked)
         with self.assertRaises(sss_config.ConfigError):
             sss_config.load_secrets(self._secrets(monitor + [("web", {"cookie_key": "k" * 40})]),
                                          sss_env="PROD", data_backend="ORACLE", papel="monitor")
@@ -858,7 +858,7 @@ class TestConfigCR007(unittest.TestCase):
                                          sss_env="PROD", data_backend="ORACLE", papel="monitor")
 
     def test_segredos_do_agente_cobrem_os_ambientes(self):
-        cfg = self._carregar(app={"sss_env": "HML"}, retention={"purge_user": "sss_purge"},
+        cfg = self._load(app={"sss_env": "HML"}, retention={"purge_user": "sss_purge"},
                              agent={"exec_users": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml",
                                     "exec_work_dir": "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec"})
         so_prod = [("oracle", {"password": "senha-agt-123"}),

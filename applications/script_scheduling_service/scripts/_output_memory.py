@@ -8,22 +8,22 @@ class RepoOutputMemory(object):
 
     def __init__(self, tickets=None):
         self.tickets = tickets if tickets is not None else {}
-        self.linhas = {}
+        self.rows = {}
         self.falhas = []
-        self.chamadas = []
+        self.calls = []
 
     def _owner(self, tid, agente_id):
         t = self.tickets.get(tid)
         return t is not None and t.get("agent_id") == agente_id
 
     def _fail(self, nome):
-        self.chamadas.append(nome)
+        self.calls.append(nome)
         if self.falhas and self.falhas[0][0] == nome:
             raise self.falhas.pop(0)[1]
 
     def start(self, conn, tid, agente_id):
         self._fail("start")
-        linha = self.linhas.get(tid)
+        linha = self.rows.get(tid)
         if linha is not None:
             if linha["state"] == "WRITING" and linha["agent_id"] == agente_id:
                 linha.update(content=b"", file_count=None, size_bytes=None)
@@ -31,13 +31,13 @@ class RepoOutputMemory(object):
             return False
         if not self._owner(tid, agente_id):
             return False
-        self.linhas[tid] = {"state": "WRITING", "reason": None, "agent_id": agente_id, "content": b"",
+        self.rows[tid] = {"state": "WRITING", "reason": None, "agent_id": agente_id, "content": b"",
                             "file_count": None, "size_bytes": None}
         return True
 
     def append_chunk(self, conn, tid, agente_id, offset, parte):
         self._fail("append_chunk")
-        linha = self.linhas.get(tid)
+        linha = self.rows.get(tid)
         if linha is None or linha["state"] != "WRITING" or linha["agent_id"] != agente_id:
             return scheduler_output.OWNERSHIP_LOST
         atual = len(linha["content"])
@@ -50,7 +50,7 @@ class RepoOutputMemory(object):
 
     def complete(self, conn, tid, agente_id, qtd, tamanho):
         self._fail("complete")
-        linha = self.linhas.get(tid)
+        linha = self.rows.get(tid)
         if linha is None or linha["state"] != "WRITING" or linha["agent_id"] != agente_id \
                 or len(linha["content"]) != tamanho:
             return False
@@ -59,25 +59,25 @@ class RepoOutputMemory(object):
 
     def register_without_content(self, conn, tid, agente_id, situacao, motivo, qtd=None):
         self._fail("register_without_content")
-        linha = self.linhas.get(tid)
+        linha = self.rows.get(tid)
         if linha is not None:
             if linha["state"] != "WRITING" or linha["agent_id"] != agente_id:
                 return False
         elif not self._owner(tid, agente_id):
             return False
-        self.linhas[tid] = {"state": situacao, "reason": motivo, "agent_id": agente_id, "content": None,
+        self.rows[tid] = {"state": situacao, "reason": motivo, "agent_id": agente_id, "content": None,
                             "file_count": qtd, "size_bytes": None}
         return True
 
     def fail_agent_writing(self, conn, agente_id):
         self._fail("fail_agent_writing")
         n = 0
-        for linha in self.linhas.values():
+        for linha in self.rows.values():
             if linha["state"] == "WRITING" and linha["agent_id"] == agente_id:
                 linha.update(state="FAILED", reason="ERROR", content=None)
                 n += 1
         return n
 
     def output_state(self, conn, tid):
-        linha = self.linhas.get(tid)
+        linha = self.rows.get(tid)
         return (linha["state"], linha["agent_id"]) if linha else None

@@ -12,7 +12,7 @@ import unittest
 
 import _testenv  # noqa: F401
 
-_PADROES_12C = [
+_PATTERNS_12C = [
     # Sintaxe 12c "OFFSET <n|:bind> ROW[S]"; a palavra solta e o parametro offset do contrato
     # RepoTickets.log_ler, nao SQL.
     (re.compile(r"\bOFFSET\s+(\d+|:\w+)\s+ROWS?\b", re.IGNORECASE), "OFFSET (paginacao 12c+)"),
@@ -35,7 +35,7 @@ _RE_FOR_UPDATE = re.compile(r"\bFOR\s+UPDATE\b.*?(?:;|\"|\')", re.IGNORECASE | r
 class TestSqlOracle11g(unittest.TestCase):
     """Garante conformidade do SQL com a especificacao Oracle 11gR2 do AGENTS §4.3."""
 
-    def _obter_arquivos_sql(self):
+    def _get_sql_files(self):
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         repo_oracle_dir = os.path.join(base_dir, "modules", "repo_oracle")
         arquivos = []
@@ -52,7 +52,7 @@ class TestSqlOracle11g(unittest.TestCase):
     def test_padroes_12c_detectam_a_sintaxe_proibida(self):
         """Regressao: a regra de OFFSET pega a paginacao 12c e ignora o parametro offset do contrato."""
         def acusa(texto):
-            return [d for p, d in _PADROES_12C if p.search(texto)]
+            return [d for p, d in _PATTERNS_12C if p.search(texto)]
         self.assertTrue(acusa("SELECT id FROM t ORDER BY id OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY"))
         self.assertTrue(acusa("SELECT id FROM t OFFSET :inicio ROWS"))
         self.assertTrue(acusa("select id from t offset 1 row"))
@@ -60,7 +60,7 @@ class TestSqlOracle11g(unittest.TestCase):
 
     def test_ausencia_sintaxe_12c(self):
         """Varre os arquivos do repositorio Oracle garantindo ausencia de recursos 12c+."""
-        arquivos = self._obter_arquivos_sql()
+        arquivos = self._get_sql_files()
         self.assertTrue(len(arquivos) > 0, "Nenhum arquivo encontrado em modules/repo_oracle/")
 
         violacoes = []
@@ -68,7 +68,7 @@ class TestSqlOracle11g(unittest.TestCase):
             with open(caminho, "r", encoding="utf-8") as fp:
                 conteudo = fp.read()
 
-            for padrao, desc in _PADROES_12C:
+            for padrao, desc in _PATTERNS_12C:
                 m = padrao.search(conteudo)
                 if m:
                     violacoes.append("%s: sintaxe proibida encontrada (%s)" % (os.path.basename(caminho), desc))
@@ -77,7 +77,7 @@ class TestSqlOracle11g(unittest.TestCase):
 
     def test_ausencia_select_star(self):
         """Proibe SELECT * direto da tabela em code de aplicacao (exceto subquery de paginacao)."""
-        arquivos = self._obter_arquivos_sql()
+        arquivos = self._get_sql_files()
         violacoes = []
         for caminho in arquivos:
             with open(caminho, "r", encoding="utf-8") as fp:
@@ -92,7 +92,7 @@ class TestSqlOracle11g(unittest.TestCase):
 
     def test_for_update_com_wait_n_ou_skip_locked(self):
         """Garante que todo FOR UPDATE use WAIT n (n <= 5) ou SKIP LOCKED (AGENTS §4.10)."""
-        arquivos = self._obter_arquivos_sql()
+        arquivos = self._get_sql_files()
         violacoes = []
         for caminho in arquivos:
             with open(caminho, "r", encoding="utf-8") as fp:
