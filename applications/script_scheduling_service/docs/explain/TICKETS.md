@@ -12,9 +12,9 @@ Consultas SQL estáticas do `RepoTicketsOracle` (`modules/repo_oracle/tickets.py
 
 | Método | Consulta | Acesso esperado |
 |---|---|---|
-| `list` | `COUNT(*)` com `ROWNUM <= 10001` e página `ROWNUM`, ordem `created_at DESC, id DESC`; filtros da allowlist (status/escopo por `IN`, ambiente, script, solicitante, reexecuções, origem e período `created_at >= :inicio AND created_at < :fim`) | `ix_{prefixo}tck_crt (created_at, id)` em ordem descendente, sem ordenar a tabela; o índice do filtro quando houver |
+| `list` | `COUNT(*)` com `ROWNUM <= 10001` e página `ROWNUM`, ordem `created_at DESC, id DESC`; filtros da allowlist (status/escopo por `IN`, ambiente, script, solicitante, reexecuções, origem e período `created_at >= :start_ts AND created_at < :end_ts`) | `ix_{prefixo}tck_crt (created_at, id)` em ordem descendente, sem ordenar a tabela; o índice do filtro quando houver |
 | `last_runs` | `ROW_NUMBER() OVER (PARTITION BY script_id ORDER BY created_at DESC, id DESC)` com `script_id IN (…)`, escopo e solicitante; `rn = 1` | `ix_{prefixo}tck_scr` ou `ix_{prefixo}tck_hist`, conforme o filtro |
-| `script_history` | `script_id = :script_id AND created_at >= :desde`, escopo e solicitante, ordem `created_at DESC, id DESC` e `ROWNUM <= :limite` (devolvido em ordem crescente) | `ix_{prefixo}tck_hist (script_id, created_at)` |
+| `script_history` | `script_id = :script_id AND created_at >= :since`, escopo e solicitante, ordem `created_at DESC, id DESC` e `ROWNUM <= :cutoff` (devolvido em ordem crescente) | `ix_{prefixo}tck_hist (script_id, created_at)` |
 | `get`, `log_read` | Leitura pela PK; o log por locator (`lob.read(offset + 1, max_chars)`) | `pk_{prefixo}tickets` |
 | `answers` | `ticket_id = :ticket_id ORDER BY id` | `uk_{prefixo}tans_tck_prm` (líder `ticket_id`) |
 | `request_cancel` | Os dois `UPDATE` literais do README §5.6 e, com `rowcount = 0`, `SELECT status, cancel_requested … FOR UPDATE WAIT 5` | `pk_{prefixo}tickets`; só a linha do próprio ticket é travada, então a ordem de locks do §8.3 não muda |

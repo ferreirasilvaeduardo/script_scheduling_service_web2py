@@ -104,18 +104,18 @@ class _Cursor(object):
             b.taken += 1
             if b.steal_on_renewal == b.taken:
                 b.ctl = {"dono": "srv-outro", "ate": NOW + datetime.timedelta(hours=1)}
-            livre = b.ctl["ate"] is None or b.ctl["ate"] < NOW or b.ctl["dono"] == binds["dono"]
+            livre = b.ctl["ate"] is None or b.ctl["ate"] < NOW or b.ctl["dono"] == binds["owner"]
             if livre:
-                b.ctl = {"dono": binds["dono"], "ate": NOW + datetime.timedelta(hours=1)}
+                b.ctl = {"dono": binds["owner"], "ate": NOW + datetime.timedelta(hours=1)}
             self.rowcount = int(livre)
         elif "SET purge_owner = NULL" in sql:
-            if b.ctl["dono"] == binds["dono"]:
+            if b.ctl["dono"] == binds["owner"]:
                 b.ctl = {"dono": None, "ate": None}
                 self.rowcount = 1
         elif sql.startswith("SELECT COUNT(*)"):
-            self._lines = [(len(self._eligible(tabela, binds["limite"])),)]
-        elif sql.startswith("DELETE") and "ROWNUM <= :lote" in sql:
-            alvo = self._eligible(tabela, binds["limite"], binds["lote"])
+            self._lines = [(len(self._eligible(tabela, binds["cutoff"])),)]
+        elif sql.startswith("DELETE") and "ROWNUM <= :batch_size" in sql:
+            alvo = self._eligible(tabela, binds["cutoff"], binds["batch_size"])
             lista = b.tickets if tabela == "tickets" else b.audit
             for linha in alvo:
                 lista.remove(linha)
@@ -123,8 +123,8 @@ class _Cursor(object):
             self.rowcount = len(alvo)
         elif "FOR UPDATE" in sql:
             cols = ("id", "created_at", "actor", "source_ip", "action", "entity", "entity_id", "detail")
-            self._lines = [tuple(a[c] for c in cols) for a in self._eligible("audit", binds["limite"],
-                                                                                  binds["lote"])]
+            self._lines = [tuple(a[c] for c in cols) for a in self._eligible("audit", binds["cutoff"],
+                                                                                  binds["batch_size"])]
         elif sql.startswith("INSERT INTO"):
             b.audit.append(dict(binds, created_at=NOW, action="PURGE", source_ip=None, entity_id=None))
             self.rowcount = 1
@@ -231,8 +231,8 @@ class TestTables(_Base):
         self.assertEqual(sorted(t["id"] for t in banco.tickets), [10, 11, 12], "nunca um ticket nao terminal")
         lotes = [s for s in banco.sqls if s.startswith("DELETE")]
         self.assertEqual(len(lotes), 4, "2 + 2 + 1 e o lote vazio")
-        self.assertEqual(lotes[0], "DELETE FROM openrisow.tbsss_tickets WHERE created_at < :limite"
-                                   " AND status IN ('SUCCESS','FAILED','CANCELLED') AND ROWNUM <= :lote")
+        self.assertEqual(lotes[0], "DELETE FROM openrisow.tbsss_tickets WHERE created_at < :cutoff"
+                                   " AND status IN ('SUCCESS','FAILED','CANCELLED') AND ROWNUM <= :batch_size")
         self.assertIn("tickets: 5 linhas apagadas", p.summary)
 
     def test_purge_auditado_por_tabela_inclusive_com_zero(self):
@@ -258,7 +258,7 @@ class TestTables(_Base):
         self.assertEqual(len(tomadas), 1 + 3, "tomada e uma renovacao por lote nao vazio")
         self.assertEqual(banco.ctl, {"dono": None, "ate": None}, "dono e prazo zerados (CR-008, R-27)")
         self.assertIn("UPDATE openrisow.tbsss_control SET purge_owner = NULL, purge_lease_until = NULL"
-                      " WHERE id = 1 AND purge_owner = :dono", banco.sqls)
+                      " WHERE id = 1 AND purge_owner = :owner", banco.sqls)
 
     def test_concessao_de_outro_no_pula_tabelas_sem_auditar(self):
         ate = NOW + datetime.timedelta(minutes=30)

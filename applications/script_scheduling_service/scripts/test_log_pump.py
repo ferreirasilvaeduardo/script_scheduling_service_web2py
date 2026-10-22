@@ -490,7 +490,7 @@ class TestRepoSchedulerLog(unittest.TestCase):
                        "DBMS_LOB.COMPARE", "WHEN NO_DATA_FOUND", "RAISE_APPLICATION_ERROR(-20002"):
             self.assertIn(trecho, sql)
         self.assertNotIn("updated_", sql)
-        self.assertEqual(set(binds), {"chunk", "ticket_id", "agent_id", "offset_esperado", "resultado"})
+        self.assertEqual(set(binds), {"chunk", "ticket_id", "agent_id", "expected_offset", "result"})
         self.assertEqual(tipos, {"chunk": db_conn.get_driver_type(db_conn.TIPO_CLOB)})
 
     def test_resultados_e_posse_perdida(self):

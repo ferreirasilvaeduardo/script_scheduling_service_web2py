@@ -87,12 +87,12 @@ class RepoAgentsOracle(BaseRepoOracle, RepoAgents):
     def unattended_queue(self, agora, limiares, conn=None):
         """Grupos de PENDING vencidos sem agente OK/DELAYED para o par ambiente/interpretador."""
         atendidos = saude_sql.served_pairs(self.list(conn=conn), agora, limiares)
-        linhas = self._ler(self._sql["QUEUE"], {"agora": agora}, {"agora": db_conn.TIPO_DATE}, conn=conn)
+        linhas = self._ler(self._sql["QUEUE"], {"now": agora}, {"now": db_conn.TIPO_DATE}, conn=conn)
         return saude_sql.unattended_queue(linhas, atendidos)
 
     def running_without_pid(self, agora, minutos, conn=None):
         """RUNNING sem process_id ha mais de `minutos`, por started_at e id; so as colunas do contrato."""
         limite = agora - datetime.timedelta(minutes=minutos)
-        linhas = self._ler(self._sql["RUNNING_NO_PID"], {"limite": limite}, {"limite": db_conn.TIPO_DATE},
+        linhas = self._ler(self._sql["RUNNING_NO_PID"], {"cutoff": limite}, {"cutoff": db_conn.TIPO_DATE},
                            conn=conn)
         return [self.tuple_to_dict(_COLS_NO_PID, r) for r in linhas]

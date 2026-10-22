@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Em andamento**, em blocos. Blocos 1 (base), 2 (repositórios), 3a (regras), 3b (services), 4a (camada de processo), 4b (laço do agente), 4c (helper), 5a (scripts de linha de comando) e 5b (testes) concluídos em 2026-10-21; passada final: F1 concluída em 2026-10-22, F2 a F4 em andamento |
+| Status | **Em andamento**, em blocos. Blocos 1 (base), 2 (repositórios), 3a (regras), 3b (services), 4a (camada de processo), 4b (laço do agente), 4c (helper), 5a (scripts de linha de comando) e 5b (testes) concluídos em 2026-10-21; passada final: F1 e F2 concluídas em 2026-10-22, F3 e F4 em andamento |
 | Origem | Regra do README §2.8 (CR-016): funções, classes, métodos, constantes e variáveis em inglês |
 | Restrições | Sem dependência nova. Python 3.6. Sem mudança de esquema |
 | Blocos | 1 base (`sql_ident`, `sss_config`, `db_conn`, `sss_logging` e formato do log); 2 repositórios e chaves lógicas das entidades; 3 regras (3a) e services (3b); 4 daemon (4a camada de processo, 4b laço do agente, 4c helper); 5 scripts de linha de comando e lançadores (5a) e testes (5b); passada final de parâmetros e variáveis locais |
@@ -2980,3 +2980,139 @@ Categorias:
 * Suítes em 3.6.0, 3.6.8 e 3.13.2, bateria Oracle, testes progressivos nos cinco agregados, `probe_driver` real (conecta; com senha errada, `AUTHENTICATION`), ciclo real do agente (snapshot v5 de ponta a ponta), percurso real das telas e conferência de resíduos.
 * Achados e corrigidos: kwargs do construtor da namedtuple e de `mock.Mock(...)`, que a troca por atributo não alcança; código em string de subprocesso (`get_selection().candidato`); argumento posicional do `argparse` (`args.candidato`); helpers de teste com `version=4` como padrão. A ferramenta de comentários passou a tratar só docstrings de verdade (um bloco PL/SQL entre três aspas parou na proteção por AST, sem alteração).
 * README §6.5: o exemplo do snapshot ainda mostrava chaves anteriores ao CR-016a (`versao`, `interpretador`, `tipo_param`); passou ao formato v5.
+
+## 22. Passada final, parte F2 (binds de SQL e abreviações de tabela)
+
+Cada bind mudou junto no SQL (`:nome`), nas chaves dos dicionários de bind (literais e `binds["…"] = …`), nos kwargs de `execute`/`set_input_types`, nas tuplas `datas=(…)` e nos binds gerados (`_placeholders`, `"env%d" % i`). As abreviações de tabela passaram às siglas físicas do `sql_ident` (`TABLES[e]['abrev']`), as mesmas dos nomes de constraint desde o CR-016a.
+
+Ficam como estão: `"dono"` (nome do papel da conta dona do esquema em `db_conn`/`init_db`) e as chaves de filtro que vêm dos services (`filtros["criado_inicio"]`…), que são da camada web (CR-016d).
+
+### Binds
+
+| Antes | Depois |
+|---|---|
+| `a_nome` | `env_name` |
+| `acao_f` | `action_f` |
+| `agora` | `now` |
+| `amb` | `env` |
+| `amb_nome` | `env_name` |
+| `ambiente_f` | `environment_f` |
+| `antiga_data` | `old_date` |
+| `ativo_f` | `active_f` |
+| `ator_f` | `actor_f` |
+| `bloq_f` | `locked_f` |
+| `bloqueio_s` | `lockout_s` |
+| `codigo_f` | `code_f` |
+| `criado_fim` | `created_to` |
+| `criado_inicio` | `created_from` |
+| `desde` | `since` |
+| `destino` | `target` |
+| `dono` | `owner` |
+| `entidade_f` | `entity_f` |
+| `entidade_id_f` | `entity_id_f` |
+| `fim` | `end_ts` |
+| `inicio` | `start_ts` |
+| `limite` | `cutoff` |
+| `lote` | `batch_size` |
+| `max_paral` | `max_par` |
+| `nome_f` | `name_f` |
+| `nome_u` | `user_name` |
+| `nova_data` | `new_date` |
+| `offset_esperado` | `expected_offset` |
+| `origem` | `source` |
+| `p_cod` | `p_code` |
+| `parametros` | `params` |
+| `parte` | `part` |
+| `per_nome` | `prf_name` |
+| `perfil` | `profile` |
+| `perfil_f` | `profile_f` |
+| `resultado` | `result` |
+| `s_nome` | `scr_name` |
+| `solicitante_f` | `requester_f` |
+| `ult_id` | `last_id` |
+| `ult_prox` | `last_next` |
+| `usuario_id_f` | `user_id_f` |
+| `valor` | `value` |
+
+### Abreviações de tabela (chaves de template e de `_idents`)
+
+| Antes | Depois |
+|---|---|
+| `agd` | `sch` |
+| `amb` | `env` |
+| `fnc` | `fea` |
+| `func` | `fea` |
+| `ocor` | `occ` |
+| `pamb` | `penv` |
+| `per` | `prf` |
+| `pfnc` | `pfea` |
+| `pfunc` | `pfea` |
+| `resp` | `tans` |
+| `sai` | `tout` |
+| `samb` | `senv` |
+
+### Atributos de tabela
+
+| Antes | Depois |
+|---|---|
+| `_agd` | `_sch` |
+| `_amb` | `_env` |
+| `_func` | `_fea` |
+| `_ocor` | `_occ` |
+| `_pamb` | `_penv` |
+| `_per` | `_prf` |
+| `_pfunc` | `_pfea` |
+| `_resp` | `_tans` |
+| `_samb` | `_senv` |
+| `_seq_agd` | `_seq_sch` |
+| `_seq_resp` | `_seq_tans` |
+
+### Variáveis `tb_`/`sq_` (`init_db`, `ddl_builder`)
+
+| Antes | Depois |
+|---|---|
+| `sq_amb` | `sq_env` |
+| `sq_fnc` | `sq_fea` |
+| `sq_pamb` | `sq_penv` |
+| `sq_per` | `sq_prf` |
+| `sq_pfnc` | `sq_pfea` |
+| `sq_samb` | `sq_senv` |
+| `tb_amb` | `tb_env` |
+| `tb_fnc` | `tb_fea` |
+| `tb_pamb` | `tb_penv` |
+| `tb_per` | `tb_prf` |
+| `tb_pfnc` | `tb_pfea` |
+| `tb_samb` | `tb_senv` |
+
+### Outras chaves de template (geração do seed)
+
+| Antes | Depois |
+|---|---|
+| `a_nome` | `env_name` |
+| `amb_nome` | `env_name` |
+| `atrib` | `attr` |
+| `cod` | `code` |
+| `coluna` | `column` |
+| `escopo` | `scope` |
+| `etp` | `stage` |
+| `f_cod` | `f_code` |
+| `lista` | `items` |
+| `obrig` | `req` |
+| `opc` | `opts` |
+| `p_cod` | `p_code` |
+| `paral` | `par` |
+| `per_nome` | `prf_name` |
+| `perfil` | `profile` |
+| `pnom` | `pname` |
+| `s_nome` | `scr_name` |
+| `tcomp` | `ctype` |
+| `tpar` | `ptype` |
+| `vpad` | `vdef` |
+| `vsub` | `vovr` |
+
+## 23. Validação da F2
+
+* `generate_sql.py`: `01_deploy_sss.sql`, `02_rollback_sss.sql` e `99_validate_deploy.sql` gerados byte a byte iguais aos versionados (as chaves de template só existem no Python).
+* Suítes em 3.6.0, 3.6.8 e 3.13.2, bateria Oracle, testes progressivos nos cinco agregados, ciclo real do agente, percurso real das telas e conferência de resíduos.
+* README, AGENTS e docs/explain com os binds novos; o bloco PL/SQL do README é conferido literalmente por `test_log_pump`.
+* Achados e corrigidos: literais adjacentes em várias linhas (uma constante só no AST), tratados por token; chave de bind montada sem dois-pontos (`"amb%d" % i`); binds lidos por nome nos fakes de teste. Os testes progressivos pegaram um defeito que teria ido para a tela: no filtro por data da lista de tickets, o dicionário de tipos (`datas["criado_inicio"]`) não acompanhou o bind (`:created_from`), e o driver recusaria a consulta (DPY-4008); corrigido. O mesmo agregado pegou ainda o `{scope}` das últimas execuções e do histórico de tickets, formatado por `_sql_dinamico(…, escopo=…)`, caminho que a troca de kwargs não cobria; corrigido. O `tb_amb` indefinido do seed do `init_db` (bug anterior, pendente por decisão do usuário) passou a `tb_env`.

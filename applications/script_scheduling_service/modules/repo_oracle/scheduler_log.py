@@ -20,7 +20,7 @@ _ORA_DIVERGENT = 20002
 _PLSQL_APPEND = """DECLARE
   v_lob CLOB;
   v_offset NUMBER(20);
-  v_tamanho NUMBER(20) {atrib} LENGTH(:chunk);
+  v_tamanho NUMBER(20) {attr} LENGTH(:chunk);
 BEGIN
   SELECT log_output, log_offset_chars
     INTO v_lob, v_offset
@@ -29,7 +29,7 @@ BEGIN
      FOR UPDATE WAIT 5;
   IF DBMS_LOB.GETLENGTH(v_lob) <> v_offset THEN
     RAISE_APPLICATION_ERROR(-20002, 'LOG_OFFSET_DIVERGENTE');
-  ELSIF v_offset = :offset_esperado THEN
+  ELSIF v_offset = :expected_offset THEN
     DBMS_LOB.WRITEAPPEND(v_lob, v_tamanho, :chunk);
     UPDATE {tck}
        SET log_offset_chars = v_offset + v_tamanho
@@ -38,17 +38,17 @@ BEGIN
     IF SQL%ROWCOUNT <> 1 THEN
       RAISE_APPLICATION_ERROR(-20002, 'LOG_OFFSET_DIVERGENTE');
     END IF;
-    :resultado {atrib} 'WRITTEN';
-  ELSIF v_offset = :offset_esperado + v_tamanho
+    :result {attr} 'WRITTEN';
+  ELSIF v_offset = :expected_offset + v_tamanho
         AND DBMS_LOB.COMPARE(v_lob, :chunk, v_tamanho,
-                             :offset_esperado + 1, 1) = 0 THEN
-    :resultado {atrib} 'ALREADY_WRITTEN';
+                             :expected_offset + 1, 1) = 0 THEN
+    :result {attr} 'ALREADY_WRITTEN';
   ELSE
     RAISE_APPLICATION_ERROR(-20002, 'LOG_OFFSET_DIVERGENTE');
   END IF;
 EXCEPTION
   WHEN NO_DATA_FOUND THEN
-    :resultado {atrib} 'OWNERSHIP_LOST';
+    :result {attr} 'OWNERSHIP_LOST';
 END;"""
 
 # Quantas posicoes do CLOB um caractere fora do BMP ocupa neste banco: 2 em AL32UTF8 (UTF-16 interno),
@@ -80,7 +80,7 @@ class RepoSchedulerLog(object):
 
     def __init__(self, owner, prefixo):
         self._tck = sql_ident.table(owner, prefixo, "tickets")
-        self._plsql = _PLSQL_APPEND.format(tck=self._tck, atrib=":" + "=")
+        self._plsql = _PLSQL_APPEND.format(tck=self._tck, attr=":" + "=")
         self._sql_truncated = _SQL_TRUNCATED.format(tck=self._tck)
 
     @classmethod
@@ -100,7 +100,7 @@ class RepoSchedulerLog(object):
             resultado = db_conn.output_variable(cur, db_conn.TIPO_VARCHAR, tamanho=20)
             try:
                 cur.execute(self._plsql, chunk=bloco, ticket_id=int(ticket_id), agent_id=agente_id,
-                            offset_esperado=int(offset_esperado), resultado=resultado)
+                            expected_offset=int(offset_esperado), result=resultado)
             except Exception as exc:
                 if db_conn.classify_error(exc) == ("ORA", _ORA_DIVERGENT):
                     raise LogOffsetMismatch(ticket_id, offset_esperado, len(bloco))

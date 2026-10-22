@@ -367,7 +367,7 @@ class TestOracleCatalog(unittest.TestCase):
         sql_conta, binds = cur.executed[0]
         self.assertIn("ROWNUM <= 10001", sql_conta)
         self.assertIn("ESCAPE", sql_conta)
-        self.assertEqual(binds["nome_f"], "%carga\\_10\\%%")
+        self.assertEqual(binds["name_f"], "%carga\\_10\\%%")
         self.assertNotIn("carga", sql_conta)
 
     # ------------------------------------------------------------- banco real
@@ -726,7 +726,7 @@ class TestOracleTickets(unittest.TestCase):
         self.assertIn("status IN (:s0, :s1)", sql)
         self.assertIn("environment IN (:e0, :e1)", sql)
         self.assertIn("schedule_id IS NULL", sql)
-        self.assertIn("created_at >= :criado_inicio", sql)
+        self.assertIn("created_at >= :created_from", sql)
         self.assertNotIn("RUNNING", sql)
         self.assertEqual((binds["s0"], binds["s1"], binds["e0"]), ("PENDING", "RUNNING", "HML"))
         self.assertIn("1 = 0", conn.executed[2][0])
@@ -741,7 +741,7 @@ class TestOracleTickets(unittest.TestCase):
             try:
                 cur.execute("SELECT MIN(id) FROM " + self.tck._idents["scr"])
                 script_id = cur.fetchone()[0]
-                cur.execute("SELECT MIN(name) FROM " + self.tck._idents["amb"])
+                cur.execute("SELECT MIN(name) FROM " + self.tck._idents["env"])
                 ambiente = cur.fetchone()[0]
                 cur.execute("SELECT MIN(id), MAX(id) FROM " + self.tck._idents["prm"])
                 prm1, prm2 = cur.fetchone()
@@ -921,7 +921,7 @@ class TestOracleSchedules(unittest.TestCase):
             self.assertNotIn("tbsss_", sql, nome)
             self.assertNotIn("SELECT *", sql, nome)
         self.assertIn("SSS_TEST_AGD.abc_schedules", repo._sql["GET"])
-        self.assertEqual(repo._seq_agd, "SSS_TEST_AGD.sq_abc_schedules")
+        self.assertEqual(repo._seq_sch, "SSS_TEST_AGD.sq_abc_schedules")
         with self.assertRaises(repo_errors.RepoViolation) as ctx:
             repo._checar_cks({"name": "x", "recurrence_type": "ANUAL"})
         self.assertEqual(ctx.exception.constraint, "ck_abc_sch_rtype")
@@ -930,7 +930,7 @@ class TestOracleSchedules(unittest.TestCase):
         """CR-007, R-19: o UPDATE exige active = 'Y' e, com antiga_data, a next_run_at lida."""
         self.assertTrue(self.agd._sql["PAUSE"].endswith("WHERE id = :id AND active = 'Y'"))
         self.assertTrue(self.agd._sql["PAUSE_OPTIMISTIC"].endswith(
-            "WHERE id = :id AND active = 'Y' AND next_run_at = :antiga_data"))
+            "WHERE id = :id AND active = 'Y' AND next_run_at = :old_date"))
         self.assertIn("updated_at = SYSDATE, updated_by = :actor", self.agd._sql["PAUSE"])
         self.assertIn("FOR UPDATE WAIT 5", self.agd._sql["GET_LOCK"])
 
@@ -981,7 +981,7 @@ class TestOracleSchedules(unittest.TestCase):
         sql, binds = conn.executed[0]
         self.assertIn("environment IN (:e0)", sql)
         self.assertIn("ROWNUM <= 10001", sql)
-        self.assertEqual(binds["nome_f"], "%50\\%\\_x%")
+        self.assertEqual(binds["name_f"], "%50\\%\\_x%")
         self.assertIn("1 = 0", conn.executed[2][0])
 
     # ------------------------------------------------------------- banco real
@@ -993,7 +993,7 @@ class TestOracleSchedules(unittest.TestCase):
             try:
                 cur.execute("SELECT MIN(id) FROM " + self.agd._idents["scr"])
                 script_id = cur.fetchone()[0]
-                cur.execute("SELECT MIN(name) FROM " + self.agd._idents["amb"])
+                cur.execute("SELECT MIN(name) FROM " + self.agd._idents["env"])
                 ambiente = cur.fetchone()[0]
                 cur.execute("SELECT MIN(id), MIN(login) FROM " + self.agd._idents["usr"])
                 usuario_id, login = cur.fetchone()
@@ -1019,12 +1019,12 @@ class TestOracleSchedules(unittest.TestCase):
                         cur.execute("DELETE FROM " + self.agd._tbl_aud + " WHERE entity = 'tbsss_tickets' "
                                     "AND entity_id = :id", {"id": tid})
                 for aid in agd_ids:
-                    cur.execute("DELETE FROM " + self.agd._idents["agd"] + " WHERE id = :id", {"id": aid})
+                    cur.execute("DELETE FROM " + self.agd._idents["sch"] + " WHERE id = :id", {"id": aid})
                     if compartilhado:
                         cur.execute("DELETE FROM " + self.agd._tbl_aud + " WHERE entity = 'tbsss_schedules' "
                                     "AND entity_id = :id", {"id": aid})
                 c.commit()
-                cur.execute("SELECT COUNT(*) FROM " + self.agd._idents["agd"] + " WHERE name LIKE :m",
+                cur.execute("SELECT COUNT(*) FROM " + self.agd._idents["sch"] + " WHERE name LIKE :m",
                             {"m": marca + "%"})
                 restantes = cur.fetchone()[0]
             finally:
@@ -1039,7 +1039,7 @@ class TestOracleSchedules(unittest.TestCase):
         try:
             cur = c.cursor()
             try:
-                cur.execute("SELECT COUNT(*) FROM " + self.agd._idents["agd"] + " WHERE name LIKE :m",
+                cur.execute("SELECT COUNT(*) FROM " + self.agd._idents["sch"] + " WHERE name LIKE :m",
                             {"m": marca + "%"})
                 return cur.fetchone()[0]
             finally:
@@ -1187,7 +1187,7 @@ class TestOracleAuditAgents(unittest.TestCase):
         self.assertIn("(" + sql_ident.FBI_TCK_RUN_AGENT_CASE + ") = :code", self.agt._sql["TICKETS_RUNNING"])
         self.assertIn("(" + sql_ident.FBI_TCK_RUN_AGENT_CASE + ") >= CHR(1)", self.agt._sql["RUNNING_NO_PID"])
         # CR-013: so ix_tck_fila (status lider e o inicio da espera), agrupado por script antes do JOIN.
-        self.assertIn("WHERE status = 'PENDING' AND " + sql_ident.FBI_TCK_QUEUE_START + " <= :agora", self.agt._sql["QUEUE"])
+        self.assertIn("WHERE status = 'PENDING' AND " + sql_ident.FBI_TCK_QUEUE_START + " <= :now", self.agt._sql["QUEUE"])
         self.assertIn("JOIN " + self.agt._idents["scr"] + " s ON s.id = g.script_id", self.agt._sql["QUEUE"])
         for nome in ("TICKETS_RUNNING", "QUEUE", "RUNNING_NO_PID"):
             self.assertNotIn("log_output", self.agt._sql[nome])
@@ -1217,14 +1217,14 @@ class TestOracleAuditAgents(unittest.TestCase):
             self.aud.list(filtros)
             list(self.aud.iterate(filtros, limite=5))
         sql, binds = conn.executed[0]
-        for trecho in ("LOWER(actor) LIKE :ator_f ESCAPE", "created_at >= :start_date", "created_at <= :end_date",
+        for trecho in ("LOWER(actor) LIKE :actor_f ESCAPE", "created_at >= :start_date", "created_at <= :end_date",
                        "id <= :id_max", "ROWNUM <= 10001"):
             self.assertIn(trecho, sql)
         self.assertNotIn("TRUNC", sql)
-        self.assertEqual((binds["ator_f"], binds["ip_f"]), ("%ana\\_1%", "%10.\\%%"))
+        self.assertEqual((binds["actor_f"], binds["ip_f"]), ("%ana\\_1%", "%10.\\%%"))
         sql_it, binds_it = conn.executed[-1]
-        self.assertIn("WHERE ROWNUM <= :limite", sql_it)
-        self.assertEqual(binds_it["limite"], 5)
+        self.assertIn("WHERE ROWNUM <= :cutoff", sql_it)
+        self.assertEqual(binds_it["cutoff"], 5)
 
     # ------------------------------------------------------------- banco real
 
@@ -1285,8 +1285,8 @@ class TestOracleAuditAgents(unittest.TestCase):
             self._executar([(
                 "INSERT INTO " + tab_agt + " (id, code, hostname, status, environments, platform, interpreters, "
                 "heartbeat_at, critical_config, created_at, created_by) VALUES (:id, :code, 'host-tst', 'ACTIVE', "
-                ":amb, 'LINUX', :interp, :hb, 'tst=1', SYSDATE, 'SYSTEM:teste')",
-                {"id": agt_id, "code": marca, "amb": ambiente, "interp": script["interpreter"], "hb": agora})])
+                ":env, 'LINUX', :interp, :hb, 'tst=1', SYSDATE, 'SYSTEM:teste')",
+                {"id": agt_id, "code": marca, "env": ambiente, "interp": script["interpreter"], "hb": agora})])
             ag = [a for a in self.agt.list() if a["code"] == marca][0]
             self.assertEqual((ag["platform"], ag["interpreters"], ag["critical_config"]),
                              ("LINUX", script["interpreter"], "tst=1"))

@@ -181,10 +181,10 @@ def _run_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_sen
     cursor = conn.cursor()
     try:
         # 1. Catálogo de Funcionalidades
-        tb_fnc = "{}.{}".format(owner, esquema["features"]["tabela"])
-        sq_fnc = "{}.{}".format(owner, esquema["features"]["sequence"])
+        tb_fea = "{}.{}".format(owner, esquema["features"]["tabela"])
+        sq_fea = "{}.{}".format(owner, esquema["features"]["sequence"])
         sql_merge_fnc = """
-        MERGE INTO {tb_fnc} dst
+        MERGE INTO {tb_fea} dst
         USING (SELECT :code AS code FROM DUAL) src
         ON (dst.code = src.code)
         WHEN MATCHED THEN
@@ -200,8 +200,8 @@ def _run_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_sen
              OR dst.active <> 'Y'
         WHEN NOT MATCHED THEN
           INSERT (id, code, name, module, description, active, created_at, created_by)
-          VALUES ({sq_fnc}.NEXTVAL, :code, :name, :module, :description, 'Y', SYSDATE, 'SYSTEM:init_db')
-        """.format(tb_fnc=tb_fnc, sq_fnc=sq_fnc)
+          VALUES ({sq_fea}.NEXTVAL, :code, :name, :module, :description, 'Y', SYSDATE, 'SYSTEM:init_db')
+        """.format(tb_fea=tb_fea, sq_fea=sq_fea)
 
         for mod, cod, nom, desc in ddl_builder.FEATURE_CATALOG:
             cursor.execute(sql_merge_fnc, {
@@ -212,15 +212,15 @@ def _run_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_sen
             })
 
         # 2. Perfis padrao e matrizes de permissao (DEFAULT_PROFILES)
-        tb_per = "{}.{}".format(owner, esquema["profiles"]["tabela"])
-        sq_per = "{}.{}".format(owner, esquema["profiles"]["sequence"])
-        tb_pfnc = "{}.{}".format(owner, esquema["profile_feature"]["tabela"])
-        sq_pfnc = "{}.{}".format(owner, esquema["profile_feature"]["sequence"])
-        tb_pamb = "{}.{}".format(owner, esquema["profile_env"]["tabela"])
-        sq_pamb = "{}.{}".format(owner, esquema["profile_env"]["sequence"])
+        tb_prf = "{}.{}".format(owner, esquema["profiles"]["tabela"])
+        sq_prf = "{}.{}".format(owner, esquema["profiles"]["sequence"])
+        tb_pfea = "{}.{}".format(owner, esquema["profile_feature"]["tabela"])
+        sq_pfea = "{}.{}".format(owner, esquema["profile_feature"]["sequence"])
+        tb_penv = "{}.{}".format(owner, esquema["profile_env"]["tabela"])
+        sq_penv = "{}.{}".format(owner, esquema["profile_env"]["sequence"])
 
         sql_merge_per = """
-        MERGE INTO {tb_per} dst
+        MERGE INTO {tb_prf} dst
         USING (SELECT :name AS name FROM DUAL) src
         ON (dst.name = src.name)
         WHEN MATCHED THEN
@@ -234,34 +234,34 @@ def _run_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_sen
              OR NVL(dst.description, '~') <> :description
         WHEN NOT MATCHED THEN
           INSERT (id, name, description, is_admin, perm_version, active, created_at, created_by)
-          VALUES ({sq_per}.NEXTVAL, :name, :description, :is_admin, 1, 'Y', SYSDATE, 'SYSTEM:init_db')
-        """.format(tb_per=tb_per, sq_per=sq_per)
+          VALUES ({sq_prf}.NEXTVAL, :name, :description, :is_admin, 1, 'Y', SYSDATE, 'SYSTEM:init_db')
+        """.format(tb_prf=tb_prf, sq_prf=sq_prf)
 
         sql_merge_pfnc = """
-        MERGE INTO {tb_pfnc} dst
+        MERGE INTO {tb_pfea} dst
         USING (
           SELECT p.id AS profile_id, f.id AS feature_id
-            FROM {tb_per} p, {tb_fnc} f
-           WHERE p.name = :per_nome AND f.code = :code
+            FROM {tb_prf} p, {tb_fea} f
+           WHERE p.name = :prf_name AND f.code = :code
         ) src
         ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
         WHEN NOT MATCHED THEN
           INSERT (id, profile_id, feature_id, created_at, created_by)
-          VALUES ({sq_pfnc}.NEXTVAL, src.profile_id, src.feature_id, SYSDATE, 'SYSTEM:init_db')
-        """.format(tb_pfnc=tb_pfnc, sq_pfnc=sq_pfnc, tb_per=tb_per, tb_fnc=tb_fnc)
+          VALUES ({sq_pfea}.NEXTVAL, src.profile_id, src.feature_id, SYSDATE, 'SYSTEM:init_db')
+        """.format(tb_pfea=tb_pfea, sq_pfea=sq_pfea, tb_prf=tb_prf, tb_fea=tb_fea)
 
         sql_merge_pamb = """
-        MERGE INTO {tb_pamb} dst
+        MERGE INTO {tb_penv} dst
         USING (
           SELECT p.id AS profile_id, a.id AS environment_id
-            FROM {tb_per} p, {tb_amb} a
-           WHERE p.name = :per_nome AND a.name = :a_nome
+            FROM {tb_prf} p, {tb_env} a
+           WHERE p.name = :prf_name AND a.name = :env_name
         ) src
         ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
         WHEN NOT MATCHED THEN
           INSERT (id, profile_id, environment_id, created_at, created_by)
-          VALUES ({sq_pamb}.NEXTVAL, src.profile_id, src.environment_id, SYSDATE, 'SYSTEM:init_db')
-        """.format(tb_pamb=tb_pamb, sq_pamb=sq_pamb, tb_per=tb_per, tb_amb=tb_amb)
+          VALUES ({sq_penv}.NEXTVAL, src.profile_id, src.environment_id, SYSDATE, 'SYSTEM:init_db')
+        """.format(tb_penv=tb_penv, sq_penv=sq_penv, tb_prf=tb_prf, tb_env=tb_env)
 
         for per_nome, per_desc, is_adm, per_funcs, per_ambs in ddl_builder.DEFAULT_PROFILES:
             cursor.execute(sql_merge_per, {
@@ -270,15 +270,15 @@ def _run_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_sen
                 "is_admin": is_adm,
             })
             for f_cod in per_funcs:
-                cursor.execute(sql_merge_pfnc, {"per_nome": per_nome, "code": f_cod})
+                cursor.execute(sql_merge_pfnc, {"prf_name": per_nome, "code": f_cod})
             for a_nome in per_ambs:
-                cursor.execute(sql_merge_pamb, {"per_nome": per_nome, "a_nome": a_nome})
+                cursor.execute(sql_merge_pamb, {"prf_name": per_nome, "env_name": a_nome})
 
         # 4. Ambientes padrão do sistema
-        tb_amb = "{}.{}".format(owner, esquema["environments"]["tabela"])
-        sq_amb = "{}.{}".format(owner, esquema["environments"]["sequence"])
+        tb_env = "{}.{}".format(owner, esquema["environments"]["tabela"])
+        sq_env = "{}.{}".format(owner, esquema["environments"]["sequence"])
         sql_merge_amb = """
-        MERGE INTO {tb_amb} dst
+        MERGE INTO {tb_env} dst
         USING (SELECT :name AS name FROM DUAL) src
         ON (dst.name = src.name)
         WHEN MATCHED THEN
@@ -292,8 +292,8 @@ def _run_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_sen
              OR NVL(dst.connection, '~') <> NVL(:connection, '~')
         WHEN NOT MATCHED THEN
           INSERT (id, name, description, connection, active, created_at, created_by)
-          VALUES ({sq_amb}.NEXTVAL, :name, :description, :connection, 'Y', SYSDATE, 'SYSTEM:init_db')
-        """.format(tb_amb=tb_amb, sq_amb=sq_amb)
+          VALUES ({sq_env}.NEXTVAL, :name, :description, :connection, 'Y', SYSDATE, 'SYSTEM:init_db')
+        """.format(tb_env=tb_env, sq_env=sq_env)
 
         for amb_nome, amb_desc, amb_conn in ddl_builder.DEFAULT_ENVIRONMENTS:
             cursor.execute(sql_merge_amb, {
@@ -346,8 +346,8 @@ def _run_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_sen
         # 6. Scripts utilitarios padrao e associacoes
         tb_scr = "{}.{}".format(owner, esquema["scripts"]["tabela"])
         sq_scr = "{}.{}".format(owner, esquema["scripts"]["sequence"])
-        tb_samb = "{}.{}".format(owner, esquema["script_env"]["tabela"])
-        sq_samb = "{}.{}".format(owner, esquema["script_env"]["sequence"])
+        tb_senv = "{}.{}".format(owner, esquema["script_env"]["tabela"])
+        sq_senv = "{}.{}".format(owner, esquema["script_env"]["sequence"])
         tb_pscr = "{}.{}".format(owner, esquema["profile_script"]["tabela"])
         sq_pscr = "{}.{}".format(owner, esquema["profile_script"]["sequence"])
         tb_sprm = "{}.{}".format(owner, esquema["script_param"]["tabela"])
@@ -365,7 +365,7 @@ def _run_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_sen
                      dst.interpreter = :interpreter,
                      dst.path_file = :path_file,
                      dst.param_type = :param_type,
-                     dst.max_parallel_env = :max_paral,
+                     dst.max_parallel_env = :max_par,
                      dst.timeout_s = :timeout_s,
                      dst.active = 'Y',
                      dst.updated_at = SYSDATE,
@@ -378,45 +378,45 @@ def _run_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_sen
              OR dst.interpreter <> :interpreter
              OR dst.path_file <> :path_file
              OR dst.param_type <> :param_type
-             OR dst.max_parallel_env <> :max_paral
+             OR dst.max_parallel_env <> :max_par
              OR NVL(dst.timeout_s, 0) <> NVL(:timeout_s, 0)
         WHEN NOT MATCHED THEN
           INSERT (id, name, description, script_group, category, stage, interpreter, path_file, param_type, max_parallel_env, timeout_s, active, created_at, created_by)
-          VALUES ({sq_scr}.NEXTVAL, :name, :description, :script_group, :category, :stage, :interpreter, :path_file, :param_type, :max_paral, :timeout_s, 'Y', SYSDATE, 'SYSTEM:init_db')
+          VALUES ({sq_scr}.NEXTVAL, :name, :description, :script_group, :category, :stage, :interpreter, :path_file, :param_type, :max_par, :timeout_s, 'Y', SYSDATE, 'SYSTEM:init_db')
         """.format(tb_scr=tb_scr, sq_scr=sq_scr)
 
         sql_merge_samb = """
-        MERGE INTO {tb_samb} dst
+        MERGE INTO {tb_senv} dst
         USING (
           SELECT s.id AS script_id, a.id AS environment_id
-            FROM {tb_scr} s, {tb_amb} a
-           WHERE s.name = :s_nome AND a.name = :amb_nome
+            FROM {tb_scr} s, {tb_env} a
+           WHERE s.name = :scr_name AND a.name = :env_name
         ) src
         ON (dst.script_id = src.script_id AND dst.environment_id = src.environment_id)
         WHEN NOT MATCHED THEN
           INSERT (id, script_id, environment_id, created_at, created_by)
-          VALUES ({sq_samb}.NEXTVAL, src.script_id, src.environment_id, SYSDATE, 'SYSTEM:init_db')
-        """.format(tb_samb=tb_samb, sq_samb=sq_samb, tb_scr=tb_scr, tb_amb=tb_amb)
+          VALUES ({sq_senv}.NEXTVAL, src.script_id, src.environment_id, SYSDATE, 'SYSTEM:init_db')
+        """.format(tb_senv=tb_senv, sq_senv=sq_senv, tb_scr=tb_scr, tb_env=tb_env)
 
         sql_merge_pscr = """
         MERGE INTO {tb_pscr} dst
         USING (
           SELECT p.id AS profile_id, s.id AS script_id
-            FROM {tb_per} p, {tb_scr} s
-           WHERE p.name = :per_nome AND s.name = :s_nome
+            FROM {tb_prf} p, {tb_scr} s
+           WHERE p.name = :prf_name AND s.name = :scr_name
         ) src
         ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
         WHEN NOT MATCHED THEN
           INSERT (id, profile_id, script_id, created_at, created_by)
           VALUES ({sq_pscr}.NEXTVAL, src.profile_id, src.script_id, SYSDATE, 'SYSTEM:init_db')
-        """.format(tb_pscr=tb_pscr, sq_pscr=sq_pscr, tb_per=tb_per, tb_scr=tb_scr)
+        """.format(tb_pscr=tb_pscr, sq_pscr=sq_pscr, tb_prf=tb_prf, tb_scr=tb_scr)
 
         sql_merge_sprm = """
         MERGE INTO {tb_sprm} dst
         USING (
           SELECT s.id AS script_id, p.id AS parameter_id
             FROM {tb_scr} s, {tb_prm} p
-           WHERE s.name = :s_nome AND p.code = :p_cod
+           WHERE s.name = :scr_name AND p.code = :p_code
         ) src
         ON (dst.script_id = src.script_id AND dst.parameter_id = src.parameter_id)
         WHEN MATCHED THEN
@@ -443,20 +443,20 @@ def _run_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_sen
                 "interpreter": s_int,
                 "path_file": s_path,
                 "param_type": s_tpar,
-                "max_paral": s_paral,
+                "max_par": s_paral,
                 "timeout_s": s_tmout,
             })
 
             for amb_nome, _, _ in ddl_builder.DEFAULT_ENVIRONMENTS:
-                cursor.execute(sql_merge_samb, {"s_nome": s_nome, "amb_nome": amb_nome})
+                cursor.execute(sql_merge_samb, {"scr_name": s_nome, "env_name": amb_nome})
 
             for per_nome, _, _, _, _ in ddl_builder.DEFAULT_PROFILES:
-                cursor.execute(sql_merge_pscr, {"per_nome": per_nome, "s_nome": s_nome})
+                cursor.execute(sql_merge_pscr, {"prf_name": per_nome, "scr_name": s_nome})
 
             for p_cod, p_ord, p_obrig, p_vsub in s_params:
                 cursor.execute(sql_merge_sprm, {
-                    "s_nome": s_nome,
-                    "p_cod": p_cod,
+                    "scr_name": s_nome,
+                    "p_code": p_cod,
                     "sort_order": p_ord,
                     "required": p_obrig,
                     "vsub": p_vsub,
@@ -482,8 +482,8 @@ def _run_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_sen
         MERGE INTO {tb_usr} dst
         USING (
           SELECT :login AS login, p.id AS profile_id
-            FROM {tb_per} p
-           WHERE p.name = :perfil
+            FROM {tb_prf} p
+           WHERE p.name = :profile
         ) src
         ON (dst.login = src.login)
         WHEN MATCHED THEN
@@ -498,7 +498,7 @@ def _run_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_sen
         WHEN NOT MATCHED THEN
           INSERT (id, login, name, password_hash, profile_id, active, session_epoch, failed_attempts, created_at, created_by)
           VALUES ({sq_usr}.NEXTVAL, :login, :name, :password_hash, src.profile_id, 'Y', 0, 0, SYSDATE, 'SYSTEM:init_db')
-        """.format(tb_usr=tb_usr, sq_usr=sq_usr, tb_per=tb_per)
+        """.format(tb_usr=tb_usr, sq_usr=sq_usr, tb_prf=tb_prf)
 
         for u_login, u_nome, u_perfil in ddl_builder.DEFAULT_USERS:
             nome_final = admin_nome if (u_login == "admin" and admin_nome) else u_nome
@@ -510,7 +510,7 @@ def _run_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_sen
             cursor.execute(sql_merge_usr, {
                 "login": u_login,
                 "name": nome_final,
-                "perfil": u_perfil,
+                "profile": u_perfil,
                 "password_hash": hash_final,
             })
             log_fn("Usuario '%s' homologado no perfil '%s'" % (u_login, u_perfil))

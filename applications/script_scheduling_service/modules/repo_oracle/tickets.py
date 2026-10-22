@@ -54,19 +54,19 @@ _SQL_LAST = (
     "SELECT " + _column_list(_COLS_LAST) + " FROM ("
     "SELECT " + _column_list(_COLS_LAST, "t.") + ", "
     "ROW_NUMBER() OVER (PARTITION BY t.script_id ORDER BY t.created_at DESC, t.id DESC) rn "
-    "FROM {tck} t WHERE t.script_id IN ({ids}){escopo}"
+    "FROM {tck} t WHERE t.script_id IN ({ids}){scope}"
     ") WHERE rn = 1"
 )
 _SQL_HISTORY = (
     "SELECT " + _column_list(_COLS_HIST) + " FROM {tck} t "
-    "WHERE t.script_id = :script_id AND t.created_at >= :desde{escopo} "
+    "WHERE t.script_id = :script_id AND t.created_at >= :since{scope} "
     "ORDER BY t.created_at DESC, t.id DESC"
 )
 _SQL_ANSWERS = (
-    "SELECT " + _column_list(_COLS_ANS) + " FROM {resp} WHERE ticket_id = :ticket_id ORDER BY id"
+    "SELECT " + _column_list(_COLS_ANS) + " FROM {tans} WHERE ticket_id = :ticket_id ORDER BY id"
 )
 _SQL_SCR_EXISTS = "SELECT id FROM {scr} WHERE id = :id"
-_SQL_ENV_EXISTS = "SELECT id FROM {amb} WHERE name = :name"
+_SQL_ENV_EXISTS = "SELECT id FROM {env} WHERE name = :name"
 _SQL_USR_EXISTS = "SELECT id FROM {usr} WHERE login = :login"
 _SQL_PRM_EXISTS = "SELECT id FROM {prm} WHERE id = :id"
 _SQL_TCK_EXISTS = "SELECT id FROM {tck} WHERE id = :id"
@@ -81,7 +81,7 @@ _SQL_INSERT = (
     "NVL(:scheduled_at, SYSDATE), :started_at, :heartbeat_at, :finished_at, SYSDATE, :actor, NULL, NULL)"
 )
 _SQL_INSERT_ANS = (
-    "INSERT INTO {resp} (id, ticket_id, parameter_id, answer_value, created_at, created_by, "
+    "INSERT INTO {tans} (id, ticket_id, parameter_id, answer_value, created_at, created_by, "
     "updated_at, updated_by) VALUES (:id, :ticket_id, :parameter_id, :answer_value, SYSDATE, :actor, NULL, NULL)"
 )
 # README §5.6, literais (no do web, uma transacao).
@@ -99,8 +99,8 @@ _SQL_LOG = "SELECT status, log_truncated, log_output FROM {tck} WHERE id = :id"
 # Saida do ticket (CR-012): metadados sem o BLOB; o conteudo so em fatias, como o log.
 _COLS_OUTPUT = ("state", "reason", "agent_id", "file_count", "size_bytes",
                "created_at", "created_by", "updated_at", "updated_by")
-_SQL_OUTPUT = "SELECT " + _column_list(_COLS_OUTPUT) + " FROM {sai} WHERE ticket_id = :ticket_id"
-_SQL_OUTPUT_CONTENT = "SELECT state, content FROM {sai} WHERE ticket_id = :ticket_id"
+_SQL_OUTPUT = "SELECT " + _column_list(_COLS_OUTPUT) + " FROM {tout} WHERE ticket_id = :ticket_id"
+_SQL_OUTPUT_CONTENT = "SELECT state, content FROM {tout} WHERE ticket_id = :ticket_id"
 OUTPUT_SLICE_MAX = 1024 * 1024
 
 
@@ -120,22 +120,22 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
         super(RepoTicketsOracle, self).__init__(cfg=cfg, segredos=segredos)
         self._idents = {
             "tck": self.qualify_table("tickets"),
-            "resp": self.qualify_table("ticket_answer"),
+            "tans": self.qualify_table("ticket_answer"),
             "scr": self.qualify_table("scripts"),
-            "amb": self.qualify_table("environments"),
+            "env": self.qualify_table("environments"),
             "usr": self.qualify_table("users"),
             "prm": self.qualify_table("parameters"),
-            "sai": self.qualify_table("ticket_output"),
+            "tout": self.qualify_table("ticket_output"),
         }
         self._sql = {}
         for nome, modelo in globals().items():
             if nome.startswith("_SQL_") and "{where" not in modelo and "{ids}" not in modelo \
-                    and "{escopo}" not in modelo:
+                    and "{scope}" not in modelo:
                 self._sql[nome[5:]] = modelo.format(**self._idents)
         self._tbl_aud = self.qualify_table("audit")
         self._seq_aud = self.qualify_sequence("audit")
         self._seq_tck = self.qualify_sequence("tickets")
-        self._seq_resp = self.qualify_sequence("ticket_answer")
+        self._seq_tans = self.qualify_sequence("ticket_answer")
 
     # -------------------------------------------------------------------------
     # Utilitarios
@@ -219,14 +219,14 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
             valores = sorted(set(stat_f)) if isinstance(stat_f, (list, tuple, set, frozenset)) else [stat_f]
             clausulas.append("status IN (" + self._marcas("s", valores, binds) + ")")
         if filtros.get("environment"):
-            clausulas.append("environment = :ambiente_f")
-            binds["ambiente_f"] = filtros["environment"]
+            clausulas.append("environment = :environment_f")
+            binds["environment_f"] = filtros["environment"]
         if filtros.get("script_id") is not None:
             clausulas.append("script_id = :script_id_f")
             binds["script_id_f"] = int(filtros["script_id"])
         if filtros.get("requested_by"):
-            clausulas.append("requested_by = :solicitante_f")
-            binds["solicitante_f"] = filtros["requested_by"]
+            clausulas.append("requested_by = :requester_f")
+            binds["requester_f"] = filtros["requested_by"]
         if filtros.get("parent_ticket_id") is not None:
             clausulas.append("parent_ticket_id = :parent_f")
             binds["parent_f"] = int(filtros["parent_ticket_id"])
@@ -237,13 +237,13 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
             clausulas.append("schedule_id IS NOT NULL")
         # Periodo sempre por intervalo, sem TRUNC (AGENTS §4.12); binds DATE (README §7.5).
         if filtros.get("criado_inicio"):
-            clausulas.append("created_at >= :criado_inicio")
-            binds["criado_inicio"] = filtros["criado_inicio"]
-            datas["criado_inicio"] = db_conn.TIPO_DATE
+            clausulas.append("created_at >= :created_from")
+            binds["created_from"] = filtros["criado_inicio"]
+            datas["created_from"] = db_conn.TIPO_DATE
         if filtros.get("criado_fim"):
-            clausulas.append("created_at < :criado_fim")
-            binds["criado_fim"] = filtros["criado_fim"]
-            datas["criado_fim"] = db_conn.TIPO_DATE
+            clausulas.append("created_at < :created_to")
+            binds["created_to"] = filtros["criado_fim"]
+            datas["created_to"] = db_conn.TIPO_DATE
 
         p = 1 if pagina is None else int(pagina)
         t = 20 if tamanho is None else int(tamanho)
@@ -257,7 +257,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
         sql_conta = self._sql_dinamico(_SQL_COUNT, where_count=where_count)
         sql_pag = (
             "SELECT * FROM (SELECT a.*, ROWNUM rn FROM (" + self._sql_dinamico(_SQL_LIST, where=where) + ") a "
-            "WHERE ROWNUM <= :fim) WHERE rn > :inicio"
+            "WHERE ROWNUM <= :end_ts) WHERE rn > :start_ts"
         )
         with self.read_context(conn=conn) as c:
             cur = c.cursor()
@@ -269,8 +269,8 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
             finally:
                 cur.close()
             binds_pag = dict(binds)
-            binds_pag["inicio"] = inicio
-            binds_pag["fim"] = inicio + t
+            binds_pag["start_ts"] = inicio
+            binds_pag["end_ts"] = inicio + t
             cur = c.cursor()
             try:
                 if datas:
@@ -299,7 +299,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
                 marcas = self._marcas("s", ids[i:i + _BATCH_IN], binds)
                 escopo = self._escopo("t.", escopo_ambientes, solicitante, binds)
                 sql = self._sql_dinamico(_SQL_LAST, ids=marcas,
-                                         escopo="".join(" AND " + x for x in escopo))
+                                         scope="".join(" AND " + x for x in escopo))
                 cur = c.cursor()
                 try:
                     cur.execute(sql, binds)
@@ -314,16 +314,16 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
     def script_history(self, script_id, desde, escopo_ambientes=None, solicitante=None, limite=5000,
                          conn=None):
         """Tickets do script desde a data, no escopo, sem LOB: os `limite` mais recentes, em ordem crescente."""
-        binds = {"script_id": int(script_id), "desde": desde}
+        binds = {"script_id": int(script_id), "since": desde}
         escopo = self._escopo("t.", escopo_ambientes, solicitante, binds)
-        sql = self._sql_dinamico(_SQL_HISTORY, escopo="".join(" AND " + x for x in escopo))
+        sql = self._sql_dinamico(_SQL_HISTORY, scope="".join(" AND " + x for x in escopo))
         if limite:
-            sql = "SELECT " + _column_list(_COLS_HIST) + " FROM (" + sql + ") WHERE ROWNUM <= :limite"
-            binds["limite"] = int(limite)
+            sql = "SELECT " + _column_list(_COLS_HIST) + " FROM (" + sql + ") WHERE ROWNUM <= :cutoff"
+            binds["cutoff"] = int(limite)
         with self.read_context(conn=conn) as c:
             cur = c.cursor()
             try:
-                db_conn.set_input_types(cur, desde=db_conn.TIPO_DATE)
+                db_conn.set_input_types(cur, since=db_conn.TIPO_DATE)
                 cur.execute(sql, binds)
                 linhas = [self.tuple_to_dict(_COLS_HIST, r) for r in cur.fetchall()]
             finally:
@@ -471,7 +471,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
 
             lote = []
             for resp in (respostas or []):
-                lote.append({"id": db_conn.next_id(c, self._seq_resp), "ticket_id": tid,
+                lote.append({"id": db_conn.next_id(c, self._seq_tans), "ticket_id": tid,
                              "parameter_id": int(resp["parameter_id"]),
                              "answer_value": resp.get("answer_value"), "actor": ator_limpo})
             if lote:

@@ -12,7 +12,7 @@ Consultas do `RepoSchedulerQueue` (`modules/repo_oracle/scheduler_queue.py`) no 
 
 | Método | Consulta | Acesso esperado |
 |---|---|---|
-| `candidates` (CR-013) | (1) scripts do agente por interpretador; (2) `RUNNING` por script e ambiente; (3) janela: por ambiente e prioridade 1 a 4, os `:lote` primeiros de `PENDING` vencidos por `(inicio, id)` dos scripts abaixo do teto, juntados e ordenados pela prioridade efetiva (README §8.2) | (1) `{prefixo}scripts` (catálogo); (2) faixa `status = 'RUNNING'` de `ix_{prefixo}tck_queue`; (3) `INDEX RANGE SCAN` de `ix_{prefixo}tck_queue` por bloco, sem sort e sem tabela, `COUNT STOPKEY`; só os escolhidos pela PK |
+| `candidates` (CR-013) | (1) scripts do agente por interpretador; (2) `RUNNING` por script e ambiente; (3) janela: por ambiente e prioridade 1 a 4, os `:batch_size` primeiros de `PENDING` vencidos por `(inicio, id)` dos scripts abaixo do teto, juntados e ordenados pela prioridade efetiva (README §8.2) | (1) `{prefixo}scripts` (catálogo); (2) faixa `status = 'RUNNING'` de `ix_{prefixo}tck_queue`; (3) `INDEX RANGE SCAN` de `ix_{prefixo}tck_queue` por bloco, sem sort e sem tabela, `COUNT STOPKEY`; só os escolhidos pela PK |
 | `claim` (3 passos) | `SELECT … FOR UPDATE WAIT 5` do script; contagem de `RUNNING` do par; `UPDATE … RETURNING started_at` (README §8.3) | `pk_{prefixo}scripts`; `ix_{prefixo}tck_scr`; `pk_{prefixo}tickets` |
 | `own_sweep`, `tickets_running_do_agente` | `(CASE WHEN status = 'RUNNING' THEN agent_id END) = :agent_id` (README §8.7) | `ix_{prefixo}tck_run` |
 | `heartbeat` | `executemany` do `UPDATE` por PK dos tickets e `UPDATE` do agente por `code` | `pk_{prefixo}tickets`; `uk_{prefixo}agt_code` |
@@ -44,7 +44,7 @@ Consultas do `RepoSchedulerQueue` (`modules/repo_oracle/scheduler_queue.py`) no 
 | 2 | 1,21 s / 22616 | 0,18 s / 264 |
 | 5 | 1,25 s / 22616 | 0,17 s / 264 |
 
-O tempo que resta é quase todo de ida e volta à rede (três consultas curtas). O custo da janela não depende do tamanho da fila: cresce com `ambientes atendidos × 4 × :lote`.
+O tempo que resta é quase todo de ida e volta à rede (três consultas curtas). O custo da janela não depende do tamanho da fila: cresce com `ambientes atendidos × 4 × :batch_size`.
 
 ### candidatos (CR-013, execução real com 1 milhão de PENDING)
 

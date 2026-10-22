@@ -100,13 +100,13 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
 
         nome_f = filtros.get("name")
         if nome_f:
-            clausulas.append("LOWER(name) LIKE :nome_f")
-            binds["nome_f"] = "%" + nome_f.lower() + "%"
+            clausulas.append("LOWER(name) LIKE :name_f")
+            binds["name_f"] = "%" + nome_f.lower() + "%"
 
         ativo_f = filtros.get("active")
         if ativo_f:
-            clausulas.append("active = :ativo_f")
-            binds["ativo_f"] = str(ativo_f).strip().upper()
+            clausulas.append("active = :active_f")
+            binds["active_f"] = str(ativo_f).strip().upper()
 
         is_admin_f = filtros.get("is_admin")
         if is_admin_f:
@@ -139,8 +139,8 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
             "created_at, created_by, updated_at, updated_by "
             "FROM " + self._tabela_perfis() + where_sql + " "
             "ORDER BY name ASC, id ASC"
-            ") a WHERE ROWNUM <= :fim"
-            ") WHERE rn > :inicio"
+            ") a WHERE ROWNUM <= :end_ts"
+            ") WHERE rn > :start_ts"
         )
 
         with self.read_context(conn=conn) as c:
@@ -153,8 +153,8 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                 total_limitado = raw_count >= 10001
 
                 binds_pag = copy.deepcopy(binds)
-                binds_pag["inicio"] = inicio
-                binds_pag["fim"] = fim
+                binds_pag["start_ts"] = inicio
+                binds_pag["end_ts"] = fim
                 cur.execute(sql_paginada, binds_pag)
                 itens = [self.tuple_to_dict(_COLS_PROFILE, r[:-1]) for r in cur.fetchall()]
 
@@ -205,8 +205,8 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
             cur = c.cursor()
             try:
                 cur.execute(
-                    "SELECT id FROM " + self._tabela_perfis() + " WHERE UPPER(name) = :nome_u",
-                    {"nome_u": nome.strip().upper()},
+                    "SELECT id FROM " + self._tabela_perfis() + " WHERE UPPER(name) = :user_name",
+                    {"user_name": nome.strip().upper()},
                 )
                 if cur.fetchone():
                     raise repo_errors.RepoViolation("Perfil com nome '%s' ja existe" % nome, constraint=self.constraint_name("uk", "profiles", "name"))

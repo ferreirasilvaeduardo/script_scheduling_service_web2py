@@ -26,54 +26,54 @@ REASONS = ("FILES", "BYTES", "DEADLINE", "ERROR")
 _PLSQL_APPEND = """DECLARE
   v_lob BLOB;
   v_atual NUMBER(12);
-  v_parte NUMBER(12) {atrib} DBMS_LOB.GETLENGTH(:parte);
+  v_parte NUMBER(12) {attr} DBMS_LOB.GETLENGTH(:part);
 BEGIN
   SELECT content INTO v_lob
-    FROM {sai}
+    FROM {tout}
    WHERE ticket_id = :ticket_id AND agent_id = :agent_id AND state = 'WRITING'
      FOR UPDATE WAIT 5;
-  v_atual {atrib} DBMS_LOB.GETLENGTH(v_lob);
-  IF v_atual = :offset_esperado THEN
-    DBMS_LOB.APPEND(v_lob, :parte);
-    :resultado {atrib} 'WRITTEN';
-  ELSIF v_atual = :offset_esperado + v_parte
-        AND DBMS_LOB.COMPARE(v_lob, :parte, v_parte, :offset_esperado + 1, 1) = 0 THEN
-    :resultado {atrib} 'ALREADY_WRITTEN';
+  v_atual {attr} DBMS_LOB.GETLENGTH(v_lob);
+  IF v_atual = :expected_offset THEN
+    DBMS_LOB.APPEND(v_lob, :part);
+    :result {attr} 'WRITTEN';
+  ELSIF v_atual = :expected_offset + v_parte
+        AND DBMS_LOB.COMPARE(v_lob, :part, v_parte, :expected_offset + 1, 1) = 0 THEN
+    :result {attr} 'ALREADY_WRITTEN';
   ELSE
     RAISE_APPLICATION_ERROR(-20003, 'SAIDA_OFFSET_DIVERGENTE');
   END IF;
 EXCEPTION
   WHEN NO_DATA_FOUND THEN
-    :resultado {atrib} 'OWNERSHIP_LOST';
+    :result {attr} 'OWNERSHIP_LOST';
 END;"""
 
 _SQL_RESTART = (
-    "UPDATE {sai} SET content = EMPTY_BLOB(), file_count = NULL, size_bytes = NULL "
+    "UPDATE {tout} SET content = EMPTY_BLOB(), file_count = NULL, size_bytes = NULL "
     "WHERE ticket_id = :ticket_id AND agent_id = :agent_id AND state = 'WRITING'"
 )
 _SQL_INSERT = (
-    "INSERT INTO {sai} (id, ticket_id, state, reason, agent_id, file_count, content, created_at, created_by) "
+    "INSERT INTO {tout} (id, ticket_id, state, reason, agent_id, file_count, content, created_at, created_by) "
     "SELECT :id, t.id, :state, :reason, :agent_id, :file_count, {content}, SYSDATE, :actor "
     "FROM {tck} t WHERE t.id = :ticket_id AND t.agent_id = :agent_id "
-    "AND NOT EXISTS (SELECT 1 FROM {sai} s WHERE s.ticket_id = :ticket_id)"
+    "AND NOT EXISTS (SELECT 1 FROM {tout} s WHERE s.ticket_id = :ticket_id)"
 )
 _SQL_COMPLETE = (
-    "UPDATE {sai} SET state = 'AVAILABLE', file_count = :file_count, size_bytes = :size_bytes, "
+    "UPDATE {tout} SET state = 'AVAILABLE', file_count = :file_count, size_bytes = :size_bytes, "
     "updated_at = SYSDATE, updated_by = :actor "
     "WHERE ticket_id = :ticket_id AND agent_id = :agent_id AND state = 'WRITING' "
     "AND DBMS_LOB.GETLENGTH(content) = :size_bytes"
 )
 _SQL_CLOSE_WRITING = (
-    "UPDATE {sai} SET state = :state, reason = :reason, file_count = :file_count, "
+    "UPDATE {tout} SET state = :state, reason = :reason, file_count = :file_count, "
     "size_bytes = NULL, content = NULL, updated_at = SYSDATE, updated_by = :actor "
     "WHERE ticket_id = :ticket_id AND agent_id = :agent_id AND state = 'WRITING'"
 )
 _SQL_FAIL_OF_AGENT = (
-    "UPDATE {sai} SET state = 'FAILED', reason = 'ERROR', file_count = NULL, size_bytes = NULL, "
+    "UPDATE {tout} SET state = 'FAILED', reason = 'ERROR', file_count = NULL, size_bytes = NULL, "
     "content = NULL, updated_at = SYSDATE, updated_by = :actor "
     "WHERE (" + sql_ident.FBI_TOUT_WRITE_CASE + ") = :agent_id"
 )
-_SQL_STATE = "SELECT state, agent_id FROM {sai} WHERE ticket_id = :ticket_id"
+_SQL_STATE = "SELECT state, agent_id FROM {tout} WHERE ticket_id = :ticket_id"
 
 
 class OutputOffsetMismatch(RuntimeError):
@@ -94,14 +94,14 @@ class RepoSchedulerOutput(object):
     def __init__(self, owner, prefixo):
         sai, tck = sql_ident.table(owner, prefixo, "ticket_output"), sql_ident.table(owner, prefixo, "tickets")
         self._seq = sql_ident.sequence(owner, prefixo, "ticket_output")
-        self._plsql = _PLSQL_APPEND.format(sai=sai, atrib=":" + "=")
-        self._sql_restart = _SQL_RESTART.format(sai=sai)
-        self._sql_insert_writing = _SQL_INSERT.format(sai=sai, tck=tck, content="EMPTY_BLOB()")
-        self._sql_insert_without_content = _SQL_INSERT.format(sai=sai, tck=tck, content="NULL")
-        self._sql_complete = _SQL_COMPLETE.format(sai=sai)
-        self._sql_finish = _SQL_CLOSE_WRITING.format(sai=sai)
-        self._sql_fail = _SQL_FAIL_OF_AGENT.format(sai=sai)
-        self._sql_state = _SQL_STATE.format(sai=sai)
+        self._plsql = _PLSQL_APPEND.format(tout=sai, attr=":" + "=")
+        self._sql_restart = _SQL_RESTART.format(tout=sai)
+        self._sql_insert_writing = _SQL_INSERT.format(tout=sai, tck=tck, content="EMPTY_BLOB()")
+        self._sql_insert_without_content = _SQL_INSERT.format(tout=sai, tck=tck, content="NULL")
+        self._sql_complete = _SQL_COMPLETE.format(tout=sai)
+        self._sql_finish = _SQL_CLOSE_WRITING.format(tout=sai)
+        self._sql_fail = _SQL_FAIL_OF_AGENT.format(tout=sai)
+        self._sql_state = _SQL_STATE.format(tout=sai)
 
     @classmethod
     def from_config(cls, cfg):
@@ -139,11 +139,11 @@ class RepoSchedulerOutput(object):
             raise ValueError("parte da saida vazia ou acima de 1 MiB")
         cur = conn.cursor()
         try:
-            db_conn.set_input_types(cur, parte=db_conn.TIPO_BLOB)
+            db_conn.set_input_types(cur, part=db_conn.TIPO_BLOB)
             resultado = db_conn.output_variable(cur, db_conn.TIPO_VARCHAR, tamanho=20)
             try:
-                cur.execute(self._plsql, parte=bytes(parte), ticket_id=int(ticket_id), agent_id=agente_id,
-                            offset_esperado=int(offset_esperado), resultado=resultado)
+                cur.execute(self._plsql, part=bytes(parte), ticket_id=int(ticket_id), agent_id=agente_id,
+                            expected_offset=int(offset_esperado), result=resultado)
             except Exception as exc:
                 if db_conn.classify_error(exc) == ("ORA", _ORA_DIVERGENT):
                     raise OutputOffsetMismatch(ticket_id, int(offset_esperado), len(parte))

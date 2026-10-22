@@ -123,14 +123,14 @@ class TestWithoutDb(unittest.TestCase):
         (sql_scr, b_scr), (sql_run, b_run), (sql, binds) = conn.executed
         self.assertIn("interpreter IN (:int0, :int1)", sql_scr)
         self.assertEqual(b_scr, {"int0": "PYTHON3", "int1": "SH"})
-        self.assertIn("environment IN (:amb0, :amb1) GROUP BY script_id, environment", sql_run)
-        self.assertEqual(b_run, {"amb0": "PRD", "amb1": "HML"})
+        self.assertIn("environment IN (:env0, :env1) GROUP BY script_id, environment", sql_run)
+        self.assertEqual(b_run, {"env0": "PRD", "env1": "HML"})
         inicio = sql_ident.FBI_TCK_QUEUE_START
         self.assertEqual(sql.count("SELECT id, script_id, environment, prio, inicio FROM (SELECT id, script_id"), 8,
                          "2 environments x 4 prioridades")
         self.assertNotIn("SELECT *", sql, "AGENTS §4.12")
-        for trecho in ("WHERE status = 'PENDING' AND environment = :amb0 AND priority = 1 AND %s <= SYSDATE" % inicio,
-                       "ORDER BY %s, id) WHERE ROWNUM <= :lote" % inicio,
+        for trecho in ("WHERE status = 'PENDING' AND environment = :env0 AND priority = 1 AND %s <= SYSDATE" % inicio,
+                       "ORDER BY %s, id) WHERE ROWNUM <= :batch_size" % inicio,
                        "c.status = 'PENDING' AND c.cancel_requested = 'N'",
                        "j.inicio, j.id", "OWN_X.pfx_tickets"):
             self.assertIn(trecho, sql)
@@ -139,7 +139,7 @@ class TestWithoutDb(unittest.TestCase):
         self.assertIn("(script_id IN (:s0_0, :s0_1))", sql)
         self.assertEqual((binds["s0_0"], binds["s0_1"]), (3, 5))
         self.assertIn("(script_id IN (:s1_0, :s1_1, :s1_2))", sql)
-        self.assertEqual((binds["lote"], binds["env_min"], binds["amb0"], binds["amb1"]), (10, 30, "PRD", "HML"))
+        self.assertEqual((binds["batch_size"], binds["env_min"], binds["env0"], binds["env1"]), (10, 30, "PRD", "HML"))
         self.assertEqual(self.repo.candidates(conn, [], ["SH"], 10, 0), [])
         self.assertEqual(self.repo.candidates(conn, ["PRD"], [], 10, 0), [])
 
@@ -316,7 +316,7 @@ class TestWithoutDb(unittest.TestCase):
         self.assertEqual(self.repo.check_config(conn, AGENT, "hb=10", 120), [("srv-02", "hb=20")])
         conn = _Conn([("SELECT name, active", (2, [("PRD", "Y"), ("HML", "N")]))])
         self.assertEqual(self.repo.active_environments(conn, ["PRD", "HML", "DEV"]), (["PRD"], ["DEV"]))
-        self.assertEqual(conn.executed[0][1], {"amb0": "DEV", "amb1": "HML", "amb2": "PRD"})
+        self.assertEqual(conn.executed[0][1], {"env0": "DEV", "env1": "HML", "env2": "PRD"})
 
     def test_contexto_execucao_monta_o_ctx_rbac(self):
         conn = _Conn([

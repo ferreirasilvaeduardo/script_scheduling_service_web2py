@@ -49,17 +49,17 @@ def _column_list(cols, alias=""):
 # (validados); todo valor entra por bind.
 # -----------------------------------------------------------------------------
 
-_SQL_GET = "SELECT " + _column_list(_COLS) + " FROM {agd} WHERE id = :id"
+_SQL_GET = "SELECT " + _column_list(_COLS) + " FROM {sch} WHERE id = :id"
 _SQL_GET_LOCK = _SQL_GET + " FOR UPDATE WAIT 5"
-_SQL_EXISTS = "SELECT id FROM {agd} WHERE id = :id"
-_SQL_LIST = "SELECT " + _column_list(_COLS) + " FROM {agd}{where} ORDER BY next_run_at, id"
-_SQL_COUNT = "SELECT COUNT(*) FROM (SELECT id FROM {agd} WHERE {where_count})"
+_SQL_EXISTS = "SELECT id FROM {sch} WHERE id = :id"
+_SQL_LIST = "SELECT " + _column_list(_COLS) + " FROM {sch}{where} ORDER BY next_run_at, id"
+_SQL_COUNT = "SELECT COUNT(*) FROM (SELECT id FROM {sch} WHERE {where_count})"
 _SQL_SCR_EXISTS = "SELECT id FROM {scr} WHERE id = :id"
 _SQL_USR_EXISTS = "SELECT id FROM {usr} WHERE id = :id"
-_SQL_ENV_EXISTS = "SELECT id FROM {amb} WHERE name = :name"
+_SQL_ENV_EXISTS = "SELECT id FROM {env} WHERE name = :name"
 _SQL_TICKET_STATUS = "SELECT status FROM {tck} WHERE id = :id"
 _SQL_INSERT = (
-    "INSERT INTO {agd} (id, name, script_id, environment, user_id, priority, recurrence_type, "
+    "INSERT INTO {sch} (id, name, script_id, environment, user_id, priority, recurrence_type, "
     "cron_expression, run_time, week_days, month_day, params_json, start_date, end_date, "
     "next_run_at, last_run_at, last_ticket_id, pause_reason, active, "
     "created_at, created_by, updated_at, updated_by) "
@@ -69,7 +69,7 @@ _SQL_INSERT = (
     "SYSDATE, :actor, NULL, NULL)"
 )
 _SQL_UPDATE = (
-    "UPDATE {agd} SET name = :name, script_id = :script_id, environment = :environment, user_id = :user_id, "
+    "UPDATE {sch} SET name = :name, script_id = :script_id, environment = :environment, user_id = :user_id, "
     "priority = :priority, recurrence_type = :recurrence_type, cron_expression = :cron_expression, "
     "run_time = :run_time, week_days = :week_days, month_day = :month_day, "
     "params_json = :params_json, start_date = :start_date, end_date = :end_date, "
@@ -79,12 +79,12 @@ _SQL_UPDATE = (
 )
 # CR-007, R-19: so pausa regra ativa e, com antiga_data, so se a next_run lida nao mudou.
 _SQL_PAUSE = (
-    "UPDATE {agd} SET active = 'N', pause_reason = :reason, updated_at = SYSDATE, updated_by = :actor "
+    "UPDATE {sch} SET active = 'N', pause_reason = :reason, updated_at = SYSDATE, updated_by = :actor "
     "WHERE id = :id AND active = 'Y'"
 )
-_SQL_PAUSE_OPTIMISTIC = _SQL_PAUSE + " AND next_run_at = :antiga_data"
+_SQL_PAUSE_OPTIMISTIC = _SQL_PAUSE + " AND next_run_at = :old_date"
 _SQL_RESUME = (
-    "UPDATE {agd} SET active = 'Y', pause_reason = NULL, next_run_at = :nova_data, "
+    "UPDATE {sch} SET active = 'Y', pause_reason = NULL, next_run_at = :new_date, "
     "updated_at = SYSDATE, updated_by = :actor WHERE id = :id"
 )
 
@@ -117,10 +117,10 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
     def __init__(self, cfg=None, segredos=None):
         super(RepoSchedulesOracle, self).__init__(cfg=cfg, segredos=segredos)
         self._idents = {
-            "agd": self.qualify_table("schedules"),
+            "sch": self.qualify_table("schedules"),
             "scr": self.qualify_table("scripts"),
             "usr": self.qualify_table("users"),
-            "amb": self.qualify_table("environments"),
+            "env": self.qualify_table("environments"),
             "tck": self.qualify_table("tickets"),
         }
         self._sql = {}
@@ -129,7 +129,7 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
                 self._sql[nome[5:]] = modelo.format(**self._idents)
         self._tbl_aud = self.qualify_table("audit")
         self._seq_aud = self.qualify_sequence("audit")
-        self._seq_agd = self.qualify_sequence("schedules")
+        self._seq_sch = self.qualify_sequence("schedules")
 
     # -------------------------------------------------------------------------
     # Utilitarios
@@ -251,22 +251,22 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
                     marcas.append(":e%d" % n)
                 clausulas.append("environment IN (" + ", ".join(marcas) + ")")
         if filtros.get("active"):
-            clausulas.append("active = :ativo_f")
-            binds["ativo_f"] = filtros["active"]
+            clausulas.append("active = :active_f")
+            binds["active_f"] = filtros["active"]
         if filtros.get("script_id") is not None:
             clausulas.append("script_id = :script_id_f")
             binds["script_id_f"] = int(filtros["script_id"])
         if filtros.get("environment"):
-            clausulas.append("environment = :ambiente_f")
-            binds["ambiente_f"] = filtros["environment"]
+            clausulas.append("environment = :environment_f")
+            binds["environment_f"] = filtros["environment"]
         if filtros.get("user_id") is not None:
-            clausulas.append("user_id = :usuario_id_f")
-            binds["usuario_id_f"] = int(filtros["user_id"])
+            clausulas.append("user_id = :user_id_f")
+            binds["user_id_f"] = int(filtros["user_id"])
         if filtros.get("name"):
             # '%' e '_' digitados contam como literais, como o 'in' do FAKE.
             trecho = filtros["name"].lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            clausulas.append("LOWER(name) LIKE :nome_f ESCAPE '\\'")
-            binds["nome_f"] = "%" + trecho + "%"
+            clausulas.append("LOWER(name) LIKE :name_f ESCAPE '\\'")
+            binds["name_f"] = "%" + trecho + "%"
 
         p = 1 if pagina is None else int(pagina)
         t = 20 if tamanho is None else int(tamanho)
@@ -280,7 +280,7 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
         sql_conta = _SQL_COUNT.format(where_count=where_count, **self._idents)
         sql_pag = (
             "SELECT * FROM (SELECT a.*, ROWNUM rn FROM (" + _SQL_LIST.format(where=where, **self._idents) + ") a "
-            "WHERE ROWNUM <= :fim) WHERE rn > :inicio"
+            "WHERE ROWNUM <= :end_ts) WHERE rn > :start_ts"
         )
         with self.read_context(conn=conn) as c:
             cur = c.cursor()
@@ -288,8 +288,8 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
                 cur.execute(sql_conta, binds)
                 bruto = cur.fetchone()[0]
                 binds_pag = dict(binds)
-                binds_pag["inicio"] = inicio
-                binds_pag["fim"] = inicio + t
+                binds_pag["start_ts"] = inicio
+                binds_pag["end_ts"] = inicio + t
                 cur.execute(sql_pag, binds_pag)
                 itens = [self._linha(r) for r in cur.fetchall()]
             finally:
@@ -354,7 +354,7 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
             }
             self._checar_cks(novo)
             self._checar_fks(c, novo)
-            aid = db_conn.next_id(c, self._seq_agd)
+            aid = db_conn.next_id(c, self._seq_sch)
             binds = self._binds_registro(novo, ator_limpo)
             binds["id"] = aid
             cur = c.cursor()
@@ -406,9 +406,9 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
             cur = c.cursor()
             try:
                 if antiga_data is not None:
-                    binds["antiga_data"] = antiga_data
+                    binds["old_date"] = antiga_data
                     # TIPO_DATE descarta a fracao: o valor lido mais microssegundos ainda casa (README §7.5).
-                    db_conn.set_input_types(cur, antiga_data=db_conn.TIPO_DATE)
+                    db_conn.set_input_types(cur, old_date=db_conn.TIPO_DATE)
                     cur.execute(self._sql["PAUSE_OPTIMISTIC"], binds)
                 else:
                     cur.execute(self._sql["PAUSE"], binds)
@@ -433,8 +433,8 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
                 raise repo_errors.RepoViolation("proxima_execucao e obrigatoria")
             cur = c.cursor()
             try:
-                db_conn.set_input_types(cur, nova_data=db_conn.TIPO_DATE)
-                cur.execute(self._sql["RESUME"], {"id": int(id), "nova_data": nova_data, "actor": ator_limpo})
+                db_conn.set_input_types(cur, new_date=db_conn.TIPO_DATE)
+                cur.execute(self._sql["RESUME"], {"id": int(id), "new_date": nova_data, "actor": ator_limpo})
                 if cur.rowcount != 1:
                     raise repo_errors.RepoConflict("Agendamento ID %s alterado por outra operacao" % id)
             finally:

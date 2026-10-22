@@ -269,8 +269,8 @@ class TestSqlRepoHealth(unittest.TestCase):
     def test_indices_sem_lob_e_interpretador_do_cadastro(self):
         fila = self.repo.sql("queue")
         self.assertIn("JOIN openrisow.tbsss_scripts s ON s.id = g.script_id", fila)
-        self.assertIn("status = 'PENDING' AND GREATEST(scheduled_at, created_at) <= :agora", fila)
-        self.assertIn("status = 'PENDING' AND GREATEST(scheduled_at, created_at) <= :agora",
+        self.assertIn("status = 'PENDING' AND GREATEST(scheduled_at, created_at) <= :now", fila)
+        self.assertIn("status = 'PENDING' AND GREATEST(scheduled_at, created_at) <= :now",
                       self.repo.sql("overdue_queue"))
         self.assertIn("(CASE WHEN status = 'RUNNING' THEN agent_id END) >= CHR(1)", self.repo.sql("running_no_pid"))
         self.assertIn("actor = 'SYSTEM:purge' AND action = 'PURGE'", self.repo.sql("purge"))
@@ -329,8 +329,8 @@ class TestHealthOracle(unittest.TestCase):
     def test_explain_sem_varredura_de_tickets_e_auditoria(self):
         import db_conn
         agora = db_conn.db_now(self.conn)
-        binds = {"queue": {"agora": agora}, "overdue_queue": {"agora": agora}, "running_no_pid": {"limite": agora},
-                 "purge": {"limite": agora}}
+        binds = {"queue": {"now": agora}, "overdue_queue": {"now": agora}, "running_no_pid": {"cutoff": agora},
+                 "purge": {"cutoff": agora}}
         for nome, valores in binds.items():
             cur = self.conn.cursor()
             stmt = "SSS_F91B_%s" % nome.upper()

@@ -225,13 +225,13 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 4. **Paginação:** sempre com a subquery de `ROWNUM`:
    ```sql
    SELECT * FROM (
-     SELECT a.*, ROWNUM rn FROM (<query ordenada>) a WHERE ROWNUM <= :fim
-   ) WHERE rn > :inicio
+     SELECT a.*, ROWNUM rn FROM (<query ordenada>) a WHERE ROWNUM <= :end_ts
+   ) WHERE rn > :start_ts
    ```
 5. **JSON:** é parseado e gerado **apenas em Python** (`json`). O banco armazena o texto em CLOB e nunca o interpreta.
 6. **Texto:** colunas textuais `VARCHAR2(N CHAR)` e flags com `CHAR(1)` + CK `IN ('Y','N')`.
 7. **FKs:** toda FK filha tem índice cuja coluna líder é a FK. Uma UK composta cobre apenas a sua coluna líder.
-8. **Índices baseados em função** (`ix_tbsss_tck_queue`, `ix_tbsss_tck_run`): as queries devem repetir a expressão **textualmente idêntica** à do índice (`sql_ident.FBI_TCK_QUEUE_START`, `FBI_TCK_RUN_AGENT_CASE`). **Fila (CR-013):** a seleção de candidatos lê a fila só pela janela por ambiente e prioridade de `ix_tbsss_tck_queue` (`status`, `environment`, `priority` simples na frente, `ORDER BY` igual à ordem do índice e `ROWNUM <= :lote`), sem ordenar a fila inteira; é proibido voltar a ordenar todos os `PENDING` por expressão de `SYSDATE`. Índice de fila só com `CASE` não elimina o sort no Oracle.
+8. **Índices baseados em função** (`ix_tbsss_tck_queue`, `ix_tbsss_tck_run`): as queries devem repetir a expressão **textualmente idêntica** à do índice (`sql_ident.FBI_TCK_QUEUE_START`, `FBI_TCK_RUN_AGENT_CASE`). **Fila (CR-013):** a seleção de candidatos lê a fila só pela janela por ambiente e prioridade de `ix_tbsss_tck_queue` (`status`, `environment`, `priority` simples na frente, `ORDER BY` igual à ordem do índice e `ROWNUM <= :batch_size`), sem ordenar a fila inteira; é proibido voltar a ordenar todos os `PENDING` por expressão de `SYSDATE`. Índice de fila só com `CASE` não elimina o sort no Oracle.
 9. **Transações:**
    * `autocommit = False` sempre.
    * Cada operação de negócio corresponde a **uma** transação, com `COMMIT` explícito ao final e `ROLLBACK` em qualquer exceção (`try/except/else` ou `finally`).

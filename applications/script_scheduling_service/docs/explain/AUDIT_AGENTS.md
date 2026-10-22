@@ -13,12 +13,12 @@ Consultas SQL estáticas do `RepoAuditOracle` e do `RepoAgentsOracle` (`modules/
 | Método | Consulta | Acesso esperado |
 |---|---|---|
 | `auditoria.list` | `COUNT(*)` com `ROWNUM <= 10001` e página `ROWNUM`, ordem `created_at DESC, id DESC`. O service sempre envia o período (`created_at >= :start_date AND created_at <= :end_date`, sem `TRUNC`, até 31 dias, ou 366 com filtro seletivo); filtros de ator e IP por trecho, ação, entidade, `entity_id` e `id_max` | `ix_{prefixo}aud_crt` no período; `ix_{prefixo}aud_ent` com entidade + id |
-| `auditoria.iterate` | Os mesmos filtros e ordem, `ROWNUM <= :limite`, cursor com `arraysize` (exportação, sem offset) | idem |
+| `auditoria.iterate` | Os mesmos filtros e ordem, `ROWNUM <= :cutoff`, cursor com `arraysize` (exportação, sem offset) | idem |
 | `auditoria.register` / `reserve_id` | `INSERT` pela PK; `NEXTVAL` da sequence | — |
 | `agentes.list` | Todos os agentes por `codigo, id` (dezenas de linhas) | `TABLE ACCESS FULL` aceitável em `tbsss_agents` |
 | `agentes.tickets_running` | `(CASE WHEN status = 'RUNNING' THEN agent_id END) = :code` | `ix_{prefixo}tck_run` |
-| `agentes.unattended_queue` (CR-013) | `status = 'PENDING' AND GREATEST(scheduled_at, created_at) <= :agora`, `COUNT(*)` e `MIN(inicio)` por ambiente e script, depois `JOIN` com `{prefixo}scripts` pelo interpretador do cadastro (CR-008, R-15) | `ix_{prefixo}tck_queue` só (`INDEX FAST FULL SCAN`, sem tabela): com 1 milhão de `PENDING`, 8.346 leituras e 0,3 s (agregado de toda a fila, só no painel) |
-| `agentes.running_without_pid` | `(CASE WHEN status = 'RUNNING' THEN agent_id END) >= CHR(1)` (equivale a `IS NOT NULL` para o `agent_id`), sem PID e `started_at < :limite` | `ix_{prefixo}tck_run` |
+| `agentes.unattended_queue` (CR-013) | `status = 'PENDING' AND GREATEST(scheduled_at, created_at) <= :now`, `COUNT(*)` e `MIN(inicio)` por ambiente e script, depois `JOIN` com `{prefixo}scripts` pelo interpretador do cadastro (CR-008, R-15) | `ix_{prefixo}tck_queue` só (`INDEX FAST FULL SCAN`, sem tabela): com 1 milhão de `PENDING`, 8.346 leituras e 0,3 s (agregado de toda a fila, só no painel) |
+| `agentes.running_without_pid` | `(CASE WHEN status = 'RUNNING' THEN agent_id END) >= CHR(1)` (equivale a `IS NOT NULL` para o `agent_id`), sem PID e `started_at < :cutoff` | `ix_{prefixo}tck_run` |
 
 ---
 

@@ -29,7 +29,7 @@ _SQL_INSERT = (
 _SQL_GET = "SELECT " + _column_list(_COLS) + " FROM {aud} WHERE id = :id"
 _SQL_LIST = "SELECT " + _column_list(_COLS) + " FROM {aud}{where} ORDER BY created_at DESC, id DESC"
 _SQL_COUNT = "SELECT COUNT(*) FROM (SELECT id FROM {aud} WHERE {where_count})"
-_SQL_ITERATE = "SELECT " + _column_list(_COLS) + " FROM ({lista}) WHERE ROWNUM <= :limite"
+_SQL_ITERATE = "SELECT " + _column_list(_COLS) + " FROM ({items}) WHERE ROWNUM <= :cutoff"
 
 
 class RepoAuditOracle(BaseRepoOracle, RepoAudit):
@@ -50,17 +50,17 @@ class RepoAuditOracle(BaseRepoOracle, RepoAudit):
         clausulas, binds, datas = [], {}, {}
         if filtros.get("actor"):
             trecho = filtros["actor"].lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            clausulas.append("LOWER(actor) LIKE :ator_f ESCAPE '\\'")
-            binds["ator_f"] = "%" + trecho + "%"
+            clausulas.append("LOWER(actor) LIKE :actor_f ESCAPE '\\'")
+            binds["actor_f"] = "%" + trecho + "%"
         if filtros.get("action"):
-            clausulas.append("action = :acao_f")
-            binds["acao_f"] = filtros["action"]
+            clausulas.append("action = :action_f")
+            binds["action_f"] = filtros["action"]
         if filtros.get("entity"):
-            clausulas.append("entity = :entidade_f")
-            binds["entidade_f"] = filtros["entity"]
+            clausulas.append("entity = :entity_f")
+            binds["entity_f"] = filtros["entity"]
         if filtros.get("entity_id") is not None:
-            clausulas.append("entity_id = :entidade_id_f")
-            binds["entidade_id_f"] = int(filtros["entity_id"])
+            clausulas.append("entity_id = :entity_id_f")
+            binds["entity_id_f"] = int(filtros["entity_id"])
         if filtros.get("source_ip"):
             trecho = filtros["source_ip"].replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             clausulas.append("source_ip LIKE :ip_f ESCAPE '\\'")
@@ -116,7 +116,7 @@ class RepoAuditOracle(BaseRepoOracle, RepoAudit):
         sql_conta = _SQL_COUNT.format(where_count=where_count, **self._idents)
         sql_pag = (
             "SELECT * FROM (SELECT a.*, ROWNUM rn FROM (" + _SQL_LIST.format(where=where, **self._idents) + ") a "
-            "WHERE ROWNUM <= :fim) WHERE rn > :inicio"
+            "WHERE ROWNUM <= :end_ts) WHERE rn > :start_ts"
         )
         with self.read_context(conn=conn) as c:
             cur = c.cursor()
@@ -128,8 +128,8 @@ class RepoAuditOracle(BaseRepoOracle, RepoAudit):
             finally:
                 cur.close()
             binds_pag = dict(binds)
-            binds_pag["inicio"] = inicio
-            binds_pag["fim"] = inicio + t
+            binds_pag["start_ts"] = inicio
+            binds_pag["end_ts"] = inicio + t
             cur = c.cursor()
             try:
                 if datas:
@@ -150,8 +150,8 @@ class RepoAuditOracle(BaseRepoOracle, RepoAudit):
         """Iterador de ate `limite` registros na ordem de listar, por cursor (arraysize), sem offset."""
         clausulas, binds, datas = self._filtros(filtros)
         where = (" WHERE " + " AND ".join(clausulas)) if clausulas else ""
-        sql = _SQL_ITERATE.format(lista=_SQL_LIST.format(where=where, **self._idents))
-        binds["limite"] = max(0, int(limite))
+        sql = _SQL_ITERATE.format(items=_SQL_LIST.format(where=where, **self._idents))
+        binds["cutoff"] = max(0, int(limite))
         return self._iterar(sql, binds, datas)
 
     def _iterar(self, sql, binds, datas):

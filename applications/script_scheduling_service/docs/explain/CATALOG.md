@@ -17,14 +17,14 @@ O padrão é o mesmo nas três listagens: um `COUNT` que para em 10.001 e a pág
 ### 1.1 `environments_list`
 ```sql
 SELECT COUNT(*) FROM (SELECT id FROM {owner}.{prefixo}environments
-                       WHERE UPPER(name) LIKE :nome_f ESCAPE '\' AND active = :ativo_f AND ROWNUM <= 10001);
+                       WHERE UPPER(name) LIKE :name_f ESCAPE '\' AND active = :active_f AND ROWNUM <= 10001);
 
 SELECT * FROM (SELECT a.*, ROWNUM rn FROM (
   SELECT id, name, description, connection, active, created_at, created_by, updated_at, updated_by
     FROM {owner}.{prefixo}environments
-   WHERE UPPER(name) LIKE :nome_f ESCAPE '\' AND active = :ativo_f
+   WHERE UPPER(name) LIKE :name_f ESCAPE '\' AND active = :active_f
    ORDER BY NLSSORT(name, 'NLS_SORT=BINARY'), id
-) a WHERE ROWNUM <= :fim) WHERE rn > :inicio
+) a WHERE ROWNUM <= :end_ts) WHERE rn > :start_ts
 ```
 * **Esperado:** `COUNT STOPKEY` + `TABLE ACCESS FULL` em `{prefixo}environments` (tabela de cadastro); `SORT ORDER BY STOPKEY`.
 
@@ -36,9 +36,9 @@ SELECT * FROM (SELECT a.*, ROWNUM rn FROM (
          s.created_at, s.created_by, s.updated_at, s.updated_by,
          (SELECT COUNT(*) FROM {owner}.{prefixo}script_param sp WHERE sp.script_id = s.id) qtd_parametros
     FROM {owner}.{prefixo}scripts s
-   WHERE LOWER(s.name) LIKE :nome_f ESCAPE '\' AND s.script_group = :grupo_f   -- só os filtros informados
+   WHERE LOWER(s.name) LIKE :name_f ESCAPE '\' AND s.script_group = :grupo_f   -- só os filtros informados
    ORDER BY NLSSORT(s.name, 'NLS_SORT=BINARY'), s.id
-) a WHERE ROWNUM <= :fim) WHERE rn > :inicio;
+) a WHERE ROWNUM <= :end_ts) WHERE rn > :start_ts;
 
 -- Ambientes homologados só da página (IN por contagem controlada, em lotes de até 500):
 SELECT sa.script_id, a.name
@@ -55,7 +55,7 @@ SELECT sa.script_id, a.name
 SELECT p.id, p.code, ..., p.updated_by,
        (SELECT COUNT(*) FROM {owner}.{prefixo}script_param sp WHERE sp.parameter_id = p.id) qtd_scripts
   FROM {owner}.{prefixo}parameters p
- WHERE LOWER(p.code) LIKE :codigo_f ESCAPE '\'                        -- só os filtros informados
+ WHERE LOWER(p.code) LIKE :code_f ESCAPE '\'                        -- só os filtros informados
  ORDER BY NLSSORT(p.code, 'NLS_SORT=BINARY'), p.id                    -- dentro do padrão ROWNUM
 ```
 * **Esperado:** `qtd_scripts` faz `INDEX RANGE SCAN` em `ix_{prefixo}sprm_prm` (`parameter_id`).

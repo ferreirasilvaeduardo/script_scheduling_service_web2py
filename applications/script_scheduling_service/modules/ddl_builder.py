@@ -547,7 +547,7 @@ def build_ddl_statements(owner, prefixo, lob_storage="SECUREFILE"):
                 "-- TRIGGER: {owner}.{trigger_name}\n"
                 "-- TABELA ALVO: {owner}.{table_name}\n"
                 "-- EVENTO: BEFORE UPDATE ON {owner}.{table_name} FOR EACH ROW\n"
-                "-- FINALIDADE DE GOVERNANCA: Garante a imutabilidade estrita da chave natural '{coluna}'.\n"
+                "-- FINALIDADE DE GOVERNANCA: Garante a imutabilidade estrita da chave natural '{column}'.\n"
                 "-- Bloqueia qualquer alteracao posterior de valor para preservar integridade de FKs.\n"
                 "-- REGRA: README §10 e AGENTS.md §4.\n"
                 "-- ==============================================================================\n"
@@ -555,15 +555,15 @@ def build_ddl_statements(owner, prefixo, lob_storage="SECUREFILE"):
                 "BEFORE UPDATE ON {owner}.{table_name}\n"
                 "FOR EACH ROW\n"
                 "BEGIN\n"
-                "    IF :NEW.{coluna} <> :OLD.{coluna} THEN\n"
-                "        RAISE_APPLICATION_ERROR(-20001, '{coluna} é imutável');\n"
+                "    IF :NEW.{column} <> :OLD.{column} THEN\n"
+                "        RAISE_APPLICATION_ERROR(-20001, '{column} é imutável');\n"
                 "    END IF;\n"
                 "END;"
             ).format(
                 owner=owner,
                 trigger_name=tr_bu_nome,
                 table_name=tabela_nome,
-                coluna=col_imutavel,
+                column=col_imutavel,
             )
             instrucoes.append(DDLItem(6, "TRIGGER", tr_bu_nome, sql_tr_bu, entidade))
 
@@ -833,12 +833,12 @@ def build_seed_statements(owner, prefixo, admin_login=None, admin_nome=None, adm
     comandos = []
 
     # 1. Funcionalidades canonicas
-    tb_fnc = "{}.{}".format(owner, esquema["features"]["tabela"])
-    sq_fnc = "{}.{}".format(owner, esquema["features"]["sequence"])
+    tb_fea = "{}.{}".format(owner, esquema["features"]["tabela"])
+    sq_fea = "{}.{}".format(owner, esquema["features"]["sequence"])
     for mod, cod, nome_exib, finalidade in FEATURE_CATALOG:
         sql = (
             "MERGE INTO {tb} dst\n"
-            "USING (SELECT '{cod}' AS code FROM DUAL) src\n"
+            "USING (SELECT '{code}' AS code FROM DUAL) src\n"
             "ON (dst.code = src.code)\n"
             "WHEN MATCHED THEN\n"
             "  UPDATE SET dst.name = '{name}',\n"
@@ -853,11 +853,11 @@ def build_seed_statements(owner, prefixo, admin_login=None, admin_nome=None, adm
             "     OR dst.description <> '{desc}'\n"
             "WHEN NOT MATCHED THEN\n"
             "  INSERT (id, code, module, name, description, active, created_at, created_by)\n"
-            "  VALUES ({sq}.NEXTVAL, '{cod}', '{mod}', '{name}', '{desc}', 'Y', SYSDATE, 'SYSTEM:init_db');"
+            "  VALUES ({sq}.NEXTVAL, '{code}', '{mod}', '{name}', '{desc}', 'Y', SYSDATE, 'SYSTEM:init_db');"
         ).format(
-            tb=tb_fnc,
-            sq=sq_fnc,
-            cod=_escape_sql(cod),
+            tb=tb_fea,
+            sq=sq_fea,
+            code=_escape_sql(cod),
             mod=_escape_sql(mod),
             name=_escape_sql(nome_exib),
             desc=_escape_sql(finalidade),
@@ -865,8 +865,8 @@ def build_seed_statements(owner, prefixo, admin_login=None, admin_nome=None, adm
         comandos.append(sql)
 
     # 2. Ambientes padrao (inseridos antes dos perfis para permitir vinculo de perfil_amb)
-    tb_amb = "{}.{}".format(owner, esquema["environments"]["tabela"])
-    sq_amb = "{}.{}".format(owner, esquema["environments"]["sequence"])
+    tb_env = "{}.{}".format(owner, esquema["environments"]["tabela"])
+    sq_env = "{}.{}".format(owner, esquema["environments"]["sequence"])
     for amb_nome, amb_desc, amb_conn in DEFAULT_ENVIRONMENTS:
         sql_amb = (
             "MERGE INTO {tb} dst\n"
@@ -885,8 +885,8 @@ def build_seed_statements(owner, prefixo, admin_login=None, admin_nome=None, adm
             "  INSERT (id, name, description, connection, active, created_at, created_by)\n"
             "  VALUES ({sq}.NEXTVAL, '{name}', '{desc}', '{conn}', 'Y', SYSDATE, 'SYSTEM:init_db');"
         ).format(
-            tb=tb_amb,
-            sq=sq_amb,
+            tb=tb_env,
+            sq=sq_env,
             name=_escape_sql(amb_nome),
             desc=_escape_sql(amb_desc),
             conn=_escape_sql(amb_conn),
@@ -894,12 +894,12 @@ def build_seed_statements(owner, prefixo, admin_login=None, admin_nome=None, adm
         comandos.append(sql_amb)
 
     # 3. Perfis padrao e matrizes de permissao (DEFAULT_PROFILES)
-    tb_per = "{}.{}".format(owner, esquema["profiles"]["tabela"])
-    sq_per = "{}.{}".format(owner, esquema["profiles"]["sequence"])
-    tb_pfnc = "{}.{}".format(owner, esquema["profile_feature"]["tabela"])
-    sq_pfnc = "{}.{}".format(owner, esquema["profile_feature"]["sequence"])
-    tb_pamb = "{}.{}".format(owner, esquema["profile_env"]["tabela"])
-    sq_pamb = "{}.{}".format(owner, esquema["profile_env"]["sequence"])
+    tb_prf = "{}.{}".format(owner, esquema["profiles"]["tabela"])
+    sq_prf = "{}.{}".format(owner, esquema["profiles"]["sequence"])
+    tb_pfea = "{}.{}".format(owner, esquema["profile_feature"]["tabela"])
+    sq_pfea = "{}.{}".format(owner, esquema["profile_feature"]["sequence"])
+    tb_penv = "{}.{}".format(owner, esquema["profile_env"]["tabela"])
+    sq_penv = "{}.{}".format(owner, esquema["profile_env"]["sequence"])
 
     for per_nome, per_desc, is_adm, per_funcs, per_ambs in DEFAULT_PROFILES:
         sql_per = (
@@ -919,7 +919,7 @@ def build_seed_statements(owner, prefixo, admin_login=None, admin_nome=None, adm
             "  INSERT (id, name, description, is_admin, perm_version, active, created_at, created_by)\n"
             "  VALUES ({sq}.NEXTVAL, '{name}', '{desc}', '{is_adm}', 1, 'Y', SYSDATE, 'SYSTEM:init_db');"
         ).format(
-            tb=tb_per, sq=sq_per, name=_escape_sql(per_nome),
+            tb=tb_prf, sq=sq_prf, name=_escape_sql(per_nome),
             desc=_escape_sql(per_desc), is_adm=_escape_sql(is_adm)
         )
         comandos.append(sql_per)
@@ -927,38 +927,38 @@ def build_seed_statements(owner, prefixo, admin_login=None, admin_nome=None, adm
         # 3a. Funcionalidades vinculadas ao perfil
         for f_cod in per_funcs:
             sql_pfnc = (
-                "MERGE INTO {tb_pfnc} dst\n"
+                "MERGE INTO {tb_pfea} dst\n"
                 "USING (\n"
                 "  SELECT p.id AS profile_id, f.id AS feature_id\n"
-                "    FROM {tb_per} p, {tb_fnc} f\n"
-                "   WHERE p.name = '{per_nome}' AND f.code = '{f_cod}'\n"
+                "    FROM {tb_prf} p, {tb_fea} f\n"
+                "   WHERE p.name = '{prf_name}' AND f.code = '{f_code}'\n"
                 ") src\n"
                 "ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)\n"
                 "WHEN NOT MATCHED THEN\n"
                 "  INSERT (id, profile_id, feature_id, created_at, created_by)\n"
-                "  VALUES ({sq_pfnc}.NEXTVAL, src.profile_id, src.feature_id, SYSDATE, 'SYSTEM:init_db');"
+                "  VALUES ({sq_pfea}.NEXTVAL, src.profile_id, src.feature_id, SYSDATE, 'SYSTEM:init_db');"
             ).format(
-                tb_pfnc=tb_pfnc, sq_pfnc=sq_pfnc, tb_per=tb_per, tb_fnc=tb_fnc,
-                per_nome=_escape_sql(per_nome), f_cod=_escape_sql(f_cod)
+                tb_pfea=tb_pfea, sq_pfea=sq_pfea, tb_prf=tb_prf, tb_fea=tb_fea,
+                prf_name=_escape_sql(per_nome), f_code=_escape_sql(f_cod)
             )
             comandos.append(sql_pfnc)
 
         # 3b. Ambientes vinculados ao perfil
         for a_nome in per_ambs:
             sql_pamb = (
-                "MERGE INTO {tb_pamb} dst\n"
+                "MERGE INTO {tb_penv} dst\n"
                 "USING (\n"
                 "  SELECT p.id AS profile_id, a.id AS environment_id\n"
-                "    FROM {tb_per} p, {tb_amb} a\n"
-                "   WHERE p.name = '{per_nome}' AND a.name = '{a_nome}'\n"
+                "    FROM {tb_prf} p, {tb_env} a\n"
+                "   WHERE p.name = '{prf_name}' AND a.name = '{env_name}'\n"
                 ") src\n"
                 "ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)\n"
                 "WHEN NOT MATCHED THEN\n"
                 "  INSERT (id, profile_id, environment_id, created_at, created_by)\n"
-                "  VALUES ({sq_pamb}.NEXTVAL, src.profile_id, src.environment_id, SYSDATE, 'SYSTEM:init_db');"
+                "  VALUES ({sq_penv}.NEXTVAL, src.profile_id, src.environment_id, SYSDATE, 'SYSTEM:init_db');"
             ).format(
-                tb_pamb=tb_pamb, sq_pamb=sq_pamb, tb_per=tb_per, tb_amb=tb_amb,
-                per_nome=_escape_sql(per_nome), a_nome=_escape_sql(a_nome)
+                tb_penv=tb_penv, sq_penv=sq_penv, tb_prf=tb_prf, tb_env=tb_env,
+                prf_name=_escape_sql(per_nome), env_name=_escape_sql(a_nome)
             )
             comandos.append(sql_pamb)
 
@@ -971,41 +971,41 @@ def build_seed_statements(owner, prefixo, admin_login=None, admin_nome=None, adm
         vpad_sql = "'{}'".format(_escape_sql(vpad)) if vpad else "NULL"
         sql_prm = (
             "MERGE INTO {tb} dst\n"
-            "USING (SELECT '{cod}' AS code FROM DUAL) src\n"
+            "USING (SELECT '{code}' AS code FROM DUAL) src\n"
             "ON (dst.code = src.code)\n"
             "WHEN MATCHED THEN\n"
-            "  UPDATE SET dst.param_flag = {pnom},\n"
+            "  UPDATE SET dst.param_flag = {pname},\n"
             "             dst.label = '{lbl}',\n"
             "             dst.description = '{desc}',\n"
-            "             dst.component_type = '{tcomp}',\n"
-            "             dst.options_json = {opc},\n"
-            "             dst.default_value = {vpad},\n"
+            "             dst.component_type = '{ctype}',\n"
+            "             dst.options_json = {opts},\n"
+            "             dst.default_value = {vdef},\n"
             "             dst.sensitive = 'N',\n"
             "             dst.active = 'Y',\n"
             "             dst.updated_at = SYSDATE,\n"
             "             dst.updated_by = 'SYSTEM:init_db'\n"
             "  WHERE dst.active <> 'Y'\n"
-            "     OR NVL(dst.param_flag, '~') <> NVL({pnom}, '~')\n"
+            "     OR NVL(dst.param_flag, '~') <> NVL({pname}, '~')\n"
             "     OR dst.label <> '{lbl}'\n"
             "     OR NVL(dst.description, '~') <> '{desc}'\n"
-            "     OR dst.component_type <> '{tcomp}'\n"
-            "     OR NVL(dst.options_json, '~') <> NVL({opc}, '~')\n"
-            "     OR NVL(dst.default_value, '~') <> NVL({vpad}, '~')\n"
+            "     OR dst.component_type <> '{ctype}'\n"
+            "     OR NVL(dst.options_json, '~') <> NVL({opts}, '~')\n"
+            "     OR NVL(dst.default_value, '~') <> NVL({vdef}, '~')\n"
             "WHEN NOT MATCHED THEN\n"
             "  INSERT (id, code, param_flag, label, description, component_type, options_json, default_value, validation_regex, sensitive, active, created_at, created_by)\n"
-            "  VALUES ({sq}.NEXTVAL, '{cod}', {pnom}, '{lbl}', '{desc}', '{tcomp}', {opc}, {vpad}, NULL, 'N', 'Y', SYSDATE, 'SYSTEM:init_db');"
+            "  VALUES ({sq}.NEXTVAL, '{code}', {pname}, '{lbl}', '{desc}', '{ctype}', {opts}, {vdef}, NULL, 'N', 'Y', SYSDATE, 'SYSTEM:init_db');"
         ).format(
-            tb=tb_prm, sq=sq_prm, cod=_escape_sql(cod), pnom=pnom_sql,
-            lbl=_escape_sql(lbl), desc=_escape_sql(desc), tcomp=_escape_sql(tcomp),
-            opc=opc_sql, vpad=vpad_sql
+            tb=tb_prm, sq=sq_prm, code=_escape_sql(cod), pname=pnom_sql,
+            lbl=_escape_sql(lbl), desc=_escape_sql(desc), ctype=_escape_sql(tcomp),
+            opts=opc_sql, vdef=vpad_sql
         )
         comandos.append(sql_prm)
 
     # 5. Scripts utilitarios padrao
     tb_scr = "{}.{}".format(owner, esquema["scripts"]["tabela"])
     sq_scr = "{}.{}".format(owner, esquema["scripts"]["sequence"])
-    tb_samb = "{}.{}".format(owner, esquema["script_env"]["tabela"])
-    sq_samb = "{}.{}".format(owner, esquema["script_env"]["sequence"])
+    tb_senv = "{}.{}".format(owner, esquema["script_env"]["tabela"])
+    sq_senv = "{}.{}".format(owner, esquema["script_env"]["sequence"])
     tb_pscr = "{}.{}".format(owner, esquema["profile_script"]["tabela"])
     sq_pscr = "{}.{}".format(owner, esquema["profile_script"]["sequence"])
     tb_sprm = "{}.{}".format(owner, esquema["script_param"]["tabela"])
@@ -1020,11 +1020,11 @@ def build_seed_statements(owner, prefixo, admin_login=None, admin_nome=None, adm
             "  UPDATE SET dst.description = '{desc}',\n"
             "             dst.script_group = '{grp}',\n"
             "             dst.category = '{cat}',\n"
-            "             dst.stage = '{etp}',\n"
+            "             dst.stage = '{stage}',\n"
             "             dst.interpreter = '{interp}',\n"
             "             dst.path_file = '{pfile}',\n"
-            "             dst.param_type = '{tpar}',\n"
-            "             dst.max_parallel_env = {paral},\n"
+            "             dst.param_type = '{ptype}',\n"
+            "             dst.max_parallel_env = {par},\n"
             "             dst.timeout_s = {tmout},\n"
             "             dst.active = 'Y',\n"
             "             dst.updated_at = SYSDATE,\n"
@@ -1033,39 +1033,39 @@ def build_seed_statements(owner, prefixo, admin_login=None, admin_nome=None, adm
             "     OR NVL(dst.description, '~') <> '{desc}'\n"
             "     OR NVL(dst.script_group, '~') <> '{grp}'\n"
             "     OR NVL(dst.category, '~') <> '{cat}'\n"
-            "     OR NVL(dst.stage, '~') <> '{etp}'\n"
+            "     OR NVL(dst.stage, '~') <> '{stage}'\n"
             "     OR dst.interpreter <> '{interp}'\n"
             "     OR dst.path_file <> '{pfile}'\n"
-            "     OR dst.param_type <> '{tpar}'\n"
-            "     OR dst.max_parallel_env <> {paral}\n"
+            "     OR dst.param_type <> '{ptype}'\n"
+            "     OR dst.max_parallel_env <> {par}\n"
             "     OR NVL(dst.timeout_s, 0) <> {tmout}\n"
             "WHEN NOT MATCHED THEN\n"
             "  INSERT (id, name, description, script_group, category, stage, interpreter, path_file, param_type, max_parallel_env, timeout_s, active, created_at, created_by)\n"
-            "  VALUES ({sq}.NEXTVAL, '{name}', '{desc}', '{grp}', '{cat}', '{etp}', '{interp}', '{pfile}', '{tpar}', {paral}, {tmout}, 'Y', SYSDATE, 'SYSTEM:init_db');"
+            "  VALUES ({sq}.NEXTVAL, '{name}', '{desc}', '{grp}', '{cat}', '{stage}', '{interp}', '{pfile}', '{ptype}', {par}, {tmout}, 'Y', SYSDATE, 'SYSTEM:init_db');"
         ).format(
             tb=tb_scr, sq=sq_scr, name=_escape_sql(s_nome), desc=_escape_sql(s_desc),
-            grp=_escape_sql(s_grp), cat=_escape_sql(s_cat), etp=_escape_sql(s_etp),
-            interp=_escape_sql(s_int), pfile=_escape_sql(s_path), tpar=_escape_sql(s_tpar),
-            paral=s_paral, tmout=s_tmout
+            grp=_escape_sql(s_grp), cat=_escape_sql(s_cat), stage=_escape_sql(s_etp),
+            interp=_escape_sql(s_int), pfile=_escape_sql(s_path), ptype=_escape_sql(s_tpar),
+            par=s_paral, tmout=s_tmout
         )
         comandos.append(sql_scr)
 
         # 5a. Homologacao do script nos 5 ambientes padrao
         for amb_nome, _, _ in DEFAULT_ENVIRONMENTS:
             sql_samb = (
-                "MERGE INTO {tb_samb} dst\n"
+                "MERGE INTO {tb_senv} dst\n"
                 "USING (\n"
                 "  SELECT s.id AS script_id, a.id AS environment_id\n"
-                "    FROM {tb_scr} s, {tb_amb} a\n"
-                "   WHERE s.name = '{s_nome}' AND a.name = '{amb_nome}'\n"
+                "    FROM {tb_scr} s, {tb_env} a\n"
+                "   WHERE s.name = '{scr_name}' AND a.name = '{env_name}'\n"
                 ") src\n"
                 "ON (dst.script_id = src.script_id AND dst.environment_id = src.environment_id)\n"
                 "WHEN NOT MATCHED THEN\n"
                 "  INSERT (id, script_id, environment_id, created_at, created_by)\n"
-                "  VALUES ({sq_samb}.NEXTVAL, src.script_id, src.environment_id, SYSDATE, 'SYSTEM:init_db');"
+                "  VALUES ({sq_senv}.NEXTVAL, src.script_id, src.environment_id, SYSDATE, 'SYSTEM:init_db');"
             ).format(
-                tb_samb=tb_samb, sq_samb=sq_samb, tb_scr=tb_scr, tb_amb=tb_amb,
-                s_nome=_escape_sql(s_nome), amb_nome=_escape_sql(amb_nome)
+                tb_senv=tb_senv, sq_senv=sq_senv, tb_scr=tb_scr, tb_env=tb_env,
+                scr_name=_escape_sql(s_nome), env_name=_escape_sql(amb_nome)
             )
             comandos.append(sql_samb)
 
@@ -1075,16 +1075,16 @@ def build_seed_statements(owner, prefixo, admin_login=None, admin_nome=None, adm
                 "MERGE INTO {tb_pscr} dst\n"
                 "USING (\n"
                 "  SELECT p.id AS profile_id, s.id AS script_id\n"
-                "    FROM {tb_per} p, {tb_scr} s\n"
-                "   WHERE p.name = '{per_nome}' AND s.name = '{s_nome}'\n"
+                "    FROM {tb_prf} p, {tb_scr} s\n"
+                "   WHERE p.name = '{prf_name}' AND s.name = '{scr_name}'\n"
                 ") src\n"
                 "ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)\n"
                 "WHEN NOT MATCHED THEN\n"
                 "  INSERT (id, profile_id, script_id, created_at, created_by)\n"
                 "  VALUES ({sq_pscr}.NEXTVAL, src.profile_id, src.script_id, SYSDATE, 'SYSTEM:init_db');"
             ).format(
-                tb_pscr=tb_pscr, sq_pscr=sq_pscr, tb_per=tb_per, tb_scr=tb_scr,
-                per_nome=_escape_sql(per_nome), s_nome=_escape_sql(s_nome)
+                tb_pscr=tb_pscr, sq_pscr=sq_pscr, tb_prf=tb_prf, tb_scr=tb_scr,
+                prf_name=_escape_sql(per_nome), scr_name=_escape_sql(s_nome)
             )
             comandos.append(sql_pscr)
 
@@ -1096,25 +1096,25 @@ def build_seed_statements(owner, prefixo, admin_login=None, admin_nome=None, adm
                 "USING (\n"
                 "  SELECT s.id AS script_id, p.id AS parameter_id\n"
                 "    FROM {tb_scr} s, {tb_prm} p\n"
-                "   WHERE s.name = '{s_nome}' AND p.code = '{p_cod}'\n"
+                "   WHERE s.name = '{scr_name}' AND p.code = '{p_code}'\n"
                 ") src\n"
                 "ON (dst.script_id = src.script_id AND dst.parameter_id = src.parameter_id)\n"
                 "WHEN MATCHED THEN\n"
                 "  UPDATE SET dst.sort_order = {sort_order},\n"
-                "             dst.required = '{obrig}',\n"
-                "             dst.default_value_override = {vsub},\n"
+                "             dst.required = '{req}',\n"
+                "             dst.default_value_override = {vovr},\n"
                 "             dst.updated_at = SYSDATE,\n"
                 "             dst.updated_by = 'SYSTEM:init_db'\n"
                 "  WHERE dst.sort_order <> {sort_order}\n"
-                "     OR dst.required <> '{obrig}'\n"
-                "     OR NVL(dst.default_value_override, '~') <> NVL({vsub}, '~')\n"
+                "     OR dst.required <> '{req}'\n"
+                "     OR NVL(dst.default_value_override, '~') <> NVL({vovr}, '~')\n"
                 "WHEN NOT MATCHED THEN\n"
                 "  INSERT (id, script_id, parameter_id, sort_order, required, default_value_override, created_at, created_by)\n"
-                "  VALUES ({sq_sprm}.NEXTVAL, src.script_id, src.parameter_id, {sort_order}, '{obrig}', {vsub}, SYSDATE, 'SYSTEM:init_db');"
+                "  VALUES ({sq_sprm}.NEXTVAL, src.script_id, src.parameter_id, {sort_order}, '{req}', {vovr}, SYSDATE, 'SYSTEM:init_db');"
             ).format(
                 tb_sprm=tb_sprm, sq_sprm=sq_sprm, tb_scr=tb_scr, tb_prm=tb_prm,
-                s_nome=_escape_sql(s_nome), p_cod=_escape_sql(p_cod),
-                sort_order=p_ord, obrig=_escape_sql(p_obrig), vsub=vsub_sql
+                scr_name=_escape_sql(s_nome), p_code=_escape_sql(p_cod),
+                sort_order=p_ord, req=_escape_sql(p_obrig), vovr=vsub_sql
             )
             comandos.append(sql_sprm)
 
@@ -1141,8 +1141,8 @@ def build_seed_statements(owner, prefixo, admin_login=None, admin_nome=None, adm
             "MERGE INTO {tb_usr} dst\n"
             "USING (\n"
             "  SELECT '{login}' AS login, p.id AS profile_id\n"
-            "    FROM {tb_per} p\n"
-            "   WHERE p.name = '{perfil}'\n"
+            "    FROM {tb_prf} p\n"
+            "   WHERE p.name = '{profile}'\n"
             ") src\n"
             "ON (dst.login = src.login)\n"
             "WHEN MATCHED THEN\n"
@@ -1159,11 +1159,11 @@ def build_seed_statements(owner, prefixo, admin_login=None, admin_nome=None, adm
             "  VALUES ({sq_usr}.NEXTVAL, '{login}', '{name}', '{hash_s}', src.profile_id, 'Y', 0, 0, SYSDATE, 'SYSTEM:init_db');"
         ).format(
             tb_usr=tb_usr,
-            tb_per=tb_per,
+            tb_prf=tb_prf,
             sq_usr=sq_usr,
             login=_escape_sql(u_login),
             name=_escape_sql(nome_final),
-            perfil=_escape_sql(u_perfil),
+            profile=_escape_sql(u_perfil),
             hash_s=_escape_sql(hash_final),
         )
         comandos.append(sql_usr)

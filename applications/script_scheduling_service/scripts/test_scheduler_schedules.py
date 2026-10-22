@@ -51,38 +51,38 @@ class TestAgendaWithoutDb(unittest.TestCase):
         self.assertEqual((conn.commits, conn.rollbacks), (0, 0), "o COMMIT unico e de quem chama (passo 8)")
 
     def test_pagina_e_trava(self):
-        conn = _Conn([("ROWNUM <= :lote", (2, [(5, OLD), (7, OLD)])), ("SKIP LOCKED", (1, [(5,)]))])
+        conn = _Conn([("ROWNUM <= :batch_size", (2, [(5, OLD), (7, OLD)])), ("SKIP LOCKED", (1, [(5,)]))])
         self.assertEqual(self.repo.due_rules(conn, 50), [(5, OLD), (7, OLD)])
         sql, binds = conn.executed[0]
         for trecho in ("WHERE active = 'Y' AND next_run_at <= SYSDATE",
-                       "(next_run_at > :ult_prox OR (next_run_at = :ult_prox AND id > :ult_id))",
+                       "(next_run_at > :last_next OR (next_run_at = :last_next AND id > :last_id))",
                        "ORDER BY next_run_at, id", "OWN_X.pfx_schedules"):
             self.assertIn(trecho, sql)
-        self.assertEqual(binds, {"ult_prox": scheduler_schedules.DATE_INITIAL, "ult_id": 0, "lote": 50})
+        self.assertEqual(binds, {"last_next": scheduler_schedules.DATE_INITIAL, "last_id": 0, "batch_size": 50})
         self.repo.due_rules(conn, 50, ult_prox=NEW, ult_id=5)
-        self.assertEqual(conn.executed[1][1]["ult_prox"], NEW.replace(microsecond=0))
-        self.assertEqual(self.types.calls[0], {"ult_prox": db_conn.TIPO_DATE})
+        self.assertEqual(conn.executed[1][1]["last_next"], NEW.replace(microsecond=0))
+        self.assertEqual(self.types.calls[0], {"last_next": db_conn.TIPO_DATE})
         self.assertTrue(self.repo.lock_rule(conn, 5))
         self.assertIn("FOR UPDATE SKIP LOCKED", conn.executed[-1][0])
         self.assertFalse(self.repo.lock_rule(_Conn([]), 5), "sem linha: outro agente a processa")
         self._without_transaction(conn)
 
     def test_reserva_sem_updated_e_ticket_com_ocorrencia(self):
-        conn = _Conn([("SET next_run_at = :nova_data, last_run_at = SYSDATE", (1, []))])
+        conn = _Conn([("SET next_run_at = :new_date, last_run_at = SYSDATE", (1, []))])
         self.assertTrue(self.repo.reserve_and_create_ticket(conn, RULE, OLD, NEW, 501, TICKET,
                                                           [{"parameter_id": 4, "answer_value": "x"}], AGENT))
         upd, b_upd = conn.executed[0]
         self.assertNotIn("updated_", upd, "a reserva e rotina tecnica (CR-006)")
-        self.assertIn("WHERE id = :id AND active = 'Y' AND next_run_at = :antiga_data", upd)
-        self.assertEqual((b_upd["nova_data"], b_upd["antiga_data"], b_upd["ticket_id"]),
+        self.assertIn("WHERE id = :id AND active = 'Y' AND next_run_at = :old_date", upd)
+        self.assertEqual((b_upd["new_date"], b_upd["old_date"], b_upd["ticket_id"]),
                          (NEW.replace(microsecond=0), OLD, 501))
-        self.assertIn({"nova_data": db_conn.TIPO_DATE, "antiga_data": db_conn.TIPO_DATE}, self.types.calls)
+        self.assertIn({"new_date": db_conn.TIPO_DATE, "old_date": db_conn.TIPO_DATE}, self.types.calls)
         ins = [e for e in conn.executed if e[0].startswith("INSERT INTO OWN_X.pfx_tickets")][0]
         self.assertIn("NULL, 'PENDING'", ins[0], "ip_origem nulo")
         self.assertEqual((ins[1]["scheduled_at"], ins[1]["actor"], ins[1]["schedule_id"], ins[1]["id"]),
                          (TICKET["scheduled_at"].replace(microsecond=0), ACTOR, 9, 501))
         resp = [e for e in conn.executed if e[0].startswith("INSERT INTO OWN_X.pfx_ticket_answer")][0]
-        self.assertEqual((resp[1]["ticket_id"], resp[1]["actor"], resp[1]["valor"]), (501, ACTOR, "x"))
+        self.assertEqual((resp[1]["ticket_id"], resp[1]["actor"], resp[1]["value"]), (501, ACTOR, "x"))
         self._without_transaction(conn)
         corrida = _Conn([])
         self.assertFalse(self.repo.reserve_and_create_ticket(corrida, RULE, OLD, NEW, 502, TICKET, [], AGENT))
@@ -90,11 +90,11 @@ class TestAgendaWithoutDb(unittest.TestCase):
 
     def test_ocorrencia_duplicada(self):
         erro = _Error("ORA-00001: unique constraint (OWN_X.IX_PFX_TCK_OCCUR) violated")
-        conn = _Conn([("SET next_run_at = :nova_data", (1, [])), ("INSERT INTO OWN_X.pfx_tickets", erro)])
+        conn = _Conn([("SET next_run_at = :new_date", (1, [])), ("INSERT INTO OWN_X.pfx_tickets", erro)])
         with self.assertRaises(DuplicateOccurrence):
             self.repo.reserve_and_create_ticket(conn, RULE, OLD, NEW, 503, TICKET, [], AGENT)
         outro = _Error("ORA-00001: unique constraint (OWN_X.PK_PFX_TICKETS) violated")
-        conn = _Conn([("SET next_run_at = :nova_data", (1, [])), ("INSERT INTO OWN_X.pfx_tickets", outro)])
+        conn = _Conn([("SET next_run_at = :new_date", (1, [])), ("INSERT INTO OWN_X.pfx_tickets", outro)])
         with self.assertRaises(_Error):
             self.repo.reserve_and_create_ticket(conn, RULE, OLD, NEW, 503, TICKET, [], AGENT)
 
@@ -104,7 +104,7 @@ class TestAgendaWithoutDb(unittest.TestCase):
         upd, b = conn.executed[0]
         self.assertIn("last_run_at = SYSDATE, last_ticket_id = :ticket_id, updated_at = SYSDATE", upd)
         self.assertNotIn("next_run_at =", upd.split("WHERE")[0], "nao grava NULL nem muda a data (D1)")
-        self.assertEqual((b["antiga_data"], b["actor"]), (OLD, ACTOR))
+        self.assertEqual((b["old_date"], b["actor"]), (OLD, ACTOR))
         aud = [e for e in conn.executed if "SCHEDULE_PAUSE" in e[0]][0]
         self.assertEqual(aud[1]["detail"], "pause_reason: COMPLETED")
         self.assertTrue(conn.sql("INSERT INTO OWN_X.pfx_tickets"))
@@ -118,14 +118,14 @@ class TestAgendaWithoutDb(unittest.TestCase):
         self._without_transaction(conn)
 
     def test_avanco_pausa_cron_erro_e_erro_interno(self):
-        conn = _Conn([("SET next_run_at = :nova_data WHERE id", (1, []))])
+        conn = _Conn([("SET next_run_at = :new_date WHERE id", (1, []))])
         self.assertTrue(self.repo.advance_without_ticket(conn, 9, OLD, NEW))
         upd = conn.executed[0][0]
         for ausente in ("last_run_at", "last_ticket_id", "updated_"):
             self.assertNotIn(ausente, upd, "R-05")
         conn = _Conn([("pause_reason = :reason", (1, []))])
         self.assertTrue(self.repo.pause(conn, 9, OLD, "NO_PERMISSION", "solicitante sem acesso", AGENT))
-        self.assertIn("AND active = 'Y' AND next_run_at = :antiga_data", conn.executed[0][0], "R-19")
+        self.assertIn("AND active = 'Y' AND next_run_at = :old_date", conn.executed[0][0], "R-19")
         aud = [e for e in conn.executed if "SCHEDULE_PAUSE" in e[0]][0][1]
         self.assertEqual((aud["detail"], aud["rid"], aud["actor"]),
                          ("pause_reason: NO_PERMISSION; solicitante sem acesso", 9, ACTOR))

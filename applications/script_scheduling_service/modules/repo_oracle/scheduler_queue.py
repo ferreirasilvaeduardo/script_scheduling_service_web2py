@@ -71,10 +71,10 @@ class RepoSchedulerQueue(object):
     def __init__(self, owner, prefixo):
         t = lambda nome: sql_ident.table(owner, prefixo, nome)  # noqa: E731
         self._p = prefixo
-        self._tck, self._scr, self._amb = t("tickets"), t("scripts"), t("environments")
-        self._agt, self._aud, self._usr, self._per = t("agents"), t("audit"), t("users"), t("profiles")
-        self._pfunc, self._pamb, self._pscr = t("profile_feature"), t("profile_env"), t("profile_script")
-        self._func, self._samb, self._agd = t("features"), t("script_env"), t("schedules")
+        self._tck, self._scr, self._env = t("tickets"), t("scripts"), t("environments")
+        self._agt, self._aud, self._usr, self._prf = t("agents"), t("audit"), t("users"), t("profiles")
+        self._pfea, self._penv, self._pscr = t("profile_feature"), t("profile_env"), t("profile_script")
+        self._fea, self._senv, self._sch = t("features"), t("script_env"), t("schedules")
         self._seq_agt = sql_ident.sequence(owner, prefixo, "agents")
         self._seq_aud = sql_ident.sequence(owner, prefixo, "audit")
 
@@ -103,10 +103,10 @@ class RepoSchedulerQueue(object):
         nomes = sorted(set(atendidos or ()))
         if not nomes:
             return [], []
-        ph, binds = _placeholders("amb", nomes)
+        ph, binds = _placeholders("env", nomes)
         cur = conn.cursor()
         try:
-            cur.execute("SELECT name, active FROM " + self._amb + " WHERE name IN (" + ph + ")", binds)
+            cur.execute("SELECT name, active FROM " + self._env + " WHERE name IN (" + ph + ")", binds)
             achados = dict((r[0], (r[1] or "").strip()) for r in cur.fetchall())
         finally:
             cur.close()
@@ -133,16 +133,16 @@ class RepoSchedulerQueue(object):
             tetos = dict((int(sid), int(teto or 0)) for sid, teto in cur.fetchall())
             if not tetos:
                 return []
-            ph_amb, b_amb = _placeholders("amb", ambientes)
+            ph_amb, b_amb = _placeholders("env", ambientes)
             cur.execute("SELECT script_id, environment, COUNT(*) FROM " + self._tck + " WHERE status = 'RUNNING'"
                         " AND environment IN (" + ph_amb + ") GROUP BY script_id, environment", b_amb)
             rodando = dict(((int(sid), amb), int(n)) for sid, amb, n in cur.fetchall())
-            blocos, binds = [], {"lote": int(lote), "env_min": int(envelhecimento_min)}
+            blocos, binds = [], {"batch_size": int(lote), "env_min": int(envelhecimento_min)}
             for i, amb in enumerate(ambientes):
                 elegiveis = sorted(sid for sid, teto in tetos.items() if rodando.get((sid, amb), 0) < teto)
                 if not elegiveis:
                     continue
-                binds["amb%d" % i] = amb
+                binds["env%d" % i] = amb
                 nomes = []
                 for k, sid in enumerate(elegiveis):
                     binds["s%d_%d" % (i, k)] = sid
@@ -152,9 +152,9 @@ class RepoSchedulerQueue(object):
                 for prio in PRIORITIES:
                     blocos.append(
                         "SELECT id, script_id, environment, prio, inicio FROM ("
-                        "SELECT id, script_id, :amb%d environment, %d prio, %s inicio FROM %s"
-                        " WHERE status = 'PENDING' AND environment = :amb%d AND priority = %d AND %s <= SYSDATE"
-                        " AND (%s) ORDER BY %s, id) WHERE ROWNUM <= :lote"
+                        "SELECT id, script_id, :env%d environment, %d prio, %s inicio FROM %s"
+                        " WHERE status = 'PENDING' AND environment = :env%d AND priority = %d AND %s <= SYSDATE"
+                        " AND (%s) ORDER BY %s, id) WHERE ROWNUM <= :batch_size"
                         % (i, prio, _START, self._tck, i, prio, _START, filtro, _START))
             if not blocos:
                 return []
@@ -166,7 +166,7 @@ class RepoSchedulerQueue(object):
                 " ORDER BY GREATEST(1, j.prio - CASE WHEN :env_min > 0"
                 " THEN FLOOR((SYSDATE - j.inicio) * 1440 / :env_min) ELSE 0 END),"
                 " j.inicio, j.id"
-                ") WHERE ROWNUM <= :lote"
+                ") WHERE ROWNUM <= :batch_size"
             )
             cur.execute(sql, binds)
             return [{"id": r[0], "script_id": r[1], "environment": r[2]} for r in cur.fetchall()]
@@ -258,18 +258,18 @@ class RepoSchedulerQueue(object):
             r = cur.fetchone()
             script = None if r is None else dict(zip(
                 ("id", "name", "interpreter", "path_file", "active", "timeout_s"), r))
-            cur.execute("SELECT id, name, description, connection, active FROM " + self._amb + " WHERE name = :name",
+            cur.execute("SELECT id, name, description, connection, active FROM " + self._env + " WHERE name = :name",
                         name=ticket["environment"])
             r = cur.fetchone()
             ambiente = None if r is None else dict(zip(("id", "name", "description", "connection", "active"), r))
             homologacoes = frozenset()
             if script is not None:
-                cur.execute("SELECT environment_id FROM " + self._samb + " WHERE script_id = :id", id=script["id"])
+                cur.execute("SELECT environment_id FROM " + self._senv + " WHERE script_id = :id", id=script["id"])
                 homologacoes = frozenset(x[0] for x in cur.fetchall())
             ctx = self._ctx_solicitante(cur, ticket.get("requested_by"))
             agendamento = None
             if ticket.get("schedule_id") is not None:
-                cur.execute("SELECT name, recurrence_type FROM " + self._agd + " WHERE id = :id",
+                cur.execute("SELECT name, recurrence_type FROM " + self._sch + " WHERE id = :id",
                             id=int(ticket["schedule_id"]))
                 r = cur.fetchone()
                 agendamento = None if r is None else {"name": r[0], "recurrence_type": (r[1] or "").strip()}
@@ -286,7 +286,7 @@ class RepoSchedulerQueue(object):
         if not login:
             return None
         cur.execute("SELECT u.id, u.login, u.name, u.profile_id, u.active, u.session_epoch, p.name, p.is_admin, "
-                    "p.active, p.perm_version FROM " + self._usr + " u JOIN " + self._per + " p ON p.id = u.profile_id "
+                    "p.active, p.perm_version FROM " + self._usr + " u JOIN " + self._prf + " p ON p.id = u.profile_id "
                     "WHERE u.login = :login", login=login)
         r = cur.fetchone()
         if r is None:
@@ -294,10 +294,10 @@ class RepoSchedulerQueue(object):
         estado = {"user_id": r[0], "login": r[1], "name": r[2], "profile_id": r[3],
                   "usuario_ativo": (r[4] or "").strip(), "session_epoch": r[5], "perfil_nome": r[6],
                   "is_admin": (r[7] or "").strip(), "perfil_ativo": (r[8] or "").strip(), "perm_version": r[9]}
-        cur.execute("SELECT f.code FROM " + self._pfunc + " pf JOIN " + self._func + " f ON f.id = pf.feature_id "
+        cur.execute("SELECT f.code FROM " + self._pfea + " pf JOIN " + self._fea + " f ON f.id = pf.feature_id "
                     "WHERE pf.profile_id = :p AND f.active = 'Y'", p=estado["profile_id"])
         estado["features"] = [x[0] for x in cur.fetchall()]
-        cur.execute("SELECT a.name FROM " + self._pamb + " pa JOIN " + self._amb + " a ON a.id = pa.environment_id "
+        cur.execute("SELECT a.name FROM " + self._penv + " pa JOIN " + self._env + " a ON a.id = pa.environment_id "
                     "WHERE pa.profile_id = :p", p=estado["profile_id"])
         estado["environments"] = [x[0] for x in cur.fetchall()]
         cur.execute("SELECT script_id FROM " + self._pscr + " WHERE profile_id = :p", p=estado["profile_id"])
@@ -308,8 +308,8 @@ class RepoSchedulerQueue(object):
         """Script ativo e homologado para o ambiente (README §8.4 passo 1)."""
         cur = conn.cursor()
         try:
-            cur.execute("SELECT COUNT(*) FROM " + self._scr + " s JOIN " + self._samb + " sa ON sa.script_id = s.id "
-                        "JOIN " + self._amb + " a ON a.id = sa.environment_id "
+            cur.execute("SELECT COUNT(*) FROM " + self._scr + " s JOIN " + self._senv + " sa ON sa.script_id = s.id "
+                        "JOIN " + self._env + " a ON a.id = sa.environment_id "
                         "WHERE s.id = :script_id AND s.active = 'Y' AND a.name = :environment",
                         script_id=int(script_id), environment=ambiente)
             return cur.fetchone()[0] > 0

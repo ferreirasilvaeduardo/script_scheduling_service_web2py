@@ -14,7 +14,7 @@ Consultas SQL estáticas do `RepoSchedulesOracle` (`modules/repo_oracle/schedule
 |---|---|---|
 | `list` | `COUNT(*)` com `ROWNUM <= 10001` e página `ROWNUM`, ordem `next_run, id`; filtros `active`, `script_id`, `environment`, `user_id`, `name` (trecho, `ESCAPE`) e escopo por `IN` | `ix_{prefixo}sch_next (active, next_run_at, id)` com `active = 'Y'` (Agenda); `ix_{prefixo}sch_scr`/`amb`/`usr` nos filtros |
 | `get`, `update`, `resume` | Leitura pela PK; lock `FOR UPDATE WAIT 5`; `UPDATE` pela PK | `pk_{prefixo}schedules` |
-| `pause` | `UPDATE … WHERE id = :id AND active = 'Y' [AND next_run_at = :antiga_data]` (CR-007, R-19), com `rowcount` conferido | `pk_{prefixo}schedules` |
+| `pause` | `UPDATE … WHERE id = :id AND active = 'Y' [AND next_run_at = :old_date]` (CR-007, R-19), com `rowcount` conferido | `pk_{prefixo}schedules` |
 | `ticket_status` | `SELECT status FROM {prefixo}tickets WHERE id = :id` | `pk_{prefixo}tickets` |
 
 ---

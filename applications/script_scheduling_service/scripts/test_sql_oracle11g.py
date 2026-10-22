@@ -54,7 +54,7 @@ class TestSqlOracle11g(unittest.TestCase):
         def acusa(texto):
             return [d for p, d in _PATTERNS_12C if p.search(texto)]
         self.assertTrue(acusa("SELECT id FROM t ORDER BY id OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY"))
-        self.assertTrue(acusa("SELECT id FROM t OFFSET :inicio ROWS"))
+        self.assertTrue(acusa("SELECT id FROM t OFFSET :start_ts ROWS"))
         self.assertTrue(acusa("select id from t offset 1 row"))
         self.assertEqual(acusa("def log_ler(self, id, offset, max_chars):\n    off = int(offset)"), [])
 

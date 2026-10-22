@@ -50,21 +50,21 @@ def _column_list(cols, alias=""):
 # qualificados por sql_ident (validados); todo valor entra por bind.
 # -----------------------------------------------------------------------------
 
-_SQL_ENV_GET = "SELECT " + _column_list(_COLS_ENV) + " FROM {amb} WHERE id = :id"
+_SQL_ENV_GET = "SELECT " + _column_list(_COLS_ENV) + " FROM {env} WHERE id = :id"
 _SQL_ENV_GET_LOCK = _SQL_ENV_GET + " FOR UPDATE WAIT 5"
-_SQL_ENV_BY_NAME = "SELECT id FROM {amb} WHERE name = :name"
-_SQL_ENV_EXISTS = "SELECT id FROM {amb} WHERE id = :id"
+_SQL_ENV_BY_NAME = "SELECT id FROM {env} WHERE name = :name"
+_SQL_ENV_EXISTS = "SELECT id FROM {env} WHERE id = :id"
 _SQL_ENV_LIST = (
-    "SELECT " + _column_list(_COLS_ENV) + " FROM {amb}{where} "
+    "SELECT " + _column_list(_COLS_ENV) + " FROM {env}{where} "
     "ORDER BY NLSSORT(name, 'NLS_SORT=BINARY'), id"
 )
-_SQL_ENV_COUNT = "SELECT COUNT(*) FROM (SELECT id FROM {amb} WHERE {where_count})"
+_SQL_ENV_COUNT = "SELECT COUNT(*) FROM (SELECT id FROM {env} WHERE {where_count})"
 _SQL_ENV_INSERT = (
-    "INSERT INTO {amb} (id, name, description, connection, active, created_at, created_by, updated_at, updated_by) "
+    "INSERT INTO {env} (id, name, description, connection, active, created_at, created_by, updated_at, updated_by) "
     "VALUES (:id, :name, :description, :connection, :active, SYSDATE, :actor, NULL, NULL)"
 )
 _SQL_ENV_UPDATE = (
-    "UPDATE {amb} SET description = :description, connection = :connection, active = :active, "
+    "UPDATE {env} SET description = :description, connection = :connection, active = :active, "
     "updated_at = SYSDATE, updated_by = :actor WHERE id = :id"
 )
 
@@ -94,14 +94,14 @@ _SQL_SCR_UPDATE = (
 )
 _SQL_SCR_STAMP = "UPDATE {scr} SET updated_at = SYSDATE, updated_by = :actor WHERE id = :id"
 _SQL_SCR_HOMOLOGATED = (
-    "SELECT sa.script_id, a.name FROM {samb} sa JOIN {amb} a ON a.id = sa.environment_id "
+    "SELECT sa.script_id, a.name FROM {senv} sa JOIN {env} a ON a.id = sa.environment_id "
     "WHERE sa.script_id IN ({ids})"
 )
 
-_SQL_SENV_OF_SCRIPT = "SELECT id, environment_id FROM {samb} WHERE script_id = :script_id"
-_SQL_SENV_DELETE = "DELETE FROM {samb} WHERE id = :id"
+_SQL_SENV_OF_SCRIPT = "SELECT id, environment_id FROM {senv} WHERE script_id = :script_id"
+_SQL_SENV_DELETE = "DELETE FROM {senv} WHERE id = :id"
 _SQL_SENV_INSERT = (
-    "INSERT INTO {samb} (id, script_id, environment_id, created_at, created_by, updated_at, updated_by) "
+    "INSERT INTO {senv} (id, script_id, environment_id, created_at, created_by, updated_at, updated_by) "
     "VALUES (:id, :script_id, :environment_id, SYSDATE, :actor, NULL, NULL)"
 )
 
@@ -176,7 +176,7 @@ _SQL_SPRM_INSERT_CHANGED = (
 _SQL_EXEC_ADMIN = (
     "SELECT " + _column_list(_COLS_SCR, "s.") + " FROM {scr} s "
     "WHERE s.active = 'Y' "
-    "AND EXISTS (SELECT 1 FROM {samb} sa JOIN {amb} a ON a.id = sa.environment_id "
+    "AND EXISTS (SELECT 1 FROM {senv} sa JOIN {env} a ON a.id = sa.environment_id "
     "WHERE sa.script_id = s.id AND a.active = 'Y') "
     "ORDER BY NLSSORT(s.name, 'NLS_SORT=BINARY'), s.id"
 )
@@ -184,8 +184,8 @@ _SQL_EXEC_PROFILE = (
     "SELECT " + _column_list(_COLS_SCR, "s.") + " FROM {scr} s "
     "WHERE s.active = 'Y' "
     "AND EXISTS (SELECT 1 FROM {pscr} ps WHERE ps.profile_id = :profile_id AND ps.script_id = s.id) "
-    "AND EXISTS (SELECT 1 FROM {samb} sa JOIN {amb} a ON a.id = sa.environment_id "
-    "JOIN {pamb} pa ON pa.environment_id = sa.environment_id AND pa.profile_id = :profile_id "
+    "AND EXISTS (SELECT 1 FROM {senv} sa JOIN {env} a ON a.id = sa.environment_id "
+    "JOIN {penv} pa ON pa.environment_id = sa.environment_id AND pa.profile_id = :profile_id "
     "WHERE sa.script_id = s.id AND a.active = 'Y') "
     "ORDER BY NLSSORT(s.name, 'NLS_SORT=BINARY'), s.id"
 )
@@ -226,13 +226,13 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
     def __init__(self, cfg=None, segredos=None):
         super(RepoCatalogOracle, self).__init__(cfg=cfg, segredos=segredos)
         self._idents = {
-            "amb": self.qualify_table("environments"),
+            "env": self.qualify_table("environments"),
             "scr": self.qualify_table("scripts"),
-            "samb": self.qualify_table("script_env"),
+            "senv": self.qualify_table("script_env"),
             "prm": self.qualify_table("parameters"),
             "sprm": self.qualify_table("script_param"),
             "pscr": self.qualify_table("profile_script"),
-            "pamb": self.qualify_table("profile_env"),
+            "penv": self.qualify_table("profile_env"),
         }
         self._sql = {}
         for nome, modelo in globals().items():
@@ -292,8 +292,8 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
         where_count = " AND ".join(list(clausulas) + ["ROWNUM <= " + str(_LIMIT_TOTAL)])
         sql_lista = self._sql_dinamico(modelo_lista, where=where)
         sql_pag = (
-            "SELECT * FROM (SELECT a.*, ROWNUM rn FROM (" + sql_lista + ") a WHERE ROWNUM <= :fim) "
-            "WHERE rn > :inicio"
+            "SELECT * FROM (SELECT a.*, ROWNUM rn FROM (" + sql_lista + ") a WHERE ROWNUM <= :end_ts) "
+            "WHERE rn > :start_ts"
         )
         sql_conta = self._sql_dinamico(modelo_conta, where_count=where_count)
         cur = conn.cursor()
@@ -301,8 +301,8 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             cur.execute(sql_conta, binds)
             bruto = cur.fetchone()[0]
             binds_pag = dict(binds)
-            binds_pag["inicio"] = inicio
-            binds_pag["fim"] = inicio + t
+            binds_pag["start_ts"] = inicio
+            binds_pag["end_ts"] = inicio + t
             cur.execute(sql_pag, binds_pag)
             todas = tuple(cols) + tuple(extras)
             itens = [self.tuple_to_dict(todas, r[:len(todas)]) for r in cur.fetchall()]
@@ -333,11 +333,11 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
         filtros = filtros or {}
         clausulas, binds = [], {}
         if filtros.get("name"):
-            clausulas.append("UPPER(name) LIKE :nome_f ESCAPE '\\'")
-            binds["nome_f"] = _like_contains(filtros["name"], maiusculas=True)
+            clausulas.append("UPPER(name) LIKE :name_f ESCAPE '\\'")
+            binds["name_f"] = _like_contains(filtros["name"], maiusculas=True)
         if filtros.get("active"):
-            clausulas.append("active = :ativo_f")
-            binds["ativo_f"] = filtros["active"]
+            clausulas.append("active = :active_f")
+            binds["active_f"] = filtros["active"]
         with self.read_context(conn=conn) as c:
             return self._listar(c, _SQL_ENV_LIST, _SQL_ENV_COUNT, _COLS_ENV, clausulas, binds, pagina, tamanho)
 
@@ -455,8 +455,8 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
         filtros = filtros or {}
         clausulas, binds = [], {}
         if filtros.get("name"):
-            clausulas.append("LOWER(s.name) LIKE :nome_f ESCAPE '\\'")
-            binds["nome_f"] = _like_contains(filtros["name"], maiusculas=False)
+            clausulas.append("LOWER(s.name) LIKE :name_f ESCAPE '\\'")
+            binds["name_f"] = _like_contains(filtros["name"], maiusculas=False)
         for chave in ("script_group", "category", "interpreter", "active"):
             if filtros.get(chave):
                 clausulas.append("s." + chave + " = :" + chave + "_f")
@@ -665,8 +665,8 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
         filtros = filtros or {}
         clausulas, binds = [], {}
         if filtros.get("code"):
-            clausulas.append("LOWER(p.code) LIKE :codigo_f ESCAPE '\\'")
-            binds["codigo_f"] = _like_contains(filtros["code"], maiusculas=False)
+            clausulas.append("LOWER(p.code) LIKE :code_f ESCAPE '\\'")
+            binds["code_f"] = _like_contains(filtros["code"], maiusculas=False)
         if filtros.get("label"):
             clausulas.append("LOWER(p.label) LIKE :label_f ESCAPE '\\'")
             binds["label_f"] = _like_contains(filtros["label"], maiusculas=False)

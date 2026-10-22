@@ -1220,12 +1220,12 @@ Implementado em `modules/schedule_expansion.py` (F8.4b), chamado pelo ciclo do o
 SELECT id, next_run_at FROM (
   SELECT id, next_run_at FROM {owner}.tbsss_schedules
    WHERE active = 'Y' AND next_run_at <= SYSDATE
-     AND (next_run_at > :ult_prox OR (next_run_at = :ult_prox AND id > :ult_id))
+     AND (next_run_at > :last_next OR (next_run_at = :last_next AND id > :last_id))
    ORDER BY next_run_at, id
-) WHERE ROWNUM <= :lote
+) WHERE ROWNUM <= :batch_size
 ```
 
-* Na primeira página, `:ult_prox` é `DATE '0001-01-01'` e `:ult_id` é `0`.
+* Na primeira página, `:last_next` é `DATE '0001-01-01'` e `:last_id` é `0`.
 * O agente lê a página seguinte enquanto a anterior vier cheia e o tempo gasto no desdobro neste ciclo for menor que `heartbeat_interval_s / 2` (orçamento do laço, §8.1). O que sobrar fica para o ciclo seguinte, a partir do início.
 * Antes de tudo, cada regra da página é travada **sem esperar**:
 
@@ -1259,16 +1259,16 @@ Para cada regra travada, na **mesma transação** (que já detém o lock da linh
 
    ```sql
    UPDATE {owner}.tbsss_schedules
-      SET next_run_at = :nova_data,
+      SET next_run_at = :new_date,
           last_run_at  = SYSDATE,
           last_ticket_id = :ticket_id
     WHERE id = :id
       AND active = 'Y'
-      AND next_run_at = :antiga_data
+      AND next_run_at = :old_date
    ```
 
    * Se `rowcount = 1`, fazer o `INSERT` do ticket com `id = :ticket_id`, `schedule_id = :id`, `solicitante = <login do usuario_id>`, `source_ip = NULL`, **`scheduled_at = :ocorrencia`** (a ocorrência coberta, nunca no futuro, CR-007 R-27) e a prioridade do passo 2. Em seguida, o `INSERT` em `tbsss_ticket_answer`.
-   * O índice único `ix_tbsss_tck_occur` impede um segundo ticket para a mesma ocorrência da mesma regra. A violação (ORA-00001) leva a `ROLLBACK` e WARN `OCORRENCIA_DUPLICADA`: outro caminho já gerou o ticket. Em seguida, numa **nova transação**, o agente aplica o **avanço sem ticket** (abaixo) com a mesma `:antiga_data` e a `:nova_data` da decisão (CR-008, R-31); `rowcount = 0` é ignorado. Assim, a regra não é reprocessada a cada ciclo até a próxima ocorrência.
+   * O índice único `ix_tbsss_tck_occur` impede um segundo ticket para a mesma ocorrência da mesma regra. A violação (ORA-00001) leva a `ROLLBACK` e WARN `OCORRENCIA_DUPLICADA`: outro caminho já gerou o ticket. Em seguida, numa **nova transação**, o agente aplica o **avanço sem ticket** (abaixo) com a mesma `:old_date` e a `:new_date` da decisão (CR-008, R-31); `rowcount = 0` é ignorado. Assim, a regra não é reprocessada a cada ciclo até a próxima ocorrência.
    * Se `rowcount = 0`, outro nó processou a regra: fazer `ROLLBACK` e seguir para a próxima.
    * A trigger condicional (§10) preserva o `:ticket_id`. Valores de sequence descartados geram apenas lacunas inofensivas.
    * A reserva é rotina técnica e **não** grava `updated_*` na regra (§10, CR-006). O ticket e o `ticket_resp` nascem com `created_by = 'SYSTEM:<agent_id>'`.
@@ -1283,7 +1283,7 @@ Para cada regra travada, na **mesma transação** (que já detém o lock da linh
           last_run_at  = CASE WHEN :ticket_id IS NULL THEN last_run_at ELSE SYSDATE END,
           last_ticket_id = NVL(:ticket_id, last_ticket_id),
           updated_at = SYSDATE, updated_by = :actor
-    WHERE id = :id AND active = 'Y' AND next_run_at = :antiga_data
+    WHERE id = :id AND active = 'Y' AND next_run_at = :old_date
    ```
 
    Com ticket, o `INSERT` do ticket e do `ticket_resp` segue como acima. Com `rowcount = 0`, `ROLLBACK` e próxima regra. A pausa é auditada como `SCHEDULE_PAUSE` (`detail` com a mensagem do parser) e registrada em WARN.
@@ -1292,8 +1292,8 @@ Para cada regra travada, na **mesma transação** (que já detém o lock da linh
 
    ```sql
    UPDATE {owner}.tbsss_schedules
-      SET next_run_at = :nova_data
-    WHERE id = :id AND active = 'Y' AND next_run_at = :antiga_data
+      SET next_run_at = :new_date
+    WHERE id = :id AND active = 'Y' AND next_run_at = :old_date
    ```
 
    Se `rowcount = 0`, `ROLLBACK` e próxima regra.
@@ -1303,7 +1303,7 @@ Para cada regra travada, na **mesma transação** (que já detém o lock da linh
    UPDATE {owner}.tbsss_schedules
       SET active = 'N', pause_reason = :reason,
           updated_at = SYSDATE, updated_by = :actor
-    WHERE id = :id AND active = 'Y' AND next_run_at = :antiga_data
+    WHERE id = :id AND active = 'Y' AND next_run_at = :old_date
    ```
 
    `:actor` é `SYSTEM:<agent_id>` no desdobro e o login de quem pausou na pausa manual (§7.6). Com `rowcount = 0`, a regra já foi pausada ou concluída por outro caminho: `ROLLBACK`, sem auditoria.
@@ -1323,7 +1323,7 @@ UPDATE {owner}.tbsss_schedules
        updated_at = SYSDATE, updated_by = :actor
  WHERE id = :id
    AND active = 'Y'
-   AND next_run_at = :antiga_data
+   AND next_run_at = :old_date
 ```
 
 * **Com ticket** (a ocorrência atual ainda gera ticket): `:ticket_id` vem do `NEXTVAL` do passo 6. Se `rowcount = 1`, seguem o `INSERT` do ticket e o do `ticket_resp`, como no passo 6. Se `rowcount = 0`, `ROLLBACK` e próxima regra.
@@ -1336,9 +1336,9 @@ UPDATE {owner}.tbsss_schedules
 
 **Bind de datas:**
 
-* `:antiga_data` e `:nova_data` são declarados pelo `db_conn` com o tipo de data do driver (no Oracle, `setinputsizes` com `cx_Oracle.DATETIME` ou `oracledb.DB_TYPE_DATE`).
+* `:old_date` e `:new_date` são declarados pelo `db_conn` com o tipo de data do driver (no Oracle, `setinputsizes` com `cx_Oracle.DATETIME` ou `oracledb.DB_TYPE_DATE`).
 * Um `datetime` com microssegundos **nunca** é comparado a uma coluna `DATE`. A regra travaria silenciosamente.
-* `:antiga_data` é usada **exatamente como retornada pelo banco** (passo 1), nunca recalculada nem convertida por fuso. `:nova_data` sai do `recurrence.py` já sem segundos nem microssegundos (§7.2).
+* `:old_date` é usada **exatamente como retornada pelo banco** (passo 1), nunca recalculada nem convertida por fuso. `:new_date` sai do `recurrence.py` já sem segundos nem microssegundos (§7.2).
 * **Teste obrigatório (F7.3/F8.4):** um desdobro com `antiga_data`/`nova_data` contendo microssegundos não pode resultar em `rowcount = 0`. O tipo `DATE` declarado no bind descarta a fração.
 
 **Contrato do repositório para o desdobro (F8.4):** `repo_oracle/scheduler_schedules.py` (processo batch, sem FAKE, §2.5) expõe operações distintas:
@@ -1486,7 +1486,7 @@ Três leituras curtas, sem varrer a fila (CR-013), com o índice `ix_tbsss_tck_q
 
 1. **Scripts do agente:** `SELECT id, max_parallel_env FROM {owner}.tbsss_scripts WHERE interpreter IN (:int0, :int1)`.
 2. **Em execução por par:** `SELECT script_id, environment, COUNT(*) FROM {owner}.tbsss_tickets WHERE status = 'RUNNING' AND environment IN (:amb0, :amb1) GROUP BY script_id, environment` (faixa curta de `ix_tbsss_tck_queue`, que tem `status` na frente). O agente separa, por ambiente, os scripts **elegíveis**: os do seu interpretador abaixo do teto.
-3. **Janela:** para cada ambiente e cada prioridade original (1 a 4), os `:lote` primeiros da fila pela ordem do índice, só dos scripts elegíveis; os blocos são juntados e ordenados pela ordem da fila:
+3. **Janela:** para cada ambiente e cada prioridade original (1 a 4), os `:batch_size` primeiros da fila pela ordem do índice, só dos scripts elegíveis; os blocos são juntados e ordenados pela ordem da fila:
 
 ```sql
 SELECT id, script_id, environment FROM (
@@ -1497,18 +1497,18 @@ SELECT id, script_id, environment FROM (
                     WHERE status = 'PENDING' AND environment = :amb0 AND priority = 1
                       AND GREATEST(scheduled_at, created_at) <= SYSDATE
                       AND (script_id IN (:s0_0, :s0_1))
-                    ORDER BY GREATEST(scheduled_at, created_at), id) WHERE ROWNUM <= :lote
+                    ORDER BY GREATEST(scheduled_at, created_at), id) WHERE ROWNUM <= :batch_size
     UNION ALL ...   -- um bloco por environment x priority (1 a 4)
   ) j JOIN {owner}.tbsss_tickets c ON c.id = j.id
    WHERE c.status = 'PENDING' AND c.cancel_requested = 'N'
    ORDER BY GREATEST(1, j.prio - CASE WHEN :env_min > 0
                                       THEN FLOOR((SYSDATE - j.inicio) * 1440 / :env_min) ELSE 0 END),
             j.inicio, j.id
-) WHERE ROWNUM <= :lote
+) WHERE ROWNUM <= :batch_size
 ```
 
-* **Por que é exato:** dentro de uma prioridade original, a prioridade efetiva só cai com a espera, então os `:lote` primeiros de cada prioridade por `(inicio, id)` contêm o lote exato da ordem completa. `inicio <= SYSDATE` equivale a `scheduled_at <= SYSDATE`, porque `created_at` nunca passa de agora.
-* **Por que é barato:** cada bloco é um `INDEX RANGE SCAN` sem sort e sem acesso à tabela, que para no `:lote` (4 leituras por bloco no GFPR); só os até `4 × ambientes × :lote` escolhidos voltam à tabela, pela PK, para conferir `cancel_requested`. Com 1 milhão de `PENDING` num ambiente, o ciclo caiu de 22.616 para 264 leituras lógicas e de 1,25 s para 0,18 s, com 1, 2 ou 5 agentes (CR-013). As colunas simples na frente do índice são o que permite ao Oracle parar no lote: um índice só com `CASE` (só dos `PENDING`) nunca eliminava o sort.
+* **Por que é exato:** dentro de uma prioridade original, a prioridade efetiva só cai com a espera, então os `:batch_size` primeiros de cada prioridade por `(inicio, id)` contêm o lote exato da ordem completa. `inicio <= SYSDATE` equivale a `scheduled_at <= SYSDATE`, porque `created_at` nunca passa de agora.
+* **Por que é barato:** cada bloco é um `INDEX RANGE SCAN` sem sort e sem acesso à tabela, que para no `:batch_size` (4 leituras por bloco no GFPR); só os até `4 × ambientes × :batch_size` escolhidos voltam à tabela, pela PK, para conferir `cancel_requested`. Com 1 milhão de `PENDING` num ambiente, o ciclo caiu de 22.616 para 264 leituras lógicas e de 1,25 s para 0,18 s, com 1, 2 ou 5 agentes (CR-013). As colunas simples na frente do índice são o que permite ao Oracle parar no lote: um índice só com `CASE` (só dos `PENDING`) nunca eliminava o sort.
 * **Teto na própria seleção (CR-007, R-07):** os scripts no teto saem da janela pelo filtro `script_id IN (...)`, aplicado no próprio índice. Sem isso, um script saturado ocupava o lote inteiro e os demais nunca eram vistos. O claim (§8.3) continua com a checagem definitiva, sob lock. Os placeholders `:s<environment>_<n>` são gerados por contagem, em listas de até 900 (o Oracle recusa mais de 1.000 itens num `IN`).
 * **Ordem:** pela prioridade efetiva (§5.3, `:env_min` = `queue_aging_min`, idade contada desde `GREATEST(scheduled_at, created_at)`, CR-008 R-20), depois esse mesmo início da espera e `id`. O `EXPLAIN` está em `docs/explain/SCHEDULER.md`.
 * **Ambientes ativos (CR-007, D2):** o agente relê `tbsss_environments` a cada ciclo do orquestrador e usa só os ambientes atendidos que estão ativos. Desativar um ambiente para os claims sem reiniciar os agentes; reativá-lo volta a atendê-lo.
@@ -1830,7 +1830,7 @@ BEGIN
      FOR UPDATE WAIT 5;
   IF DBMS_LOB.GETLENGTH(v_lob) <> v_offset THEN
     RAISE_APPLICATION_ERROR(-20002, 'LOG_OFFSET_DIVERGENTE');
-  ELSIF v_offset = :offset_esperado THEN
+  ELSIF v_offset = :expected_offset THEN
     DBMS_LOB.WRITEAPPEND(v_lob, v_tamanho, :chunk);
     UPDATE {owner}.tbsss_tickets
        SET log_offset_chars = v_offset + v_tamanho
@@ -1839,21 +1839,21 @@ BEGIN
     IF SQL%ROWCOUNT <> 1 THEN
       RAISE_APPLICATION_ERROR(-20002, 'LOG_OFFSET_DIVERGENTE');
     END IF;
-    :resultado := 'WRITTEN';
-  ELSIF v_offset = :offset_esperado + v_tamanho
+    :result := 'WRITTEN';
+  ELSIF v_offset = :expected_offset + v_tamanho
         AND DBMS_LOB.COMPARE(v_lob, :chunk, v_tamanho,
-                             :offset_esperado + 1, 1) = 0 THEN
-    :resultado := 'ALREADY_WRITTEN';
+                             :expected_offset + 1, 1) = 0 THEN
+    :result := 'ALREADY_WRITTEN';
   ELSE
     RAISE_APPLICATION_ERROR(-20002, 'LOG_OFFSET_DIVERGENTE');
   END IF;
 EXCEPTION
   WHEN NO_DATA_FOUND THEN
-    :resultado := 'OWNERSHIP_LOST';
+    :result := 'OWNERSHIP_LOST';
 END;
 ```
 
-  * `log_offset_chars` é a posição confirmada em **caracteres CLOB**, não bytes UTF-8. Cada ticket tem no máximo um bloco de log em voo por vez. `:offset_esperado` é a posição conhecida pela bomba antes do bloco.
+  * `log_offset_chars` é a posição confirmada em **caracteres CLOB**, não bytes UTF-8. Cada ticket tem no máximo um bloco de log em voo por vez. `:expected_offset` é a posição conhecida pela bomba antes do bloco.
   * O chamador confirma a transação. Se o `COMMIT` tiver desfecho desconhecido, mantém o bloco pendente e reapresenta exatamente o mesmo offset e bloco numa conexão nova. O SQL devolve `ALREADY_WRITTEN` somente se o offset avançou exatamente pelo tamanho do bloco e o conteúdo nessa posição for idêntico; devolve `WRITTEN` se o bloco ainda não foi anexado. Assim, a repetição não reaplica o `WRITEAPPEND`.
   * `NO_DATA_FOUND` devolve `OWNERSHIP_LOST` (`OWNERSHIP_LOST`). Offset divergente ou conteúdo diferente é erro de integridade: não repetir nem descartar o bloco; interromper o pump daquele ticket e registrar ERROR com contexto.
   * A gravação do log (`log_output` e `log_truncated`) é rotina técnica e não grava `updated_*` (§10, CR-006).
@@ -2545,18 +2545,18 @@ END;
 * **Concessão no banco:** só um nó purga tickets e auditoria por vez. Antes, o purge toma a concessão:
   ```sql
   UPDATE {owner}.tbsss_control
-     SET purge_owner = :dono, purge_lease_until = SYSDATE + 1/24
+     SET purge_owner = :owner, purge_lease_until = SYSDATE + 1/24
    WHERE id = 1
-     AND (purge_lease_until IS NULL OR purge_lease_until < SYSDATE OR purge_owner = :dono)
+     AND (purge_lease_until IS NULL OR purge_lease_until < SYSDATE OR purge_owner = :owner)
   ```
-  Com `rowcount = 0`, outro nó está purgando: o purge pula tickets e auditoria, registra INFO e sai com 0. A concessão é renovada a cada lote e liberada no fim com `SET purge_owner = NULL, purge_lease_until = NULL WHERE id = 1 AND purge_owner = :dono` (CR-008, R-27: zerar só o dono deixava outro nó esperando até 1 h). `:dono` é o `agent_id` do servidor.
+  Com `rowcount = 0`, outro nó está purgando: o purge pula tickets e auditoria, registra INFO e sai com 0. A concessão é renovada a cada lote e liberada no fim com `SET purge_owner = NULL, purge_lease_until = NULL WHERE id = 1 AND purge_owner = :owner` (CR-008, R-27: zerar só o dono deixava outro nó esperando até 1 h). `:owner` é o `agent_id` do servidor.
 * **`--dry-run` (F9.1):** não toma concessão nem lock local, não executa DML, não remove arquivos e não grava auditoria `PURGE`. Calcula os limites de retenção uma vez com `db_now()` e consulta as quantidades elegíveis de tickets, auditoria e pastas de logs locais; as consultas para identificar pastas de tickets `RUNNING` são somente leitura. O resumo identifica cada alvo e suas contagens como estimativas sujeitas a corrida.
 * Remove tickets terminais com `created_at < SYSDATE - :ticket_retention_days`, em lotes:
   ```sql
   DELETE FROM {owner}.tbsss_tickets
-   WHERE created_at < :limite
+   WHERE created_at < :cutoff
      AND status IN ('SUCCESS','FAILED','CANCELLED')
-     AND ROWNUM <= :lote
+     AND ROWNUM <= :batch_size
   ```
   Com `COMMIT` por lote, até `rowcount = 0`. A renovação da concessão vai na mesma transação do lote: se ela não achar mais este nó como dono (outro nó a tomou depois de vencida), o lote é desfeito, o purge registra ERROR e sai com 1.
 * `tbsss_ticket_answer` é removida em cascata, e `parent_ticket_id` dos filhos vira `NULL`. `tbsss_schedules.last_ticket_id` pode apontar para um ticket removido: o desdobro o trata como livre (§7.5).

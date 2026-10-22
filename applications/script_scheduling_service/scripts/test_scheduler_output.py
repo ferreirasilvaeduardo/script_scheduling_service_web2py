@@ -55,9 +55,9 @@ class TestWithoutDb(unittest.TestCase):
         self.repo.append_chunk(conn, 7, AGENT, 1048576, b"x")
         sql, binds = conn.executed[0]
         self.assertIn("FOR UPDATE WAIT 5", sql)
-        self.assertIn("DBMS_LOB.APPEND(v_lob, :parte)", sql)
+        self.assertIn("DBMS_LOB.APPEND(v_lob, :part)", sql)
         self.assertIn("state = 'WRITING'", sql)
-        self.assertEqual((binds["offset_esperado"], binds["parte"]), (1048576, b"x"))
+        self.assertEqual((binds["expected_offset"], binds["part"]), (1048576, b"x"))
         conn = _Conn([("DECLARE", _Error("ORA-20003: SAIDA_OFFSET_DIVERGENTE"))])
         with self.assertRaises(OutputOffsetMismatch):
             self.repo.append_chunk(conn, 7, AGENT, 0, b"x")

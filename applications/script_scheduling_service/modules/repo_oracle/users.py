@@ -160,24 +160,24 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
 
         nome_f = filtros.get("name")
         if nome_f:
-            clausulas.append("LOWER(name) LIKE :nome_f")
-            binds["nome_f"] = "%" + nome_f.lower() + "%"
+            clausulas.append("LOWER(name) LIKE :name_f")
+            binds["name_f"] = "%" + nome_f.lower() + "%"
 
         perfil_f = filtros.get("profile_id")
         if perfil_f is not None:
-            clausulas.append("profile_id = :perfil_f")
-            binds["perfil_f"] = int(perfil_f)
+            clausulas.append("profile_id = :profile_f")
+            binds["profile_f"] = int(perfil_f)
 
         ativo_f = filtros.get("active")
         if ativo_f:
-            clausulas.append("active = :ativo_f")
-            binds["ativo_f"] = str(ativo_f).strip().upper()
+            clausulas.append("active = :active_f")
+            binds["active_f"] = str(ativo_f).strip().upper()
 
         bloq_f = filtros.get("bloqueado_em")
         if bloq_f is not None:
-            clausulas.append("locked_until IS NOT NULL AND locked_until > :bloq_f")
-            binds["bloq_f"] = bloq_f
-            binds_data["bloq_f"] = db_conn.TIPO_DATE
+            clausulas.append("locked_until IS NOT NULL AND locked_until > :locked_f")
+            binds["locked_f"] = bloq_f
+            binds_data["locked_f"] = db_conn.TIPO_DATE
 
         where_sql = (" WHERE " + " AND ".join(clausulas)) if clausulas else ""
 
@@ -206,8 +206,8 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
             "created_at, created_by, updated_at, updated_by "
             "FROM " + self._tabela() + where_sql + " "
             "ORDER BY login ASC, id ASC"
-            ") a WHERE ROWNUM <= :fim"
-            ") WHERE rn > :inicio"
+            ") a WHERE ROWNUM <= :end_ts"
+            ") WHERE rn > :start_ts"
         )
 
         with self.read_context(conn=conn) as c:
@@ -222,8 +222,8 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                 total_limitado = raw_count >= 10001
 
                 binds_pag = copy.deepcopy(binds)
-                binds_pag["inicio"] = inicio
-                binds_pag["fim"] = fim
+                binds_pag["start_ts"] = inicio
+                binds_pag["end_ts"] = fim
                 cur.execute(sql_paginada, binds_pag)
                 itens = [self.tuple_to_dict(_COLS_USER, r[:-1]) for r in cur.fetchall()]
 
@@ -454,15 +454,15 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                     cur.execute(
                         "UPDATE " + self._tabela_perfis() + " "
                         "SET perm_version = perm_version + 1 "
-                        "WHERE id = :origem",
-                        {"origem": p_origem},
+                        "WHERE id = :source",
+                        {"source": p_origem},
                     )
                     if p_destino != p_origem:
                         cur.execute(
                             "UPDATE " + self._tabela_perfis() + " "
                             "SET perm_version = perm_version + 1 "
-                            "WHERE id = :destino",
-                            {"destino": p_destino},
+                            "WHERE id = :target",
+                            {"target": p_destino},
                         )
 
                 write_audit(c, self._tabela_auditoria(), self._seq_auditoria(), auditoria, "tbsss_users", int(id))
@@ -501,9 +501,9 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                     cur.execute(
                         "UPDATE " + self._tabela() + " "
                         "SET failed_attempts = failed_attempts + 1, "
-                        "locked_until = SYSDATE + :bloqueio_s / 86400 "
+                        "locked_until = SYSDATE + :lockout_s / 86400 "
                         "WHERE id = :id",
-                        {"id": uid, "bloqueio_s": int(bloqueio_s)},
+                        {"id": uid, "lockout_s": int(bloqueio_s)},
                     )
                 else:
                     cur.execute(
@@ -610,14 +610,14 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                 sql = (
                     "UPDATE " + self._tabela() + " "
                     "SET password_hash = :password_hash, "
-                    "password_changed_at = NVL(:agora, SYSDATE), "
+                    "password_changed_at = NVL(:now, SYSDATE), "
                     "failed_attempts = 0, locked_until = NULL, "
                     "session_epoch = session_epoch + 1, "
                     "updated_at = SYSDATE, updated_by = :actor "
                     "WHERE id = :id"
                 )
-                db_conn.set_input_types(cur, agora=db_conn.TIPO_DATE)
-                cur.execute(sql, {"id": int(id), "password_hash": senha_hash, "agora": agora, "actor": ator_limpo})
+                db_conn.set_input_types(cur, now=db_conn.TIPO_DATE)
+                cur.execute(sql, {"id": int(id), "password_hash": senha_hash, "now": agora, "actor": ator_limpo})
                 write_audit(c, self._tabela_auditoria(), self._seq_auditoria(), auditoria, "tbsss_users", int(id))
             finally:
                 cur.close()

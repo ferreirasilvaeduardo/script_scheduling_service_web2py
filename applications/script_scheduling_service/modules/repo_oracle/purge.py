@@ -46,7 +46,7 @@ class RepoPurge(object):
     def _contar(self, conn, sql, binds):
         cur = conn.cursor()
         try:
-            db_conn.set_input_types(cur, limite=db_conn.TIPO_DATE)
+            db_conn.set_input_types(cur, cutoff=db_conn.TIPO_DATE)
             cur.execute(sql, binds)
             return int(cur.fetchone()[0])
         finally:
@@ -56,46 +56,46 @@ class RepoPurge(object):
 
     def take_lease(self, conn, dono):
         """Toma ou renova a concessao por 1 hora (README §11.3). False: outro no esta purgando. Sem COMMIT."""
-        return self._executar(conn, "UPDATE " + self._ctl + " SET purge_owner = :dono, purge_lease_until = SYSDATE + 1/24"
+        return self._executar(conn, "UPDATE " + self._ctl + " SET purge_owner = :owner, purge_lease_until = SYSDATE + 1/24"
                               " WHERE id = 1 AND (purge_lease_until IS NULL OR purge_lease_until < SYSDATE"
-                              " OR purge_owner = :dono)", {"dono": dono}) == 1
+                              " OR purge_owner = :owner)", {"owner": dono}) == 1
 
     def release_lease(self, conn, dono):
         """Libera dono e prazo (CR-008, R-27), so se a concessao ainda for deste no. Sem COMMIT."""
         return self._executar(conn, "UPDATE " + self._ctl + " SET purge_owner = NULL, purge_lease_until = NULL"
-                              " WHERE id = 1 AND purge_owner = :dono", {"dono": dono}) == 1
+                              " WHERE id = 1 AND purge_owner = :owner", {"owner": dono}) == 1
 
     # ------------------------------------------------------------------ tickets
 
     def count_tickets(self, conn, limite):
-        return self._contar(conn, "SELECT COUNT(*) FROM " + self._tck + " WHERE created_at < :limite"
-                            " AND status IN ('SUCCESS','FAILED','CANCELLED')", {"limite": limite})
+        return self._contar(conn, "SELECT COUNT(*) FROM " + self._tck + " WHERE created_at < :cutoff"
+                            " AND status IN ('SUCCESS','FAILED','CANCELLED')", {"cutoff": limite})
 
     def delete_tickets(self, conn, limite, lote):
         """Um lote do DELETE literal do README §11.3 (so terminais; respostas e saidas em cascata). Sem COMMIT."""
-        return self._executar(conn, "DELETE FROM " + self._tck + " WHERE created_at < :limite"
-                              " AND status IN ('SUCCESS','FAILED','CANCELLED') AND ROWNUM <= :lote",
-                              {"limite": limite, "lote": int(lote)}, datas=("limite",))
+        return self._executar(conn, "DELETE FROM " + self._tck + " WHERE created_at < :cutoff"
+                              " AND status IN ('SUCCESS','FAILED','CANCELLED') AND ROWNUM <= :batch_size",
+                              {"cutoff": limite, "batch_size": int(lote)}, datas=("cutoff",))
 
     # ------------------------------------------------------------------ auditoria
 
     def count_audit(self, conn, limite):
-        return self._contar(conn, "SELECT COUNT(*) FROM " + self._aud + " WHERE created_at < :limite",
-                            {"limite": limite})
+        return self._contar(conn, "SELECT COUNT(*) FROM " + self._aud + " WHERE created_at < :cutoff",
+                            {"cutoff": limite})
 
     def delete_audit(self, conn, limite, lote):
         """Um lote do DELETE da auditoria (mesmo padrao, audit_retention_days). Sem COMMIT."""
-        return self._executar(conn, "DELETE FROM " + self._aud + " WHERE created_at < :limite AND ROWNUM <= :lote",
-                              {"limite": limite, "lote": int(lote)}, datas=("limite",))
+        return self._executar(conn, "DELETE FROM " + self._aud + " WHERE created_at < :cutoff AND ROWNUM <= :batch_size",
+                              {"cutoff": limite, "batch_size": int(lote)}, datas=("cutoff",))
 
     def read_and_delete_audit(self, conn, limite, lote):
         """Com --export-audit (CR-007, R-22): trava e devolve as linhas do lote e as apaga pelo id, para o
         CSV ter exatamente o que saiu. Devolve a lista de dicts (vazia no fim). Sem COMMIT."""
         cur = conn.cursor()
         try:
-            db_conn.set_input_types(cur, limite=db_conn.TIPO_DATE)
-            cur.execute("SELECT " + ", ".join(_COLS_AUD) + " FROM " + self._aud + " WHERE created_at < :limite"
-                        " AND ROWNUM <= :lote FOR UPDATE WAIT 5", {"limite": limite, "lote": int(lote)})
+            db_conn.set_input_types(cur, cutoff=db_conn.TIPO_DATE)
+            cur.execute("SELECT " + ", ".join(_COLS_AUD) + " FROM " + self._aud + " WHERE created_at < :cutoff"
+                        " AND ROWNUM <= :batch_size FOR UPDATE WAIT 5", {"cutoff": limite, "batch_size": int(lote)})
             linhas = [dict(zip(_COLS_AUD, r)) for r in cur.fetchall()]
             if linhas:
                 cur.executemany("DELETE FROM " + self._aud + " WHERE id = :id", [{"id": l["id"]} for l in linhas])

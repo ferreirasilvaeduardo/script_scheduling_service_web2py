@@ -23,7 +23,7 @@ COLS_NO_PID = ("id", "script_id", "environment", "agent_id", "started_at")
 SQL_QUEUE = (
     "SELECT g.environment, s.interpreter, SUM(g.n), MIN(g.inicio) FROM ("
     "SELECT environment, script_id, COUNT(*) n, MIN(" + _START + ") inicio FROM {tck} "
-    "WHERE status = 'PENDING' AND " + _START + " <= :agora GROUP BY environment, script_id) g "
+    "WHERE status = 'PENDING' AND " + _START + " <= :now GROUP BY environment, script_id) g "
     "JOIN {scr} s ON s.id = g.script_id GROUP BY g.environment, s.interpreter"
 )
 # ">= CHR(1)" equivale a IS NOT NULL para o agent_id ([A-Za-z0-9._-], todos acima de CHR(1)), mas vira
@@ -31,16 +31,16 @@ SQL_QUEUE = (
 SQL_RUNNING_NO_PID = (
     "SELECT " + ", ".join(COLS_NO_PID) + " FROM {tck} "
     "WHERE " + _RUN + " >= CHR(1) AND status = 'RUNNING' AND process_id IS NULL "
-    "AND started_at < :limite ORDER BY started_at, id"
+    "AND started_at < :cutoff ORDER BY started_at, id"
 )
 _SQL_AGENTS = "SELECT " + ", ".join(COLS_AGENT) + " FROM {agt} ORDER BY code"
-_SQL_ENVIRONMENTS = "SELECT name FROM {amb} WHERE active = 'Y' ORDER BY name"
+_SQL_ENVIRONMENTS = "SELECT name FROM {env} WHERE active = 'Y' ORDER BY name"
 # Fila vencida inteira, so no indice ix_tck_fila (mesma faixa do SQL_QUEUE).
 _SQL_QUEUE_OVERDUE = ("SELECT COUNT(*), MIN(" + _START + ") FROM {tck} WHERE status = 'PENDING' AND "
-                     + _START + " <= :agora")
+                     + _START + " <= :now")
 # ator na coluna de ix_aud_ator: faixa so das linhas do purge.
 _SQL_LAST_PURGE = ("SELECT MAX(created_at) FROM {aud} WHERE actor = 'SYSTEM:purge' AND action = 'PURGE'"
-                     " AND created_at >= :limite")
+                     " AND created_at >= :cutoff")
 _SQL_VERSION = "SELECT schema_version FROM {ctl} WHERE id = 1"
 
 
@@ -73,7 +73,7 @@ class RepoHealth(object):
     """Owner e prefixo vem da configuracao; os nomes passam por sql_ident."""
 
     def __init__(self, owner, prefixo):
-        nomes = {"agt": "agents", "tck": "tickets", "scr": "scripts", "amb": "environments", "aud": "audit",
+        nomes = {"agt": "agents", "tck": "tickets", "scr": "scripts", "env": "environments", "aud": "audit",
                  "ctl": "control"}
         idents = dict((k, sql_ident.table(owner, prefixo, v)) for k, v in nomes.items())
         self._sql = dict((nome, modelo.format(**idents)) for nome, modelo in (
@@ -108,20 +108,20 @@ class RepoHealth(object):
 
     def queue_by_pair(self, conn, agora):
         """Linhas (ambiente, interpretador, quantidade, mais_antigo) dos PENDING vencidos."""
-        return self._ler(conn, "queue", {"agora": agora})
+        return self._ler(conn, "queue", {"now": agora})
 
     def overdue_queue(self, conn, agora):
         """(quantidade, mais_antigo) dos PENDING vencidos; mais_antigo None sem fila."""
-        qtd, antigo = self._ler(conn, "overdue_queue", {"agora": agora})[0]
+        qtd, antigo = self._ler(conn, "overdue_queue", {"now": agora})[0]
         return int(qtd or 0), antigo
 
     def running_without_pid(self, conn, agora, minutos):
-        linhas = self._ler(conn, "running_no_pid", {"limite": agora - datetime.timedelta(minutes=minutos)})
+        linhas = self._ler(conn, "running_no_pid", {"cutoff": agora - datetime.timedelta(minutes=minutos)})
         return [dict(zip(COLS_NO_PID, r)) for r in linhas]
 
     def last_purge(self, conn, agora, dias):
         """created_at do PURGE mais recente desde agora - dias (inclusive 0 linhas, CR-008 R-16), ou None."""
-        return self._ler(conn, "purge", {"limite": agora - datetime.timedelta(days=dias)})[0][0]
+        return self._ler(conn, "purge", {"cutoff": agora - datetime.timedelta(days=dias)})[0][0]
 
     def schema_version(self, conn):
         linhas = self._ler(conn, "version")

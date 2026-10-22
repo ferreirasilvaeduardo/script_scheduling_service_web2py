@@ -58,13 +58,13 @@ SELECT * FROM (
       FROM {owner}.{prefixo}users
      WHERE 1=1
        AND LOWER(login) LIKE :login_f
-       AND LOWER(name) LIKE :nome_f
-       AND profile_id = :perfil_f
-       AND active = :ativo_f
-       AND locked_until IS NOT NULL AND locked_until > :bloq_f
+       AND LOWER(name) LIKE :name_f
+       AND profile_id = :profile_f
+       AND active = :active_f
+       AND locked_until IS NOT NULL AND locked_until > :locked_f
      ORDER BY login ASC, id ASC
-  ) a WHERE ROWNUM <= :fim
-) WHERE rn > :inicio
+  ) a WHERE ROWNUM <= :end_ts
+) WHERE rn > :start_ts
 ```
 * **Contagem com teto:**
 ```sql
@@ -110,12 +110,12 @@ SELECT * FROM (
            created_at, created_by, updated_at, updated_by
       FROM {owner}.{prefixo}profiles
      WHERE 1=1
-       AND LOWER(name) LIKE :nome_f
-       AND active = :ativo_f
+       AND LOWER(name) LIKE :name_f
+       AND active = :active_f
        AND is_admin = :is_admin_f
      ORDER BY name ASC, id ASC
-  ) a WHERE ROWNUM <= :fim
-) WHERE rn > :inicio
+  ) a WHERE ROWNUM <= :end_ts
+) WHERE rn > :start_ts
 ```
 * **Acesso esperado:** `INDEX FULL SCAN` em `uk_{prefixo}prf_name` com `COUNT STOPKEY`.
 
