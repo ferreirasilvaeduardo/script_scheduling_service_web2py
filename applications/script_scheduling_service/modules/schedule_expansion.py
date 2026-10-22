@@ -126,7 +126,7 @@ class Expansion(object):
         ctx_exec = self.queue.execution_context(conn, {"script_id": rule["script_id"], "environment": rule["environment"],
                                                       "requested_by": login})
         ok, reason = rbac.can_execute(ctx_exec["ctx"], ctx_exec["script"], ctx_exec["environment"],
-                                        ctx_exec["homologacoes"])
+                                        ctx_exec["homologations"])
         if not ok:
             return self._pause(conn, rule, old, rbac.pause_reason_for(reason), "rbac: %s" % reason, log)
         priority = int(rule["priority"])

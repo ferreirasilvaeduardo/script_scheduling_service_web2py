@@ -9,14 +9,14 @@
 #                  multipla: lista de (valor, rotulo) em caixas de seleção, valor = lista marcada)};
 #     keep -- opcional; dict de parâmetros mantidos ao filtrar e ao limpar (ex.: tamanho).
 # 'page' nunca é preservada: filtrar ou limpar volta para a página 1.
-_flt_preservar = dict((k, v) for k, v in (filtros.get('keep') or {}).items() if k != 'page')
-_flt_url = URL(c=filtros['url_base'][0], f=filtros['url_base'][1])
+_flt_preservar = dict((k, v) for k, v in (filters.get('keep') or {}).items() if k != 'page')
+_flt_url = URL(c=filters['url_base'][0], f=filters['url_base'][1])
 }}<form class="sss-filtros" method="get" action="{{=_flt_url}}" role="search" x-data="filtros">
   {{for _flt_k, _flt_v in sorted(_flt_preservar.items()):}}
   <input type="hidden" name="{{=_flt_k}}" value="{{=_flt_v}}">
   {{pass}}
-  {{for _flt_c in filtros['fields']:}}
-  {{_flt_id = filtros['id'] + '-' + _flt_c['name']
+  {{for _flt_c in filters['fields']:}}
+  {{_flt_id = filters['id'] + '-' + _flt_c['name']
   _flt_valor = _flt_c.get('value')
   _flt_valor = '' if _flt_valor is None else _flt_valor}}
   {{if _flt_c['kind'] == 'multiple':}}
@@ -48,6 +48,6 @@ _flt_url = URL(c=filtros['url_base'][0], f=filtros['url_base'][1])
   {{pass}}
   <div class="sss-filtros-acoes">
     <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
-    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c=filtros['url_base'][0], f=filtros['url_base'][1], vars=_flt_preservar)}}" @click="limpar">Limpar</a>
+    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c=filters['url_base'][0], f=filters['url_base'][1], vars=_flt_preservar)}}" @click="limpar">Limpar</a>
   </div>
 </form>

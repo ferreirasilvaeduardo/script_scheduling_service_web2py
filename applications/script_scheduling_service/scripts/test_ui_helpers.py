@@ -203,25 +203,25 @@ class TestSanitizeSize(unittest.TestCase):
 class TestPaginationInfo(unittest.TestCase):
 
     def _summary(self, info):
-        return (info["pagina"], info["total_paginas"], info["tem_anterior"], info["tem_proxima"],
-                info["anterior"], info["proxima"], info["primeiro_registro"], info["ultimo_registro"])
+        return (info["page"], info["total_pages"], info["has_previous"], info["has_next"],
+                info["previous_page"], info["next_page"], info["first_record"], info["last_record"])
 
     def test_total_limitado_nao_corta_navegacao(self):
         info = ui_helpers.paginacao_info(502, 20, 10001, True, 20)
-        self.assertTrue(info["total_limitado"])
-        self.assertIsNone(info["total_paginas"])
-        self.assertEqual(info["pagina"], 502)
-        self.assertEqual(info["proxima"], 503)
-        self.assertTrue(info["tem_proxima"])
-        self.assertEqual((info["primeiro_registro"], info["ultimo_registro"]), (10021, 10040))
+        self.assertTrue(info["total_capped"])
+        self.assertIsNone(info["total_pages"])
+        self.assertEqual(info["page"], 502)
+        self.assertEqual(info["next_page"], 503)
+        self.assertTrue(info["has_next"])
+        self.assertEqual((info["first_record"], info["last_record"]), (10021, 10040))
         end = ui_helpers.paginacao_info(503, 20, 10001, True, 7)
-        self.assertFalse(end["tem_proxima"])
-        self.assertEqual(end["ultimo_registro"], 10047)
+        self.assertFalse(end["has_next"])
+        self.assertEqual(end["last_record"], 10047)
         empty = ui_helpers.paginacao_info(504, 20, 10001, True, 0)
-        self.assertFalse(empty["tem_proxima"])
-        self.assertTrue(empty["tem_anterior"])
-        self.assertEqual((empty["primeiro_registro"], empty["ultimo_registro"]), (0, 0))
-        self.assertFalse(ui_helpers.paginacao_info(1, 20, 10000)["total_limitado"])
+        self.assertFalse(empty["has_next"])
+        self.assertTrue(empty["has_previous"])
+        self.assertEqual((empty["first_record"], empty["last_record"]), (0, 0))
+        self.assertFalse(ui_helpers.paginacao_info(1, 20, 10000)["total_capped"])
 
     def test_total_zero(self):
         info = ui_helpers.paginacao_info(1, 20, 0)
@@ -246,8 +246,8 @@ class TestPaginationInfo(unittest.TestCase):
     def test_ultima_exata(self):
         self.assertEqual(self._summary(ui_helpers.paginacao_info(2, 20, 40)),
                          (2, 2, True, False, 1, 2, 21, 40))
-        self.assertEqual(ui_helpers.paginacao_info(1, 20, 20)["total_paginas"], 1)
-        self.assertEqual(ui_helpers.paginacao_info(1, 20, 21)["total_paginas"], 2)
+        self.assertEqual(ui_helpers.paginacao_info(1, 20, 20)["total_pages"], 1)
+        self.assertEqual(ui_helpers.paginacao_info(1, 20, 21)["total_pages"], 2)
 
     def test_um_registro(self):
         self.assertEqual(self._summary(ui_helpers.paginacao_info(1, 50, 1)),
@@ -255,16 +255,16 @@ class TestPaginationInfo(unittest.TestCase):
 
     def test_tamanho_e_total_invalidos(self):
         info = ui_helpers.paginacao_info(1, 0, 57)
-        self.assertEqual((info["tamanho"], info["total_paginas"]), (20, 3))
-        self.assertEqual(ui_helpers.paginacao_info(1, -5, 57)["tamanho"], 20)
+        self.assertEqual((info["size"], info["total_pages"]), (20, 3))
+        self.assertEqual(ui_helpers.paginacao_info(1, -5, 57)["size"], 20)
         info = ui_helpers.paginacao_info(3, 20, -1)
-        self.assertEqual((info["total"], info["pagina"], info["total_paginas"]), (0, 1, 1))
+        self.assertEqual((info["total"], info["page"], info["total_pages"]), (0, 1, 1))
         self.assertEqual(ui_helpers.paginacao_info(1, 20, None)["total"], 0)
 
     def test_chaves(self):
         self.assertEqual(sorted(ui_helpers.paginacao_info(1, 20, 5)), sorted([
-            "pagina", "tamanho", "total", "total_paginas", "total_limitado", "tem_anterior", "tem_proxima",
-            "anterior", "proxima", "primeiro_registro", "ultimo_registro"]))
+            "page", "size", "total", "total_pages", "total_capped", "has_previous", "has_next",
+            "previous_page", "next_page", "first_record", "last_record"]))
 
 
 class TestFirstInvalidField(unittest.TestCase):
@@ -317,7 +317,7 @@ class TestAlertInfo(unittest.TestCase):
 class TestBuildMenu(unittest.TestCase):
 
     def _codes(self, menu):
-        return [(s["secao"], [i["code"] for i in s["itens"]]) for s in menu]
+        return [(s["section"], [i["code"] for i in s["items"]]) for s in menu]
 
     def test_admin_ve_catalogo_completo_na_ordem(self):
         menu = ui_menu.montar_menu([], True)
@@ -347,22 +347,22 @@ class TestBuildMenu(unittest.TestCase):
 
     def test_item_completo_e_rota_ativa(self):
         menu = ui_menu.montar_menu(["EXEC_SCRIPT", "VIEW_LOGS"], False, ("tickets", "index"))
-        items = menu[0]["itens"]
+        items = menu[0]["items"]
         self.assertEqual(menu[0]["title"], u"Operação")
         # CR-004 U5 (README §5.8): "Rotinas disponíveis" vem antes de "Disparar Scripts".
-        self.assertEqual(items[0]["rota"], ("tickets", "catalog"))
+        self.assertEqual(items[0]["route"], ("tickets", "catalog"))
         self.assertEqual(items[1], {
             "code": "EXEC_SCRIPT",
             "label": u"Disparar Scripts",
-            "rota": ("tickets", "new"),
+            "route": ("tickets", "new"),
             "icon": "icon-play",
             "active": False,
         })
         self.assertTrue(items[2]["active"])
-        self.assertEqual(ui_menu.montar_menu(["EXEC_SCRIPT"], False)[0]["itens"][0]["active"], False)
+        self.assertEqual(ui_menu.montar_menu(["EXEC_SCRIPT"], False)[0]["items"][0]["active"], False)
 
     def test_rotulos_do_catalogo_canonico(self):
-        labels = {i["code"]: i["label"] for s in ui_menu.montar_menu([], True) for i in s["itens"]}
+        labels = {i["code"]: i["label"] for s in ui_menu.montar_menu([], True) for i in s["items"]}
         self.assertEqual(labels["MANAGE_PARAMETERS"], u"Dicionário de Parâmetros")
         self.assertEqual(labels["MANAGE_USERS"], u"Gestão de Usuários")
         self.assertEqual(ui_menu.montar_menu([], True)[1]["title"], u"Administração")
@@ -370,15 +370,15 @@ class TestBuildMenu(unittest.TestCase):
     def test_rotas_e_icones_ascii_e_icones_no_sprite(self):
         ids = _ids_sprite()
         for section in ui_menu.montar_menu([], True):
-            for item in section["itens"]:
-                for part in item["rota"] + (item["icon"],):
+            for item in section["items"]:
+                for part in item["route"] + (item["icon"],):
                     self.assertTrue(re.match(r"^[a-z][a-z0-9_-]*$", part), part)
                 self.assertIn(item["icon"], ids)
 
     def test_resultado_independente_entre_chamadas(self):
         menu = ui_menu.montar_menu([], True)
-        menu[0]["itens"][0]["label"] = "alterado"
-        self.assertEqual(ui_menu.montar_menu([], True)[0]["itens"][0]["label"], u"Rotinas disponíveis")
+        menu[0]["items"][0]["label"] = "alterado"
+        self.assertEqual(ui_menu.montar_menu([], True)[0]["items"][0]["label"], u"Rotinas disponíveis")
 
 
 class TestPureModulesWithoutGluon(unittest.TestCase):
@@ -425,20 +425,20 @@ class TestPlainLanguage(unittest.TestCase):
         created = self.NOW - datetime.timedelta(minutes=10)
         pend = ui_helpers.etapas_ticket({"status": "PENDING", "created_at": created,
                                          "scheduled_at": self.NOW + datetime.timedelta(hours=1)}, self.NOW)
-        self.assertEqual([e["estado"] for e in pend], ["feito", "atual", "pendente", "pendente"])
+        self.assertEqual([e["state_info"] for e in pend], ["feito", "atual", "pendente", "pendente"])
         self.assertTrue(pend[1]["when"].startswith(u"agendado para"))
         run = ui_helpers.etapas_ticket({"status": "RUNNING", "created_at": created, "scheduled_at": created,
                                         "started_at": self.NOW - datetime.timedelta(minutes=2)}, self.NOW)
-        self.assertEqual([e["estado"] for e in run], ["feito", "feito", "atual", "pendente"])
+        self.assertEqual([e["state_info"] for e in run], ["feito", "feito", "atual", "pendente"])
         self.assertEqual(run[2]["when"], u"há 2 minutos")
         cancel = ui_helpers.etapas_ticket({"status": "CANCELLED", "created_at": created, "scheduled_at": created,
                                          "finished_at": self.NOW}, self.NOW)
-        self.assertEqual([e["estado"] for e in cancel], ["feito", "feito", "pulado", "atual"])
+        self.assertEqual([e["state_info"] for e in cancel], ["feito", "feito", "pulado", "atual"])
         self.assertEqual(cancel[2]["when"], u"não chegou a rodar")
         self.assertTrue(cancel[3]["when"].startswith(u"Cancelado"))
         ok = ui_helpers.etapas_ticket({"status": "SUCCESS", "created_at": created, "scheduled_at": created,
                                        "started_at": created, "finished_at": self.NOW}, self.NOW)
-        self.assertEqual([e["estado"] for e in ok], ["feito", "feito", "feito", "atual"])
+        self.assertEqual([e["state_info"] for e in ok], ["feito", "feito", "feito", "atual"])
 
     def test_tempo_simples(self):
         self.assertEqual(ui_helpers.tempo_simples(30), u"menos de 1 minuto")

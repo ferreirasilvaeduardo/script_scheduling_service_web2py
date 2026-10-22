@@ -11,7 +11,7 @@ class RepoSchedules(object):
     """
 
     def list(self, filters=None, page=1, size=20, environment_scope=None):
-        """Lista agendamentos paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}.
+        """Lista agendamentos paginados com formato {'items': [...], 'total': n, 'page': p, 'size': t}.
 
         Ordem: next_run ASC, id ASC. Os itens trazem parametros_json (excecao documentada no
         README §2.5: o service avalia cada regra com ele); nenhuma listagem traz log_output.

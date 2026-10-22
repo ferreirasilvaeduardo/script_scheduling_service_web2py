@@ -55,10 +55,10 @@ class _Base(unittest.TestCase):
         self.ctx["gestor"] = dict(self.ctx["op.prod"], features=frozenset(["MANAGE_PROFILES"]))
         self.ctx["admin_externo"] = dict(self.ctx["admin"], profile_id=999)
         self.svc = AdminProfilesService(self.rbac_repo, repo_factory.get("catalog"), self.users, self.log)
-        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["itens"]] or [0])
+        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["items"]] or [0])
 
     def _audits(self, action):
-        return [a for a in self.audit.list(filters={"action": action}, page=1, size=100)["itens"]
+        return [a for a in self.audit.list(filters={"action": action}, page=1, size=100)["items"]
                 if a["entity"] == "tbsss_profiles" and a["id"] > self.aud_base]
 
     def _form(self, profile_id, actor="admin"):
@@ -120,18 +120,18 @@ class TestDeactivationWithImpact(_Base):
     def test_formulario_lista_os_usuarios_afetados(self):
         # CR-003 P4: o modal mostra os logins (README §4.3.B.1).
         form = self._form(PERFIL_CONSULTA)
-        self.assertEqual(form["usuarios_ativos"], 1)
-        self.assertEqual(form["usuarios_afetados"], ["consulta"])
-        self.assertFalse(form["proprio"])
-        self.assertTrue(self._form(PERFIL_ADMIN)["proprio"])
+        self.assertEqual(form["active_users"], 1)
+        self.assertEqual(form["affected_users"], ["consulta"])
+        self.assertFalse(form["own"])
+        self.assertTrue(self._form(PERFIL_ADMIN)["own"])
 
     def test_lista_limitada_a_vinte_logins(self):
         for i in range(perfis_mod.AFFECTED_MAX + 3):
             self.users.insert({"login": "usr.%02d" % i, "name": "U %d" % i, "password_hash": "x",
                                    "profile_id": PERFIL_CONSULTA, "active": "Y"}, actor="teste")
         form = self._form(PERFIL_CONSULTA)
-        self.assertEqual(form["usuarios_ativos"], perfis_mod.AFFECTED_MAX + 4)
-        self.assertEqual(len(form["usuarios_afetados"]), perfis_mod.AFFECTED_MAX)
+        self.assertEqual(form["active_users"], perfis_mod.AFFECTED_MAX + 4)
+        self.assertEqual(len(form["affected_users"]), perfis_mod.AFFECTED_MAX)
 
     def test_desativacao_audita_impacto(self):
         form = self._form(PERFIL_CONSULTA)
@@ -191,23 +191,23 @@ class TestWhoCan(_Base):
         # Cada perfil listado tem um usuario cujo contexto can_execute no ambiente indicado.
         catalog = self.svc._catalog
         script = catalog.scripts_get(1)
-        envs = dict((a["name"], a) for a in catalog.environments_list(page=1, size=50)["itens"])
+        envs = dict((a["name"], a) for a in catalog.environments_list(page=1, size=50)["items"])
         hom = catalog.homologation_get(1)
         for login in ("op.prod", "consulta"):
             ctx = self.ctx[login]
             can = set(n for n, a in envs.items() if rbac.can_execute(ctx, script, a, hom)[0])
             name = self.rbac_repo.profiles_get(ctx["profile_id"])["name"]
-            self.assertEqual(set(profiles[name]["detalhes"]) if name in profiles else set(), can, login)
+            self.assertEqual(set(profiles[name]["details"]) if name in profiles else set(), can, login)
 
     def test_por_ambiente_e_inativos(self):
         self.rbac_repo.profiles_update(PERFIL_CONSULTA, {"is_admin": "Y"}, actor="teste")
         self.rbac_repo.profiles_update(PERFIL_CONSULTA, {"active": "N"}, actor="teste")
-        env = [a for a in self.svc._catalog.environments_list(page=1, size=50)["itens"]
+        env = [a for a in self.svc._catalog.environments_list(page=1, size=50)["items"]
                if a["name"] == "HOMOLOGACAO"][0]
         q = self.svc.who_can(self.ctx["admin"], environment_id=str(env["id"]))
-        self.assertIn("READ_ONLY", self._names(q["inativos"]))
+        self.assertIn("READ_ONLY", self._names(q["inactive_items"]))
         self.assertNotIn("READ_ONLY", self._names(q["profiles"]))
-        self.assertTrue(self._names(q["profiles"])["ADMINISTRATOR"]["detalhes"])
+        self.assertTrue(self._names(q["profiles"])["ADMINISTRATOR"]["details"])
 
     def test_script_inativo_avisa_e_acesso(self):
         self.svc._catalog.scripts_update(5, {"active": "N"}, actor="teste")

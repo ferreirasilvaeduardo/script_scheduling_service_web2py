@@ -35,22 +35,22 @@ class PermissionsService(object):
         admin = ctx.get("is_admin") is True
         routes = {}
         for section in ui_menu.montar_menu(ctx.get("features"), admin):
-            for item in section["itens"]:
+            for item in section["items"]:
                 # Ultimo item vence: EXEC_SCRIPT ("Disparar Scripts") leva ao disparo, nao ao catalogo.
-                routes[item["code"]] = item["rota"]
+                routes[item["code"]] = item["route"]
         screens = []
         for f in self._rbac.features_list():
             if f.get("active") != "Y" or not (admin or f["code"] in (ctx.get("features") or ())):
                 continue
-            screens.append({"code": f["code"], "name": f["name"], "finalidade": f.get("description") or "",
-                          "rota": routes.get(f["code"])})
+            screens.append({"code": f["code"], "name": f["name"], "purpose": f.get("description") or "",
+                          "route": routes.get(f["code"])})
         return screens
 
     def _environments(self, ctx):
         admin = ctx.get("is_admin") is True
         mine = ctx.get("environments") or ()
         return [{"name": a["name"], "description": a.get("description") or ""}
-                for a in self._catalog.environments_list(page=1, size=_CATALOG_MAX)["itens"]
+                for a in self._catalog.environments_list(page=1, size=_CATALOG_MAX)["items"]
                 if a["active"] == "Y" and (admin or a["name"] in mine)]
 
     def _scripts(self, ctx):
@@ -101,15 +101,15 @@ class PermissionsService(object):
                 missing.append({"name": script["name"],
                                  "reason": REASON_NO_FEATURE if not can_exec else (reason or REASON_NOT_HOMOLOGATED)})
         return {
-            "perfil": ctx.get("perfil_nome"),
-            "frase_admin": ADMIN_PHRASE if admin else None,
-            "telas": self._screens(ctx),
+            "profile": ctx.get("profile_name"),
+            "admin_phrase": ADMIN_PHRASE if admin else None,
+            "screens": self._screens(ctx),
             "environments": self._environments(ctx),
-            "pode_executar": can_exec,
-            "frase_sem_exec": None if can_exec else NO_EXEC_PHRASE,
+            "can_execute": can_exec,
+            "no_runs_phrase": None if can_exec else NO_EXEC_PHRASE,
             "scripts": scripts,
-            "ausentes": missing,
-            "frase_mais_acesso": MORE_ACCESS_PHRASE,
+            "absent": missing,
+            "more_access_phrase": MORE_ACCESS_PHRASE,
         }
 
 

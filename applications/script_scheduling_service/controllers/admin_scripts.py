@@ -45,8 +45,8 @@ def _vazio_form(ctx):
     return {"id": None, "name": "", "description": "", "script_group": "", "category": "", "stage": "",
             "interpreter": path_guard.ALLOWLIST[0], "path_file": "",
             "param_type": "NAMED",
-            "max_parallel_env": 1, "timeout_s": "", "active": "Y", "version": "", "agendamentos_ativos": 0,
-            "obs_validacao": servico.VALIDATION_NOTE}
+            "max_parallel_env": 1, "timeout_s": "", "active": "Y", "version": "", "active_schedules": 0,
+            "validation_note": servico.VALIDATION_NOTE}
 
 
 def _pagina_form(ctx, dados, erros=None):
@@ -56,9 +56,9 @@ def _pagina_form(ctx, dados, erros=None):
     campos = [{"name": n, "error": erros.get(n)} for n in ("name", "description", "script_group", "category", "stage",
                                                           "interpreter", "path_file", "param_type",
                                                           "max_parallel_env", "timeout_s")]
-    return dict(scr=dados, erros=erros, erro_geral=erros.get(admin_crud.GENERAL_FIELD), interpretadores=servico.INTERPRETER_LABELS,
-                tipos_param=servico.PARAM_TYPE_LABELS, foco_campo=ui_helpers.primeiro_campo_invalido(campos),
-                aviso_desativacao=servico.DEACTIVATION_WARNING)
+    return dict(scr=dados, errors=erros, general_error=erros.get(admin_crud.GENERAL_FIELD), interpreters=servico.INTERPRETER_LABELS,
+                param_types=servico.PARAM_TYPE_LABELS, focus_field=ui_helpers.primeiro_campo_invalido(campos),
+                deactivation_warning=servico.DEACTIVATION_WARNING)
 
 
 def index():
@@ -74,10 +74,10 @@ def index():
         _negado()
     except RepoError:
         _log.exception("falha ao listar scripts (login=%s)", ctx["login"], extra={"action": _FUNC})
-        resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
+        resultado = {"items": [], "total": 0, "page": 1, "size": tamanho}
         erro = _MSG_FALHA_LISTA
     response.title = u"Scripts — SSS"
-    return dict(resultado=resultado, erro=erro, filtros_ativos=filtros, tamanho=tamanho, interpretadores=servico.INTERPRETER_LABELS,
+    return dict(result=resultado, error=erro, active_filters=filtros, size=tamanho, interpreters=servico.INTERPRETER_LABELS,
                 query_params=dict(filtros, size=tamanho))
 
 
@@ -162,7 +162,7 @@ def homologation():
         _negado()
     response.title = u"Homologação de %s — SSS" % dados["script"]["name"]
     response.sss_scripts = [_JS]
-    return dict(homolog=dados)
+    return dict(homologation=dados)
 
 
 def save_homologation():
@@ -201,7 +201,7 @@ def parameters():
         _negado()
     response.title = u"Parâmetros de %s — SSS" % dados["script"]["name"]
     response.sss_scripts = [_JS]
-    return dict(vinc=dados)
+    return dict(links_page=dados)
 
 
 def save_parameters():

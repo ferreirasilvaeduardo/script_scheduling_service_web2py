@@ -51,7 +51,7 @@ class _Base(unittest.TestCase):
 class TestLastRuns(_Base):
 
     def test_contrato_ultimo_por_script_no_escopo(self):
-        all_value = self.tickets.list(page=1, size=100)["itens"]
+        all_value = self.tickets.list(page=1, size=100)["items"]
         expected = {}
         for t in all_value:
             if t["environment"] == "HOMOLOGACAO":
@@ -72,26 +72,26 @@ class TestRoutineCatalog(_Base):
     def test_cartoes_iguais_ao_disparo_e_ultima_no_escopo(self):
         ctx = self.ctx["op.hml"]
         groups = self.svc.routine_catalog(ctx)
-        ids = sorted(c["id"] for g in groups for c in g["cartoes"])
+        ids = sorted(c["id"] for g in groups for c in g["cards"])
         self.assertEqual(ids, sorted(s["id"] for g in self.svc.available_scripts(ctx) for s in g["scripts"]))
         for g in groups:
-            for c in g["cartoes"]:
+            for c in g["cards"]:
                 self.assertTrue(c["environments"])
-                if c["ultima"]:
-                    t = self.tickets.get(c["ultima"]["id"])
+                if c["last_run"]:
+                    t = self.tickets.get(c["last_run"]["id"])
                     self.assertIn(t["environment"], ctx["environments"])
-                    self.assertTrue(c["ultima"]["when"].startswith(u"há "))
+                    self.assertTrue(c["last_run"]["when"].startswith(u"há "))
 
     def test_sem_ver_logs_so_os_proprios(self):
         ctx = self._without("op.hml", "VIEW_LOGS")
         for g in self.svc.routine_catalog(ctx):
-            for c in g["cartoes"]:
-                if c["ultima"]:
-                    self.assertEqual(self.tickets.get(c["ultima"]["id"])["requested_by"], "op.hml")
+            for c in g["cards"]:
+                if c["last_run"]:
+                    self.assertEqual(self.tickets.get(c["last_run"]["id"])["requested_by"], "op.hml")
 
     def test_perguntas_com_obrigatorio(self):
-        cards = dict((c["name"], c) for g in self.svc.routine_catalog(self.ctx["admin"]) for c in g["cartoes"])
-        questions = cards["carga_diaria"]["perguntas"]
+        cards = dict((c["name"], c) for g in self.svc.routine_catalog(self.ctx["admin"]) for c in g["cards"])
+        questions = cards["carga_diaria"]["questions"]
         self.assertIn({"label": u"Data de Referencia", "required": True}, questions)
 
     def test_sem_exec_script_vazio(self):
@@ -114,16 +114,16 @@ class TestScriptHistory(_Base):
 
     def test_numeros_batem_com_o_grafico_e_a_taxa(self):
         h = self.svc.script_history(self.ctx["admin"], "1")
-        c = h["contagem"]
+        c = h["counts"]
         self.assertEqual(sum(c.values()), h["total"])
-        by_day = sum(sum(d[k] for k in c) for d in h["dias"])
+        by_day = sum(sum(d[k] for k in c) for d in h["days"])
         self.assertEqual(by_day, h["total"])
-        self.assertEqual(len(h["dias"]), 30)
+        self.assertEqual(len(h["days"]), 30)
         finished = c["succeeded"] + c["error"] + c["cancelled"]
         if finished:
-            self.assertEqual(h["taxa"], int(round(100.0 * c["succeeded"] / finished)))
-            self.assertTrue(h["frase_taxa"].startswith(u"De cada 10 vezes,"))
-        self.assertEqual(h["filtro_lista"]["script"], 1)
+            self.assertEqual(h["rate"], int(round(100.0 * c["succeeded"] / finished)))
+            self.assertTrue(h["rate_phrase"].startswith(u"De cada 10 vezes,"))
+        self.assertEqual(h["list_filter"]["script"], 1)
 
     def test_fora_das_rotinas_e_404(self):
         from repo_errors import RepoNotFound
@@ -145,12 +145,12 @@ class TestStackedBars(unittest.TestCase):
         days = [{"label": "01/10", "succeeded": 2, "error": 1, "cancelled": 0, "in_progress": 0},
                 {"label": "02/10", "succeeded": 0, "error": 0, "cancelled": 0, "in_progress": 0}]
         g = ui_helpers.barras_empilhadas(days, width=200, height=100)
-        self.assertEqual(g["maximo"], 3)
-        self.assertEqual([b["css_class"] for b in g["barras"]], ["sss-graf-succeeded", "sss-graf-error"])
-        right, error = g["barras"]
+        self.assertEqual(g["maximum"], 3)
+        self.assertEqual([b["css_class"] for b in g["bars"]], ["sss-graf-succeeded", "sss-graf-error"])
+        right, error = g["bars"]
         self.assertLess(error["y"], right["y"])  # empilhado de baixo para cima
         self.assertIn(u"01/10: Deu erro — 1", error["title"])
-        self.assertEqual(ui_helpers.barras_empilhadas([], 200, 100)["barras"], [])
+        self.assertEqual(ui_helpers.barras_empilhadas([], 200, 100)["bars"], [])
 
 
 if __name__ == "__main__":

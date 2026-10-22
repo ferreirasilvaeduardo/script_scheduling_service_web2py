@@ -3,33 +3,33 @@
 # Inclusão e edição de ambiente (padrão de CRUD administrativo, docs/ADMIN_CRUD_PATTERN.md).
 # Na edição o nome é somente leitura e o servidor ignora qualquer valor enviado para ele.
 import ui_helpers
-_novo = not amb.get('id')
-_situacao = ui_helpers.ativo_info(amb.get('active'))
+_novo = not env.get('id')
+_situacao = ui_helpers.ativo_info(env.get('active'))
 _campos = [
-    {'name': 'name', 'label': 'Nome', 'value': amb.get('name'), 'error': erros.get('name'), 'required': _novo, 'maxlength': 30, 'read_only': not _novo,
+    {'name': 'name', 'label': 'Nome', 'value': env.get('name'), 'error': errors.get('name'), 'required': _novo, 'maxlength': 30, 'read_only': not _novo,
      'help': u'Letras maiúsculas, dígitos e _ (ex.: PRODUCAO). Não pode ser alterado depois de criado.'},
-    {'name': 'description', 'label': u'Descrição', 'value': amb.get('description'), 'error': erros.get('description'), 'maxlength': 100},
-    {'name': 'connection', 'label': 'DSN', 'value': amb.get('connection'), 'error': erros.get('connection'), 'maxlength': 250,
+    {'name': 'description', 'label': u'Descrição', 'value': env.get('description'), 'error': errors.get('description'), 'maxlength': 100},
+    {'name': 'connection', 'label': 'DSN', 'value': env.get('connection'), 'error': errors.get('connection'), 'maxlength': 250,
      'help': u'host:porta/serviço (ex.: db01.local:1521/svc) ou alias TNS. Sem usuário nem senha: credenciais ficam no secrets.cfg.'},
 ]
 if not _novo:
-    _desativar = amb.get('active') == 'Y'
-    _qtd = amb.get('agendamentos_ativos') or 0
+    _desativar = env.get('active') == 'Y'
+    _qtd = env.get('active_schedules') or 0
     if _desativar:
-        _texto_modal = u'%s Agendamentos ativos afetados: %d. Scripts homologados neste ambiente, que deixam de poder rodar nele: %d.' % (aviso_desativacao, _qtd, amb.get('scripts_homologados') or 0)
+        _texto_modal = u'%s Agendamentos ativos afetados: %d. Scripts homologados neste ambiente, que deixam de poder rodar nele: %d.' % (deactivation_warning, _qtd, env.get('homologated_scripts') or 0)
     else:
         _texto_modal = u'O ambiente voltará a aceitar tickets e agendamentos.'
     pass
-    _modal_ativo = {'id': 'modal-ativo', 'title': (u'Desativar ambiente %s' if _desativar else u'Reativar ambiente %s') % amb['name'],
+    _modal_ativo = {'id': 'modal-ativo', 'title': (u'Desativar ambiente %s' if _desativar else u'Reativar ambiente %s') % env['name'],
                     'text': _texto_modal, 'trigger_label': 'Desativar' if _desativar else 'Reativar',
                     'confirm_label': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
                     'variant': 'danger' if _desativar else 'normal', 'action': URL(c='admin_environments', f='toggle_active'),
-                    'hidden_fields': dict(id=amb['id'], versao=amb['version'])}
+                    'hidden_fields': dict(id=env['id'], versao=env['version'])}
 pass
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">
   <div>
-    <h1 class="sss-page-titulo">{{if _novo:}}Novo ambiente{{else:}}Ambiente <span class="sss-mono">{{=amb['name']}}</span>
+    <h1 class="sss-page-titulo">{{if _novo:}}Novo ambiente{{else:}}Ambiente <span class="sss-mono">{{=env['name']}}</span>
       <span class="sss-status {{=_situacao['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icon']}}"></use></svg><span>{{=_situacao['label']}}</span></span>{{pass}}
     </h1>
   </div>
@@ -42,9 +42,9 @@ pass
   </div>
 </div>
 
-{{if not _novo and amb.get('active') == 'Y' and amb.get('agendamentos_ativos'):}}
+{{if not _novo and env.get('active') == 'Y' and env.get('active_schedules'):}}
 <div class="alert alert-info sss-alerta" role="note">
-  <span>Este ambiente tem {{=amb['agendamentos_ativos']}} agendamento(s) ativo(s). {{=aviso_desativacao}}</span>
+  <span>Este ambiente tem {{=env['active_schedules']}} agendamento(s) ativo(s). {{=deactivation_warning}}</span>
 </div>
 {{pass}}
 
@@ -53,16 +53,16 @@ pass
   <form class="sss-card-corpo" method="post" action="{{=URL(c='admin_environments', f='save')}}" autocomplete="off">
     {{=csrf_campo()}}
     {{if not _novo:}}
-    <input type="hidden" name="id" value="{{=amb['id']}}">
-    <input type="hidden" name="version" value="{{=amb['version']}}">
+    <input type="hidden" name="id" value="{{=env['id']}}">
+    <input type="hidden" name="version" value="{{=env['version']}}">
     {{pass}}
-    {{if erro_geral:}}
+    {{if general_error:}}
     <div class="alert alert-danger sss-alerta" role="alert">
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#icon-alert"></use></svg>
-      <span>{{=erro_geral}}</span>
+      <span>{{=general_error}}</span>
     </div>
     {{pass}}
-    {{for campo in _campos:}}
+    {{for field in _campos:}}
     {{include 'components/form_field.html'}}
     {{pass}}
     <div class="sss-form-acoes">
@@ -72,7 +72,7 @@ pass
   </form>
 </section>
 
-{{if not _novo and amb.get('registro'):}}
-{{registro = amb['registro']}}
+{{if not _novo and env.get('record'):}}
+{{record = env['record']}}
 {{include 'components/record.html'}}
 {{pass}}

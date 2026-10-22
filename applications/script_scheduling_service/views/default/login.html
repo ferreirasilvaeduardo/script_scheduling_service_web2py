@@ -3,9 +3,9 @@
   <section class="sss-card" aria-labelledby="login-titulo">
     <h1 class="sss-card-titulo" id="login-titulo">Entrar</h1>
     <div class="sss-card-corpo">
-      {{if mensagem:}}
+      {{if message:}}
       {{# components/alert.html ja e incluido pelo layout; o parser do web2py nao o inclui duas vezes.
-      _erro = ui_helpers.alerta_info({'kind': 'error', 'message': mensagem})}}
+      _erro = ui_helpers.alerta_info({'kind': 'error', 'message': message})}}
       <div class="alert {{=_erro['css_class']}} sss-alerta" role="{{=_erro['role']}}">
         <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_erro['icon']}}"></use></svg>
         <span>{{=_erro['message']}}</span>
@@ -13,10 +13,10 @@
       {{pass}}
       <form method="post" action="{{=URL(c='default', f='login')}}">
         {{=csrf_campo()}}
-        {{if destino:}}<input type="hidden" name="next" value="{{=destino}}">{{pass}}
+        {{if next_url:}}<input type="hidden" name="next" value="{{=next_url}}">{{pass}}
         <div class="mb-3">
           <label class="form-label" for="campo-login">Usuário</label>
-          <input type="text" class="form-control" id="campo-login" name="login" value="{{=login_digitado}}" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
+          <input type="text" class="form-control" id="campo-login" name="login" value="{{=typed_login}}" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
         </div>
         <div class="mb-3">
           <label class="form-label" for="campo-password">Senha</label>

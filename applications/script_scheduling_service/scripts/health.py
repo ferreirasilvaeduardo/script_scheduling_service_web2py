@@ -98,7 +98,7 @@ class Check(object):
         served = saude_sql.served_pairs(agents, now, self.thresholds)
         for g in saude_sql.unattended_queue(self.repo.queue_by_pair(self.conn, now), served):
             self._problem(CRITICAL, "fila sem atendente: %d tickets de %s/%s, o mais antigo desde %s" % (
-                g["quantidade"], g["environment"], g["interpreter"], g["mais_antigo"].strftime("%Y-%m-%d %H:%M:%S")))
+                g["quantity"], g["environment"], g["interpreter"], g["oldest"].strftime("%Y-%m-%d %H:%M:%S")))
         count, old = self.repo.overdue_queue(self.conn, now)
         wait_min = 0 if old is None else max(0, int((now - old).total_seconds()) // 60)
         a = self.args

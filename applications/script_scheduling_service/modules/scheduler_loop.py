@@ -1080,7 +1080,7 @@ class Agent(object):
             return self._refuse(item, "NOT_HOMOLOGATED")
         if environment is None or environment.get("active") != "Y":
             return self._refuse(item, "ENVIRONMENT_INACTIVE")
-        ok, _reason = rbac.can_execute(context["ctx"], script, environment, context["homologacoes"])
+        ok, _reason = rbac.can_execute(context["ctx"], script, environment, context["homologations"])
         if not ok:
             return self._refuse(item, "NO_PERMISSION")
         return snap, argv, script_real, context
@@ -1175,7 +1175,7 @@ class Agent(object):
             ticket_env = dict(ticket, started_at=item.started_at)
             env = env_builder.build(self.cfg, self.secrets, ticket_env, context["environment"], script_real,
                                         work_dir_ticket, dict(os.environ), self.plat.NAME, snapshot=snap,
-                                        schedule=context["agendamento"], log_path=path,
+                                        schedule=context["schedule"], log_path=path,
                                         timeout_sec=timeout, hostname=self.hostname, version=sss_config.SSS_VERSION,
                                         output_dir=output.folder if output else None,
                                         input_dir=os.path.join(*input_value) if input_value else None)

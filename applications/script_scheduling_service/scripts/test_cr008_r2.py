@@ -59,11 +59,11 @@ class TestMaskedOwner(unittest.TestCase):
                              features=frozenset(f for f in self.admin["features"] if f != "VIEW_AUDIT"))
 
     def test_lista_e_formulario(self):
-        owners = set(i["responsavel"] for i in self.svc.list(self.operator, {}, 1, 100)["itens"])
+        owners = set(i["responsible"] for i in self.svc.list(self.operator, {}, 1, 100)["items"])
         self.assertTrue(owners)
         self.assertTrue(owners <= {u"você", u"outra pessoa"}, owners)
-        self.assertEqual(self.svc.form(self.operator, "2")["regra"]["responsavel"], u"você")
-        self.assertEqual(self.svc.form(self.admin, "2")["regra"]["responsavel"], "op.prod")
+        self.assertEqual(self.svc.form(self.operator, "2")["rule"]["responsible"], u"você")
+        self.assertEqual(self.svc.form(self.admin, "2")["rule"]["responsible"], "op.prod")
 
 
 class TestPauseReason(unittest.TestCase):

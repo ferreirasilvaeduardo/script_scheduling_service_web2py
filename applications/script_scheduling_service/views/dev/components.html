@@ -8,7 +8,7 @@
 <section class="sss-card" aria-labelledby="sec-badges">
   <h2 class="sss-card-titulo" id="sec-badges">badge_status</h2>
   <div class="sss-card-corpo sss-status-lista">
-    {{for status, status_motivo in badges:}}
+    {{for status, status_reason in badges:}}
     {{include 'components/badge_status.html'}}
     {{pass}}
   </div>
@@ -19,38 +19,38 @@
   {{include 'components/filters.html'}}
   <div class="sss-card-corpo sss-acoes">
     <span class="sss-page-sub">Tamanho da página:</span>
-    {{for _t in tamanhos:}}
-    {{if _t == tamanho:}}
+    {{for _t in sizes:}}
+    {{if _t == size:}}
     <span class="btn btn-sm btn-secondary disabled" aria-current="true">{{=_t}}</span>
     {{else:}}
-    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c=url_base[0], f=url_base[1], vars=dict([(k, v) for k, v in query_params.items() if v], tamanho=_t))}}">{{=_t}}</a>
+    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c=url_base[0], f=url_base[1], vars=dict([(k, v) for k, v in query_params.items() if v], size=_t))}}">{{=_t}}</a>
     {{pass}}
     {{pass}}
   </div>
   {{include 'components/table.html'}}
-  {{total_limitado = False
-quantidade_pagina = None}}
+  {{total_capped = False
+page_count = None}}
   {{include 'components/pagination.html'}}
 </section>
 
 <section class="sss-card" aria-labelledby="sec-tabela-estados">
   <h2 class="sss-card-titulo" id="sec-tabela-estados">tabela: estados vazio e de erro</h2>
-  {{tabela = tabela_vazia}}
+  {{table = empty_table}}
   {{include 'components/table.html'}}
-  {{tabela = tabela_erro}}
+  {{table = error_table}}
   {{include 'components/table.html'}}
 </section>
 
 <section class="sss-card" aria-labelledby="sec-form">
   <h2 class="sss-card-titulo" id="sec-form">form_campo</h2>
   <div class="sss-card-corpo">
-    {{if not form_enviado:}}
+    {{if not form_sent:}}
     <p class="sss-page-sub"><a href="{{=URL(c=url_base[0], f=url_base[1], vars=dict(demo_submit='1', demo_timeout='0'), anchor='sec-form')}}">Simular envio com erros</a> (foco vai para o primeiro campo inválido).</p>
     {{pass}}
     <form method="post" action="{{=URL(c=url_base[0], f=url_base[1], anchor='sec-form')}}" novalidate>
       {{=csrf_campo()}}
       <input type="hidden" name="demo_submit" value="1">
-      {{for campo in campos_form:}}
+      {{for field in form_fields:}}
       {{include 'components/form_field.html'}}
       {{pass}}
       <button type="submit" class="btn btn-sm btn-primary">Validar</button>
@@ -61,7 +61,7 @@ quantidade_pagina = None}}
 <section class="sss-card" aria-labelledby="sec-modal">
   <h2 class="sss-card-titulo" id="sec-modal">modal_confirmacao</h2>
   <div class="sss-card-corpo sss-acoes">
-    {{for modal in modais:}}
+    {{for modal in modals:}}
     {{include 'components/confirm_modal.html'}}
     {{pass}}
   </div>
@@ -71,7 +71,7 @@ quantidade_pagina = None}}
 <section class="sss-card" aria-labelledby="sec-alerta">
   <h2 class="sss-card-titulo" id="sec-alerta">alerta</h2>
   <div class="sss-card-corpo">
-    {{for alerta in alertas:}}
+    {{for alert in alerts:}}
     {{include 'components/alert.html'}}
     {{pass}}
     <p class="sss-page-sub mb-0">Via <span class="sss-mono">response.flash</span>:
@@ -84,7 +84,7 @@ quantidade_pagina = None}}
 <section class="sss-card" aria-labelledby="sec-copiar">
   <h2 class="sss-card-titulo" id="sec-copiar">copiar</h2>
   <div class="sss-card-corpo sss-copiar-valor">
-    <code id="texto-copia">{{=texto_copia}}</code>
-    <button type="button" class="btn btn-sm btn-outline-secondary" x-data="copiar" data-texto="{{=texto_copia}}" aria-describedby="texto-copia" @click="copiar"><span x-text="rotulo">Copiar</span></button>
+    <code id="texto-copia">{{=copy_text}}</code>
+    <button type="button" class="btn btn-sm btn-outline-secondary" x-data="copiar" data-texto="{{=copy_text}}" aria-describedby="texto-copia" @click="copiar"><span x-text="rotulo">Copiar</span></button>
   </div>
 </section>

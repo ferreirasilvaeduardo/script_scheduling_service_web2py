@@ -4,7 +4,7 @@
 # cliente por conveniência); o servidor revalida tudo e renumera a ordem. Valor específico sigiloso
 # nunca volta ao HTML: em branco mantém o gravado.
 import json
-_v = vinc
+_v = links_page
 _sc = _v['script']
 _rotulo_tipo = {'NAMED': u'por flag (NOMEADO)', 'POSITIONAL': u'posicional (SEQUENCIAL)', 'NONE': u'sem argumentos (NENHUM)'}
 }}
@@ -21,7 +21,7 @@ _rotulo_tipo = {'NAMED': u'por flag (NOMEADO)', 'POSITIONAL': u'posicional (SEQU
 
 <form class="sss-card" method="post" action="{{=URL(c='admin_scripts', f='save_parameters')}}" autocomplete="off"
       x-data="vinculosScript" data-url-previa="{{=URL(c='admin_scripts', f='preview')}}"
-      data-vinculos="{{=json.dumps(_v['vinculos'])}}" data-disponiveis="{{=json.dumps(_v['disponiveis'])}}">
+      data-vinculos="{{=json.dumps(_v['links'])}}" data-disponiveis="{{=json.dumps(_v['available'])}}">
   {{=csrf_campo()}}
   <input type="hidden" name="id" value="{{=_sc['id']}}">
   <input type="hidden" name="version" value="{{=_v['version']}}">

@@ -124,7 +124,7 @@ class AdminProfilesService(object):
         """(total, logins) dos usuarios ativos do perfil; no maximo AFFECTED_MAX logins (README §4.3.B.1)."""
         page = self._users.list(filters={"profile_id": profile_id, "active": "Y"}, page=1,
                                        size=AFFECTED_MAX)
-        return page["total"], [u["login"] for u in page["itens"]]
+        return page["total"], [u["login"] for u in page["items"]]
 
     # ------------------------------------------------------------- cadastro
 
@@ -138,7 +138,7 @@ class AdminProfilesService(object):
         admin_crud.require_feature(ctx, FEATURE)
         if profile_id in (None, ""):
             return {"id": None, "name": "", "description": "", "is_admin": "N", "active": "Y", "version": "",
-                    "usuarios_ativos": 0, "usuarios_afetados": [], "proprio": False, "registro": None}
+                    "active_users": 0, "affected_users": [], "own": False, "record": None}
         profile = self._get(profile_id)
         total, logins = self.affected_users(profile["id"])
         return {
@@ -148,10 +148,10 @@ class AdminProfilesService(object):
             "is_admin": profile["is_admin"],
             "active": profile["active"],
             "version": admin_crud.version(profile, EDITABLE_FIELDS),
-            "usuarios_ativos": total,
-            "usuarios_afetados": logins,
-            "proprio": ctx.get("profile_id") == profile["id"],
-            "registro": ui_helpers.registro(profile, ctx),
+            "active_users": total,
+            "affected_users": logins,
+            "own": ctx.get("profile_id") == profile["id"],
+            "record": ui_helpers.registro(profile, ctx),
         }
 
     def _validate(self, date, errors):
@@ -289,16 +289,16 @@ class AdminProfilesService(object):
         scripts homologados ali que podem rodar. Perfis inativos vao para 'inativos'.
         """
         admin_crud.require_feature(ctx, FEATURE)
-        scripts = dict((s["id"], s) for s in self._catalog.scripts_list(page=1, size=_CATALOG_MAX)["itens"])
-        environments = dict((a["id"], a) for a in self._catalog.environments_list(page=1, size=_CATALOG_MAX)["itens"])
+        scripts = dict((s["id"], s) for s in self._catalog.scripts_list(page=1, size=_CATALOG_MAX)["items"])
+        environments = dict((a["id"], a) for a in self._catalog.environments_list(page=1, size=_CATALOG_MAX)["items"])
         result = {"scripts": sorted(scripts.values(), key=lambda s: s["name"]),
                      "environments": sorted(environments.values(), key=lambda a: a["name"]),
-                     "script": None, "environment": None, "profiles": [], "inativos": [], "warning": None}
+                     "script": None, "environment": None, "profiles": [], "inactive_items": [], "warning": None}
         sid, aid = _id(script_id), _id(environment_id)
         if sid is None and aid is None:
             return result
         exec_id = [f["id"] for f in self._rbac.features_list() if f["code"] == "EXEC_SCRIPT"]
-        profiles = self._rbac.profiles_list(page=1, size=_CATALOG_MAX)["itens"]
+        profiles = self._rbac.profiles_list(page=1, size=_CATALOG_MAX)["items"]
         homolog = {}
 
         def homologados(script):
@@ -309,7 +309,7 @@ class AdminProfilesService(object):
 
         def linha(profile, reason, details):
             return {"id": profile["id"], "name": profile["name"], "is_admin": profile["is_admin"] == "Y",
-                    "reason": reason, "detalhes": details, "usuarios_ativos": self.active_users(profile["id"])}
+                    "reason": reason, "details": details, "active_users": self.active_users(profile["id"])}
 
         if sid is not None and sid in scripts:
             script = scripts[sid]
@@ -327,7 +327,7 @@ class AdminProfilesService(object):
                 if not envs:
                     continue
                 item = linha(p, reason_text, sorted(environments[a]["name"] for a in envs))
-                result["profiles" if p["active"] == "Y" else "inativos"].append(item)
+                result["profiles" if p["active"] == "Y" else "inactive_items"].append(item)
         elif aid is not None and aid in environments:
             env = environments[aid]
             result["environment"] = env
@@ -343,7 +343,7 @@ class AdminProfilesService(object):
                 else:
                     continue
                 item = linha(p, reason_text, sorted(s["name"] for s in items))
-                result["profiles" if p["active"] == "Y" else "inativos"].append(item)
+                result["profiles" if p["active"] == "Y" else "inactive_items"].append(item)
         else:
             raise RepoNotFound("script ou ambiente inexistente")
         return result
@@ -352,8 +352,8 @@ class AdminProfilesService(object):
 
     def _matrix_catalog(self):
         features = self._rbac.features_list()
-        envs = self._catalog.environments_list(page=1, size=_CATALOG_MAX)["itens"]
-        scrs = self._catalog.scripts_list(page=1, size=_CATALOG_MAX)["itens"]
+        envs = self._catalog.environments_list(page=1, size=_CATALOG_MAX)["items"]
+        scrs = self._catalog.scripts_list(page=1, size=_CATALOG_MAX)["items"]
         return {"funcs": dict((f["id"], f) for f in features), "ambs": dict((a["id"], a) for a in envs),
                 "scrs": dict((s["id"], s) for s in scrs)}
 
@@ -377,8 +377,8 @@ class AdminProfilesService(object):
 
         def item(dim, reg, label, detail, prefix):
             return {"id": reg["id"], "label": label, "detail": detail or "",
-                    "checked": reg["id"] in marked[dim], "inativo": reg.get("active") != "Y",
-                    "rotulo_diff": prefix + label}
+                    "checked": reg["id"] in marked[dim], "inactive": reg.get("active") != "Y",
+                    "diff_label": prefix + label}
 
         def agrupar(dim, group_key, build):
             groups = collections.OrderedDict()
@@ -387,13 +387,13 @@ class AdminProfilesService(object):
                 if reg.get("active") != "Y" and reg["id"] not in marked[dim]:
                     continue
                 groups.setdefault(group_key(reg), []).append(build(reg))
-            return [{"script_group": g, "itens": items} for g, items in groups.items()]
+            return [{"script_group": g, "items": items} for g, items in groups.items()]
 
         return {
-            "perfil": {"id": profile["id"], "name": profile["name"], "is_admin": profile["is_admin"],
+            "profile": {"id": profile["id"], "name": profile["name"], "is_admin": profile["is_admin"],
                        "active": profile["active"]},
             "perm_version": profile["perm_version"],
-            "aviso_admin": ADMIN_WARNING if profile["is_admin"] == "Y" else None,
+            "admin_warning": ADMIN_WARNING if profile["is_admin"] == "Y" else None,
             "funcs": agrupar("funcs", lambda r: r.get("module") or _NO_GROUP,
                              lambda r: item("funcs", r, r["code"], r.get("name"), "")),
             "ambs": agrupar("ambs", lambda r: u"Ambientes",

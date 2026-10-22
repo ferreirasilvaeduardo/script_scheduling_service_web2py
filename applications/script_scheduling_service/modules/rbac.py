@@ -43,10 +43,10 @@ def user_context(state):
         "login": state["login"],
         "name": state.get("name") or state["login"],
         "profile_id": state["profile_id"],
-        "perfil_nome": state.get("perfil_nome") or "",
+        "profile_name": state.get("profile_name") or "",
         "is_admin": _flag(state.get("is_admin")),
-        "usuario_ativo": _flag(state.get("usuario_ativo")),
-        "perfil_ativo": _flag(state.get("perfil_ativo")),
+        "active_user": _flag(state.get("active_user")),
+        "active_profile": _flag(state.get("active_profile")),
         "features": frozenset(state.get("features") or ()),
         "environments": frozenset(state.get("environments") or ()),
         "scripts": frozenset(state.get("scripts") or ()),
@@ -56,7 +56,7 @@ def user_context(state):
 
 
 def _active(ctx):
-    return bool(ctx) and ctx.get("usuario_ativo") is True and ctx.get("perfil_ativo") is True
+    return bool(ctx) and ctx.get("active_user") is True and ctx.get("active_profile") is True
 
 
 def has_feature(ctx, code):
@@ -97,9 +97,9 @@ def can_execute(ctx, script, environment, homologations):
     if not _valid_id(script.get("id")) or not _valid_id(environment.get("id")) \
             or _environment_name(environment) is None:
         return False, Reason.INVALID_DATA
-    if ctx.get("usuario_ativo") is not True:
+    if ctx.get("active_user") is not True:
         return False, Reason.USER_INACTIVE
-    if ctx.get("perfil_ativo") is not True:
+    if ctx.get("active_profile") is not True:
         return False, Reason.PROFILE_INACTIVE
     if not _flag(script.get("active")):
         return False, Reason.SCRIPT_INACTIVE

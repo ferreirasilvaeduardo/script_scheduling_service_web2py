@@ -116,8 +116,8 @@ class _Fixtures(object):
         if self._scenario is None:
             c = {}
             c["amb1"], c["amb2"] = self.environment("A"), self.environment("B")
-            c["perfil"] = self.profile("P")
-            c["u1"], c["u2"] = self.usuario(c["perfil"]["id"], "u1"), self.usuario(c["perfil"]["id"], "u2")
+            c["profile"] = self.profile("P")
+            c["u1"], c["u2"] = self.usuario(c["profile"]["id"], "u1"), self.usuario(c["profile"]["id"], "u2")
             c["prm_a"], c["prm_b"] = self.parameter("a"), self.parameter("b")
             c["scr"] = self.script("s")
             cat = self._r("catalog")
@@ -157,7 +157,7 @@ class BaseRepoContractTest(object):
 
     def aud_last(self, action, entity, entity_id):
         return self.obter_repo("audit").list(
-            filters={"action": action, "entity": entity, "entity_id": entity_id}, page=1, size=1)["itens"][0]
+            filters={"action": action, "entity": entity, "entity_id": entity_id}, page=1, size=1)["items"][0]
 
     def test_ocorrencia_duplicada_recusada_sem_alterar_ticket(self):
         c = self.m.scenario()
@@ -184,7 +184,7 @@ class BaseRepoContractTest(object):
         self.assertEqual((changed["description"], changed["active"]), ("Descricao alterada", "N"))
         items = cat.environments_list(filters={"name": env["name"]})
         self.assertEqual(items["total"], 1)
-        self.assertEqual(items["itens"][0]["id"], env["id"])
+        self.assertEqual(items["items"][0]["id"], env["id"])
 
     def test_02_uk_duplicada_ambiente_perfil_script_usuario(self):
         c = self.m.scenario()
@@ -193,7 +193,7 @@ class BaseRepoContractTest(object):
             cat.environments_insert({"name": c["amb1"]["name"], "connection": "db-prod2.local:1521/svc"}, actor="teste")
         self.assertEqual(ctx.exception.constraint, self.cn("uk", "environments", "name"))
         with self.assertRaises(RepoViolation) as ctx:
-            rbac.profiles_insert({"name": c["perfil"]["name"], "is_admin": "N"}, actor="teste")
+            rbac.profiles_insert({"name": c["profile"]["name"], "is_admin": "N"}, actor="teste")
         self.assertEqual(ctx.exception.constraint, self.cn("uk", "profiles", "name"))
         with self.assertRaises(RepoViolation) as ctx:
             cat.scripts_insert({"name": c["scr"]["name"], "interpreter": "PYTHON3",
@@ -206,7 +206,7 @@ class BaseRepoContractTest(object):
         self.assertEqual(ctx.exception.constraint, self.cn("ck", "scripts", "path"))
         with self.assertRaises(RepoViolation) as ctx:
             usr.insert({"login": c["login"], "name": "Duplicado", "password_hash": "h",
-                         "profile_id": c["perfil"]["id"]}, actor="teste")
+                         "profile_id": c["profile"]["id"]}, actor="teste")
         self.assertEqual(ctx.exception.constraint, self.cn("uk", "users", "login"))
 
     def test_03_ck_conexao_com_arroba(self):
@@ -262,7 +262,7 @@ class BaseRepoContractTest(object):
         """Conflito sem incremento e matriz condicional (o ultimo admin fica em TestLastAdmin*)."""
         c = self.m.scenario()
         rbac = self.obter_repo("rbac")
-        prf = c["perfil"]
+        prf = c["profile"]
         feature_ids = [f["id"] for f in rbac.features_list()][:2]
         rbac.matrix_save(prf["id"], feature_ids, [c["amb1"]["id"]], [c["scr"]["id"]], actor="teste")
         current = rbac.profiles_get(prf["id"])
@@ -319,16 +319,16 @@ class BaseRepoContractTest(object):
         self.assertEqual(reg["last_login_at"].microsecond, 0)
 
         usr.update(target["id"], {"locked_until": datetime.datetime(2999, 1, 1)}, actor="teste")
-        locked = usr.list(filters={"bloqueado_em": datetime.datetime(2998, 1, 1)}, page=1, size=200)
-        self.assertIn(target["login"], [u["login"] for u in locked["itens"]])
-        self.assertNotIn(c["u1"]["login"], [u["login"] for u in locked["itens"]])
+        locked = usr.list(filters={"locked_at": datetime.datetime(2998, 1, 1)}, page=1, size=200)
+        self.assertIn(target["login"], [u["login"] for u in locked["items"]])
+        self.assertNotIn(c["u1"]["login"], [u["login"] for u in locked["items"]])
 
     def test_04e_parametro_dependencias_atomicas_qtd_scripts_e_auditoria(self):
         c = self.m.scenario()
         cat = self.obter_repo("catalog")
-        prm = cat.parameters_list(filters={"code": c["prm_a"]["code"]})["itens"][0]
-        self.assertEqual(prm["qtd_scripts"], len(cat.parameter_links(prm["id"])))
-        self.assertEqual(prm["qtd_scripts"], 1)
+        prm = cat.parameters_list(filters={"code": c["prm_a"]["code"]})["items"][0]
+        self.assertEqual(prm["script_count"], len(cat.parameter_links(prm["id"])))
+        self.assertEqual(prm["script_count"], 1)
         for date, constraint in (({"component_type": "NUMBER"}, "sss_prm_tipo_vinculado"),
                                   ({"param_flag": "--outra-flag"}, "sss_prm_flag_nomeado"),
                                   ({"active": "N"}, "sss_prm_vinculo_ativo")):
@@ -353,9 +353,9 @@ class BaseRepoContractTest(object):
     def test_04f_script_regras_de_tipo_param_homologacao_e_vinculos_condicionais(self):
         c = self.m.scenario()
         cat = self.obter_repo("catalog")
-        scr = cat.scripts_list(filters={"name": c["scr"]["name"]})["itens"][0]
-        self.assertEqual(scr["qtd_parametros"], len(cat.script_params_get(scr["id"])))
-        self.assertEqual(scr["ambientes_homologados"], [c["amb1"]["name"]])
+        scr = cat.scripts_list(filters={"name": c["scr"]["name"]})["items"][0]
+        self.assertEqual(scr["param_count"], len(cat.script_params_get(scr["id"])))
+        self.assertEqual(scr["homologated_environments"], [c["amb1"]["name"]])
 
         with self.assertRaises(RepoViolation) as ctx:
             cat.scripts_update(scr["id"], {"param_type": "NONE", "description": "Nao grava"}, actor="teste")
@@ -393,7 +393,7 @@ class BaseRepoContractTest(object):
         cat.homologation_save(sid, [c["amb1"]["id"], c["amb2"]["id"]], actor="teste")
         self.assertEqual(sorted(cat.homologation_get(sid)), sorted([c["amb1"]["id"], c["amb2"]["id"]]))
 
-        p = c["perfil"]
+        p = c["profile"]
         v_before = rbac.profiles_get(p["id"])["perm_version"]
         feature_ids = sorted(f["id"] for f in rbac.features_list())[:2]
         rbac.matrix_save(p["id"], features_ids=feature_ids, envs=[c["amb1"]["id"]], scrs=[sid], actor="teste")
@@ -533,7 +533,7 @@ class BaseRepoContractTest(object):
     def test_08_perm_versao_incrementando(self):
         c = self.m.scenario()
         rbac, usr = self.obter_repo("rbac"), self.obter_repo("users")
-        p = c["perfil"]
+        p = c["profile"]
         v0 = rbac.profiles_get(p["id"])["perm_version"]
         rbac.profiles_update(p["id"], {"description": "Nova descricao"}, actor="teste")
         v1 = rbac.profiles_get(p["id"])["perm_version"]
@@ -553,13 +553,13 @@ class BaseRepoContractTest(object):
         filters = {"script_id": c["scr"]["id"], "requested_by": c["login"]}
         pag1 = tck.list(filters=filters, page=1, size=10)
         pag2 = tck.list(filters=filters, page=2, size=10)
-        self.assertEqual((pag1["pagina"], pag1["tamanho"], pag1["total"]), (1, 10, 25))
-        self.assertEqual((len(pag1["itens"]), len(pag2["itens"])), (10, 10))
-        self.assertTrue({i["id"] for i in pag1["itens"]}.isdisjoint({i["id"] for i in pag2["itens"]}))
-        order = [(i["created_at"], i["id"]) for i in pag1["itens"] + pag2["itens"]]
+        self.assertEqual((pag1["page"], pag1["size"], pag1["total"]), (1, 10, 25))
+        self.assertEqual((len(pag1["items"]), len(pag2["items"])), (10, 10))
+        self.assertTrue({i["id"] for i in pag1["items"]}.isdisjoint({i["id"] for i in pag2["items"]}))
+        order = [(i["created_at"], i["id"]) for i in pag1["items"] + pag2["items"]]
         self.assertEqual(order, sorted(order, reverse=True))
-        self.assertEqual([i["id"] for i in pag1["itens"]],
-                         [i["id"] for i in tck.list(filters=filters, page=1, size=10)["itens"]])
+        self.assertEqual([i["id"] for i in pag1["items"]],
+                         [i["id"] for i in tck.list(filters=filters, page=1, size=10)["items"]])
 
     def test_10_escopo_ambientes_na_listagem_tickets(self):
         c = self.m.scenario()
@@ -571,8 +571,8 @@ class BaseRepoContractTest(object):
         filters = {"script_id": c["scr"]["id"]}
         items_a = tck.list(filters=filters, environment_scope=[c["amb1"]["name"]], page=1, size=50)
         items_b = tck.list(filters=filters, environment_scope=[c["amb2"]["name"]], page=1, size=50)
-        self.assertEqual({t["environment"] for t in items_a["itens"]}, {c["amb1"]["name"]})
-        self.assertEqual({t["environment"] for t in items_b["itens"]}, {c["amb2"]["name"]})
+        self.assertEqual({t["environment"] for t in items_a["items"]}, {c["amb1"]["name"]})
+        self.assertEqual({t["environment"] for t in items_b["items"]}, {c["amb2"]["name"]})
         self.assertEqual((items_a["total"], items_b["total"]), (3, 2))
         self.assertEqual(tck.list(filters=filters, environment_scope=[], page=1, size=50)["total"], 0)
 
@@ -719,7 +719,7 @@ class BaseLastAdminTest(object):
 
     def test_perfil_ultimo_admin_recusado_sem_alterar(self):
         rbac = self.obter_repo("rbac")
-        admin = rbac.profiles_list(filters={"name": "ADMINISTRATOR"})["itens"][0]
+        admin = rbac.profiles_list(filters={"name": "ADMINISTRATOR"})["items"][0]
         version = admin["perm_version"]
         for date in ({"active": "N"}, {"is_admin": "N"}):
             with self.assertRaises(RepoViolation) as ctx:
@@ -1150,9 +1150,9 @@ class TestFailFastRegression(unittest.TestCase):
         with self.assertRaises(TypeError):
             usr.list(size=[])
         page = usr.list(page=None, size=None)
-        self.assertEqual((page["pagina"], page["tamanho"]), (1, 20))
+        self.assertEqual((page["page"], page["size"]), (1, 20))
         page = usr.list(page="0", size="-5")
-        self.assertEqual((page["pagina"], page["tamanho"]), (1, 20))
+        self.assertEqual((page["page"], page["size"]), (1, 20))
 
     def test_log_ler_rejeita_entrada_nao_numerica(self):
         repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})

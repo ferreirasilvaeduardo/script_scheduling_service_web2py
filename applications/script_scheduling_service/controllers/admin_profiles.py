@@ -50,9 +50,9 @@ def _pagina_form(ctx, dados, erros=None):
     response.view = "admin_profiles/form.html"
     erros = erros or {}
     campos = [{"name": n, "error": erros.get(n)} for n in ("name", "description")]
-    return dict(perfil=dados, erros=erros, erro_geral=erros.get(admin_crud.GENERAL_FIELD),
-                foco_campo=ui_helpers.primeiro_campo_invalido(campos),
-                aviso_desativacao=servico.DEACTIVATION_WARNING)
+    return dict(profile=dados, errors=erros, general_error=erros.get(admin_crud.GENERAL_FIELD),
+                focus_field=ui_helpers.primeiro_campo_invalido(campos),
+                deactivation_warning=servico.DEACTIVATION_WARNING)
 
 
 def index():
@@ -68,10 +68,10 @@ def index():
         _negado()
     except RepoError:
         _log.exception("falha ao listar perfis (login=%s)", ctx["login"], extra={"action": _FUNC})
-        resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
+        resultado = {"items": [], "total": 0, "page": 1, "size": tamanho}
         erro = _MSG_FALHA_LISTA
     response.title = u"Perfis — SSS"
-    return dict(resultado=resultado, erro=erro, filtros_ativos=filtros, tamanho=tamanho,
+    return dict(result=resultado, error=erro, active_filters=filtros, size=tamanho,
                 query_params=dict(filtros, size=tamanho))
 
 
@@ -108,7 +108,7 @@ def save():
         dados = servico.form(ctx, perfil_id) if perfil_id else servico.form(ctx)
     except RepoError:
         dados = {"id": None, "name": "", "description": "", "is_admin": "N", "active": "Y", "version": "",
-                 "usuarios_ativos": 0}
+                 "active_users": 0}
     if admin_crud.GENERAL_FIELD not in erros:
         dados = dict(dados, name=enviados["name"] or "", description=enviados["description"] or "",
                      is_admin="Y" if enviados["is_admin"] == "Y" else "N")
@@ -166,9 +166,9 @@ def matrix():
         _nao_encontrado()
     except AccessDenied:
         _negado()
-    response.title = u"Permissões de %s — SSS" % dados["perfil"]["name"]
+    response.title = u"Permissões de %s — SSS" % dados["profile"]["name"]
     response.sss_scripts = [_JS_MATRIZ]
-    return dict(matriz=dados)
+    return dict(matrix=dados)
 
 
 def save_matrix():

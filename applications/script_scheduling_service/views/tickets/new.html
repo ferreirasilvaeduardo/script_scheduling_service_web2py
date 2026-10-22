@@ -12,17 +12,17 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
 
 <ol class="sss-etapas" aria-label="Etapas do disparo">
   {{for _num, _rotulo in _etapas:}}
-  <li class="sss-etapa{{=' sss-etapa-atual' if _num == etapa else (' sss-etapa-feita' if _num < etapa else '')}}"{{if _num == etapa:}} aria-current="step"{{pass}}>
+  <li class="sss-etapa{{=' sss-etapa-atual' if _num == step else (' sss-etapa-feita' if _num < step else '')}}"{{if _num == step:}} aria-current="step"{{pass}}>
     <span class="sss-etapa-num">{{=_num}}</span> <span>{{=_rotulo}}</span>
   </li>
   {{pass}}
 </ol>
 
-{{if etapa == 1:}}
+{{if step == 1:}}
 <section class="sss-card" aria-labelledby="titulo-scripts" x-data="buscaScript">
   <h2 class="sss-card-titulo" id="titulo-scripts">1. Escolha o script, que é a rotina que você quer rodar.</h2>
   <div class="sss-card-corpo">
-    {{if not grupos:}}
+    {{if not groups:}}
     <p class="mb-0">Nenhum script está liberado para o seu perfil em ambientes homologados. Procure um administrador.</p>
     {{else:}}
     <div class="sss-busca mb-3">
@@ -30,7 +30,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
       <input class="form-control form-control-sm" type="search" id="busca-script" maxlength="60" autocomplete="off" placeholder="Nome, descrição, grupo ou categoria" x-ref="busca" @input="filtrar">
     </div>
     <p class="sss-busca-vazia" x-show="semResultado" x-cloak role="status">Nenhum script corresponde à busca.</p>
-    {{for _g in grupos:}}
+    {{for _g in groups:}}
     <section class="sss-grupo-scripts" data-grupo>
       <h3 class="sss-grupo-titulo">{{=_g['script_group']}} <span class="sss-grupo-categoria">/ {{=_g['category']}}</span></h3>
       <ul class="sss-lista-escolha">
@@ -58,12 +58,12 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
 </section>
 {{pass}}
 
-{{if etapa == 2:}}
+{{if step == 2:}}
 <section class="sss-card" aria-labelledby="titulo-ambientes">
   <h2 class="sss-card-titulo" id="titulo-ambientes">2. Escolha o ambiente, que é onde ela vai rodar.</h2>
   <div class="sss-card-corpo">
     <ul class="sss-lista-escolha">
-      {{for _a in ambientes:}}
+      {{for _a in environments:}}
       <li>
         <a class="sss-escolha" href="{{=URL(c='tickets', f='new', vars={'script_id': script['id'], 'environment': _a['name']})}}">
           <span class="sss-escolha-nome">{{=_a['name']}}{{if _a['name'] == 'PRODUCAO':}} <span class="badge text-bg-danger">Produção</span>{{pass}}</span>
@@ -74,11 +74,11 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
     </ul>
   </div>
 </section>
-{{elif etapa == 3:}}
+{{elif step == 3:}}
 <section class="sss-card" aria-labelledby="titulo-ambiente-escolhido">
   <h2 class="sss-card-titulo" id="titulo-ambiente-escolhido">2. Ambiente</h2>
   <div class="sss-card-corpo sss-escolhido">
-    <span><strong>{{=form['environment']['name']}}</strong>{{if form['environment']['producao']:}} <span class="badge text-bg-danger">Produção</span>{{pass}} — {{=form['environment']['description']}}</span>
+    <span><strong>{{=form['environment']['name']}}</strong>{{if form['environment']['production']:}} <span class="badge text-bg-danger">Produção</span>{{pass}} — {{=form['environment']['description']}}</span>
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='new', vars={'script_id': form['script']['id']})}}">Trocar ambiente</a>
   </div>
 </section>
@@ -89,28 +89,28 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
     {{=csrf_campo()}}
     <input type="hidden" name="script_id" value="{{=form['script']['id']}}">
     <input type="hidden" name="environment" value="{{=form['environment']['name']}}">
-    {{if reexecucao_de:}}
-    <input type="hidden" name="rerun_of" value="{{=reexecucao_de}}">
+    {{if rerun_of:}}
+    <input type="hidden" name="rerun_of" value="{{=rerun_of}}">
     <div class="alert alert-info sss-alerta" role="note">
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
-      <span>Reexecução do <a href="{{=URL(c='tickets', f='detail', args=[reexecucao_de])}}">ticket #{{=reexecucao_de}}</a>. As respostas originais foram carregadas; valores sigilosos não são exibidos e precisam ser informados novamente, se necessário.</span>
+      <span>Reexecução do <a href="{{=URL(c='tickets', f='detail', args=[rerun_of])}}">ticket #{{=rerun_of}}</a>. As respostas originais foram carregadas; valores sigilosos não são exibidos e precisam ser informados novamente, se necessário.</span>
     </div>
     {{pass}}
 
-    {{if tem_ultima and not usou_ultima:}}
+    {{if has_last and not used_last:}}
     <p class="mb-3"><a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='new', vars=dict(script_id=form['script']['id'], environment=form['environment']['name'], last='1'))}}">Usar as respostas da minha última execução</a></p>
-    {{elif usou_ultima:}}
+    {{elif used_last:}}
     <div class="alert alert-info sss-alerta" role="note"><span>Carregamos as respostas da sua última execução. Confira antes de criar; valores sigilosos precisam ser digitados de novo.</span></div>
     {{pass}}
 
-    {{if erros:}}
+    {{if errors:}}
     <div class="alert alert-danger sss-alerta-lista" role="alert" id="resumo-erros">
       <p class="mb-1"><strong>Não foi possível criar o ticket:</strong></p>
       <ul class="mb-0">
-        {{if erro_geral:}}<li>{{=erro_geral}}</li>{{pass}}
+        {{if general_error:}}<li>{{=general_error}}</li>{{pass}}
         {{for _c in form['fields']:}}{{if _c['error']:}}<li>{{=_c['error']}}</li>{{pass}}{{pass}}
-        {{if erros.get('priority'):}}<li>{{=erros['priority']}}</li>{{pass}}
-        {{if erros.get('scheduled_at'):}}<li>{{=erros['scheduled_at']}}</li>{{pass}}
+        {{if errors.get('priority'):}}<li>{{=errors['priority']}}</li>{{pass}}
+        {{if errors.get('scheduled_at'):}}<li>{{=errors['scheduled_at']}}</li>{{pass}}
       </ul>
     </div>
     {{pass}}
@@ -120,19 +120,19 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
     <div class="sss-form-linha">
       <div class="sss-form-campo mb-3">
         <label class="form-label" for="campo-prioridade">Prioridade</label>
-        <select class="form-select{{=' is-invalid' if erros.get('priority') else ''}}" id="campo-prioridade" name="priority" aria-describedby="campo-prioridade-ajuda{{=' campo-prioridade-erro' if erros.get('priority') else ''}}"{{if erros.get('priority'):}} aria-invalid="true"{{pass}}{{if foco_campo == 'priority':}} autofocus{{pass}}>
-          {{for _pv, _pr in form['prioridades']:}}
-          <option value="{{=_pv}}"{{if str(_pv) == str(prioridade or 2):}} selected{{pass}}>{{=_pr}}</option>
+        <select class="form-select{{=' is-invalid' if errors.get('priority') else ''}}" id="campo-prioridade" name="priority" aria-describedby="campo-prioridade-ajuda{{=' campo-prioridade-erro' if errors.get('priority') else ''}}"{{if errors.get('priority'):}} aria-invalid="true"{{pass}}{{if focus_field == 'priority':}} autofocus{{pass}}>
+          {{for _pv, _pr in form['priorities']:}}
+          <option value="{{=_pv}}"{{if str(_pv) == str(priority or 2):}} selected{{pass}}>{{=_pr}}</option>
           {{pass}}
         </select>
         <div class="form-text" id="campo-prioridade-ajuda">1 é a mais alta; a fila ordena por prioridade e depois pelo horário agendado.</div>
-        {{if erros.get('priority'):}}<div class="invalid-feedback" id="campo-prioridade-erro">{{=erros['priority']}}</div>{{pass}}
+        {{if errors.get('priority'):}}<div class="invalid-feedback" id="campo-prioridade-erro">{{=errors['priority']}}</div>{{pass}}
       </div>
       <div class="sss-form-campo mb-3">
         <label class="form-label" for="campo-scheduled_at">Agendar para (opcional)</label>
-        <input class="form-control{{=' is-invalid' if erros.get('scheduled_at') else ''}}" type="datetime-local" id="campo-scheduled_at" name="scheduled_at" value="{{=scheduled_at}}" aria-describedby="campo-scheduled_at-ajuda{{=' campo-scheduled_at-erro' if erros.get('scheduled_at') else ''}}"{{if erros.get('scheduled_at'):}} aria-invalid="true"{{pass}}{{if foco_campo == 'scheduled_at':}} autofocus{{pass}}>
+        <input class="form-control{{=' is-invalid' if errors.get('scheduled_at') else ''}}" type="datetime-local" id="campo-scheduled_at" name="scheduled_at" value="{{=scheduled_at}}" aria-describedby="campo-scheduled_at-ajuda{{=' campo-scheduled_at-erro' if errors.get('scheduled_at') else ''}}"{{if errors.get('scheduled_at'):}} aria-invalid="true"{{pass}}{{if focus_field == 'scheduled_at':}} autofocus{{pass}}>
         <div class="form-text" id="campo-scheduled_at-ajuda">Horário do servidor do banco de dados. Deixe em branco para rodar assim que houver um servidor livre.</div>
-        {{if erros.get('scheduled_at'):}}<div class="invalid-feedback" id="campo-scheduled_at-erro">{{=erros['scheduled_at']}}</div>{{pass}}
+        {{if errors.get('scheduled_at'):}}<div class="invalid-feedback" id="campo-scheduled_at-erro">{{=errors['scheduled_at']}}</div>{{pass}}
       </div>
     </div>
 
@@ -169,7 +169,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
               <button type="button" class="btn-close" aria-label="Fechar" @click="fechar"></button>
             </div>
             <div class="modal-body" id="confirmar-ticket-texto">
-              {{if form['environment']['producao']:}}
+              {{if form['environment']['production']:}}
               <div class="alert alert-danger sss-alerta sss-aviso-producao" role="alert">
                 <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
                 <strong>Ambiente de produção</strong>
@@ -196,7 +196,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-sm btn-outline-secondary" x-ref="cancelar" @click="fechar">Cancelar</button>
-              <button type="submit" class="btn btn-sm {{='btn-danger' if form['environment']['producao'] else 'btn-primary'}}">Criar ticket</button>
+              <button type="submit" class="btn btn-sm {{='btn-danger' if form['environment']['production'] else 'btn-primary'}}">Criar ticket</button>
             </div>
           </div>
         </div>

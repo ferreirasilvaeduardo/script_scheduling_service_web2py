@@ -147,7 +147,7 @@ class TestRevocableSession(_Base):
         self.auth.logout(self.ctx["op.prod"], IP)
         self.assertEqual(self._epoch(U_OPPROD), 1)
         self.assertIsNone(self.auth.revalidate(other))
-        logout = [a for a in self.audit.list(filters={"action": "LOGOUT"}, page=1, size=10)["itens"]
+        logout = [a for a in self.audit.list(filters={"action": "LOGOUT"}, page=1, size=10)["items"]
                   if a["actor"] == "op.prod"]
         self.assertEqual((logout[0]["entity"], logout[0]["entity_id"], logout[0]["source_ip"]),
                          ("tbsss_users", U_OPPROD, IP))

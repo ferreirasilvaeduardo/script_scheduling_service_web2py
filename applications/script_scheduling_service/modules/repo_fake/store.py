@@ -98,7 +98,7 @@ class FakeDataStore(object):
             return copy.deepcopy(reg)
 
     def record_actor(self, audit=None, actor=None):
-        """Ator das colunas de registro (CR-006, README §10): auditoria['ator'] ou ator=, obrigatorio.
+        """Ator das colunas de registro (CR-006, README §10): auditoria['actor'] ou ator=, obrigatorio.
 
         Chamado antes de qualquer gravacao: sem ator, nada e gravado (paridade com created_by NOT NULL).
         """
@@ -187,9 +187,9 @@ def paginate(items, page=1, size=20):
     end = start + t
     slice_value = items[start:end]
     return {
-        "itens": copy.deepcopy(slice_value),
+        "items": copy.deepcopy(slice_value),
         "total": total,
-        "pagina": p,
-        "tamanho": t,
-        "total_limitado": total_capped,
+        "page": p,
+        "size": t,
+        "total_capped": total_capped,
     }

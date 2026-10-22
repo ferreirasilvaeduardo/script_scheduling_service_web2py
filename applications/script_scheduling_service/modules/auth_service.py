@@ -83,7 +83,7 @@ class AuthService(object):
             return self._wrong_password(user, ip)
 
         state = self._users.get_session_state(user["id"])
-        if state.get("usuario_ativo") != "Y" or state.get("perfil_ativo") != "Y":
+        if state.get("active_user") != "Y" or state.get("active_profile") != "Y":
             self._record_failure(user, ip, "usuario ou perfil inativo")
             return None, MSG_GENERIC
 
@@ -124,7 +124,7 @@ class AuthService(object):
             lock_audit=_aud(user["login"], ip, "LOGIN_LOCKED",
                                     "Conta bloqueada por %d falhas consecutivas" % self._max))
         attempts = int(reg.get("failed_attempts") or 0)
-        lock = bool(reg.get("bloqueou"))
+        lock = bool(reg.get("locked_now"))
         reason = "senha incorreta (tentativa %d de %d)" % (attempts, self._max)
         self._log.warning("login falhou (login=%s ip=%s reason=%s)", user["login"], ip, reason,
                           extra={"action": "LOGIN"})
@@ -180,8 +180,8 @@ class AuthService(object):
             self._log.warning("sessao encerrada: login divergente (user_id=%s)", user_id,
                               extra={"action": "SESSAO"})
             return None
-        if state.get("usuario_ativo") != "Y" or state.get("perfil_ativo") != "Y":
-            reason = u"usuário inativo" if state.get("usuario_ativo") != "Y" else u"perfil inativo"
+        if state.get("active_user") != "Y" or state.get("active_profile") != "Y":
+            reason = u"usuário inativo" if state.get("active_user") != "Y" else u"perfil inativo"
             self._audit.register(state.get("login"), ip, "LOGOUT", ENTITY, user_id,
                                       u"sessão encerrada pela revalidação: %s" % reason)
             self._log.info("sessao encerrada: usuario ou perfil inativo (login=%s)", state.get("login"),

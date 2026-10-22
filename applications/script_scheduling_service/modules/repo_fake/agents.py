@@ -60,9 +60,9 @@ class RepoAgentsFake(RepoAgents):
                 if key in served:
                     continue
                 group = groups.setdefault(key, {"environment": key[0], "interpreter": key[1],
-                                                  "quantidade": 0, "mais_antigo": start})
-                group["quantidade"] += 1
-                group["mais_antigo"] = min(group["mais_antigo"], start)
+                                                  "quantity": 0, "oldest": start})
+                group["quantity"] += 1
+                group["oldest"] = min(group["oldest"], start)
         return [groups[key] for key in sorted(groups)]
 
     def running_without_pid(self, now, minutes):

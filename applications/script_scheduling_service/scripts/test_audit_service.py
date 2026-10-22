@@ -83,7 +83,7 @@ class _Base(unittest.TestCase):
         return aid
 
     def _exports(self):
-        return self.audit.list(filters={"action": "AUDIT_EXPORT"}, page=1, size=100)["itens"]
+        return self.audit.list(filters={"action": "AUDIT_EXPORT"}, page=1, size=100)["items"]
 
 
 class TestFilters(unittest.TestCase):
@@ -91,48 +91,48 @@ class TestFilters(unittest.TestCase):
     def test_periodo_padrao_ultimos_7_dias(self):
         filters, errors = audit_service.normalize_filters({}, TODAY)
         self.assertEqual(errors, {})
-        self.assertEqual((filters["de"], filters["ate"]), ("2026-10-09", "2026-10-15"))
-        filters, _ = audit_service.normalize_filters({"ate": "2026-09-30"}, TODAY)
-        self.assertEqual(filters["de"], "2026-09-24")
+        self.assertEqual((filters["date_from"], filters["date_to"]), ("2026-10-09", "2026-10-15"))
+        filters, _ = audit_service.normalize_filters({"date_to": "2026-09-30"}, TODAY)
+        self.assertEqual(filters["date_from"], "2026-09-24")
 
     def test_periodo_maximo_90_dias(self):
-        ok, errors = audit_service.normalize_filters({"de": "2026-07-18", "ate": "2026-10-15"}, TODAY)
+        ok, errors = audit_service.normalize_filters({"date_from": "2026-07-18", "date_to": "2026-10-15"}, TODAY)
         self.assertEqual(errors, {})
-        _, errors = audit_service.normalize_filters({"de": "2026-07-17", "ate": "2026-10-15"}, TODAY)
-        self.assertEqual(errors, {"de": audit_service.MSG_PERIOD})
+        _, errors = audit_service.normalize_filters({"date_from": "2026-07-17", "date_to": "2026-10-15"}, TODAY)
+        self.assertEqual(errors, {"date_from": audit_service.MSG_PERIOD})
 
     def test_periodo_longo_exige_filtro_seletivo(self):
-        long = {"de": "2025-10-15", "ate": "2026-10-15"}  # 366 dias
+        long = {"date_from": "2025-10-15", "date_to": "2026-10-15"}  # 366 dias
         for extra in ({"actor": "admin"}, {"entity": "tbsss_users", "entity_id": "6"}):
             with self.subTest(extra=extra):
                 _, errors = audit_service.normalize_filters(dict(long, **extra), TODAY)
                 self.assertEqual(errors, {})
         _, errors = audit_service.normalize_filters(dict(long, entity="tbsss_users"), TODAY)
-        self.assertEqual(errors, {"de": audit_service.MSG_PERIOD})
-        _, errors = audit_service.normalize_filters({"de": "2025-10-14", "ate": "2026-10-15", "actor": "admin"},
+        self.assertEqual(errors, {"date_from": audit_service.MSG_PERIOD})
+        _, errors = audit_service.normalize_filters({"date_from": "2025-10-14", "date_to": "2026-10-15", "actor": "admin"},
                                                         TODAY)
-        self.assertEqual(errors, {"de": audit_service.MSG_SELECTIVE_PERIOD})
+        self.assertEqual(errors, {"date_from": audit_service.MSG_SELECTIVE_PERIOD})
 
     def test_datas_invalidas_ou_invertidas(self):
-        _, errors = audit_service.normalize_filters({"de": "2026-02-30"}, TODAY)
-        self.assertEqual(errors, {"de": audit_service.MSG_DATE})
-        filters, errors = audit_service.normalize_filters({"de": "2026-10-10", "ate": "2026-10-01"}, TODAY)
-        self.assertEqual(errors, {"ate": audit_service.MSG_RANGE})
-        self.assertEqual(filters["ate"], "2026-10-01")
+        _, errors = audit_service.normalize_filters({"date_from": "2026-02-30"}, TODAY)
+        self.assertEqual(errors, {"date_from": audit_service.MSG_DATE})
+        filters, errors = audit_service.normalize_filters({"date_from": "2026-10-10", "date_to": "2026-10-01"}, TODAY)
+        self.assertEqual(errors, {"date_to": audit_service.MSG_RANGE})
+        self.assertEqual(filters["date_to"], "2026-10-01")
 
     def test_allowlist_dos_demais_filtros(self):
         input_value = {"actor": "SYSTEM:agt-host01", "action": "LOGIN_OK", "entity": "tbsss_agents",
                    "entity_id": "12", "ip": "10.0.", "outro": "x"}
         filters, errors = audit_service.normalize_filters(input_value, TODAY)
         self.assertEqual(errors, {})
-        self.assertEqual(list(filters), ["de", "ate", "actor", "action", "entity", "entity_id", "ip"])
+        self.assertEqual(list(filters), ["date_from", "date_to", "actor", "action", "entity", "entity_id", "ip"])
         self.assertEqual(filters["entity_id"], 12)
         invalid = {"actor": "a b", "action": "DROP", "entity": "dual", "entity_id": "-1", "ip": "1.1;x"}
         _, errors = audit_service.normalize_filters(invalid, TODAY)
         self.assertEqual(sorted(errors), ["action", "actor", "entity", "entity_id", "ip"])
 
     def test_filtros_repo_periodo_inclusivo(self):
-        filters, _ = audit_service.normalize_filters({"de": "2026-10-01", "ate": "2026-10-02", "ip": "127"}, TODAY)
+        filters, _ = audit_service.normalize_filters({"date_from": "2026-10-01", "date_to": "2026-10-02", "ip": "127"}, TODAY)
         repo = audit_service.repo_filters(filters)
         self.assertEqual(repo["start_date"], datetime.datetime(2026, 10, 1))
         self.assertEqual(repo["end_date"], datetime.datetime(2026, 10, 2, 23, 59, 59))
@@ -163,15 +163,15 @@ class TestList(_Base):
         res = self.svc.list(self.ctx["admin"], {}, 1, 100)
         self.assertEqual(res["errors"], {})
         self.assertEqual(res["total"], 30)
-        keys = [(i["created_at"], i["id"]) for i in res["itens"]]
+        keys = [(i["created_at"], i["id"]) for i in res["items"]]
         self.assertEqual(keys, sorted(keys, reverse=True))
 
     def test_periodo_padrao_exclui_antigos(self):
         old = self._insert_row(self.base - datetime.timedelta(days=8))
-        ids = [i["id"] for i in self.svc.list(self.ctx["admin"], {}, 1, 100)["itens"]]
+        ids = [i["id"] for i in self.svc.list(self.ctx["admin"], {}, 1, 100)["items"]]
         self.assertNotIn(old, ids)
         of = (self.base - datetime.timedelta(days=8)).strftime("%Y-%m-%d")
-        ids = [i["id"] for i in self.svc.list(self.ctx["admin"], {"de": of}, 1, 100)["itens"]]
+        ids = [i["id"] for i in self.svc.list(self.ctx["admin"], {"date_from": of}, 1, 100)["items"]]
         self.assertIn(old, ids)
 
     def test_filtros(self):
@@ -191,7 +191,7 @@ class TestList(_Base):
         for _ in range(130):
             self._insert_row(self.base)
         res = self.svc.list(self.ctx["admin"], {}, 1, 500)
-        self.assertEqual((res["tamanho"], len(res["itens"])), (100, 100))
+        self.assertEqual((res["size"], len(res["items"])), (100, 100))
 
     def test_filtro_invalido_nao_consulta(self):
         with mock.patch.object(self.audit, "list") as list_value:
@@ -210,15 +210,15 @@ class TestList(_Base):
         long = u"campo: " + u"á" * 120
         aid_long = self._insert_row(self.base, detail=long)
         aid_seg = self._insert_row(self.base, detail=u"valor vazado %s" % SECRET)
-        items = dict((i["id"], i) for i in self.svc.list(self.ctx["admin"], {}, 1, 100)["itens"])
+        items = dict((i["id"], i) for i in self.svc.list(self.ctx["admin"], {}, 1, 100)["items"])
         self.assertTrue(items[aid_long]["truncated"])
-        self.assertEqual(len(items[aid_long]["detalhe_curto"]), audit_service.SHORT_DETAIL)
+        self.assertEqual(len(items[aid_long]["short_detail"]), audit_service.SHORT_DETAIL)
         self.assertEqual(items[aid_long]["detail"], long)
         self.assertNotIn(SECRET, items[aid_seg]["detail"])
 
     def test_seed_sem_segredos(self):
         res = self.svc.list(self.ctx["admin"], {}, 1, 100)
-        for item in res["itens"]:
+        for item in res["items"]:
             for value in item.values():
                 if isinstance(value, str):
                     self.assertNotIn(DEV_PASSWORD, value)
@@ -284,7 +284,7 @@ class TestExport(_Base):
             self._insert_row(self.base)
         result = self.audit.list(size=1)
         self.assertEqual(result["total"], 10001)
-        self.assertTrue(result["total_limitado"])
+        self.assertTrue(result["total_capped"])
         _, rows, chunks = self.svc.export_csv(self.ctx["admin"], IP, {})
         _, table = _read_csv(chunks)
         self.assertEqual(rows, audit_service.EXPORT_LIMIT)
@@ -301,8 +301,8 @@ class TestExport(_Base):
         with self.assertRaises(AccessDenied):
             self.svc.export_csv(self.ctx["consulta"], IP, {})
         with self.assertRaises(InvalidFilters) as cm:
-            self.svc.export_csv(self.ctx["admin"], IP, {"de": "2020-01-01"})
-        self.assertIn("de", cm.exception.errors)
+            self.svc.export_csv(self.ctx["admin"], IP, {"date_from": "2020-01-01"})
+        self.assertIn("date_from", cm.exception.errors)
         self.assertEqual(self._exports(), [])
 
 
@@ -343,7 +343,7 @@ class TestAgentsDashboard(_Base):
 
     def _healths(self, now=None):
         dashboard = self.svc_agentes.dashboard(self.ctx["admin"], now)
-        return dict((a["code"], a["saude"]["code"]) for a in dashboard["agents"])
+        return dict((a["code"], a["health"]["code"]) for a in dashboard["agents"])
 
     def test_seed_em_estados_diferentes_mudando_com_o_relogio(self):
         self.assertEqual(self._healths(), {"agt-host01": OK, "agt-host02": DELAYED})
@@ -354,10 +354,10 @@ class TestAgentsDashboard(_Base):
 
     def test_campos_e_tickets_running(self):
         dashboard = self.svc_agentes.dashboard(self.ctx["admin"])
-        self.assertEqual(dashboard["agora"], self.base)
+        self.assertEqual(dashboard["now"], self.base)
         ag = dashboard["agents"][0]
         for field in ("code", "hostname", "status", "version", "environments", "started_at", "heartbeat_at",
-                      "saude", "running", "ha"):
+                      "health", "running", "ago"):
             self.assertIn(field, ag)
         for ag in dashboard["agents"]:
             expected = [t["id"] for t in self.agents.tickets_running(ag["code"])]
@@ -365,7 +365,7 @@ class TestAgentsDashboard(_Base):
             self.assertEqual(ag["running"], len(expected))
         self.assertEqual(sum(dashboard["summary"].values()), 2)
         second = [a for a in dashboard["agents"] if a["code"] == "agt-host02"][0]
-        self.assertEqual((second["idade_s"], second["ha"]), (30, u"há 30 s"))
+        self.assertEqual((second["age_s"], second["ago"]), (30, u"há 30 s"))
 
     def _queue_diagnostics(self):
         self.store.tickets.clear()
@@ -383,8 +383,8 @@ class TestAgentsDashboard(_Base):
         self.store.agents[1].update(environments="PRODUCAO", interpreters="PYTHON3")
         self.store.agents[2].update(environments="HOMOLOGACAO", interpreters="BASH")
         result = self.agents.unattended_queue(self.now, THRESHOLDS)
-        self.assertEqual(result, [{"environment": "PRODUCAO", "interpreter": "BASH", "quantidade": 2,
-                                     "mais_antigo": self.now - datetime.timedelta(seconds=300)}])
+        self.assertEqual(result, [{"environment": "PRODUCAO", "interpreter": "BASH", "quantity": 2,
+                                     "oldest": self.now - datetime.timedelta(seconds=300)}])
         self.store.agents[2]["environments"] = "PRODUCAO"
         self.assertEqual(self.agents.unattended_queue(self.now, THRESHOLDS), [])
 
@@ -424,9 +424,9 @@ class TestAgentsDashboard(_Base):
         self.assertEqual(dashboard["unattended_queue"], [])  # agt-host02 ainda DELAYED
         self.now = self.base + datetime.timedelta(seconds=61)  # agt-host02 AT_RISK
         queue_value = self.svc_agentes.dashboard(self.ctx["admin"])["unattended_queue"]
-        self.assertEqual([(g["environment"], g["interpreter"], g["quantidade"]) for g in queue_value],
+        self.assertEqual([(g["environment"], g["interpreter"], g["quantity"]) for g in queue_value],
                          [("HOMOLOGACAO", "SH", 1)])
-        self.assertEqual(queue_value[0]["mais_antigo"], self.store.tickets[4]["scheduled_at"])
+        self.assertEqual(queue_value[0]["oldest"], self.store.tickets[4]["scheduled_at"])
 
     def test_diagnosticos_config_divergente_e_parado(self):
         self.store.agents[2]["critical_config"] = CRITICAL_CONFIG
@@ -443,7 +443,7 @@ class TestAgentsDashboard(_Base):
     def test_tickets_do_agente(self):
         items = self.svc_agentes.agent_tickets(self.ctx["admin"], "agt-host01")
         self.assertEqual([t["id"] for t in items], [11, 13, 15])
-        self.assertTrue(all(t["script_nome"] for t in items))
+        self.assertTrue(all(t["script_name"] for t in items))
         self.assertEqual(self.svc_agentes.agent_tickets(self.ctx["admin"], "inexistente"), [])
 
     def test_somente_leitura_e_rbac(self):
@@ -469,22 +469,22 @@ class TestHomeSummary(_Base):
         admin = self.svc_tickets.home_summary(self.ctx["admin"])
         prod = self.svc_tickets.home_summary(self.ctx["op.prod"])
         query = self.svc_tickets.home_summary(self.ctx["consulta"])
-        self.assertEqual([s for s, _ in admin["contagem"]], ["PENDING", "RUNNING", "SUCCESS", "FAILED", "CANCELLED"])
-        self.assertEqual(admin["desde"], self.base - datetime.timedelta(hours=24))
-        total_admin = sum(q for _, q in admin["contagem"])
+        self.assertEqual([s for s, _ in admin["counts"]], ["PENDING", "RUNNING", "SUCCESS", "FAILED", "CANCELLED"])
+        self.assertEqual(admin["since"], self.base - datetime.timedelta(hours=24))
+        total_admin = sum(q for _, q in admin["counts"])
         self.assertGreater(total_admin, 0)
-        self.assertLessEqual(sum(q for _, q in prod["contagem"]), total_admin)
-        self.assertLessEqual(len(admin["meus"]), 5)
-        self.assertTrue(all(t["requested_by"] == "admin" for t in admin["meus"]))
-        self.assertTrue(all(t["requested_by"] == u"você" for t in prod["meus"]))
-        self.assertEqual(query["meus"], [])
+        self.assertLessEqual(sum(q for _, q in prod["counts"]), total_admin)
+        self.assertLessEqual(len(admin["mine"]), 5)
+        self.assertTrue(all(t["requested_by"] == "admin" for t in admin["mine"]))
+        self.assertTrue(all(t["requested_by"] == u"você" for t in prod["mine"]))
+        self.assertEqual(query["mine"], [])
 
     def test_contagem_igual_a_lista(self):
         summary = self.svc_tickets.home_summary(self.ctx["op.prod"])
-        since = summary["desde"]
-        items = self.tickets.list(filters={"criado_inicio": since}, page=1, size=1000,
-                                    environment_scope=["HOMOLOGACAO", "PRODUCAO"])["itens"]
-        for status, count in summary["contagem"]:
+        since = summary["since"]
+        items = self.tickets.list(filters={"created_from": since}, page=1, size=1000,
+                                    environment_scope=["HOMOLOGACAO", "PRODUCAO"])["items"]
+        for status, count in summary["counts"]:
             with self.subTest(status=status):
                 self.assertEqual(count, len([t for t in items if t["status"] == status]))
 

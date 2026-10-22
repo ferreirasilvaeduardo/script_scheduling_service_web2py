@@ -174,20 +174,20 @@ class AdminScriptsService(object):
     def form(self, ctx, script_id=None):
         """Dados do formulario. Inclui agendamentos ativos na edicao."""
         admin_crud.require_feature(ctx, FEATURE)
-        common = {"obs_validacao": VALIDATION_NOTE}
+        common = {"validation_note": VALIDATION_NOTE}
         if script_id in (None, ""):
             return dict(common, id=None, name="", description="", script_group="", category="", stage="",
                         interpreter=path_guard.ALLOWLIST[0], path_file="", param_type="NAMED",
-                        max_parallel_env=1, timeout_s="", active="Y", version="", agendamentos_ativos=0,
-                        registro=None)
+                        max_parallel_env=1, timeout_s="", active="Y", version="", active_schedules=0,
+                        record=None)
         s = self._get(script_id)
         date = dict((c, s.get(c)) for c in EDITABLE_FIELDS)
         for c in ("description", "script_group", "category", "stage"):
             date[c] = admin_crud.normalize(date[c]) or ""
         date["timeout_s"] = "" if s.get("timeout_s") is None else s["timeout_s"]
         date.update(common, id=s["id"], version=admin_crud.version(s, EDITABLE_FIELDS),
-                     agendamentos_ativos=self._active_schedules(script_id=s["id"]),
-                     registro=ui_helpers.registro(s, ctx))
+                     active_schedules=self._active_schedules(script_id=s["id"]),
+                     record=ui_helpers.registro(s, ctx))
         return date
 
     # ------------------------------------------------------------- validacao
@@ -352,12 +352,12 @@ class AdminScriptsService(object):
         script = self._get(script_id)
         marked = set(self._catalog.homologation_get(script["id"]))
         environments = []
-        for a in self._catalog.environments_list(page=1, size=_CATALOG_MAX)["itens"]:
+        for a in self._catalog.environments_list(page=1, size=_CATALOG_MAX)["items"]:
             if a["active"] != "Y" and a["id"] not in marked:
                 continue
             environments.append({"id": a["id"], "name": a["name"], "description": a.get("description") or "",
-                              "checked": a["id"] in marked, "inativo": a["active"] != "Y",
-                              "agendamentos_ativos": self._active_schedules(script_id=script["id"],
+                              "checked": a["id"] in marked, "inactive": a["active"] != "Y",
+                              "active_schedules": self._active_schedules(script_id=script["id"],
                                                                                environment=a["name"])})
         return {"script": {"id": script["id"], "name": script["name"], "active": script["active"]},
                 "environments": environments, "version": _hash(sorted(marked))}
@@ -380,7 +380,7 @@ class AdminScriptsService(object):
         current = self._catalog.homologation_get(script["id"])
         if admin_crud.text(version, 64) != _hash(sorted(current)):
             return None, {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
-        environments = dict((a["id"], a) for a in self._catalog.environments_list(page=1, size=_CATALOG_MAX)["itens"])
+        environments = dict((a["id"], a) for a in self._catalog.environments_list(page=1, size=_CATALOG_MAX)["items"])
         if sent - set(environments):
             return None, {GENERAL_FIELD: MSG_HOMOLOG_INVALID}
         inactive = set(i for i, a in environments.items() if a["active"] != "Y")
@@ -409,7 +409,7 @@ class AdminScriptsService(object):
     # -------------------------------------------------------------- vinculos
 
     def _dictionary(self):
-        return dict((p["id"], p) for p in self._catalog.parameters_list(page=1, size=_CATALOG_MAX)["itens"])
+        return dict((p["id"], p) for p in self._catalog.parameters_list(page=1, size=_CATALOG_MAX)["items"])
 
     def parameters(self, ctx, script_id):
         """Tela de vinculos: vinculos atuais (sub sigiloso nunca devolvido), dicionario para busca e versao."""
@@ -433,7 +433,7 @@ class AdminScriptsService(object):
             links.append(item)
         available = [resumo(p) for p in sorted(mapping.values(), key=lambda p: p["code"]) if p.get("active") == "Y"]
         return {"script": {"id": script["id"], "name": script["name"], "param_type": script["param_type"]},
-                "vinculos": links, "disponiveis": available, "version": _links_version(current, mapping)}
+                "links": links, "available": available, "version": _links_version(current, mapping)}
 
     def _build_links(self, script, links_json, current, errors):
         """Valida o JSON do cliente e devolve a lista final ordenada (dicts completos para o compilador)."""

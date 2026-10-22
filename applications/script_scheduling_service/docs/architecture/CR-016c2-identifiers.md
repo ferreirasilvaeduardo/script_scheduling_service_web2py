@@ -4817,3 +4817,215 @@ Ferramenta: troca por contexto (chave de dicionário, índice, `.get`/`.pop`/`.s
 Achados durante a aplicação e corrigidos antes do commit: comparações de template (`_tipo == 'acao':`) tomadas como chave (a troca coincidiu com a de valor); a série `erro` do histórico trocada só no acesso (completada para as quatro séries); dois `dict` de controller que viram variável de tela (`dados["legenda"]`, `dados["opcoes"]`) e um que vira dado do serviço (`answers=` no salvar do agendamento); argumentos nomeados de helpers de teste (`_save(respostas=...)`).
 
 Pendências registradas (fora do d2b, para decisão): códigos de resultado do cancelamento (`CANCELADO`, `SINALIZADO`, `JA_SINALIZADO`, `TERMINAL`) e da devolução à fila (`DEVOLVIDO`, `PERDIDO`), e as chaves dos metadados de esquema do `sql_ident` (`tipo`, `colunas`, `sufixo`, `tabela`, `abrev`).
+
+## 33. Variáveis de tela e dicionários dos serviços e repositórios (CR-016d, parte d2c)
+
+Aprovado pelo usuário (2026-10-22); o D29 fica para depois do d2c.
+
+Trocados juntos, com o mesmo nome em inglês: as variáveis que os controllers passam às telas (`return dict(...)` e `dados[...]`), as entradas dos componentes (`tabela`, `filtros`, `campo`, `alerta`, `registro`, `pagina`, `tamanho`…, que o template incluído lê pelo nome), as chaves dos dicionários que os serviços devolvem à tela e o contrato de lista dos repositórios Oracle e FAKE (`items`, `page`, `size`, `total_capped`). As chaves do contexto de permissão (`active_user`, `active_profile`, `profile_name`) e do contexto do claim (`homologations`, `schedule`) passam também por `rbac`, `scheduler_queue`, `scheduler_loop`, `schedule_expansion` e `health.py`. Os filtros de URL da auditoria e da lista de tickets passam a `date_from`/`date_to`, `created_from`/`created_to` e `source` (D27: link salvo com o nome antigo perde o filtro).
+
+| Antes | Depois |
+|---|---|
+| `aba_ativa` | `active_tab` |
+| `acoes` | `actions` |
+| `aconteceu` | `happened` |
+| `agendamento` | `schedule` |
+| `agendamentos_ativos` | `active_schedules` |
+| `agente` | `agent` |
+| `agora` | `now` |
+| `ajuda_senha` | `password_help` |
+| `alerta` | `alert` |
+| `alertas` | `alerts` |
+| `altura` | `height` |
+| `amb` | `env` |
+| `ambiente` | `environment` |
+| `ambientes` | `environments` |
+| `ambientes_homologados` | `homologated_environments` |
+| `anterior` | `previous_page` |
+| `argv_para_exibicao` | `display_argv` |
+| `ate` | `date_to` |
+| `ator` | `actor` |
+| `atrasados` | `delayed` |
+| `atual` | `current` |
+| `ausentes` | `absent` |
+| `aviso_admin` | `admin_warning` |
+| `aviso_desativacao` | `deactivation_warning` |
+| `aviso_limite` | `limit_warning` |
+| `aviso_sensivel` | `sensitive_warning` |
+| `aviso_total` | `total_warning` |
+| `badges` | `badges` |
+| `barras` | `bars` |
+| `bloqueado` | `locked` |
+| `bloqueado_em` | `locked_at` |
+| `bloqueio` | `lockout` |
+| `bloqueou` | `locked_now` |
+| `campo` | `field` |
+| `campos` | `fields` |
+| `campos_form` | `form_fields` |
+| `cartoes` | `cards` |
+| `codigo` | `code` |
+| `comando_exibicao` | `display_command` |
+| `compilado_em` | `compiled_at` |
+| `contagem` | `counts` |
+| `criado_ate` | `created_to` |
+| `criado_de` | `created_from` |
+| `criado_fim` | `created_to` |
+| `criado_inicio` | `created_from` |
+| `dados` | `data` |
+| `de` | `date_from` |
+| `descricao_motivo` | `reason_description` |
+| `desde` | `since` |
+| `destino` | `next_url` |
+| `detalhe_curto` | `short_detail` |
+| `detalhes` | `details` |
+| `dias` | `days` |
+| `dias_semana` | `weekdays` |
+| `disponiveis` | `available` |
+| `duracao` | `duration` |
+| `duracao_maxima` | `max_duration` |
+| `duracao_tipica` | `typical_duration` |
+| `edicao` | `editing` |
+| `eixo_x` | `x_axis` |
+| `emitidos` | `issued` |
+| `entidades` | `entities` |
+| `erro` | `error` |
+| `erro_geral` | `general_error` |
+| `erros` | `errors` |
+| `erros_senha` | `password_errors` |
+| `estado` | `state_info` |
+| `etapa` | `step` |
+| `etapas` | `steps` |
+| `explicacao` | `explanation` |
+| `fazer` | `todo` |
+| `filhos` | `children` |
+| `filtro_lista` | `list_filter` |
+| `filtros` | `filters` |
+| `filtros_ativos` | `active_filters` |
+| `finalidade` | `purpose` |
+| `foco_campo` | `focus_field` |
+| `form_enviado` | `form_sent` |
+| `frase_admin` | `admin_phrase` |
+| `frase_mais_acesso` | `more_access_phrase` |
+| `frase_sem_exec` | `no_runs_phrase` |
+| `frase_taxa` | `rate_phrase` |
+| `grade` | `grid` |
+| `grafico` | `chart` |
+| `grupos` | `groups` |
+| `ha` | `ago` |
+| `homolog` | `homologation` |
+| `homologacoes` | `homologations` |
+| `hora` | `hour` |
+| `idade_s` | `age_s` |
+| `inativo` | `inactive` |
+| `inativos` | `inactive_items` |
+| `inicio` | `start` |
+| `interpretadores` | `interpreters` |
+| `intervalo_s` | `interval_s` |
+| `itens` | `items` |
+| `largura` | `width` |
+| `legenda` | `legend` |
+| `limiares` | `thresholds` |
+| `limite_exportacao` | `export_limit` |
+| `login_digitado` | `typed_login` |
+| `mais` | `more` |
+| `mais_antigo` | `oldest` |
+| `margem_esq` | `left_margin` |
+| `matriz` | `matrix` |
+| `maximo` | `maximum` |
+| `mensagem` | `message` |
+| `meus` | `mine` |
+| `modais` | `modals` |
+| `motivos` | `reasons` |
+| `obs_validacao` | `validation_note` |
+| `opcoes` | `options` |
+| `origem` | `source` |
+| `origens` | `sources` |
+| `outro_responsavel` | `other_owner` |
+| `padrao` | `default` |
+| `pagina` | `page` |
+| `pai` | `parent` |
+| `painel` | `dashboard` |
+| `passo_s` | `step_s` |
+| `pausa_aviso` | `pause_warning` |
+| `perfil` | `profile` |
+| `perfil_ativo` | `active_profile` |
+| `perfil_nome` | `profile_name` |
+| `perfis` | `profiles` |
+| `perguntas` | `questions` |
+| `permissoes` | `permissions` |
+| `pode_baixar` | `can_download` |
+| `pode_cancelar` | `can_cancel` |
+| `pode_disparar` | `can_trigger` |
+| `pode_executar` | `can_execute` |
+| `pode_reexecutar` | `can_rerun` |
+| `pode_regex` | `can_regex` |
+| `previa` | `preview` |
+| `primeiro_registro` | `first_record` |
+| `prioridade` | `priority` |
+| `prioridades` | `priorities` |
+| `problema` | `problem` |
+| `problemas` | `problems` |
+| `producao` | `production` |
+| `proprio` | `own` |
+| `proxima` | `next_page` |
+| `qtd` | `count` |
+| `qtd_parametros` | `param_count` |
+| `qtd_scripts` | `script_count` |
+| `quantidade` | `quantity` |
+| `quantidade_pagina` | `page_count` |
+| `recorrencia` | `recurrence` |
+| `reexecucao_de` | `rerun_of` |
+| `registro` | `record` |
+| `regra` | `rule` |
+| `regra_id` | `rule_id` |
+| `responsavel` | `responsible` |
+| `resultado` | `result` |
+| `rota` | `route` |
+| `rotulo_diff` | `diff_label` |
+| `rotulos_tipo` | `type_labels` |
+| `saida` | `output` |
+| `saude` | `health` |
+| `script_nome` | `script_name` |
+| `scripts_homologados` | `homologated_scripts` |
+| `secao` | `section` |
+| `sensiveis` | `sensitive_codes` |
+| `status_desconhecido` | `unknown_status` |
+| `status_motivo` | `status_reason` |
+| `tabela_erro` | `error_table` |
+| `tabela_vazia` | `empty_table` |
+| `tamanho` | `size` |
+| `tamanhos` | `sizes` |
+| `taxa` | `rate` |
+| `telas` | `screens` |
+| `tem_anterior` | `has_previous` |
+| `tem_proxima` | `has_next` |
+| `tem_ultima` | `has_last` |
+| `texto_copia` | `copy_text` |
+| `tipos` | `types` |
+| `tipos_param` | `param_types` |
+| `total_limitado` | `total_capped` |
+| `total_paginas` | `total_pages` |
+| `ultima` | `last_run` |
+| `ultimo_registro` | `last_record` |
+| `url_baixar` | `download_url` |
+| `url_fragmento` | `fragment_url` |
+| `uso` | `usage` |
+| `usou_ultima` | `used_last` |
+| `usuario` | `user` |
+| `usuario_ativo` | `active_user` |
+| `usuarios_afetados` | `affected_users` |
+| `usuarios_ativos` | `active_users` |
+| `valores` | `values` |
+| `vinc` | `links_page` |
+| `vinculos` | `links` |
+| `visor_log` | `log_viewer` |
+
+Ficam: as dimensões da matriz de perfis (`funcs`, `ambs`, `scrs`), abreviações compartilhadas entre repositório, serviço, formulário e o texto do diff gravado na auditoria (`amb:`/`scr:`); `tabela` como chave dos metadados do `sql_ident` (só a variável de template mudou); os valores de dado e códigos (`agendamento`/`manual`, estados das etapas `feito`/`atual`/`pendente`/`pulado`, que viram classe CSS no d3) e os logins do seed (`inativo`, `bloqueado`).
+
+Ferramenta: a do d2b, agora restrita aos blocos `{{ }}` dos templates (com troca dos nomes de variável, sem comentários nem textos), com chave de dicionário só depois de `{` ou `,` e índice só depois de nome, `)` ou `]`. Achados durante a aplicação e corrigidos antes do commit (a árvore foi revertida e a troca refeita): comparações `if x == "bloqueou":` e listas `["bloqueado"]` tomadas como chave; chave após comentário de linha inteira (`"explicacao"`, achada pelo percurso e conferida por AST); marcadores `{agente}`/`{qtd}`/`{tamanho}` do quadro de saída; valores que apontam para chave (`'key'` das colunas, `INSERT_FIELDS`, `"inativos"`, nomes de filtro em tuplas); um perfil de teste deixado pela primeira tentativa do percurso, removido pelo id.
+
+O percurso passou a reenviar quatro formulários inválidos (ambiente, minha senha, disparo e agendamento) e exige a tela reapresentada com o campo marcado.
+
+Achado pela bateria Oracle e corrigido antes do commit: as contagens extras da listagem de scripts e de parâmetros vinham do alias da coluna no SQL (`qtd_parametros`, `qtd_scripts`), que vira a chave do item; o alias passou a `param_count`/`script_count` (o FAKE já usava os nomes novos). Aliases internos do SQL lidos por posição (`inicio`, `n` no `health` e na janela da fila) ficam para o D29.
+
+Validação: suítes em 3.6.0, 3.6.8 e 3.13.2 (1275 testes), bateria Oracle (1273), testes progressivos nos cinco agregados, ciclo real do agente, percurso real das telas (44 telas, 4 formulários inválidos, varredura das URLs, 11 contratos JS × servidor), conferência de resíduos.

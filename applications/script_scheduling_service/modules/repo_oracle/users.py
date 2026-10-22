@@ -135,10 +135,10 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                     "user_id": row[0],
                     "login": row[1],
                     "name": row[2],
-                    "usuario_ativo": (row[3] or "").strip(),
+                    "active_user": (row[3] or "").strip(),
                     "profile_id": row[4],
-                    "perfil_nome": row[5],
-                    "perfil_ativo": (row[6] or "").strip(),
+                    "profile_name": row[5],
+                    "active_profile": (row[6] or "").strip(),
                     "is_admin": (row[7] or "").strip(),
                     "perm_version": row[8],
                     "session_epoch": row[9],
@@ -173,7 +173,7 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
             clauses.append("active = :active_f")
             binds["active_f"] = str(active_f).strip().upper()
 
-        locked_f = filters.get("bloqueado_em")
+        locked_f = filters.get("locked_at")
         if locked_f is not None:
             clauses.append("locked_until IS NOT NULL AND locked_until > :locked_f")
             binds["locked_f"] = locked_f
@@ -228,11 +228,11 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                 items = [self.tuple_to_dict(_COLS_USER, r[:-1]) for r in cur.fetchall()]
 
                 return {
-                    "itens": items,
+                    "items": items,
                     "total": total,
-                    "pagina": p,
-                    "tamanho": t,
-                    "total_limitado": total_capped,
+                    "page": p,
+                    "size": t,
+                    "total_capped": total_capped,
                 }
             finally:
                 cur.close()
@@ -518,7 +518,7 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                 cur.close()
 
             record = self.get_by_id(uid, conn=c)
-            record["bloqueou"] = bool(lock)
+            record["locked_now"] = bool(lock)
             return record
 
     def register_login_success(self, login, new_hash=None, audit=None, conn=None):

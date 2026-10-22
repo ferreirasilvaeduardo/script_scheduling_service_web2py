@@ -53,10 +53,10 @@ def _pagina_form(ctx, dados, erros=None, erros_senha=None):
     # Perfil de administrador so e oferecido a administrador (CR-008, E1), salvo o perfil atual.
     perfis = [p for p in servico.profiles()
               if p["id"] == dados.get("profile_id") or (p["active"] == "Y" and (ctx["is_admin"] or p["is_admin"] != "Y"))]
-    return dict(usuario=dados, erros=erros, erro_geral=erros.get(admin_crud.GENERAL_FIELD),
-                erros_senha=erros_senha or {}, perfis=perfis,
-                foco_campo=ui_helpers.primeiro_campo_invalido(campos), ajuda_senha=servico.POLICY_HELP,
-                aviso_desativacao=servico.DEACTIVATION_WARNING)
+    return dict(user=dados, errors=erros, general_error=erros.get(admin_crud.GENERAL_FIELD),
+                password_errors=erros_senha or {}, profiles=perfis,
+                focus_field=ui_helpers.primeiro_campo_invalido(campos), password_help=servico.POLICY_HELP,
+                deactivation_warning=servico.DEACTIVATION_WARNING)
 
 
 def index():
@@ -74,10 +74,10 @@ def index():
         _negado()
     except RepoError:
         _log.exception("falha ao listar usuarios (login=%s)", ctx["login"], extra={"action": _FUNC})
-        resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
+        resultado = {"items": [], "total": 0, "page": 1, "size": tamanho}
         erro = _MSG_FALHA_LISTA
     response.title = u"Usuários — SSS"
-    return dict(resultado=resultado, erro=erro, filtros_ativos=filtros, tamanho=tamanho, perfis=perfis,
+    return dict(result=resultado, error=erro, active_filters=filtros, size=tamanho, profiles=perfis,
                 query_params=dict(filtros, size=tamanho))
 
 
@@ -116,7 +116,7 @@ def save():
         dados = servico.form(ctx, usuario_id) if usuario_id else servico.form(ctx)
     except RepoError:
         dados = {"id": None, "login": "", "name": "", "profile_id": None, "active": "Y", "version": "",
-                 "bloqueado": False, "locked_until": None, "failed_attempts": 0, "proprio": False}
+                 "locked": False, "locked_until": None, "failed_attempts": 0, "own": False}
     if admin_crud.GENERAL_FIELD not in erros:
         dados = dict(dados, name=enviados["name"] or "", profile_id=_inteiro(enviados["profile_id"]))
         if not usuario_id:

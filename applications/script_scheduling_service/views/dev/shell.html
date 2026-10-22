@@ -15,9 +15,9 @@
       <span>{{=t['status']['label']}}</span>
     </span>
     {{pass}}
-    <span class="sss-status {{=status_desconhecido['css_class']}}">
-      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=status_desconhecido['icon']}}"></use></svg>
-      <span>{{=status_desconhecido['label']}}</span>
+    <span class="sss-status {{=unknown_status['css_class']}}">
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=unknown_status['icon']}}"></use></svg>
+      <span>{{=unknown_status['label']}}</span>
     </span>
   </div>
 </section>
@@ -48,8 +48,8 @@
               <span>{{=t['status']['label']}}</span>
             </span>
           </td>
-          <td class="sss-mono">{{=t['inicio']}}</td>
-          <td class="sss-mono sss-col-num">{{=t['duracao']}}</td>
+          <td class="sss-mono">{{=t['start']}}</td>
+          <td class="sss-mono sss-col-num">{{=t['duration']}}</td>
         </tr>
         {{pass}}
       </tbody>

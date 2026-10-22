@@ -62,9 +62,9 @@ class TestRecordInServices(unittest.TestCase):
 
     def test_formularios_de_inclusao_sem_registro_e_de_edicao_com_as_quatro_colunas(self):
         for name, (svc, rid, read) in self.services.items():
-            self.assertIsNone(svc.form(self.ctx)["registro"], name)
-            self.assertEqual(svc.form(self.ctx, str(rid))["registro"], ui_helpers.registro(read(), self.ctx), name)
-            self.assertEqual(svc.form(self.ctx, str(rid))["registro"]["created_by"], "SYSTEM:seed", name)
+            self.assertIsNone(svc.form(self.ctx)["record"], name)
+            self.assertEqual(svc.form(self.ctx, str(rid))["record"], ui_helpers.registro(read(), self.ctx), name)
+            self.assertEqual(svc.form(self.ctx, str(rid))["record"]["created_by"], "SYSTEM:seed", name)
 
     def test_registro_sem_auditoria_nos_servicos_e_aviso_de_pausa(self):
         ctx = dict(self.ctx, is_admin=False, login="op.prod", user_id=2,
@@ -78,15 +78,15 @@ class TestRecordInServices(unittest.TestCase):
             record["updated_by"] = "op.prod"
             record["updated_at"] = store.now()
         for name, (svc, rid, read) in self.services.items():
-            record = svc.form(ctx, str(rid))["registro"]
+            record = svc.form(ctx, str(rid))["record"]
             self.assertEqual((record["created_by"], record["updated_by"]),
                              (u"outra pessoa", u"você"), name)
-        rule = self.schedules.form(ctx, "5")["regra"]
-        self.assertEqual(rule["registro"]["created_by"], u"outra pessoa")
-        self.assertIn(u"por você", rule["pausa_aviso"])
+        rule = self.schedules.form(ctx, "5")["rule"]
+        self.assertEqual(rule["record"]["created_by"], u"outra pessoa")
+        self.assertIn(u"por você", rule["pause_warning"])
         detail = self.ticket.detail(ctx, 17)
-        self.assertEqual(detail["registro"]["created_by"], u"outra pessoa")
-        self.assertNotIn("editor.privado", str(detail["registro"]))
+        self.assertEqual(detail["record"]["created_by"], u"outra pessoa")
+        self.assertNotIn("editor.privado", str(detail["record"]))
 
     def test_edicao_pela_tela_grava_o_editor(self):
         svc, rid, read = self.services["environments"]
@@ -94,19 +94,19 @@ class TestRecordInServices(unittest.TestCase):
         _id, errors = svc.save(self.ctx, IP, str(rid), {"description": "Editada", "connection": form["connection"],
                                                          "version": form["version"]})
         self.assertEqual(errors, {})
-        reg = svc.form(self.ctx, str(rid))["registro"]
+        reg = svc.form(self.ctx, str(rid))["record"]
         self.assertEqual((reg["created_by"], reg["updated_by"]), ("SYSTEM:seed", "admin"))
         self.assertEqual(svc.form(self.ctx, str(rid))["version"] != form["version"], True)
 
     def test_agendamento_e_ticket(self):
-        rule = self.schedules.form(self.ctx, "5")["regra"]
-        self.assertEqual(rule["registro"], ui_helpers.registro(self.r("schedules").get(5), self.ctx))
-        self.assertEqual(rule["registro"]["created_by"], "SYSTEM:seed")
-        self.assertEqual(rule["registro"]["updated_by"], "admin")
+        rule = self.schedules.form(self.ctx, "5")["rule"]
+        self.assertEqual(rule["record"], ui_helpers.registro(self.r("schedules").get(5), self.ctx))
+        self.assertEqual(rule["record"]["created_by"], "SYSTEM:seed")
+        self.assertEqual(rule["record"]["updated_by"], "admin")
         detail = self.ticket.detail(self.ctx, 17)
         raw = self.r("tickets").get(17)
-        self.assertEqual(detail["registro"], ui_helpers.registro(raw, self.ctx))
-        self.assertTrue(detail["registro"]["updated_by"].startswith("SYSTEM:agt-"))
+        self.assertEqual(detail["record"], ui_helpers.registro(raw, self.ctx))
+        self.assertTrue(detail["record"]["updated_by"].startswith("SYSTEM:agt-"))
 
 
 if __name__ == "__main__":

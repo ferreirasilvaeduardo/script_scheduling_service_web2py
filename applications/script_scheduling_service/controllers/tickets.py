@@ -69,23 +69,23 @@ def _pagina_novo(ctx, script_id, ambiente, valores=None, erros=None, prioridade=
     response.title = u"Disparar script — SSS"
     response.sss_scripts = [_JS_DISPARO]
     erros = erros or {}
-    dados = dict(etapa=1, grupos=[], script=None, ambientes=[], form=None, erros=erros,
-                 erro_geral=erros.get(ticket_service.GENERAL_FIELD), prioridade=prioridade,
-                 scheduled_at=scheduled_at or "", foco_campo=None, reexecucao_de=reexecucao_de,
-                 tem_ultima=False, usou_ultima=avisos is not None)
+    dados = dict(step=1, groups=[], script=None, environments=[], form=None, errors=erros,
+                 general_error=erros.get(ticket_service.GENERAL_FIELD), priority=prioridade,
+                 scheduled_at=scheduled_at or "", focus_field=None, rerun_of=reexecucao_de,
+                 has_last=False, used_last=avisos is not None)
     if not script_id:
-        dados["grupos"] = ticket_service.available_scripts(ctx)
+        dados["groups"] = ticket_service.available_scripts(ctx)
         return dados
     script, ambientes = ticket_service.available_environments(ctx, script_id)
-    dados.update(etapa=2, script=script, ambientes=ambientes)
+    dados.update(step=2, script=script, environments=ambientes)
     if not ambiente:
         return dados
     form = ticket_service.prepare_form(ctx, script_id, ambiente, valores, erros, avisos)
-    dados["tem_ultima"] = not reexecucao_de and ticket_service.has_last_run(ctx, script_id, ambiente)
+    dados["has_last"] = not reexecucao_de and ticket_service.has_last_run(ctx, script_id, ambiente)
     campos = [{"name": c["name"], "error": c["error"]} for c in form["fields"]]
     campos.append({"name": "priority", "error": erros.get(ticket_service.PRIORITY_FIELD)})
     campos.append({"name": "scheduled_at", "error": erros.get(ticket_service.SCHEDULED_AT_FIELD)})
-    dados.update(etapa=3, form=form, foco_campo=ui_helpers.primeiro_campo_invalido(campos))
+    dados.update(step=3, form=form, focus_field=ui_helpers.primeiro_campo_invalido(campos))
     return dados
 
 
@@ -96,7 +96,7 @@ def new():
     try:
         if reexecucao:
             dados = ticket_service.prepare_rerun(ctx, reexecucao)
-            return _pagina_novo(ctx, dados["script_id"], dados["environment"], dados["valores"], dados["errors"],
+            return _pagina_novo(ctx, dados["script_id"], dados["environment"], dados["values"], dados["errors"],
                                 dados["priority"], reexecucao_de=dados["ticket_id"])
         script_id = _texto(request.get_vars.get("script_id"), 10)
         ambiente = _texto(request.get_vars.get("environment"), 30)
@@ -118,10 +118,10 @@ def catalog():
     response.title = u"Rotinas disponíveis — SSS"
     response.sss_scripts = [_JS_DISPARO]
     try:
-        return dict(grupos=ticket_service.routine_catalog(ctx), erro=None)
+        return dict(groups=ticket_service.routine_catalog(ctx), error=None)
     except RepoError:
         _log.exception("falha ao montar o catalogo de rotinas (login=%s)", ctx["login"], extra={"action": "CATALOGO"})
-        return dict(grupos=[], erro=ui_helpers.mensagem("internal_error"))
+        return dict(groups=[], error=ui_helpers.mensagem("internal_error"))
 
 
 def history():
@@ -195,19 +195,19 @@ def index():
         _negado()
     except RepoError:
         _log.exception("falha ao listar tickets (login=%s)", ctx["login"], extra={"action": "TICKET_LISTAR"})
-        resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
+        resultado = {"items": [], "total": 0, "page": 1, "size": tamanho}
         erro = _MSG_FALHA_LISTA
     query_params = dict(filtros, size=tamanho)
-    dados = dict(resultado=resultado, erro=erro, pagina=resultado["pagina"], tamanho=tamanho,
+    dados = dict(result=resultado, error=erro, page=resultado["page"], size=tamanho,
                  query_params=query_params,
-                 url_fragmento=URL(c="tickets", f="index", extension="load",
-                                   vars=dict(query_params, page=resultado["pagina"])))
+                 fragment_url=URL(c="tickets", f="index", extension="load",
+                                   vars=dict(query_params, page=resultado["page"])))
     if request.extension == "load":
         return dados
     response.title = u"Tickets — SSS"
     response.sss_scripts = [_JS_TICKETS]
-    dados["filtros_ativos"] = filtros
-    dados["opcoes"] = ticket_service.filter_options(ctx)
+    dados["active_filters"] = filtros
+    dados["options"] = ticket_service.filter_options(ctx)
     return dados
 
 
@@ -222,11 +222,11 @@ def detail():
     response.sss_scripts = [_JS_TICKETS, _JS_LOG]
     visor_log = {
         "url_chunk": URL(c="logs", f="chunk", vars={"ticket_id": ticket["id"]}),
-        "url_baixar": URL(c="logs", f="download", vars={"ticket_id": ticket["id"]}),
-        "intervalo_s": current.sss_cfg.web.log_poll_interval_s,
+        "download_url": URL(c="logs", f="download", vars={"ticket_id": ticket["id"]}),
+        "interval_s": current.sss_cfg.web.log_poll_interval_s,
         "max_chars": ticket_service.LOG_MAX_CHARS,
     }
-    return dict(ticket=ticket, visor_log=visor_log)
+    return dict(ticket=ticket, log_viewer=visor_log)
 
 
 def output():

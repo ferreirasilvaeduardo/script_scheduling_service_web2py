@@ -58,20 +58,20 @@ def index():
     except RepoError:
         _log.exception("falha ao listar a auditoria (login=%s)", ctx["login"], extra={"action": _FUNC})
         filtros, erros = audit_service.default_filters(entrada)
-        resultado = {"filtros": filtros, "errors": erros, "itens": [], "total": 0, "pagina": 1,
-                     "tamanho": tamanho}
+        resultado = {"filters": filtros, "errors": erros, "items": [], "total": 0, "page": 1,
+                     "size": tamanho}
         erro = _MSG_FALHA_LISTA
     if resultado["errors"] and not erro:
         response.flash = {"kind": "error", "message": u"Corrija os filtros destacados."}
     pode_ver_tickets = ticket_service.can_query(ctx)
-    for item in resultado["itens"]:
+    for item in resultado["items"]:
         item["link"] = audit_service.entity_link(ctx, item["entity"], item["entity_id"],
                                                        pode_ver_tickets)
     response.title = u"Auditoria — SSS"
-    return dict(resultado=resultado, erro=erro, tamanho=tamanho, filtros_ativos=resultado["filtros"],
-                query_params=dict(resultado["filtros"], size=tamanho),
-                acoes=audit_service.ACTIONS, entidades=audit_service.ENTITIES,
-                limite_exportacao=audit_service.EXPORT_LIMIT)
+    return dict(result=resultado, error=erro, size=tamanho, active_filters=resultado["filters"],
+                query_params=dict(resultado["filters"], size=tamanho),
+                actions=audit_service.ACTIONS, entities=audit_service.ENTITIES,
+                export_limit=audit_service.EXPORT_LIMIT)
 
 
 def export():
@@ -110,19 +110,19 @@ def agents():
         _negado()
     except RepoError:
         _log.exception("falha ao montar o painel de agentes (login=%s)", ctx["login"], extra={"action": _FUNC})
-        painel = {"agents": [], "summary": {}, "agora": None}
+        painel = {"agents": [], "summary": {}, "now": None}
         erro = _MSG_FALHA_AGENTES
-    dados = dict(painel=painel, erro=erro, url_fragmento=URL(c="audit", f="agents", extension="load"),
-                 intervalo_s=INTERVALO_AGENTES_S)
+    dados = dict(dashboard=painel, error=erro, fragment_url=URL(c="audit", f="agents", extension="load"),
+                 interval_s=INTERVALO_AGENTES_S)
     if request.extension == "load":
         return dados
     response.title = u"Agentes — SSS"
     response.sss_scripts = [_JS_AGENTES]
     # A aba Agentes pertence ao item de menu Auditoria (audit/index).
     for secao in response.sss_menu or []:
-        for item in secao["itens"]:
-            if item["rota"] == ("audit", "index"):
+        for item in secao["items"]:
+            if item["route"] == ("audit", "index"):
                 item["active"] = True
-    dados["legenda"] = agents_service.legend()
-    dados["limiares"] = current.sss_cfg.agent
+    dados["legend"] = agents_service.legend()
+    dados["thresholds"] = current.sss_cfg.agent
     return dados

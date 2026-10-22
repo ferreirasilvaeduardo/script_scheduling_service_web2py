@@ -17,7 +17,7 @@ from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 FEATURE = "MANAGE_USERS"
 EDITABLE_FIELDS = ("name", "profile_id", "active")
 # Referencias aparecem pelo nome na auditoria de inclusao (README §4.4): perfil, nao perfil_id.
-INSERT_FIELDS = ("login", "name", "perfil")
+INSERT_FIELDS = ("login", "name", "profile")
 NAME_MAX_LENGTH = 60
 _PROFILES_MAX = 1000
 _PUBLIC_FIELDS = ("id", "login", "name", "profile_id", "failed_attempts", "locked_until", "last_login_at",
@@ -101,7 +101,7 @@ class AdminUsersService(object):
     def profiles(self, active_only=False):
         """Perfis para selecao: lista de {id, nome, is_admin, ativo} ordenada por nome."""
         items = self._rbac.profiles_list(filters={"active": "Y"} if active_only else None, page=1,
-                                         size=_PROFILES_MAX)["itens"]
+                                         size=_PROFILES_MAX)["items"]
         return [{"id": p["id"], "name": p["name"], "is_admin": p["is_admin"], "active": p["active"]} for p in items]
 
     def _admin_profile(self, profile_id):
@@ -128,28 +128,28 @@ class AdminUsersService(object):
         if state in ("Y", "N"):
             repo_filters["active"] = state
         elif state == "B":
-            repo_filters["bloqueado_em"] = self._clock()
+            repo_filters["locked_at"] = self._clock()
         result = self._users.list(filters=repo_filters, page=page, size=size)
         names = dict((p["id"], p["name"]) for p in self.profiles())
         items = []
-        for u in result["itens"]:
+        for u in result["items"]:
             item = public_view(u)
-            item["perfil_nome"] = names.get(u["profile_id"], "#%s" % u["profile_id"])
-            item["bloqueado"] = self.is_locked(u)
+            item["profile_name"] = names.get(u["profile_id"], "#%s" % u["profile_id"])
+            item["locked"] = self.is_locked(u)
             items.append(item)
-        return dict(result, itens=items)
+        return dict(result, items=items)
 
     def form(self, ctx, user_id=None):
         """Dados do formulario sem senha_hash; na edicao inclui versao, bloqueio e se e o proprio usuario."""
         admin_crud.require_feature(ctx, FEATURE)
         if user_id in (None, ""):
             return {"id": None, "login": "", "name": "", "profile_id": None, "active": "Y", "version": "",
-                    "bloqueado": False, "locked_until": None, "failed_attempts": 0, "proprio": False,
-                    "registro": None}
+                    "locked": False, "locked_until": None, "failed_attempts": 0, "own": False,
+                    "record": None}
         u = self._get(user_id)
         date = public_view(u)
-        date.update(version=admin_crud.version(u, EDITABLE_FIELDS), bloqueado=self.is_locked(u),
-                     proprio=u["id"] == ctx.get("user_id"), registro=ui_helpers.registro(u, ctx))
+        date.update(version=admin_crud.version(u, EDITABLE_FIELDS), locked=self.is_locked(u),
+                     own=u["id"] == ctx.get("user_id"), record=ui_helpers.registro(u, ctx))
         return date
 
     # ----------------------------------------------------------------- escrita
@@ -222,7 +222,7 @@ class AdminUsersService(object):
             new = {"login": login, "name": name, "profile_id": profile_id, "active": "Y",
                     "password_hash": security.hash_password(password), "password_changed_at": now}
             audit = admin_crud.audit_entry(ctx, ip, "CREATE",
-                                             admin_crud.insert_detail(dict(new, perfil=profile["name"]),
+                                             admin_crud.insert_detail(dict(new, profile=profile["name"]),
                                                                          INSERT_FIELDS))
             try:
                 created = self._users.insert(new, audit=audit)

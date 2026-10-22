@@ -5,16 +5,16 @@
 import ui_helpers
 icones = URL('static', 'img/icons.svg')
 _opc_ativo = [('', 'Todas'), ('Y', 'Ativas'), ('N', 'Pausadas')]
-filtros = {'id': 'filtro-agendamentos', 'url_base': ('schedules', 'index'), 'keep': {'size': tamanho}, 'fields': [
-    {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': filtros_ativos.get('name')},
-    {'name': 'environment', 'label': 'Ambiente', 'kind': 'text', 'value': filtros_ativos.get('environment')},
-    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': filtros_ativos.get('active'), 'options': _opc_ativo},
+filters = {'id': 'filtro-agendamentos', 'url_base': ('schedules', 'index'), 'keep': {'size': size}, 'fields': [
+    {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': active_filters.get('name')},
+    {'name': 'environment', 'label': 'Ambiente', 'kind': 'text', 'value': active_filters.get('environment')},
+    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('active'), 'options': _opc_ativo},
 ]}
 _colunas = ('Nome', 'Script', 'Ambiente', u'Recorrência', u'Próxima execução', u'Última execução', u'Responsável', u'Situação', u'Ações')
-pagina = resultado['pagina']
-total = resultado['total']
-total_limitado = resultado.get('total_limitado', False)
-quantidade_pagina = len(resultado['itens'])
+page = result['page']
+total = result['total']
+total_capped = result.get('total_capped', False)
+page_count = len(result['items'])
 url_base = ('schedules', 'index')
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">
@@ -42,28 +42,28 @@ url_base = ('schedules', 'index')
         </tr>
       </thead>
       <tbody>
-        {{if erro:}}
+        {{if error:}}
         <tr>
           <td colspan="{{=len(_colunas)}}" class="sss-tabela-estado">
             <div class="alert alert-danger mb-0" role="alert">
               <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
-              <span>{{=erro}}</span>
+              <span>{{=error}}</span>
             </div>
           </td>
         </tr>
-        {{elif not resultado['itens']:}}
+        {{elif not result['items']:}}
         <tr><td colspan="{{=len(_colunas)}}" class="sss-tabela-estado sss-tabela-vazia">Nenhuma regra de agendamento encontrada.</td></tr>
         {{else:}}
-        {{for _r in resultado['itens']:}}
+        {{for _r in result['items']:}}
         {{_sit = ui_helpers.ativo_info(_r['active'])}}
         <tr>
           <td>{{=_r['name']}}</td>
           <td class="sss-mono">{{=_r['script']}}</td>
           <td>{{=_r['environment']}}</td>
-          <td>{{=_r['recorrencia']}}{{if _r['cron_expression']:}}<br><code class="sss-mono">{{=_r['cron_expression']}}</code>{{pass}}</td>
+          <td>{{=_r['recurrence']}}{{if _r['cron_expression']:}}<br><code class="sss-mono">{{=_r['cron_expression']}}</code>{{pass}}</td>
           <td>{{=_r['next_run_at']}}</td>
           <td>{{=_r['last_run_at']}}{{if _r['last_ticket_id']:}}<br><a href="{{=URL(c='tickets', f='detail', args=[_r['last_ticket_id']])}}" aria-label="Ticket #{{=_r['last_ticket_id']}} da última execução">ticket #{{=_r['last_ticket_id']}}</a>{{pass}}</td>
-          <td class="sss-mono">{{=_r['responsavel']}}</td>
+          <td class="sss-mono">{{=_r['responsible']}}</td>
           <td>
             <span class="sss-status {{=_sit['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_sit['icon']}}"></use></svg><span>{{=_r['state']}}</span></span>
             {{if _r['reason']:}}<div class="sss-texto-suave">{{=_r['reason']}}</div>{{pass}}

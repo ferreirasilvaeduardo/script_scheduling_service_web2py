@@ -21,8 +21,8 @@ def index():
     response.status = codigo
     response.view = "error/index.html"
     return dict(
-        codigo=codigo,
-        aconteceu=_MENSAGENS.get(codigo, ui_helpers.mensagem_partes("internal_error"))[0],
-        fazer=_MENSAGENS.get(codigo, ui_helpers.mensagem_partes("internal_error"))[1],
-        permissoes=codigo == 403,
+        code=codigo,
+        happened=_MENSAGENS.get(codigo, ui_helpers.mensagem_partes("internal_error"))[0],
+        todo=_MENSAGENS.get(codigo, ui_helpers.mensagem_partes("internal_error"))[1],
+        permissions=codigo == 403,
     )

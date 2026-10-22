@@ -3,23 +3,23 @@
 # Inclusão e edição de usuário. login fica somente leitura na edição (o servidor o ignora);
 # senhas usam type="password", nunca são reapresentadas e não saem do servidor.
 import ui_helpers
-_u = usuario
+_u = user
 _novo = not _u.get('id')
 _situacao = ui_helpers.ativo_info(_u.get('active'))
-_opc_perfil = [('', u'Selecione…')] + [(str(_pf['id']), _pf['name'] + (' (inativo)' if _pf['active'] != 'Y' else '')) for _pf in perfis]
+_opc_perfil = [('', u'Selecione…')] + [(str(_pf['id']), _pf['name'] + (' (inativo)' if _pf['active'] != 'Y' else '')) for _pf in profiles]
 _campos = [
-    {'name': 'login', 'label': 'Login', 'value': _u.get('login'), 'error': erros.get('login'), 'required': _novo, 'maxlength': 30, 'read_only': not _novo, 'autocomplete': 'off',
+    {'name': 'login', 'label': 'Login', 'value': _u.get('login'), 'error': errors.get('login'), 'required': _novo, 'maxlength': 30, 'read_only': not _novo, 'autocomplete': 'off',
      'help': u'3 a 30 caracteres: letras minúsculas, dígitos, ponto, _ ou -. Não pode ser alterado depois de criado.'},
-    {'name': 'name', 'label': 'Nome', 'value': _u.get('name'), 'error': erros.get('name'), 'required': True, 'maxlength': 60},
-    {'name': 'profile_id', 'label': 'Perfil', 'kind': 'select', 'value': str(_u.get('profile_id') or ''), 'error': erros.get('profile_id'), 'required': True, 'options': _opc_perfil},
+    {'name': 'name', 'label': 'Nome', 'value': _u.get('name'), 'error': errors.get('name'), 'required': True, 'maxlength': 60},
+    {'name': 'profile_id', 'label': 'Perfil', 'kind': 'select', 'value': str(_u.get('profile_id') or ''), 'error': errors.get('profile_id'), 'required': True, 'options': _opc_perfil},
 ]
 if _novo:
-    _campos.append({'name': 'password', 'label': 'Senha inicial', 'kind': 'password', 'error': erros.get('password'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024, 'help': ajuda_senha})
-    _campos.append({'name': 'confirmation', 'label': u'Confirmação da senha', 'kind': 'password', 'error': erros.get('confirmation'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024})
+    _campos.append({'name': 'password', 'label': 'Senha inicial', 'kind': 'password', 'error': errors.get('password'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024, 'help': password_help})
+    _campos.append({'name': 'confirmation', 'label': u'Confirmação da senha', 'kind': 'password', 'error': errors.get('confirmation'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024})
 else:
     _desativar = _u.get('active') == 'Y'
     _modal_ativo = {'id': 'modal-ativo', 'title': (u'Desativar usuário %s' if _desativar else u'Reativar usuário %s') % _u['login'],
-                    'text': aviso_desativacao if _desativar else u'O usuário voltará a ter acesso conforme o perfil.',
+                    'text': deactivation_warning if _desativar else u'O usuário voltará a ter acesso conforme o perfil.',
                     'trigger_label': 'Desativar' if _desativar else 'Reativar',
                     'confirm_label': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
                     'variant': 'danger' if _desativar else 'normal', 'action': URL(c='admin_users', f='toggle_active'),
@@ -29,8 +29,8 @@ else:
                       'confirm_label': 'Confirmar desbloqueio', 'variant': 'normal', 'action': URL(c='admin_users', f='unlock'),
                       'hidden_fields': dict(id=_u['id'])}
     _campos_senha = [
-        {'name': 'password', 'label': 'Nova senha', 'kind': 'password', 'error': erros_senha.get('password'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024, 'help': ajuda_senha},
-        {'name': 'confirmation', 'label': u'Confirmação da nova senha', 'kind': 'password', 'error': erros_senha.get('confirmation'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024},
+        {'name': 'password', 'label': 'Nova senha', 'kind': 'password', 'error': password_errors.get('password'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024, 'help': password_help},
+        {'name': 'confirmation', 'label': u'Confirmação da nova senha', 'kind': 'password', 'error': password_errors.get('confirmation'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024},
     ]
 pass
 }}
@@ -39,11 +39,11 @@ pass
     <h1 class="sss-page-titulo">{{if _novo:}}Novo usuário{{else:}}Usuário <span class="sss-mono">{{=_u['login']}}</span>
       <span class="sss-status {{=_situacao['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icon']}}"></use></svg><span>{{=_situacao['label']}}</span></span>{{pass}}
     </h1>
-    {{if not _novo and _u.get('proprio'):}}<p class="sss-page-sub">Este é o seu usuário: desativação, troca para perfil não administrativo e redefinição de senha por aqui não são permitidas.</p>{{pass}}
+    {{if not _novo and _u.get('own'):}}<p class="sss-page-sub">Este é o seu usuário: desativação, troca para perfil não administrativo e redefinição de senha por aqui não são permitidas.</p>{{pass}}
   </div>
   <div class="sss-acoes">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_users', f='index')}}">Voltar à lista</a>
-    {{if not _novo and not (_u.get('proprio') and _u.get('active') == 'Y'):}}
+    {{if not _novo and not (_u.get('own') and _u.get('active') == 'Y'):}}
     {{modal = _modal_ativo}}
     {{include 'components/confirm_modal.html'}}
     {{pass}}
@@ -58,13 +58,13 @@ pass
     <input type="hidden" name="id" value="{{=_u['id']}}">
     <input type="hidden" name="version" value="{{=_u['version']}}">
     {{pass}}
-    {{if erro_geral:}}
+    {{if general_error:}}
     <div class="alert alert-danger sss-alerta" role="alert">
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#icon-alert"></use></svg>
-      <span>{{=erro_geral}}</span>
+      <span>{{=general_error}}</span>
     </div>
     {{pass}}
-    {{for campo in _campos:}}
+    {{for field in _campos:}}
     {{include 'components/form_field.html'}}
     {{pass}}
     <div class="sss-form-acoes">
@@ -74,8 +74,8 @@ pass
   </form>
 </section>
 
-{{if not _novo and _u.get('registro'):}}
-{{registro = _u['registro']}}
+{{if not _novo and _u.get('record'):}}
+{{record = _u['record']}}
 {{include 'components/record.html'}}
 {{pass}}
 
@@ -85,7 +85,7 @@ pass
   <div class="sss-card-corpo">
     <dl class="sss-resumo">
       <dt>Situação do login</dt>
-      <dd>{{if _u.get('bloqueado'):}}Bloqueado até {{=ui_helpers.formatar_data(_u.get('locked_until'))}}{{else:}}Liberado{{pass}}</dd>
+      <dd>{{if _u.get('locked'):}}Bloqueado até {{=ui_helpers.formatar_data(_u.get('locked_until'))}}{{else:}}Liberado{{pass}}</dd>
       <dt>Tentativas com falha</dt>
       <dd>{{=_u.get('failed_attempts') or 0}}</dd>
       <dt>Último login</dt>
@@ -93,7 +93,7 @@ pass
       <dt>Senha alterada em</dt>
       <dd>{{=ui_helpers.formatar_data(_u.get('password_changed_at'))}}</dd>
     </dl>
-    {{if _u.get('bloqueado') or (_u.get('failed_attempts') or 0) > 0:}}
+    {{if _u.get('locked') or (_u.get('failed_attempts') or 0) > 0:}}
     <div class="mt-3">
       {{modal = _modal_desbloq}}
       {{include 'components/confirm_modal.html'}}
@@ -104,13 +104,13 @@ pass
 
 <section class="sss-card" aria-labelledby="titulo-redefinir">
   <h2 class="sss-card-titulo" id="titulo-redefinir">Redefinir senha</h2>
-  {{if _u.get('proprio'):}}
+  {{if _u.get('own'):}}
   <p class="sss-card-corpo mb-0">Para trocar a sua própria senha, use <a href="{{=URL(c='default', f='my_password')}}">Minha senha</a> (exige a senha atual).</p>
   {{else:}}
   <form class="sss-card-corpo sss-form-estreito" method="post" action="{{=URL(c='admin_users', f='reset_password')}}" autocomplete="off">
     {{=csrf_campo()}}
     <input type="hidden" name="id" value="{{=_u['id']}}">
-    {{for campo in _campos_senha:}}
+    {{for field in _campos_senha:}}
     {{include 'components/form_field.html'}}
     {{pass}}
     <div class="sss-confirmacao sss-form-acoes" x-data="confirmacao" @keydown.escape.window="fechar">

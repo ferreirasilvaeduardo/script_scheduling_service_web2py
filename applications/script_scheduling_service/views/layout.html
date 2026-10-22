@@ -28,16 +28,16 @@
     <span class="sss-brand-nome">Script Scheduling Service</span>
   </a>
   <nav class="sss-nav" aria-label="Menu principal">
-    {{for secao in response.sss_menu:}}
+    {{for section in response.sss_menu:}}
     <div class="sss-nav-secao">
-      <span class="sss-nav-titulo" id="menu-{{=secao['secao'].lower()}}">{{=secao['title']}}</span>
-      <ul class="sss-nav-lista" aria-labelledby="menu-{{=secao['secao'].lower()}}">
-        {{for item in secao['itens']:}}
+      <span class="sss-nav-titulo" id="menu-{{=section['section'].lower()}}">{{=section['title']}}</span>
+      <ul class="sss-nav-lista" aria-labelledby="menu-{{=section['section'].lower()}}">
+        {{for item in section['items']:}}
         <li>
           {{if item['active']:}}
-          <a class="sss-nav-link" href="{{=URL(c=item['rota'][0], f=item['rota'][1])}}" aria-current="page">
+          <a class="sss-nav-link" href="{{=URL(c=item['route'][0], f=item['route'][1])}}" aria-current="page">
           {{else:}}
-          <a class="sss-nav-link" href="{{=URL(c=item['rota'][0], f=item['rota'][1])}}">
+          <a class="sss-nav-link" href="{{=URL(c=item['route'][0], f=item['route'][1])}}">
           {{pass}}
             <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=item['icon']}}"></use></svg>
             <span>{{=item['label']}}</span>
@@ -54,7 +54,7 @@
     <span class="sss-usuario-id">
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-users"></use></svg>
       <span>{{=_sss_ctx['login']}}</span>
-      <span class="sss-usuario-perfil">{{=_sss_ctx['perfil_nome']}}</span>
+      <span class="sss-usuario-perfil">{{=_sss_ctx['profile_name']}}</span>
     </span>
     <a class="btn btn-sm btn-outline-light" href="{{=URL(c='default', f='permissions')}}">O que eu posso fazer</a>
     <a class="btn btn-sm btn-outline-light" href="{{=URL(c='default', f='my_password')}}">Minha senha</a>
@@ -68,7 +68,7 @@
 
 <main id="content" class="sss-main" tabindex="-1">
   {{import ui_helpers
-  alerta = ui_helpers.alerta_info(response.flash)}}
+  alert = ui_helpers.alerta_info(response.flash)}}
   {{include 'components/alert.html'}}
   {{include}}
 </main>

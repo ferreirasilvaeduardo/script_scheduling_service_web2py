@@ -31,7 +31,7 @@ class RepoTickets(object):
         raise NotImplementedError
 
     def list(self, filters=None, page=1, size=20, environment_scope=None):
-        """Lista tickets com paginacao e formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}.
+        """Lista tickets com paginacao e formato {'items': [...], 'total': n, 'page': p, 'size': t}.
 
         Os itens nunca trazem CLOB (sem log_output e sem parametros_enviados; AGENTS §4.13).
 

@@ -57,7 +57,7 @@ EXPORT_LIMIT = 50000
 SHORT_DETAIL = 80
 _LINES_PER_CHUNK = 500
 
-FILTER_FIELDS = ("de", "ate", "actor", "action", "entity", "entity_id", "ip")
+FILTER_FIELDS = ("date_from", "date_to", "actor", "action", "entity", "entity_id", "ip")
 CSV_HEADER = (u"ID", u"Data/hora", u"Ator", u"IP de origem", u"Ação", u"Entidade", u"ID da entidade",
                  u"Detalhe")
 # Prefixos que planilhas interpretam como formula (CSV injection).
@@ -107,17 +107,17 @@ def normalize_filters(input_value, today):
     """Allowlist dos filtros (querystring ou POST da exportacao).
 
     Retorna (filtros, erros): filtros e um OrderedDict na forma de exibicao/URL, sempre com
-    'de' e 'ate' (padrao: os ultimos 7 dias ate `hoje`); erros mapeia campo -> mensagem.
+    'date_from' e 'date_to' (padrao: os ultimos 7 dias ate `hoje`); erros mapeia campo -> mensagem.
     """
     input_value = input_value or {}
     filters = collections.OrderedDict()
     errors = {}
 
     raw = {}
-    for key in ("de", "ate"):
+    for key in ("date_from", "date_to"):
         raw[key] = _text(input_value.get(key), 10)
-    of, until = _day(raw["de"]), _day(raw["ate"])
-    for key, value in (("de", of), ("ate", until)):
+    of, until = _day(raw["date_from"]), _day(raw["date_to"])
+    for key, value in (("date_from", of), ("date_to", until)):
         if raw[key] and value is None:
             errors[key] = MSG_DATE
     if until is None:
@@ -156,27 +156,27 @@ def normalize_filters(input_value, today):
         else:
             errors["ip"] = MSG_IP
 
-    if "de" not in errors and "ate" not in errors:
+    if "date_from" not in errors and "date_to" not in errors:
         days = (until - of).days + 1
         selective = "actor" in filters or ("entity" in filters and "entity_id" in filters)
         if days < 1:
-            errors["ate"] = MSG_RANGE
+            errors["date_to"] = MSG_RANGE
         elif days > MAX_SELECTIVE_PERIOD_DAYS:
-            errors["de"] = MSG_SELECTIVE_PERIOD
+            errors["date_from"] = MSG_SELECTIVE_PERIOD
         elif days > MAX_PERIOD_DAYS and not selective:
-            errors["de"] = MSG_PERIOD
+            errors["date_from"] = MSG_PERIOD
 
     result = collections.OrderedDict()
-    result["de"] = raw["de"] if "de" in errors and raw["de"] else of.strftime(_DAY_FORMAT)
-    result["ate"] = raw["ate"] if "ate" in errors and raw["ate"] else until.strftime(_DAY_FORMAT)
+    result["date_from"] = raw["date_from"] if "date_from" in errors and raw["date_from"] else of.strftime(_DAY_FORMAT)
+    result["date_to"] = raw["date_to"] if "date_to" in errors and raw["date_to"] else until.strftime(_DAY_FORMAT)
     result.update(filters)
     return result, errors
 
 
 def repo_filters(filters):
     """Traduz filtros validos para o contrato: periodo vira [de 00:00:00, ate 23:59:59]."""
-    of = datetime.datetime.strptime(filters["de"], _DAY_FORMAT)
-    until = datetime.datetime.strptime(filters["ate"], _DAY_FORMAT)
+    of = datetime.datetime.strptime(filters["date_from"], _DAY_FORMAT)
+    until = datetime.datetime.strptime(filters["date_to"], _DAY_FORMAT)
     repo = {"start_date": of, "end_date": until + datetime.timedelta(days=1, seconds=-1)}
     for key, destination in (("actor", "actor"), ("action", "action"), ("entity", "entity"),
                            ("entity_id", "entity_id"), ("ip", "source_ip")):
@@ -254,17 +254,17 @@ class AuditService(object):
         admin_crud.require_feature(ctx, FEATURE)
         size = max(1, min(int(size or 20), MAX_LENGTH))
         filters, errors = self.normalize_filters(input_value)
-        empty = {"filtros": filters, "errors": errors, "itens": [], "total": 0, "pagina": 1, "tamanho": size}
+        empty = {"filters": filters, "errors": errors, "items": [], "total": 0, "page": 1, "size": size}
         if errors:
             return empty
         repo_filters_dict = repo_filters(filters)
         result = self._audit.list(filters=repo_filters_dict, page=page, size=size)
         info = ui_helpers.paginacao_info(page, size, result["total"],
-                                         result.get("total_limitado", False), len(result["itens"]))
-        if not result["itens"] and info["pagina"] != result["pagina"]:
-            result = self._audit.list(filters=repo_filters_dict, page=info["pagina"], size=size)
+                                         result.get("total_capped", False), len(result["items"]))
+        if not result["items"] and info["page"] != result["page"]:
+            result = self._audit.list(filters=repo_filters_dict, page=info["page"], size=size)
         items = []
-        for reg in result["itens"]:
+        for reg in result["items"]:
             detail = _mask(reg.get("detail")) or u""
             items.append({
                 "id": reg["id"],
@@ -275,11 +275,11 @@ class AuditService(object):
                 "entity": reg.get("entity"),
                 "entity_id": reg.get("entity_id"),
                 "detail": detail,
-                "detalhe_curto": detail if len(detail) <= SHORT_DETAIL else detail[:SHORT_DETAIL - 1] + u"…",
+                "short_detail": detail if len(detail) <= SHORT_DETAIL else detail[:SHORT_DETAIL - 1] + u"…",
                 "truncated": len(detail) > SHORT_DETAIL,
             })
-        return dict(empty, itens=items, total=result["total"], pagina=result["pagina"],
-                    tamanho=result["tamanho"], total_limitado=result.get("total_limitado", False))
+        return dict(empty, items=items, total=result["total"], page=result["page"],
+                    size=result["size"], total_capped=result.get("total_capped", False))
 
     def export_csv(self, ctx, ip, input_value):
         """Exportacao com os filtros e o RBAC da tela: retorna (nome_arquivo, linhas, blocos).

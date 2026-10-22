@@ -187,7 +187,7 @@ class _Queue(object):
     """contexto_execucao do RepoSchedulerQueue em memoria (o mesmo ctx RBAC da web)."""
 
     def __init__(self):
-        self.usuario = {"user_id": 7, "login": LOGIN, "profile_id": 2, "usuario_ativo": "Y", "perfil_ativo": "Y",
+        self.usuario = {"user_id": 7, "login": LOGIN, "profile_id": 2, "active_user": "Y", "active_profile": "Y",
                         "is_admin": "N", "perm_version": 1, "features": ["EXEC_SCRIPT"], "environments": ["PRD"],
                         "scripts": [3]}
         self.script = {"id": 3, "name": "carga", "interpreter": "SH", "path_file": "/opt/x/carga.sh", "active": "Y",
@@ -196,8 +196,8 @@ class _Queue(object):
         self.homologations = frozenset([1])
 
     def execution_context(self, conn, ticket):
-        return {"script": dict(self.script), "environment": dict(self.environment), "homologacoes": self.homologations,
-                "ctx": rbac.user_context(dict(self.usuario)) if self.usuario else None, "agendamento": None}
+        return {"script": dict(self.script), "environment": dict(self.environment), "homologations": self.homologations,
+                "ctx": rbac.user_context(dict(self.usuario)) if self.usuario else None, "schedule": None}
 
 
 def _link():
@@ -271,7 +271,7 @@ class TestExpansion(_Base):
         self.assertEqual(self.process(), "OTHER_AGENT")
 
     def test_pausas_pelo_rbac_com_a_traducao_unica(self):
-        cases = (("usuario_ativo", "N", "USER_INACTIVE"), ("perfil_ativo", "N", "NO_PERMISSION"),
+        cases = (("active_user", "N", "USER_INACTIVE"), ("active_profile", "N", "NO_PERMISSION"),
                  ("scripts", [], "NO_PERMISSION"), ("environments", [], "NO_PERMISSION"),
                  ("features", [], "NO_PERMISSION"))
         for i, (field, value, reason) in enumerate(cases, 1):
@@ -552,7 +552,7 @@ class TestExpansionOracle(unittest.TestCase):
         cat, self.rbac = self.obter_repo("catalog"), self.obter_repo("rbac")
         self.cat = cat
         features = [f["id"] for f in self.rbac.features_list() if f["code"] == "EXEC_SCRIPT"]
-        self.rbac.matrix_save(self.c["perfil"]["id"], features, [self.c["amb1"]["id"]], [self.c["scr"]["id"]],
+        self.rbac.matrix_save(self.c["profile"]["id"], features, [self.c["amb1"]["id"]], [self.c["scr"]["id"]],
                                 actor=self._fixtures.actor)
         self.agent = "tst-ha-%s" % self._fixtures.suf
         self.des = schedule_expansion.Expansion(RepoSchedulerSchedules(cat._owner, cat._prefixo),
@@ -571,7 +571,7 @@ class TestExpansionOracle(unittest.TestCase):
                 self._fixtures.note("tickets", tid)
             cur.execute("DELETE FROM " + aud + " WHERE entity = 'tbsss_schedules' AND entity_id = :id", id=rid)
         self.conn.commit()
-        self.rbac.matrix_save(self.c["perfil"]["id"], [], [], [], actor=self._fixtures.actor)
+        self.rbac.matrix_save(self.c["profile"]["id"], [], [], [], actor=self._fixtures.actor)
         self.contrato.tearDown(self)
 
     def _rule(self, answers):

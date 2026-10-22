@@ -11,7 +11,7 @@ class RepoCatalog(object):
     """
 
     def environments_list(self, filters=None, page=1, size=20):
-        """Lista ambientes paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}."""
+        """Lista ambientes paginados com formato {'items': [...], 'total': n, 'page': p, 'size': t}."""
         raise NotImplementedError
 
     def environments_get(self, id):
@@ -36,10 +36,10 @@ class RepoCatalog(object):
         raise NotImplementedError
 
     def scripts_list(self, filters=None, page=1, size=20):
-        """Lista scripts paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}.
+        """Lista scripts paginados com formato {'items': [...], 'total': n, 'page': p, 'size': t}.
 
         Ordem: nome ASC, id ASC. Filtros: nome (trecho), grupo, categoria, interpretador (logico) e ativo.
-        Cada item traz 'ambientes_homologados' (nomes, ordem alfabetica) e 'qtd_parametros'.
+        Cada item traz 'homologated_environments' (nomes, ordem alfabetica) e 'param_count'.
         """
         raise NotImplementedError
 
@@ -73,9 +73,9 @@ class RepoCatalog(object):
         raise NotImplementedError
 
     def parameters_list(self, filters=None, page=1, size=20):
-        """Lista parametros paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}.
+        """Lista parametros paginados com formato {'items': [...], 'total': n, 'page': p, 'size': t}.
 
-        Ordem: codigo ASC, id ASC. Cada item traz 'qtd_scripts' (vinculos em tbsss_script_param, de
+        Ordem: codigo ASC, id ASC. Cada item traz 'script_count' (vinculos em tbsss_script_param, de
         scripts ativos ou nao), calculado na mesma consulta.
         """
         raise NotImplementedError

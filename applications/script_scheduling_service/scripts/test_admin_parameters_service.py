@@ -51,10 +51,10 @@ class _Base(unittest.TestCase):
         # Gestor: perfil nao admin com MANAGE_PARAMETERS (como se a matriz o concedesse).
         self.ctx["gestor"] = dict(self.ctx["op.prod"], features=frozenset(["MANAGE_PARAMETERS"]))
         self.svc = AdminParametersService(self.catalog, self.log)
-        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["itens"]] or [0])
+        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["items"]] or [0])
 
     def _audits(self, action):
-        return [a for a in self.audit.list(filters={"action": action}, page=1, size=100)["itens"]
+        return [a for a in self.audit.list(filters={"action": action}, page=1, size=100)["items"]
                 if a["entity"] == "tbsss_parameters" and a["id"] > self.aud_base]
 
     def _insert(self, actor="admin", **changes):
@@ -285,8 +285,8 @@ class TestSensitiveAndTest(_Base):
 
     def test_lista_filtros_e_acesso(self):
         page = self.svc.list(self.ctx["admin"], {"component_type": "DATE"}, 1, 20)
-        date_ref = [p for p in page["itens"] if p["code"] == "data_ref"][0]
-        self.assertEqual(date_ref["qtd_scripts"], 2)
+        date_ref = [p for p in page["items"] if p["code"] == "data_ref"][0]
+        self.assertEqual(date_ref["script_count"], 2)
         self.assertEqual(prm_mod.normalize_filters({"code": "data", "component_type": "DATE", "active": "Y"}),
                          {"code": "data", "component_type": "DATE", "active": "Y"})
         self.assertEqual(prm_mod.normalize_filters({"code": "<x>", "component_type": "XML"}), {})

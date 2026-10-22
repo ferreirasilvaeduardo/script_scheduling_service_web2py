@@ -23,7 +23,7 @@ class RepoUsers(object):
         raise NotImplementedError
 
     def list(self, filters=None, page=1, size=20):
-        """Lista usuarios paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}.
+        """Lista usuarios paginados com formato {'items': [...], 'total': n, 'page': p, 'size': t}.
 
         Ordem: login ASC, id ASC. Filtros (opcionais, combinados com E): login e nome (trecho, sem
         diferenciar maiusculas), perfil_id, ativo e bloqueado_em (bloqueado_ate > valor).
@@ -80,7 +80,7 @@ class RepoUsers(object):
     def unlock(self, id, audit=None, actor=None):
         """Desbloqueio pelo administrador: zera tentativas_falha e bloqueado_ate e grava updated_*.
 
-        auditoria: opcional, na mesma transacao. O ator (auditoria['ator'] ou ator=) e obrigatorio (CR-006).
+        auditoria: opcional, na mesma transacao. O ator (auditoria['actor'] ou ator=) e obrigatorio (CR-006).
         """
         raise NotImplementedError
 

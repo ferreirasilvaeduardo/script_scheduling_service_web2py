@@ -8,9 +8,9 @@ icones = URL('static', 'img/icons.svg')
   <p class="sss-page-sub">Os scripts (rotinas) que você pode rodar, onde podem rodar, que perguntas fazem e como foi a última vez.</p>
 </div>
 
-{{if erro:}}
-<div class="alert alert-danger sss-alerta" role="alert"><span>{{=erro}}</span></div>
-{{elif not grupos:}}
+{{if error:}}
+<div class="alert alert-danger sss-alerta" role="alert"><span>{{=error}}</span></div>
+{{elif not groups:}}
 <section class="sss-card"><p class="sss-card-corpo mb-0">Nenhum script pode ser rodado agora com o seu perfil. Veja em <a href="{{=URL(c='default', f='permissions')}}">O que eu posso fazer</a> o motivo.</p></section>
 {{else:}}
 <section class="sss-card" x-data="buscaScript" aria-label="Rotinas">
@@ -20,21 +20,21 @@ icones = URL('static', 'img/icons.svg')
       <input class="form-control form-control-sm" type="search" id="busca-rotina" maxlength="60" autocomplete="off" placeholder="Nome, descrição, grupo ou categoria" x-ref="busca" @input="filtrar">
     </div>
     <p class="sss-busca-vazia" x-show="semResultado" x-cloak role="status">Nenhuma rotina corresponde à busca.</p>
-    {{for _g in grupos:}}
+    {{for _g in groups:}}
     <section class="sss-grupo-scripts" data-grupo>
       <h2 class="sss-grupo-titulo">{{=_g['script_group']}} <span class="sss-grupo-categoria">/ {{=_g['category']}}</span></h2>
       <ul class="sss-cartoes-rotina">
-        {{for _c in _g['cartoes']:}}
+        {{for _c in _g['cards']:}}
         <li class="sss-cartao-rotina" data-busca="{{=(' '.join((_c['name'], _c['description'], _c['script_group'], _c['category'], _c['stage']))).lower()}}">
           <h3 class="sss-cartao-rotina-titulo sss-mono">{{=_c['name']}}</h3>
           {{if _c['description']:}}<p class="mb-2">{{=_c['description']}}</p>{{pass}}
           <p class="mb-1"><strong>Perguntas que faz:</strong>
-            {{if _c['perguntas']:}}{{=u', '.join(p['label'] + (u' (obrigatório)' if p['required'] else u'') for p in _c['perguntas'])}}{{else:}}nenhuma{{pass}}
+            {{if _c['questions']:}}{{=u', '.join(p['label'] + (u' (obrigatório)' if p['required'] else u'') for p in _c['questions'])}}{{else:}}nenhuma{{pass}}
           </p>
           <p class="mb-2"><strong>Última execução:</strong>
-            {{if _c['ultima']:}}
-            <a href="{{=URL(c='tickets', f='detail', args=[_c['ultima']['id']])}}"><span class="sss-status {{=_c['ultima']['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_c['ultima']['icon']}}"></use></svg><span>{{=_c['ultima']['state']}}</span></span></a>
-            <span class="sss-texto-suave">{{=_c['ultima']['when']}}</span>
+            {{if _c['last_run']:}}
+            <a href="{{=URL(c='tickets', f='detail', args=[_c['last_run']['id']])}}"><span class="sss-status {{=_c['last_run']['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_c['last_run']['icon']}}"></use></svg><span>{{=_c['last_run']['state']}}</span></span></a>
+            <span class="sss-texto-suave">{{=_c['last_run']['when']}}</span>
             {{else:}}Ainda não rodou{{pass}}
           </p>
           <div class="sss-acoes-inline">

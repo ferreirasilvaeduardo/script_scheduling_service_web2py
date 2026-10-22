@@ -157,16 +157,16 @@ class AdminParametersService(object):
     # ----------------------------------------------------------------- leitura
 
     def list(self, ctx, filters, page, size):
-        """Pagina de parametros (codigo ASC) com qtd_scripts; padrao de sensivel mascarado."""
+        """Pagina de parametros (codigo ASC) com script_count; padrao de sensivel mascarado."""
         admin_crud.require_feature(ctx, FEATURE)
         result = self._catalog.parameters_list(filters=filters, page=page, size=size)
         items = []
-        for p in result["itens"]:
+        for p in result["items"]:
             item = dict(p)
             if p.get("sensitive") == "Y" and p.get("default_value"):
                 item["default_value"] = MASK
             items.append(item)
-        return dict(result, itens=items)
+        return dict(result, items=items)
 
     def form(self, ctx, parameter_id=None):
         """Dados do formulario. Padrao de parametro sensivel nunca e devolvido (apenas 'tem_padrao')."""
@@ -175,8 +175,8 @@ class AdminParametersService(object):
         if parameter_id in (None, ""):
             return {"id": None, "code": "", "param_flag": "", "label": "", "description": "",
                     "component_type": "TEXT", "options_json": "", "default_value": "", "has_default": False,
-                    "validation_regex": "", "sensitive": "N", "active": "Y", "version": "", "vinculos": [],
-                    "pode_regex": can_regex, "registro": None}
+                    "validation_regex": "", "sensitive": "N", "active": "Y", "version": "", "links": [],
+                    "can_regex": can_regex, "record": None}
         p = self._get(parameter_id)
         sensitive = p.get("sensitive") == "Y"
         return {
@@ -188,8 +188,8 @@ class AdminParametersService(object):
             "has_default": bool(p.get("default_value")),
             "validation_regex": p.get("validation_regex") or "", "sensitive": p.get("sensitive") or "N",
             "active": p["active"], "version": _version(p),
-            "vinculos": self.links(p["id"]), "pode_regex": can_regex,
-            "registro": ui_helpers.registro(p, ctx),
+            "links": self.links(p["id"]), "can_regex": can_regex,
+            "record": ui_helpers.registro(p, ctx),
         }
 
     # ------------------------------------------------------------- validacao

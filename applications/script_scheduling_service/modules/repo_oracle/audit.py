@@ -139,11 +139,11 @@ class RepoAuditOracle(BaseRepoOracle, RepoAudit):
             finally:
                 cur.close()
         return {
-            "itens": items,
+            "items": items,
             "total": min(raw, _LIMIT_TOTAL),
-            "pagina": p,
-            "tamanho": t,
-            "total_limitado": raw >= _LIMIT_TOTAL,
+            "page": p,
+            "size": t,
+            "total_capped": raw >= _LIMIT_TOTAL,
         }
 
     def iterate(self, filters=None, limit=50000):

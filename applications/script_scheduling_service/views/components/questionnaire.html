@@ -34,7 +34,7 @@
     pass
     _requerido = _c['required'] and not _c['has_default'] and not _mantido
     _invalido = ' is-invalid' if _c['error'] else ''
-    _foco = bool(_c['error']) and _c['name'] == foco_campo
+    _foco = bool(_c['error']) and _c['name'] == focus_field
     }}
     {{if _c['kind'] == 'CHECKBOX':}}
     <div class="sss-form-campo mb-3">

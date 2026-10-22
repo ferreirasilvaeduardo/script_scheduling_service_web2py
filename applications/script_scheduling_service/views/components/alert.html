@@ -3,9 +3,9 @@
 # Variáveis de entrada:
 #   alerta -- resultado de ui_helpers.alerta_info(flash): None (nada é exibido) ou
 #             {tipo: 'sucesso' | 'aviso' | 'erro', mensagem, classe, icone, role}.
-}}{{if alerta:}}
-<div class="alert {{=alerta['css_class']}} sss-alerta" role="{{=alerta['role']}}">
-  <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=alerta['icon']}}"></use></svg>
-  <span>{{=alerta['message']}}</span>
+}}{{if alert:}}
+<div class="alert {{=alert['css_class']}} sss-alerta" role="{{=alert['role']}}">
+  <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=alert['icon']}}"></use></svg>
+  <span>{{=alert['message']}}</span>
 </div>
 {{pass}}

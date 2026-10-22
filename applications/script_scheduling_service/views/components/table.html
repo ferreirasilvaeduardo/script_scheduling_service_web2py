@@ -12,11 +12,11 @@
 #     error      -- opcional; mensagem segura ao usuário (sem ORA-, SQL ou stack trace, AGENTS §3.1);
 #     empty_message -- opcional; padrão "Nenhum registro encontrado".
 import ui_helpers
-_tab_colunas = tabela['columns']
-_tab_linhas = tabela.get('rows') or []
+_tab_colunas = table['columns']
+_tab_linhas = table.get('rows') or []
 }}<div class="table-responsive">
   <table class="table table-sm sss-tabela mb-0">
-    {{if tabela.get('caption'):}}<caption class="visually-hidden">{{=tabela['caption']}}</caption>{{pass}}
+    {{if table.get('caption'):}}<caption class="visually-hidden">{{=table['caption']}}</caption>{{pass}}
     <thead>
       <tr>
         {{for _tab_col in _tab_colunas:}}
@@ -25,18 +25,18 @@ _tab_linhas = tabela.get('rows') or []
       </tr>
     </thead>
     <tbody>
-      {{if tabela.get('error'):}}
+      {{if table.get('error'):}}
       <tr>
         <td colspan="{{=len(_tab_colunas)}}" class="sss-tabela-estado">
           <div class="alert alert-danger mb-0" role="alert">
             <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#icon-alert"></use></svg>
-            <span>{{=tabela['error']}}</span>
+            <span>{{=table['error']}}</span>
           </div>
         </td>
       </tr>
       {{elif not _tab_linhas:}}
       <tr>
-        <td colspan="{{=len(_tab_colunas)}}" class="sss-tabela-estado sss-tabela-vazia">{{=tabela.get('empty_message') or 'Nenhum registro encontrado'}}</td>
+        <td colspan="{{=len(_tab_colunas)}}" class="sss-tabela-estado sss-tabela-vazia">{{=table.get('empty_message') or 'Nenhum registro encontrado'}}</td>
       </tr>
       {{else:}}
       {{for _tab_linha in _tab_linhas:}}
@@ -46,7 +46,7 @@ _tab_linhas = tabela.get('rows') or []
         {{if _tab_tipo == 'status':}}
         <td class="{{=_tab_col.get('css_class', '')}}">
           {{status = _tab_linha.get(_tab_col['key'])
-          status_motivo = _tab_linha.get(_tab_col['key'] + '_motivo')}}
+          status_reason = _tab_linha.get(_tab_col['key'] + '_motivo')}}
           {{include 'components/badge_status.html'}}
         </td>
         {{elif _tab_tipo == 'active':}}

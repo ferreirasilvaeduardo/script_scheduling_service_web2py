@@ -295,11 +295,11 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
             finally:
                 cur.close()
         return {
-            "itens": items,
+            "items": items,
             "total": min(raw, _LIMIT_TOTAL),
-            "pagina": p,
-            "tamanho": t,
-            "total_limitado": raw >= _LIMIT_TOTAL,
+            "page": p,
+            "size": t,
+            "total_capped": raw >= _LIMIT_TOTAL,
         }
 
     def get(self, id, conn=None):

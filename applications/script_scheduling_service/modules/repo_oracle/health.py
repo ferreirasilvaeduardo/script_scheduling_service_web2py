@@ -62,8 +62,8 @@ def served_pairs(agents, now, thresholds):
 
 def unattended_queue(queue_rows, served):
     """Grupos (ambiente, interpretador) do SQL_QUEUE que nenhum par atendido cobre, por ambiente e interpretador."""
-    groups = [{"environment": env, "interpreter": interp, "quantidade": int(count),
-               "mais_antigo": old.replace(microsecond=0)}
+    groups = [{"environment": env, "interpreter": interp, "quantity": int(count),
+               "oldest": old.replace(microsecond=0)}
               for env, interp, count, old in queue_rows if (env, interp) not in served]
     groups.sort(key=lambda g: (g["environment"], g["interpreter"]))
     return groups

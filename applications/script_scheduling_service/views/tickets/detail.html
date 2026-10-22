@@ -19,24 +19,24 @@ if _t['status'] == 'RUNNING':
 pass
 _modal_cancelar = {'id': 'modal-cancelar', 'title': u'Cancelar o pedido #%s' % _t['id'], 'text': _txt_cancelar, 'trigger_label': u'Cancelar este pedido', 'confirm_label': u'Sim, cancelar', 'variant': 'danger', 'action': URL(c='tickets', f='cancel'), 'hidden_fields': _ocultos}
 _modal_reexecutar = {'id': 'modal-reexecutar', 'title': u'Rodar de novo o pedido #%s' % _t['id'], 'text': u'Um novo pedido será criado com as mesmas respostas, conferidas de novo contra o cadastro atual do script. Este pedido não muda.', 'trigger_label': u'Rodar de novo com as mesmas respostas', 'confirm_label': u'Sim, rodar de novo', 'variant': 'normal', 'action': URL(c='tickets', f='rerun'), 'hidden_fields': _ocultos}
-_exp = _t['explicacao']
+_exp = _t['explanation']
 _info = ui_helpers.status_info(_t['status'])
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">
   <div>
     <h1 class="sss-page-titulo">Ticket #{{=_t['id']}}
       {{status = _t['status']
-      status_motivo = _t['status_reason']}}{{include 'components/badge_status.html'}}
+      status_reason = _t['status_reason']}}{{include 'components/badge_status.html'}}
     </h1>
-    <p class="sss-page-sub"><span class="sss-mono">{{=_t['script_nome']}}</span> em <strong>{{=_t['environment']}}</strong> · solicitado por {{=_t['requested_by']}}</p>
+    <p class="sss-page-sub"><span class="sss-mono">{{=_t['script_name']}}</span> em <strong>{{=_t['environment']}}</strong> · solicitado por {{=_t['requested_by']}}</p>
   </div>
   <div class="sss-acoes">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='index')}}">Voltar à lista</a>
-    {{if _t['pode_cancelar']:}}
+    {{if _t['can_cancel']:}}
     {{modal = _modal_cancelar}}
     {{include 'components/confirm_modal.html'}}
     {{pass}}
-    {{if _t['pode_reexecutar']:}}
+    {{if _t['can_rerun']:}}
     {{modal = _modal_reexecutar}}
     {{include 'components/confirm_modal.html'}}
     {{pass}}
@@ -51,8 +51,8 @@ _info = ui_helpers.status_info(_t['status'])
     <p class="sss-explicacao-frase mb-1"><strong>O que aconteceu:</strong> {{=_exp['happened']}}</p>
     {{if _exp['todo']:}}<p class="sss-explicacao-frase mb-3"><strong>O que fazer agora:</strong> {{=_exp['todo']}}</p>{{pass}}
     <ol class="sss-passos" aria-label="Etapas do pedido">
-      {{for _e in _t['etapas']:}}
-      <li class="sss-passo sss-passo-{{=_e['estado']}}"{{if _e['estado'] == 'atual':}} aria-current="step"{{pass}}>
+      {{for _e in _t['steps']:}}
+      <li class="sss-passo sss-passo-{{=_e['state_info']}}"{{if _e['state_info'] == 'atual':}} aria-current="step"{{pass}}>
         <span class="sss-passo-rotulo">{{=_e['label']}}</span>
         <span class="sss-passo-quando">{{=_e['when']}}</span>
       </li>
@@ -68,19 +68,19 @@ _info = ui_helpers.status_info(_t['status'])
       <dt>Situação</dt>
       <dd>{{=_info['label']}}</dd>
       <dt>Detalhe técnico</dt>
-      <dd><span class="sss-mono">{{=_t['status']}}{{if _t['status_reason']:}} / {{=_t['status_reason']}}{{pass}}</span>{{if _t['descricao_motivo']:}} — {{=_t['descricao_motivo']}}{{pass}}</dd>
+      <dd><span class="sss-mono">{{=_t['status']}}{{if _t['status_reason']:}} / {{=_t['status_reason']}}{{pass}}</span>{{if _t['reason_description']:}} — {{=_t['reason_description']}}{{pass}}</dd>
       <dt>Código de retorno</dt>
       <dd class="sss-mono">{{='-' if _t['return_code'] is None else _t['return_code']}}</dd>
       <dt>Prioridade</dt>
       <dd>{{=_t['priority']}}</dd>
       <dt>Origem</dt>
-      <dd>{{if _t['origem'] == 'agendamento':}}Agendamento #{{=_t['schedule_id']}}{{else:}}Manual{{pass}}</dd>
+      <dd>{{if _t['source'] == 'agendamento':}}Agendamento #{{=_t['schedule_id']}}{{else:}}Manual{{pass}}</dd>
       <dt>Agente</dt>
       <dd class="sss-mono">{{=_t['agent_id'] or '-'}}</dd>
       <dt>PID</dt>
       <dd class="sss-mono">{{='-' if _t['process_id'] is None else _t['process_id']}}</dd>
       <dt>Duração</dt>
-      <dd>{{=_t['duracao']}}</dd>
+      <dd>{{=_t['duration']}}</dd>
     </dl>
   </section>
 
@@ -97,18 +97,18 @@ _info = ui_helpers.status_info(_t['status'])
   </section>
 </div>
 
-{{if _t.get('registro'):}}
-{{registro = _t['registro']}}
+{{if _t.get('record'):}}
+{{record = _t['record']}}
 {{include 'components/record.html'}}
 {{pass}}
 
 <section class="sss-card" aria-labelledby="titulo-comando">
   <h2 class="sss-card-titulo" id="titulo-comando">Comando executado</h2>
   <div class="sss-card-corpo">
-    {{if _t['comando_exibicao']:}}
-    <pre class="sss-argv" tabindex="0" aria-label="Comando do ticket (valores sigilosos mascarados)"><code>{{=_t['comando_exibicao']}}</code></pre>
+    {{if _t['display_command']:}}
+    <pre class="sss-argv" tabindex="0" aria-label="Comando do ticket (valores sigilosos mascarados)"><code>{{=_t['display_command']}}</code></pre>
     <div x-data="copiar">
-      <button type="button" class="btn btn-sm btn-outline-secondary" data-texto="{{=_t['comando_exibicao']}}" @click="copiar"><span x-text="rotulo">Copiar</span></button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" data-texto="{{=_t['display_command']}}" @click="copiar"><span x-text="rotulo">Copiar</span></button>
     </div>
     {{if _t['snapshot']:}}
     <dl class="sss-resumo mt-3">
@@ -119,7 +119,7 @@ _info = ui_helpers.status_info(_t['status'])
       <dt>Montagem</dt>
       <dd>{{=_t['snapshot']['param_type'] or '-'}}</dd>
       <dt>Compilado em</dt>
-      <dd>{{=_t['snapshot']['compilado_em'] or '-'}}</dd>
+      <dd>{{=_t['snapshot']['compiled_at'] or '-'}}</dd>
     </dl>
     {{pass}}
     {{else:}}
@@ -157,12 +157,12 @@ _info = ui_helpers.status_info(_t['status'])
   <h2 class="sss-card-titulo" id="titulo-cadeia">Reexecuções</h2>
   <dl class="sss-card-corpo sss-resumo">
     <dt>Ticket original</dt>
-    <dd>{{if _t['pai']:}}<a href="{{=URL(c='tickets', f='detail', args=[_t['pai']['id']])}}">#{{=_t['pai']['id']}}</a> ({{=ui_helpers.status_info(_t['pai']['status'])['label']}}){{else:}}-{{pass}}</dd>
+    <dd>{{if _t['parent']:}}<a href="{{=URL(c='tickets', f='detail', args=[_t['parent']['id']])}}">#{{=_t['parent']['id']}}</a> ({{=ui_helpers.status_info(_t['parent']['status'])['label']}}){{else:}}-{{pass}}</dd>
     <dt>Reexecuções deste ticket</dt>
     <dd>
-      {{if _t['filhos']:}}
+      {{if _t['children']:}}
       <ul class="sss-lista-inline">
-        {{for _f in _t['filhos']:}}
+        {{for _f in _t['children']:}}
         <li><a href="{{=URL(c='tickets', f='detail', args=[_f['id']])}}">#{{=_f['id']}}</a> ({{=ui_helpers.status_info(_f['status'])['label']}})</li>
         {{pass}}
       </ul>
@@ -175,11 +175,11 @@ _info = ui_helpers.status_info(_t['status'])
 # Visor de log (README §8.10): o texto chega por logs/chunk e só é exibido via x-text.
 import json
 import ticket_service
-_vl = visor_log
+_vl = log_viewer
 _status_visor = dict((_s, ui_helpers.status_info(_s)) for _s in ticket_service.STATUS_TICKET)
 _status_visor = dict((_s, {'label': _i['label'], 'css_class': _i['css_class']}) for _s, _i in _status_visor.items())
 }}
-<section class="sss-card" aria-labelledby="titulo-log" x-data="logViewer" data-url-chunk="{{=_vl['url_chunk']}}" data-intervalo-s="{{=_vl['intervalo_s']}}" data-max-chars="{{=_vl['max_chars']}}" data-status="{{=_t['status']}}" data-truncado="{{='Y' if _t['log_truncated'] else 'N'}}" data-status-info="{{=json.dumps(_status_visor, sort_keys=True)}}">
+<section class="sss-card" aria-labelledby="titulo-log" x-data="logViewer" data-url-chunk="{{=_vl['url_chunk']}}" data-intervalo-s="{{=_vl['interval_s']}}" data-max-chars="{{=_vl['max_chars']}}" data-status="{{=_t['status']}}" data-truncado="{{='Y' if _t['log_truncated'] else 'N'}}" data-status-info="{{=json.dumps(_status_visor, sort_keys=True)}}">
   <h2 class="sss-card-titulo sss-log-titulo" id="titulo-log">
     <span>Log de execução</span>
     <span class="sss-status" :class="classeStatus" role="status" aria-live="polite"><span x-text="rotuloStatus">{{=ui_helpers.status_info(_t['status'])['label']}}</span></span>
@@ -191,7 +191,7 @@ _status_visor = dict((_s, {'label': _i['label'], 'css_class': _i['css_class']}) 
         <label class="form-check-label" for="log-seguir">Seguir o final</label>
       </div>
       <button type="button" class="btn btn-sm btn-outline-secondary" @click="alternarPausa" :disabled="encerrado"><span x-text="rotuloPausa">Pausar</span></button>
-      <a class="btn btn-sm btn-outline-secondary" href="{{=_vl['url_baixar']}}" download="ticket_{{=_t['id']}}.log">Baixar log</a>
+      <a class="btn btn-sm btn-outline-secondary" href="{{=_vl['download_url']}}" download="ticket_{{=_t['id']}}.log">Baixar log</a>
       <span class="sss-texto-suave sss-log-situacao" x-text="state" aria-live="polite"></span>
     </div>
     <p class="alert alert-warning sss-alerta sss-log-aviso" role="status" x-show="truncado" x-cloak>O log foi truncado no banco por exceder o limite; o arquivo integral permanece no agente.</p>
@@ -200,8 +200,8 @@ _status_visor = dict((_s, {'label': _i['label'], 'css_class': _i['css_class']}) 
   </div>
 </section>
 
-{{if _t.get('saida'):}}
-{{_s = _t['saida']}}
+{{if _t.get('output'):}}
+{{_s = _t['output']}}
 <section class="sss-card" aria-labelledby="titulo-saida">
   <h2 class="sss-card-titulo" id="titulo-saida">Saída</h2>
   <div class="sss-card-corpo">
@@ -209,7 +209,7 @@ _status_visor = dict((_s, {'label': _i['label'], 'css_class': _i['css_class']}) 
       <p class="mb-1">{{=_s['happened']}}</p>
       <p class="mb-0">{{=_s['todo']}}</p>
     </div>
-    {{if _s['pode_baixar']:}}
+    {{if _s['can_download']:}}
     <a class="btn btn-sm btn-primary" href="{{=URL(c='tickets', f='output', args=[_t['id']])}}" download="ticket_{{=_t['id']}}_saida.zip">Baixar</a>
     {{pass}}
   </div>

@@ -230,19 +230,19 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
         if filters.get("parent_ticket_id") is not None:
             clauses.append("parent_ticket_id = :parent_f")
             binds["parent_f"] = int(filters["parent_ticket_id"])
-        source = filters.get("origem")
+        source = filters.get("source")
         if source == "manual":
             clauses.append("schedule_id IS NULL")
         elif source == "agendamento":
             clauses.append("schedule_id IS NOT NULL")
         # Periodo sempre por intervalo, sem TRUNC (AGENTS §4.12); binds DATE (README §7.5).
-        if filters.get("criado_inicio"):
+        if filters.get("created_from"):
             clauses.append("created_at >= :created_from")
-            binds["created_from"] = filters["criado_inicio"]
+            binds["created_from"] = filters["created_from"]
             dates["created_from"] = db_conn.TIPO_DATE
-        if filters.get("criado_fim"):
+        if filters.get("created_to"):
             clauses.append("created_at < :created_to")
-            binds["created_to"] = filters["criado_fim"]
+            binds["created_to"] = filters["created_to"]
             dates["created_to"] = db_conn.TIPO_DATE
 
         p = 1 if page is None else int(page)
@@ -280,11 +280,11 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
             finally:
                 cur.close()
         return {
-            "itens": items,
+            "items": items,
             "total": min(raw, _LIMIT_TOTAL),
-            "pagina": p,
-            "tamanho": t,
-            "total_limitado": raw >= _LIMIT_TOTAL,
+            "page": p,
+            "size": t,
+            "total_capped": raw >= _LIMIT_TOTAL,
         }
 
     def last_runs(self, script_ids, environment_scope=None, requester=None, conn=None):

@@ -5,7 +5,7 @@ _abas = (('index', u'Trilha de auditoria'), ('agents', u'Agentes'))
   <ul class="nav nav-tabs sss-abas-auditoria">
     {{for _aba_f, _aba_rotulo in _abas:}}
     <li class="nav-item">
-      {{if _aba_f == aba_ativa:}}
+      {{if _aba_f == active_tab:}}
       <a class="nav-link active" aria-current="page" href="{{=URL(c='audit', f=_aba_f, extension=False)}}">{{=_aba_rotulo}}</a>
       {{else:}}
       <a class="nav-link" href="{{=URL(c='audit', f=_aba_f, extension=False)}}">{{=_aba_rotulo}}</a>

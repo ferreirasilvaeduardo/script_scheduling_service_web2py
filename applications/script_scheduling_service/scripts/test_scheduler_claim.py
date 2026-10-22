@@ -71,7 +71,7 @@ class _Db(object):
         self.environment = {"id": 1, "name": AMB, "description": "Desenvolvimento", "connection": "db:1521/dev", "active": "Y"}
         self.homologados = set()
         self.ctx = rbac.user_context({
-            "user_id": 9, "login": "ana", "profile_id": 2, "usuario_ativo": "Y", "perfil_ativo": "Y",
+            "user_id": 9, "login": "ana", "profile_id": 2, "active_user": "Y", "active_profile": "Y",
             "is_admin": "N", "perm_version": 1, "features": ["EXEC_SCRIPT"], "environments": [AMB],
             "scripts": []})
         self.failures = collections.defaultdict(list)
@@ -171,8 +171,8 @@ class _Db(object):
         self._fail("execution_context")
         s = self.scripts.get(ticket["script_id"])
         return {"script": dict(s) if s else None, "environment": dict(self.environment),
-                "homologacoes": frozenset({1}) if ticket["script_id"] in self.homologados else frozenset(),
-                "ctx": self.ctx, "agendamento": None}
+                "homologations": frozenset({1}) if ticket["script_id"] in self.homologados else frozenset(),
+                "ctx": self.ctx, "schedule": None}
 
     def active_homologated_script(self, conn, sid, environment):
         return self.scripts[sid]["active"] == "Y" and sid in self.homologados

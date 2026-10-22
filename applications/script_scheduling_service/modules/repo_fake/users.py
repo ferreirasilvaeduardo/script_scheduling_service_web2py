@@ -60,10 +60,10 @@ class RepoUsersFake(RepoUsers):
                     "user_id": u["id"],
                     "login": u["login"],
                     "name": u["name"],
-                    "usuario_ativo": u["active"],
+                    "active_user": u["active"],
                     "profile_id": p["id"],
-                    "perfil_nome": p["name"],
-                    "perfil_ativo": p["active"],
+                    "profile_name": p["name"],
+                    "active_profile": p["active"],
                     "is_admin": p["is_admin"],
                     "perm_version": p["perm_version"],
                     "session_epoch": u.get("session_epoch", 0),
@@ -91,7 +91,7 @@ class RepoUsersFake(RepoUsers):
             if active_f:
                 items = [u for u in items if u["active"] == active_f]
 
-            locked_f = filters.get("bloqueado_em")
+            locked_f = filters.get("locked_at")
             if locked_f is not None:
                 items = [u for u in items if u.get("locked_until") is not None and u["locked_until"] > locked_f]
 
@@ -243,7 +243,7 @@ class RepoUsersFake(RepoUsers):
             self._auditar(_failed_login_audit(audit, attempts, max_attempts, lock, lock_audit),
                           u["id"])
             record = copy.deepcopy(u)
-            record["bloqueou"] = bool(lock)
+            record["locked_now"] = bool(lock)
             return record
 
     def register_login_success(self, login, new_hash=None, audit=None):

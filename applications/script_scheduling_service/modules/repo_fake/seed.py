@@ -471,9 +471,9 @@ def load_seed(store, force=False, dev_password=None):
                                                 str(started), scr["name"], env
                                             )
                                             store.log_simulated[tid] = {
-                                                "passo_s": _STEP_LOG_S[tid],
-                                                "emitidos": 0,
-                                                "sensiveis": list(sensitive_by_script.get(script_id, [])),
+                                                "step_s": _STEP_LOG_S[tid],
+                                                "issued": 0,
+                                                "sensitive_codes": list(sensitive_by_script.get(script_id, [])),
                                             }
                                     elif tid <= 28:
                                         status = "SUCCESS"

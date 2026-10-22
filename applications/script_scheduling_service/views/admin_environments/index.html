@@ -2,12 +2,12 @@
 {{
 # Lista de ambientes (padrão de CRUD administrativo, docs/ADMIN_CRUD_PATTERN.md).
 _opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
-filtros = {'id': 'filtro-ambientes', 'url_base': ('admin_environments', 'index'), 'keep': {'size': tamanho}, 'fields': [
-    {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': filtros_ativos.get('name')},
-    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': filtros_ativos.get('active'), 'options': _opc_ativo},
+filters = {'id': 'filtro-ambientes', 'url_base': ('admin_environments', 'index'), 'keep': {'size': size}, 'fields': [
+    {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': active_filters.get('name')},
+    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('active'), 'options': _opc_ativo},
 ]}
 _linhas = []
-for _a in resultado['itens']:
+for _a in result['items']:
     _linhas.append({
         'name': _a['name'],
         'description': _a.get('description') or '-',
@@ -16,17 +16,17 @@ for _a in resultado['itens']:
         'action': {'href': URL(c='admin_environments', f='form', args=[_a['id']]), 'label': 'Editar', 'description': u'Editar ambiente %s' % _a['name']},
     })
 pass
-tabela = {'caption': 'Ambientes cadastrados', 'error': erro, 'rows': _linhas, 'empty_message': 'Nenhum ambiente encontrado.', 'columns': [
+table = {'caption': 'Ambientes cadastrados', 'error': error, 'rows': _linhas, 'empty_message': 'Nenhum ambiente encontrado.', 'columns': [
     {'key': 'name', 'label': 'Nome', 'kind': 'mono'},
     {'key': 'description', 'label': u'Descrição'},
     {'key': 'connection', 'label': 'DSN', 'kind': 'mono'},
     {'key': 'active', 'label': u'Situação', 'kind': 'active'},
     {'key': 'action', 'label': u'Ações', 'kind': 'action'},
 ]}
-pagina = resultado['pagina']
-total = resultado['total']
-total_limitado = resultado.get('total_limitado', False)
-quantidade_pagina = len(resultado['itens'])
+page = result['page']
+total = result['total']
+total_capped = result.get('total_capped', False)
+page_count = len(result['items'])
 url_base = ('admin_environments', 'index')
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">

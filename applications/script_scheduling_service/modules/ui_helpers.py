@@ -156,7 +156,7 @@ def etapas_ticket(ticket, now):
     labels = (u"Pedido criado", u"Na fila", u"Rodando", u"Terminou")
     whens = (formatar_data(ticket.get("created_at")), queue_when, running_when,
                end if terminal else u"-")
-    return [{"label": r, "when": q, "estado": e} for r, q, e in zip(labels, whens, states)]
+    return [{"label": r, "when": q, "state_info": e} for r, q, e in zip(labels, whens, states)]
 
 
 # Nomes curtos dos motivos de erro (historico do script, README §5.8).
@@ -198,16 +198,16 @@ def barras_empilhadas(days, width=1000, height=240, left_margin=28, bottom_margi
                 continue
             h = area_h * count / float(scale_max)
             y = top - h
-            bars.append({"x": round(x, 1), "y": round(y, 1), "largura": round(width_bar, 1),
-                           "altura": round(max(h - gap, 1.0), 1), "css_class": "sss-graf-" + key,
+            bars.append({"x": round(x, 1), "y": round(y, 1), "width": round(width_bar, 1),
+                           "height": round(max(h - gap, 1.0), 1), "css_class": "sss-graf-" + key,
                            "title": u"%s: %s — %d" % (d["label"], label, count)})
             top = y
         if i % 5 == 0 or i == n - 1:
             axis_x.append({"x": round(x + width_bar / 2.0, 1), "label": d["label"]})
     grid = [{"y": round(base_y - area_h * f, 1), "label": str(int(round(scale_max * f)))}
              for f in (0.5, 1.0) if max_value]
-    return {"largura": width, "altura": height, "base_y": base_y, "maximo": max_value, "grade": grid,
-            "eixo_x": axis_x, "barras": bars, "margem_esq": left_margin}
+    return {"width": width, "height": height, "base_y": base_y, "maximum": max_value, "grid": grid,
+            "x_axis": axis_x, "bars": bars, "left_margin": left_margin}
 
 
 # Mensagens-padrao em duas partes: o que aconteceu + o que fazer agora (README §2.4.2, texto exato).
@@ -242,14 +242,14 @@ SAIDA_GRAVANDO_LIMITE_S = 3600
 _SAIDA_MENSAGENS = {
     "WRITING": (u"A saída está em preparação.", u"Atualize a página em alguns instantes."),
     "STALLED": (u"A saída não foi concluída.",
-               u"Os arquivos ficaram temporariamente no servidor do agente {agente}. Peça a quem administra o servidor."),
-    "AVAILABLE": (u"O script deixou {qtd} na pasta de saída ({tamanho}).", u"Use o botão Baixar para salvar o zip."),
+               u"Os arquivos ficaram temporariamente no servidor do agente {agent}. Peça a quem administra o servidor."),
+    "AVAILABLE": (u"O script deixou {count} na pasta de saída ({size}).", u"Use o botão Baixar para salvar o zip."),
     "FILES": (u"A saída passou do limite de quantidade de arquivos e não foi empacotada.",
-                 u"Os arquivos ficaram temporariamente no servidor do agente {agente}. Peça a quem administra o servidor."),
+                 u"Os arquivos ficaram temporariamente no servidor do agente {agent}. Peça a quem administra o servidor."),
     "BYTES": (u"A saída passou do limite de tamanho e não foi empacotada.",
-              u"Os arquivos ficaram temporariamente no servidor do agente {agente}. Peça a quem administra o servidor."),
+              u"Os arquivos ficaram temporariamente no servidor do agente {agent}. Peça a quem administra o servidor."),
     "FAILED": (u"A saída não foi gravada.",
-               u"Os arquivos ficaram temporariamente no servidor do agente {agente}. Peça a quem administra o servidor."),
+               u"Os arquivos ficaram temporariamente no servidor do agente {agent}. Peça a quem administra o servidor."),
 }
 _SAIDA_CLASSE = {"WRITING": "info", "STALLED": "warning", "AVAILABLE": "success", "FILES": "warning",
                  "BYTES": "warning", "FAILED": "warning"}
@@ -282,11 +282,11 @@ def quadro_saida(output, now):
     elif state not in _SAIDA_MENSAGENS:
         key = "FAILED"
     count = output.get("file_count")
-    values = {"agente": output.get("agent_id") or u"-", "tamanho": tamanho_legivel(output.get("size_bytes")),
-               "qtd": (u"1 arquivo" if count == 1 else u"%s arquivos" % count)}
+    values = {"agent": output.get("agent_id") or u"-", "size": tamanho_legivel(output.get("size_bytes")),
+               "count": (u"1 arquivo" if count == 1 else u"%s arquivos" % count)}
     happened, todo = _SAIDA_MENSAGENS[key]
     return {"state": state, "css_class": _SAIDA_CLASSE[key], "happened": happened.format(**values),
-            "todo": todo.format(**values), "pode_baixar": state == "AVAILABLE"}
+            "todo": todo.format(**values), "can_download": state == "AVAILABLE"}
 
 
 def mensagem(key_name, **values):
@@ -431,18 +431,18 @@ def paginacao_info(page, size, total, capped_total=False, quantity=None):
     else:
         first = last = 0
     return {
-        "pagina": page,
-        "tamanho": size,
+        "page": page,
+        "size": size,
         "total": total,
-        "total_paginas": None if capped_total else total_pages,
-        "total_limitado": bool(capped_total),
-        "tem_anterior": page > 1,
-        "tem_proxima": (quantity == size if capped_total and quantity is not None
+        "total_pages": None if capped_total else total_pages,
+        "total_capped": bool(capped_total),
+        "has_previous": page > 1,
+        "has_next": (quantity == size if capped_total and quantity is not None
                         else page < total_pages),
-        "anterior": max(page - 1, 1),
-        "proxima": page + 1 if capped_total else min(page + 1, total_pages),
-        "primeiro_registro": first,
-        "ultimo_registro": last,
+        "previous_page": max(page - 1, 1),
+        "next_page": page + 1 if capped_total else min(page + 1, total_pages),
+        "first_record": first,
+        "last_record": last,
     }
 
 

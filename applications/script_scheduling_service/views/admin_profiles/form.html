@@ -2,46 +2,46 @@
 {{
 # Inclusão e edição de perfil (padrão de CRUD administrativo, docs/ADMIN_CRUD_PATTERN.md).
 import ui_helpers
-_novo = not perfil.get('id')
-_situacao = ui_helpers.ativo_info(perfil.get('active'))
+_novo = not profile.get('id')
+_situacao = ui_helpers.ativo_info(profile.get('active'))
 _campos = [
-    {'name': 'name', 'label': 'Nome', 'value': perfil.get('name'), 'error': erros.get('name'), 'required': True, 'maxlength': 30,
+    {'name': 'name', 'label': 'Nome', 'value': profile.get('name'), 'error': errors.get('name'), 'required': True, 'maxlength': 30,
      'help': u'Letras maiúsculas, dígitos e _ (ex.: OPERATOR_PROD).'},
-    {'name': 'description', 'label': u'Descrição', 'value': perfil.get('description'), 'error': erros.get('description'), 'maxlength': 100},
+    {'name': 'description', 'label': u'Descrição', 'value': profile.get('description'), 'error': errors.get('description'), 'maxlength': 100},
 ]
 if not _novo:
-    _desativar = perfil.get('active') == 'Y'
+    _desativar = profile.get('active') == 'Y'
     if _desativar:
-        _total = perfil.get('usuarios_ativos') or 0
-        _logins = perfil.get('usuarios_afetados') or []
-        _texto_modal = u'%s Usuários ativos afetados: %d' % (aviso_desativacao, _total)
+        _total = profile.get('active_users') or 0
+        _logins = profile.get('affected_users') or []
+        _texto_modal = u'%s Usuários ativos afetados: %d' % (deactivation_warning, _total)
         if _logins:
             _texto_modal += u' (%s%s)' % (u', '.join(_logins), (u' e outros %d' % (_total - len(_logins))) if _total > len(_logins) else u'')
         pass
         _texto_modal += u'.'
-        if perfil.get('proprio'):
+        if profile.get('own'):
             _texto_modal = u'Você não pode desativar o seu próprio perfil.'
         pass
     else:
         _texto_modal = u'Os usuários do perfil voltarão a ter acesso conforme a matriz de permissões.'
     pass
-    _modal_ativo = {'id': 'modal-ativo', 'title': (u'Desativar perfil %s' if _desativar else u'Reativar perfil %s') % perfil['name'],
+    _modal_ativo = {'id': 'modal-ativo', 'title': (u'Desativar perfil %s' if _desativar else u'Reativar perfil %s') % profile['name'],
                     'text': _texto_modal, 'trigger_label': 'Desativar' if _desativar else 'Reativar',
                     'confirm_label': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
                     'variant': 'danger' if _desativar else 'normal', 'action': URL(c='admin_profiles', f='toggle_active'),
-                    'hidden_fields': dict(id=perfil['id'], versao=perfil['version'])}
+                    'hidden_fields': dict(id=profile['id'], versao=profile['version'])}
 pass
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">
   <div>
-    <h1 class="sss-page-titulo">{{if _novo:}}Novo perfil{{else:}}Perfil <span class="sss-mono">{{=perfil['name']}}</span>
+    <h1 class="sss-page-titulo">{{if _novo:}}Novo perfil{{else:}}Perfil <span class="sss-mono">{{=profile['name']}}</span>
       <span class="sss-status {{=_situacao['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icon']}}"></use></svg><span>{{=_situacao['label']}}</span></span>{{pass}}
     </h1>
   </div>
   <div class="sss-acoes">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_profiles', f='index')}}">Voltar à lista</a>
     {{if not _novo:}}
-    <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_profiles', f='matrix', args=[perfil['id']])}}">Permissões</a>
+    <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_profiles', f='matrix', args=[profile['id']])}}">Permissões</a>
     {{modal = _modal_ativo}}
     {{include 'components/confirm_modal.html'}}
     {{pass}}
@@ -53,20 +53,20 @@ pass
   <form class="sss-card-corpo" method="post" action="{{=URL(c='admin_profiles', f='save')}}" autocomplete="off">
     {{=csrf_campo()}}
     {{if not _novo:}}
-    <input type="hidden" name="id" value="{{=perfil['id']}}">
-    <input type="hidden" name="version" value="{{=perfil['version']}}">
+    <input type="hidden" name="id" value="{{=profile['id']}}">
+    <input type="hidden" name="version" value="{{=profile['version']}}">
     {{pass}}
-    {{if erro_geral:}}
+    {{if general_error:}}
     <div class="alert alert-danger sss-alerta" role="alert">
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#icon-alert"></use></svg>
-      <span>{{=erro_geral}}</span>
+      <span>{{=general_error}}</span>
     </div>
     {{pass}}
-    {{for campo in _campos:}}
+    {{for field in _campos:}}
     {{include 'components/form_field.html'}}
     {{pass}}
     <div class="form-check mb-3">
-      <input class="form-check-input" type="checkbox" id="campo-is_admin" name="is_admin" value="Y" aria-describedby="campo-is_admin-ajuda"{{if perfil.get('is_admin') == 'Y':}} checked{{pass}}>
+      <input class="form-check-input" type="checkbox" id="campo-is_admin" name="is_admin" value="Y" aria-describedby="campo-is_admin-ajuda"{{if profile.get('is_admin') == 'Y':}} checked{{pass}}>
       <label class="form-check-label" for="campo-is_admin">Perfil administrativo</label>
       <div class="form-text" id="campo-is_admin-ajuda">Dispensa funcionalidades, ambientes e scripts; não dispensa a homologação nem as flags de ativo. O sistema nunca fica sem administrador ativo.</div>
     </div>
@@ -77,7 +77,7 @@ pass
   </form>
 </section>
 
-{{if not _novo and perfil.get('registro'):}}
-{{registro = perfil['registro']}}
+{{if not _novo and profile.get('record'):}}
+{{record = profile['record']}}
 {{include 'components/record.html'}}
 {{pass}}

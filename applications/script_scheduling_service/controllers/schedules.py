@@ -64,8 +64,8 @@ def _respostas_post():
 
 
 def _pagina_form(dados):
-    regra = dados.get("regra") or {}
-    if dados["edicao"]:
+    regra = dados.get("rule") or {}
+    if dados["editing"]:
         response.title = u"Regra %s — SSS" % regra.get("name", "")
     else:
         response.title = u"Nova regra de agendamento — SSS"
@@ -80,8 +80,8 @@ def _pagina_form(dados):
         campos.extend({"name": c["name"], "error": c["error"]} for c in dados["form"]["fields"])
         campos.append({"name": "priority", "error": erros.get("priority")})
         foco = ui_helpers.primeiro_campo_invalido(campos)
-    return dict(dados, erros=erros, erro_geral=erros.get(admin_crud.GENERAL_FIELD), foco_campo=foco,
-                rotulos_tipo=servico.TYPE_LABELS, dias_semana=servico.WEEKDAYS)
+    return dict(dados, errors=erros, general_error=erros.get(admin_crud.GENERAL_FIELD), focus_field=foco,
+                type_labels=servico.TYPE_LABELS, weekdays=servico.WEEKDAYS)
 
 
 def _redirecionar_lista(tipo, mensagem):
@@ -102,11 +102,11 @@ def index():
         _negado()
     except RepoError:
         _log.exception("falha ao listar agendamentos (login=%s)", ctx["login"], extra={"action": _FUNC})
-        resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
+        resultado = {"items": [], "total": 0, "page": 1, "size": tamanho}
         erro = _MSG_FALHA_LISTA
     response.title = u"Regras de agendamento — SSS"
     response.sss_scripts = [_JS]
-    return dict(resultado=resultado, erro=erro, filtros_ativos=filtros, tamanho=tamanho,
+    return dict(result=resultado, error=erro, active_filters=filtros, size=tamanho,
                 query_params=dict(filtros, size=tamanho))
 
 
@@ -116,12 +116,12 @@ def agenda():
     ctx = _exigir_func(_FUNC)
     response.title = u"Agenda — SSS"
     try:
-        return dict(dados=servico.agenda(ctx), erro=None)
+        return dict(data=servico.agenda(ctx), error=None)
     except AccessDenied:
         _negado()
     except RepoError:
         _log.exception("falha ao montar a agenda (login=%s)", ctx["login"], extra={"action": _FUNC})
-        return dict(dados=None, erro=ui_helpers.mensagem("internal_error"))
+        return dict(data=None, error=ui_helpers.mensagem("internal_error"))
 
 
 def form():

@@ -49,9 +49,9 @@ def _pagina_form(ctx, dados, erros=None):
     campos = [{"name": n, "error": erros.get(n)} for n in ("code", "param_flag", "label", "description",
                                                           "component_type", "options_json", "validation_regex",
                                                           "default_value")]
-    return dict(prm=dados, erros=erros, erro_geral=erros.get(admin_crud.GENERAL_FIELD),
-                foco_campo=ui_helpers.primeiro_campo_invalido(campos), tipos=servico.TYPE_LABELS,
-                aviso_sensivel=servico.SENSITIVE_WARNING)
+    return dict(prm=dados, errors=erros, general_error=erros.get(admin_crud.GENERAL_FIELD),
+                focus_field=ui_helpers.primeiro_campo_invalido(campos), types=servico.TYPE_LABELS,
+                sensitive_warning=servico.SENSITIVE_WARNING)
 
 
 def index():
@@ -67,10 +67,10 @@ def index():
         _negado()
     except RepoError:
         _log.exception("falha ao listar parametros (login=%s)", ctx["login"], extra={"action": _FUNC})
-        resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
+        resultado = {"items": [], "total": 0, "page": 1, "size": tamanho}
         erro = _MSG_FALHA_LISTA
     response.title = u"Parâmetros — SSS"
-    return dict(resultado=resultado, erro=erro, filtros_ativos=filtros, tamanho=tamanho, tipos=servico.TYPE_LABELS,
+    return dict(result=resultado, error=erro, active_filters=filtros, size=tamanho, types=servico.TYPE_LABELS,
                 query_params=dict(filtros, size=tamanho))
 
 
@@ -108,15 +108,15 @@ def save():
     except RepoError:
         dados = {"id": None, "code": "", "param_flag": "", "label": "", "description": "",
                  "component_type": "TEXT", "options_json": "", "default_value": "", "has_default": False,
-                 "validation_regex": "", "sensitive": "N", "active": "Y", "version": "", "vinculos": [],
-                 "pode_regex": ctx.get("is_admin") is True}
+                 "validation_regex": "", "sensitive": "N", "active": "Y", "version": "", "links": [],
+                 "can_regex": ctx.get("is_admin") is True}
     if admin_crud.GENERAL_FIELD not in erros:
         reapresentar = dict((c, enviados[c] or "") for c in ("param_flag", "label", "description", "component_type",
                                                              "options_json", "validation_regex"))
         reapresentar["sensitive"] = "Y" if enviados["sensitive"] == "Y" else "N"
         # Padrao de parametro sensivel nunca volta ao HTML.
         reapresentar["default_value"] = "" if reapresentar["sensitive"] == "Y" else (enviados["default_value"] or "")
-        if not dados.get("pode_regex"):
+        if not dados.get("can_regex"):
             reapresentar.pop("validation_regex")
         dados = dict(dados, **reapresentar)
         if not parametro_id:

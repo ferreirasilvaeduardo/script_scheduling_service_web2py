@@ -278,8 +278,8 @@ class RepoSchedulerQueue(object):
         for d in (script, environment):
             if d is not None:
                 d["active"] = (d.get("active") or "").strip()
-        return {"script": script, "environment": environment, "homologacoes": homologations, "ctx": ctx,
-                "agendamento": schedule}
+        return {"script": script, "environment": environment, "homologations": homologations, "ctx": ctx,
+                "schedule": schedule}
 
     def _ctx_solicitante(self, cur, login):
         """Contexto RBAC do solicitante (o mesmo da web: rbac.user_context), ou None se ele nao existe."""
@@ -292,8 +292,8 @@ class RepoSchedulerQueue(object):
         if r is None:
             return None
         state = {"user_id": r[0], "login": r[1], "name": r[2], "profile_id": r[3],
-                  "usuario_ativo": (r[4] or "").strip(), "session_epoch": r[5], "perfil_nome": r[6],
-                  "is_admin": (r[7] or "").strip(), "perfil_ativo": (r[8] or "").strip(), "perm_version": r[9]}
+                  "active_user": (r[4] or "").strip(), "session_epoch": r[5], "profile_name": r[6],
+                  "is_admin": (r[7] or "").strip(), "active_profile": (r[8] or "").strip(), "perm_version": r[9]}
         cur.execute("SELECT f.code FROM " + self._pfea + " pf JOIN " + self._fea + " f ON f.id = pf.feature_id "
                     "WHERE pf.profile_id = :p AND f.active = 'Y'", p=state["profile_id"])
         state["features"] = [x[0] for x in cur.fetchall()]

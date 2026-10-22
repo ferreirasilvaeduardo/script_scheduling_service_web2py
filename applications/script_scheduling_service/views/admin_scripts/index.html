@@ -1,24 +1,24 @@
 {{extend 'layout.html'}}
 {{
 # Lista de scripts (padrão de CRUD administrativo). O caminho completo do arquivo é exibido (README §8.5, CR-005 D8).
-_opc_cmd = [('', 'Todos')] + [(_c, _c) for _c, _r in interpretadores]
+_opc_cmd = [('', 'Todos')] + [(_c, _c) for _c, _r in interpreters]
 _opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
-filtros = {'id': 'filtro-scripts', 'url_base': ('admin_scripts', 'index'), 'keep': {'size': tamanho}, 'fields': [
-    {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': filtros_ativos.get('name')},
-    {'name': 'script_group', 'label': 'Grupo', 'kind': 'text', 'value': filtros_ativos.get('script_group')},
-    {'name': 'category', 'label': 'Categoria', 'kind': 'text', 'value': filtros_ativos.get('category')},
-    {'name': 'interpreter', 'label': 'Interpretador', 'kind': 'select', 'value': filtros_ativos.get('interpreter'), 'options': _opc_cmd},
-    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': filtros_ativos.get('active'), 'options': _opc_ativo},
+filters = {'id': 'filtro-scripts', 'url_base': ('admin_scripts', 'index'), 'keep': {'size': size}, 'fields': [
+    {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': active_filters.get('name')},
+    {'name': 'script_group', 'label': 'Grupo', 'kind': 'text', 'value': active_filters.get('script_group')},
+    {'name': 'category', 'label': 'Categoria', 'kind': 'text', 'value': active_filters.get('category')},
+    {'name': 'interpreter', 'label': 'Interpretador', 'kind': 'select', 'value': active_filters.get('interpreter'), 'options': _opc_cmd},
+    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('active'), 'options': _opc_ativo},
 ]}
 _linhas = []
-for _s in resultado['itens']:
+for _s in result['items']:
     _linhas.append({
         'name': _s['name'],
         'script_group': ' / '.join([_x for _x in (_s.get('script_group'), _s.get('category')) if _x]) or '-',
         'cmd': _s['interpreter'],
         'path': _s['path_file'],
-        'environments': ', '.join(_s.get('ambientes_homologados') or []) or u'Nenhum',
-        'parameters': str(_s.get('qtd_parametros') or 0),
+        'environments': ', '.join(_s.get('homologated_environments') or []) or u'Nenhum',
+        'parameters': str(_s.get('param_count') or 0),
         'active': _s['active'],
         'action': [
             {'href': URL(c='admin_scripts', f='form', args=[_s['id']]), 'label': 'Editar', 'description': u'Editar script %s' % _s['name']},
@@ -27,7 +27,7 @@ for _s in resultado['itens']:
         ],
     })
 pass
-tabela = {'caption': 'Scripts cadastrados', 'error': erro, 'rows': _linhas, 'empty_message': 'Nenhum script encontrado.', 'columns': [
+table = {'caption': 'Scripts cadastrados', 'error': error, 'rows': _linhas, 'empty_message': 'Nenhum script encontrado.', 'columns': [
     {'key': 'name', 'label': 'Nome', 'kind': 'mono'},
     {'key': 'script_group', 'label': 'Grupo / categoria'},
     {'key': 'cmd', 'label': 'Interpretador', 'kind': 'mono'},
@@ -37,10 +37,10 @@ tabela = {'caption': 'Scripts cadastrados', 'error': erro, 'rows': _linhas, 'emp
     {'key': 'active', 'label': u'Situação', 'kind': 'active'},
     {'key': 'action', 'label': u'Ações', 'kind': 'action'},
 ]}
-pagina = resultado['pagina']
-total = resultado['total']
-total_limitado = resultado.get('total_limitado', False)
-quantidade_pagina = len(resultado['itens'])
+page = result['page']
+total = result['total']
+total_capped = result.get('total_capped', False)
+page_count = len(result['items'])
 url_base = ('admin_scripts', 'index')
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">

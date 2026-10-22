@@ -57,11 +57,11 @@ class _Base(unittest.TestCase):
         # O seed usa o relogio real: o bloqueio do usuario 'bloqueado' e reposicionado a partir de AGORA.
         self.users.update(U_BLOQUEADO, {"locked_until": NOW + datetime.timedelta(minutes=30)}, actor="teste")
         self.svc = AdminUsersService(self.users, self.rbac_repo, self.log, clock=lambda: NOW)
-        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["itens"]] or [0])
+        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["items"]] or [0])
 
     def _audits(self, action=None):
         filters = {"action": action} if action else None
-        return [a for a in self.audit.list(filters=filters, page=1, size=200)["itens"]
+        return [a for a in self.audit.list(filters=filters, page=1, size=200)["items"]
                 if a["entity"] == "tbsss_users" and a["id"] > self.aud_base]
 
     def _insert(self, **changes):
@@ -94,7 +94,7 @@ class TestInsert(_Base):
         uid, errors = self._insert()
         self.assertEqual(errors, {})
         detail = [a for a in self._audits("CREATE") if a["entity_id"] == uid][0]["detail"]
-        self.assertIn("perfil: READ_ONLY", detail)
+        self.assertIn("profile: READ_ONLY", detail)
         self.assertNotIn("profile_id", detail)
 
     def test_inclusao_ok_com_hash_e_auditoria_sem_senha(self):
@@ -224,7 +224,7 @@ class TestEditAndLastAdmin(_Base):
 class TestPasswordAndLock(_Base):
 
     def test_redefinicao_zera_bloqueio_e_audita_sem_senha(self):
-        self.assertTrue(self._form(U_BLOQUEADO)["bloqueado"])
+        self.assertTrue(self._form(U_BLOQUEADO)["locked"])
         errors = self.svc.reset_password(self.ctx["admin"], IP, str(U_BLOQUEADO), NEW_PASSWORD, NEW_PASSWORD)
         self.assertEqual(errors, {})
         u = self.users.get_by_id(U_BLOQUEADO)
@@ -256,7 +256,7 @@ class TestPasswordAndLock(_Base):
         u = self.users.get_by_id(U_OPPROD)
         self.assertEqual(u["failed_attempts"], 1)
         self.assertTrue(security.verify_password(DEV_PASSWORD, u["password_hash"]))
-        failures = [a for a in self.audit.list(filters={"action": "LOGIN_FAILED"}, page=1, size=50)["itens"]
+        failures = [a for a in self.audit.list(filters={"action": "LOGIN_FAILED"}, page=1, size=50)["items"]
                   if a["id"] > self.aud_base]
         self.assertEqual(len(failures), 1)
 
@@ -297,14 +297,14 @@ class TestListAndAccess(_Base):
     def test_lista_sem_hash_com_bloqueio_e_filtros(self):
         page = self.svc.list(self.ctx["admin"], {}, 1, 20)
         self.assertEqual(page["total"], 6)
-        for item in page["itens"]:
+        for item in page["items"]:
             self.assertNotIn("password_hash", item)
-        locked = [i for i in page["itens"] if i["login"] == "bloqueado"][0]
-        self.assertTrue(locked["bloqueado"])
-        self.assertEqual(locked["perfil_nome"], "OPERATOR_PROD")
-        self.assertEqual([i["login"] for i in self.svc.list(self.ctx["admin"], {"state": "B"}, 1, 20)["itens"]],
+        locked = [i for i in page["items"] if i["login"] == "bloqueado"][0]
+        self.assertTrue(locked["locked"])
+        self.assertEqual(locked["profile_name"], "OPERATOR_PROD")
+        self.assertEqual([i["login"] for i in self.svc.list(self.ctx["admin"], {"state": "B"}, 1, 20)["items"]],
                          ["bloqueado"])
-        self.assertEqual([i["login"] for i in self.svc.list(self.ctx["admin"], {"state": "N"}, 1, 20)["itens"]],
+        self.assertEqual([i["login"] for i in self.svc.list(self.ctx["admin"], {"state": "N"}, 1, 20)["items"]],
                          ["inativo"])
         self.assertNotIn("password_hash", self._form(U_OPPROD))
         self.assertEqual(usr_mod.normalize_filters({"login": "op", "profile_id": "2", "state": "B"}),

@@ -1,4 +1,4 @@
-{{if painel['unattended_queue']:}}
+{{if dashboard['unattended_queue']:}}
 <section class="sss-card" aria-labelledby="titulo-fila-sem-atendente">
   <h3 class="sss-card-titulo" id="titulo-fila-sem-atendente">Fila sem atendente</h3>
   <div class="sss-card-corpo">
@@ -8,8 +8,8 @@
         <caption class="visually-hidden">Pedidos vencidos sem servidor disponível</caption>
         <thead><tr><th scope="col">Ambiente</th><th scope="col">Interpretador</th><th scope="col">Quantidade</th><th scope="col">Horário mais antigo</th></tr></thead>
         <tbody>
-          {{for _fila in painel['unattended_queue']:}}
-          <tr><td>{{=_fila['environment']}}</td><td>{{=_fila['interpreter']}}</td><td>{{=_fila['quantidade']}}</td><td>{{=ui_helpers.formatar_data(_fila['mais_antigo'])}}</td></tr>
+          {{for _fila in dashboard['unattended_queue']:}}
+          <tr><td>{{=_fila['environment']}}</td><td>{{=_fila['interpreter']}}</td><td>{{=_fila['quantity']}}</td><td>{{=ui_helpers.formatar_data(_fila['oldest'])}}</td></tr>
           {{pass}}
         </tbody>
       </table>
@@ -17,27 +17,27 @@
   </div>
 </section>
 {{pass}}
-{{if painel['running_without_pid']:}}
+{{if dashboard['running_without_pid']:}}
 <section class="sss-card" aria-labelledby="titulo-rodando-sem-pid">
   <h3 class="sss-card-titulo" id="titulo-rodando-sem-pid">Rodando sem PID</h3>
   <div class="sss-card-corpo">
     <p>{{=ui_helpers.mensagem('running_without_pid')}}</p>
     <ul>
-      {{for _sem_pid in painel['running_without_pid']:}}
+      {{for _sem_pid in dashboard['running_without_pid']:}}
       <li><a href="{{=URL(c='tickets', f='detail', args=[_sem_pid['id']], extension=False)}}">Pedido #{{=_sem_pid['id']}}</a> · {{=_sem_pid['environment']}} · servidor {{=_sem_pid['agent_id'] or '-'}} · reservado em {{=ui_helpers.formatar_data(_sem_pid['started_at'])}}</li>
       {{pass}}
     </ul>
   </div>
 </section>
 {{pass}}
-{{if painel['config_mismatch']:}}
+{{if dashboard['config_mismatch']:}}
 <section class="sss-card" aria-labelledby="titulo-config-divergente">
   <h3 class="sss-card-titulo" id="titulo-config-divergente">Configuração divergente</h3>
   <div class="sss-card-corpo">
     <p>{{=ui_helpers.mensagem('config_mismatch')}}</p>
-    <p>Nó web: <code class="text-break">{{=painel['config_web']}}</code></p>
+    <p>Nó web: <code class="text-break">{{=dashboard['config_web']}}</code></p>
     <ul>
-      {{for _divergente in painel['config_mismatch']:}}
+      {{for _divergente in dashboard['config_mismatch']:}}
       <li>{{=_divergente['code']}}: <code class="text-break">{{=_divergente['critical_config'] or 'Configuração não registrada'}}</code></li>
       {{pass}}
     </ul>

@@ -176,11 +176,11 @@ class RepoCatalogFake(RepoCatalog):
 
             items.sort(key=lambda x: (x.get("name", ""), x["id"]))
             page_ = paginate(items, page=page, size=size)
-            for item in page_["itens"]:
-                item["ambientes_homologados"] = sorted(
+            for item in page_["items"]:
+                item["homologated_environments"] = sorted(
                     self._store.environments[sa["environment_id"]]["name"] for sa in self._store.script_env.values()
                     if sa["script_id"] == item["id"] and sa["environment_id"] in self._store.environments)
-                item["qtd_parametros"] = len(self._vinculos_do_script(item["id"]))
+                item["param_count"] = len(self._vinculos_do_script(item["id"]))
             return page_
 
     def scripts_get(self, id):
@@ -346,8 +346,8 @@ class RepoCatalogFake(RepoCatalog):
 
             items.sort(key=lambda x: (x.get("code", ""), x["id"]))
             page_ = paginate(items, page=page, size=size)
-            for item in page_["itens"]:
-                item["qtd_scripts"] = sum(1 for sp in self._store.script_param.values()
+            for item in page_["items"]:
+                item["script_count"] = sum(1 for sp in self._store.script_param.values()
                                           if sp["parameter_id"] == item["id"])
             return page_
 

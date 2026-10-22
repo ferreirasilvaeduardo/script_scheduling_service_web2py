@@ -45,10 +45,10 @@ def montar_menu(features, is_admin, current_route=None):
             visible.append({
                 "code": code,
                 "label": label,
-                "rota": (controller, function),
+                "route": (controller, function),
                 "icon": icon,
                 "active": current == (controller, function),
             })
         if visible:
-            menu.append({"secao": section, "title": title, "itens": visible})
+            menu.append({"section": section, "title": title, "items": visible})
     return menu

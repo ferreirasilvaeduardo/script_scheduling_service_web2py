@@ -98,7 +98,7 @@ class _Base(unittest.TestCase):
         self.base = _tree()
         self.addCleanup(_remove, self.base)
         self.svc = self._service(self.ENV)
-        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["itens"]] or [0])
+        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["items"]] or [0])
 
     def _service(self, env):
         return AdminScriptsService(self.catalog, repo_factory.get("schedules"), env, self.log, lambda: NOW)
@@ -107,7 +107,7 @@ class _Base(unittest.TestCase):
         return os.path.join(self.base, name)
 
     def _audits(self, action):
-        return [a for a in self.audit.list(filters={"action": action}, page=1, size=100)["itens"]
+        return [a for a in self.audit.list(filters={"action": action}, page=1, size=100)["items"]
                 if a["entity"] == "tbsss_scripts" and a["id"] > self.aud_base]
 
     def _insert(self, svc=None, **changes):
@@ -127,7 +127,7 @@ class _Base(unittest.TestCase):
         screen = self.svc.parameters(self.ctx["admin"], str(sid))
         return screen, [{"parameter_id": v["id"], "required": v["required"],
                        "default_value_override": v["default_value_override"], "keep_secret": v["sensitive"]}
-                      for v in screen["vinculos"]]
+                      for v in screen["links"]]
 
 
 @_SKIP_ROOT
@@ -237,7 +237,7 @@ class TestRegistration(_Base):
 
     def test_desativacao_com_agendamentos_e_conflito(self):
         f = self.svc.form(self.ctx["admin"], str(S_CARGA))
-        self.assertEqual(f["agendamentos_ativos"], 2)
+        self.assertEqual(f["active_schedules"], 2)
         self.assertEqual(self.svc.toggle_active(self.ctx["admin"], IP, str(S_CARGA), f["version"])["active"], "N")
         self.assertIn("agendamentos ativos afetados: 2", self._audits("DEACTIVATE")[0]["detail"])
         with self.assertRaises(RepoConflict):
@@ -273,7 +273,7 @@ class TestHomologation(_Base):
         self.catalog.homologation_save(S_CARGA, [AMB_PROD, AMB_DESENV], actor="teste")
         screen = self.svc.homologation(self.ctx["admin"], str(S_CARGA))
         dev = [a for a in screen["environments"] if a["name"] == "DESENV"][0]
-        self.assertTrue(dev["checked"] and dev["inativo"])
+        self.assertTrue(dev["checked"] and dev["inactive"])
         diff, _ = self.svc.save_homologation(self.ctx["admin"], IP, str(S_CARGA),
                                               [str(AMB_PROD), str(AMB_HML), str(AMB_DESENV)], screen["version"])
         self.assertEqual(diff, "+HOMOLOGACAO")
@@ -424,10 +424,10 @@ class TestPreview(_Base):
 
     def test_lista_com_homologados_e_parametros(self):
         page = self.svc.list(self.ctx["admin"], {"interpreter": "PYTHON3"}, 1, 20)
-        load = [s for s in page["itens"] if s["name"] == "carga_diaria"][0]
-        self.assertEqual(load["qtd_parametros"], 5)
-        self.assertIn("PRODUCAO", load["ambientes_homologados"])
-        self.assertTrue(all(s["interpreter"] == "PYTHON3" for s in page["itens"]))
+        load = [s for s in page["items"] if s["name"] == "carga_diaria"][0]
+        self.assertEqual(load["param_count"], 5)
+        self.assertIn("PRODUCAO", load["homologated_environments"])
+        self.assertTrue(all(s["interpreter"] == "PYTHON3" for s in page["items"]))
         self.assertEqual(scr_mod.normalize_filters({"interpreter": "/bin/ls", "active": "Y"}), {"active": "Y"})
         self.assertEqual(scr_mod.normalize_filters({"interpreter": "POWERSHELL"}), {})
 

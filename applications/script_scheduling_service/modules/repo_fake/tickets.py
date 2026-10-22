@@ -203,17 +203,17 @@ class RepoTicketsFake(RepoTickets):
             if pair_f is not None:
                 items = [t for t in items if t.get("parent_ticket_id") == int(pair_f)]
 
-            source_f = filters.get("origem")
+            source_f = filters.get("source")
             if source_f == "manual":
                 items = [t for t in items if t.get("schedule_id") is None]
             elif source_f == "agendamento":
                 items = [t for t in items if t.get("schedule_id") is not None]
 
-            dt_ini = filters.get("criado_inicio")
+            dt_ini = filters.get("created_from")
             if dt_ini:
                 items = [t for t in items if t.get("created_at") and t["created_at"] >= dt_ini]
 
-            dt_end = filters.get("criado_fim")
+            dt_end = filters.get("created_to")
             if dt_end:
                 items = [t for t in items if t.get("created_at") and t["created_at"] < dt_end]
 
@@ -359,15 +359,15 @@ class RepoTicketsFake(RepoTickets):
         """Emula o log_pump e a finalizacao pelo agente em funcao do relogio injetavel (somente FAKE)."""
         now = self._store.now()
         elapsed = int((now - t["started_at"]).total_seconds())
-        target = min(_STAGES_SIMULATED, max(0, elapsed // sim["passo_s"]))
+        target = min(_STAGES_SIMULATED, max(0, elapsed // sim["step_s"]))
         cancel = t.get("cancel_requested") == "Y"
-        if target <= sim["emitidos"] and not cancel:
+        if target <= sim["issued"] and not cancel:
             return
         rows = []
-        for n in range(sim["emitidos"] + 1, target + 1):
-            when = t["started_at"] + datetime.timedelta(seconds=n * sim["passo_s"])
-            rows.extend(_stage_lines(n, when, sim["sensiveis"]))
-        sim["emitidos"] = target
+        for n in range(sim["issued"] + 1, target + 1):
+            when = t["started_at"] + datetime.timedelta(seconds=n * sim["step_s"])
+            rows.extend(_stage_lines(n, when, sim["sensitive_codes"]))
+        sim["issued"] = target
         if cancel:
             rows.append("[%s] processo encerrado por cancelamento (SIGTERM)\n" % now)
             t.update(status="CANCELLED", status_reason="CANCEL_USER", return_code=-1)
@@ -380,4 +380,4 @@ class RepoTicketsFake(RepoTickets):
             self._store.stamp_update(t, "SYSTEM:%s" % t.get("agent_id"))
             self._store.log_simulated.pop(t["id"], None)
         t["heartbeat_at"] = now
-        t["log_output"] = (t.get("log_output") or "") + _mask_like_log_pump("".join(rows), sim["sensiveis"])
+        t["log_output"] = (t.get("log_output") or "") + _mask_like_log_pump("".join(rows), sim["sensitive_codes"])

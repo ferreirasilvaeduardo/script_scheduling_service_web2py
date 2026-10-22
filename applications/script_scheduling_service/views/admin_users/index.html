@@ -3,38 +3,38 @@
 # Lista de usuários (padrão de CRUD administrativo). O serviço já remove senha_hash dos itens.
 import ui_helpers
 _opc_situacao = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos'), ('B', 'Bloqueados')]
-_opc_perfil = [('', 'Todos')] + [(str(_pf['id']), _pf['name']) for _pf in perfis]
-filtros = {'id': 'filtro-usuarios', 'url_base': ('admin_users', 'index'), 'keep': {'size': tamanho}, 'fields': [
-    {'name': 'login', 'label': 'Login', 'kind': 'text', 'value': filtros_ativos.get('login')},
-    {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': filtros_ativos.get('name')},
-    {'name': 'profile_id', 'label': 'Perfil', 'kind': 'select', 'value': str(filtros_ativos.get('profile_id') or ''), 'options': _opc_perfil},
-    {'name': 'state', 'label': u'Situação', 'kind': 'select', 'value': filtros_ativos.get('state'), 'options': _opc_situacao},
+_opc_perfil = [('', 'Todos')] + [(str(_pf['id']), _pf['name']) for _pf in profiles]
+filters = {'id': 'filtro-usuarios', 'url_base': ('admin_users', 'index'), 'keep': {'size': size}, 'fields': [
+    {'name': 'login', 'label': 'Login', 'kind': 'text', 'value': active_filters.get('login')},
+    {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': active_filters.get('name')},
+    {'name': 'profile_id', 'label': 'Perfil', 'kind': 'select', 'value': str(active_filters.get('profile_id') or ''), 'options': _opc_perfil},
+    {'name': 'state', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('state'), 'options': _opc_situacao},
 ]}
 _linhas = []
-for _u in resultado['itens']:
+for _u in result['items']:
     _linhas.append({
         'login': _u['login'],
         'name': _u['name'],
-        'perfil': _u['perfil_nome'],
+        'profile': _u['profile_name'],
         'active': _u['active'],
-        'bloqueio': (u'Bloqueado até %s' % ui_helpers.formatar_data(_u['locked_until'])) if _u['bloqueado'] else '-',
+        'lockout': (u'Bloqueado até %s' % ui_helpers.formatar_data(_u['locked_until'])) if _u['locked'] else '-',
         'last_login_at': ui_helpers.formatar_data(_u['last_login_at']),
         'action': {'href': URL(c='admin_users', f='form', args=[_u['id']]), 'label': 'Editar', 'description': u'Editar usuário %s' % _u['login']},
     })
 pass
-tabela = {'caption': u'Usuários cadastrados', 'error': erro, 'rows': _linhas, 'empty_message': u'Nenhum usuário encontrado.', 'columns': [
+table = {'caption': u'Usuários cadastrados', 'error': error, 'rows': _linhas, 'empty_message': u'Nenhum usuário encontrado.', 'columns': [
     {'key': 'login', 'label': 'Login', 'kind': 'mono'},
     {'key': 'name', 'label': 'Nome'},
-    {'key': 'perfil', 'label': 'Perfil', 'kind': 'mono'},
+    {'key': 'profile', 'label': 'Perfil', 'kind': 'mono'},
     {'key': 'active', 'label': u'Situação', 'kind': 'active'},
-    {'key': 'bloqueio', 'label': 'Bloqueio'},
+    {'key': 'lockout', 'label': 'Bloqueio'},
     {'key': 'last_login_at', 'label': u'Último login'},
     {'key': 'action', 'label': u'Ações', 'kind': 'action'},
 ]}
-pagina = resultado['pagina']
-total = resultado['total']
-total_limitado = resultado.get('total_limitado', False)
-quantidade_pagina = len(resultado['itens'])
+page = result['page']
+total = result['total']
+total_capped = result.get('total_capped', False)
+page_count = len(result['items'])
 url_base = ('admin_users', 'index')
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">

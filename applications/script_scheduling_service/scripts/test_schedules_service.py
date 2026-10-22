@@ -68,7 +68,7 @@ class _Base(unittest.TestCase):
         self.svc = SchedulesService(self.agd, self.catalog, repo_factory.get("users"), trigger,
                                        lambda: self.now, HORIZON, self.log,
                                        tickets=self.tickets, rbac_repo=self.rbac)
-        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["itens"]] or [0])
+        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["items"]] or [0])
 
     def _ctx(self, user_id, login, profile_id):
         session = {"user_id": user_id, "login": login, "profile_id": profile_id,
@@ -76,7 +76,7 @@ class _Base(unittest.TestCase):
         return self.auth.revalidate(session)
 
     def _audits(self, action=None):
-        items = self.audit.list(filters={"action": action} if action else None, page=1, size=1000)["itens"]
+        items = self.audit.list(filters={"action": action} if action else None, page=1, size=1000)["items"]
         return [a for a in items if a["entity"] == "tbsss_schedules" and a["id"] > self.aud_base]
 
     def _data(self, **extra):
@@ -142,7 +142,7 @@ class TestSaveTypes(_Base):
             for field in ("start_date", "end_date", "next_run_at"):
                 if reg[field] is not None:
                     self.assertEqual(reg[field].microsecond, 0, field)
-        weekly = self.agd.list(filters={"name": "Regra de teste"}, size=100)["itens"]
+        weekly = self.agd.list(filters={"name": "Regra de teste"}, size=100)["items"]
         self.assertIn("1,3,5", [r["week_days"] for r in weekly])
 
     def test_campos_de_outros_tipos_sao_descartados(self):
@@ -349,7 +349,7 @@ class TestEdit(_Base):
     def test_sensivel_nao_reexibido_e_vazio_mantem_valor(self):
         # CR-003 P1: a versao do formulario tambem nao deriva da resposta sensivel.
         aid0, _e = self._save(answers={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": "tok-um-111"})
-        v1 = self.svc.form(self.ctx["admin"], str(aid0))["regra"]["version"]
+        v1 = self.svc.form(self.ctx["admin"], str(aid0))["rule"]["version"]
         reg = self.agd.get(aid0)
         swapped = json.loads(reg["params_json"])
         swapped["documento_cliente"] = "tok-dois-222"
@@ -386,7 +386,7 @@ class TestAgenda(_Base):
         aid, errors = self._save(recurrence_type="CRON", cron_expression="0 0 1 12 *")
         self.assertEqual(errors, {})
         agenda = self.svc.agenda(self.ctx["admin"])
-        self.assertFalse(any(item["regra_id"] == aid for item in agenda["problemas"]))
+        self.assertFalse(any(item["rule_id"] == aid for item in agenda["problems"]))
 
     """CR-004 U6 (README §7.7)."""
 
@@ -399,14 +399,14 @@ class TestAgenda(_Base):
         return self.agd.insert(base, actor="teste")["id"]
 
     def _items(self, date, rule_id):
-        return [o for d in date["dias"] for o in d["itens"] if o["regra_id"] == rule_id]
+        return [o for d in date["days"] for o in d["items"] if o["rule_id"] == rule_id]
 
     def test_diaria_sete_dias_com_rotulos(self):
         rid = self._rule()
         date = self.svc.agenda(self.ctx["admin"])
         items = self._items(date, rid)
         self.assertEqual(len(items), 7)  # 16/01 a 22/01: ate o fim do 7o dia seguinte a 15/01
-        labels = [d["label"] for d in date["dias"] if any(o["regra_id"] == rid for o in d["itens"])]
+        labels = [d["label"] for d in date["days"] if any(o["rule_id"] == rid for o in d["items"])]
         self.assertEqual(labels[0], u"Amanhã")
         self.assertTrue(labels[1].startswith(u"sábado, 17/01"))
 
@@ -415,14 +415,14 @@ class TestAgenda(_Base):
                           next_run_at=datetime.datetime(2026, 1, 15, 10, 1))
         items = self._items(self.svc.agenda(self.ctx["admin"]), rid)
         self.assertEqual(len(items), svc_mod.AGENDA_PER_RULE)
-        self.assertGreater(items[-1]["mais"], 0)
+        self.assertGreater(items[-1]["more"], 0)
 
     def test_atrasada_pausada_e_escopo(self):
         late = self._rule(next_run_at=datetime.datetime(2026, 1, 15, 3, 0))
         paused = self._rule(active="N", pause_reason="MANUAL")
         in_prod = self._rule(environment="PRODUCAO")
         date = self.svc.agenda(self.ctx["admin"])
-        self.assertIn(late, [a["regra_id"] for a in date["atrasados"]])
+        self.assertIn(late, [a["rule_id"] for a in date["delayed"]])
         self.assertFalse(self._items(date, paused))
         self.assertTrue(self._items(date, in_prod))
         # op.hml nao enxerga PRODUCAO (README §7.6, lista por escopo).
@@ -547,26 +547,26 @@ class TestPreviewList(_Base):
 
     def test_lista_no_escopo_com_colunas(self):
         res = self.svc.list(self.ctx["op.hml"], {}, 1, 20)
-        self.assertEqual(sorted(i["environment"] for i in res["itens"]), ["HOMOLOGACAO", "HOMOLOGACAO"])
+        self.assertEqual(sorted(i["environment"] for i in res["items"]), ["HOMOLOGACAO", "HOMOLOGACAO"])
         all_value = self.svc.list(self.ctx["admin"], {}, 1, 20)
         self.assertEqual(all_value["total"], 5)
-        paused = [i for i in all_value["itens"] if i["id"] == 5][0]
+        paused = [i for i in all_value["items"] if i["id"] == 5][0]
         self.assertEqual((paused["state"], paused["reason"]), (u"Pausado", u"Pausado manualmente"))
         self.assertEqual(paused["cron_expression"], "0 */4 * * *")
-        self.assertTrue(paused["recorrencia"].startswith(u"A cada"))
+        self.assertTrue(paused["recurrence"].startswith(u"A cada"))
         self.assertEqual(paused["next_run_at"], "-")
         self.assertEqual(paused["last_ticket_id"], 35)
-        weekly = [i for i in all_value["itens"] if i["id"] == 3][0]
-        self.assertEqual(weekly["recorrencia"], u"Às 04:00, seg, qua, sex")
-        self.assertEqual(weekly["responsavel"], "admin")
+        weekly = [i for i in all_value["items"] if i["id"] == 3][0]
+        self.assertEqual(weekly["recurrence"], u"Às 04:00, seg, qua, sex")
+        self.assertEqual(weekly["responsible"], "admin")
         self.assertEqual(weekly["script"], "relatorio_mensal")
-        self.assertEqual([i for i in all_value["itens"] if i["id"] == 4][0]["responsavel"], "op.hml")
+        self.assertEqual([i for i in all_value["items"] if i["id"] == 4][0]["responsible"], "op.hml")
 
     def test_lista_filtros(self):
         filters = svc_mod.normalize_filters({"environment": "producao", "active": "N", "name": " Limpeza "})
         self.assertEqual(filters, {"environment": "PRODUCAO", "active": "N", "name": "Limpeza"})
         res = self.svc.list(self.ctx["admin"], filters, 1, 20)
-        self.assertEqual([i["id"] for i in res["itens"]], [5])
+        self.assertEqual([i["id"] for i in res["items"]], [5])
         self.assertEqual(svc_mod.normalize_filters({"environment": "x;drop", "active": "Z"}), {})
 
     def test_previa_mensal_dia_31(self):
@@ -611,7 +611,7 @@ class TestPreviewList(_Base):
                                  [], actor="admin")
         self.agd.update(1, {"last_ticket_id": tid}, actor="teste")
         res = self.svc.list(self.ctx["admin"], {}, 1, 20)
-        item1 = [i for i in res["itens"] if i["id"] == 1][0]
+        item1 = [i for i in res["items"] if i["id"] == 1][0]
         self.assertIsNotNone(item1.get("warning"))
         self.assertIn(u"pode ser pulada", item1["warning"])
         self.assertIn(str(tid), item1["warning"])
@@ -621,7 +621,7 @@ class TestPreviewList(_Base):
         self.assertEqual(errors, {})
         self.catalog.scripts_update(1, {"active": "N"}, actor="teste")
         date = self.svc.agenda(self.ctx["admin"])
-        items_r1 = [i for day in date["dias"] for i in day["itens"] if i["regra_id"] == aid_active]
+        items_r1 = [i for day in date["days"] for i in day["items"] if i["rule_id"] == aid_active]
         self.assertTrue(items_r1)
         self.assertIn(u"Será pausada", items_r1[0].get("warning", ""))
         aid = self.agd.insert({"name": "CRON Problematico", "user_id": 1, "script_id": 1,
@@ -629,15 +629,15 @@ class TestPreviewList(_Base):
                                 "cron_expression": "0 0 31 2 *", "priority": 2, "active": "Y",
                                 "params_json": "{}"}, actor="teste")["id"]
         data2 = self.svc.agenda(self.ctx["admin"])
-        problems = data2.get("problemas", [])
-        self.assertIn(aid, [p["regra_id"] for p in problems])
+        problems = data2.get("problems", [])
+        self.assertIn(aid, [p["rule_id"] for p in problems])
 
     def test_formulario_regra_pausada_pausa_aviso(self):
         aid, _errors = self._save(script_id="1", answers={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
         self.svc.pause(self.ctx["admin"], IP, str(aid))
         f = self.svc.form(self.ctx["admin"], str(aid))
-        self.assertIsNotNone(f["regra"].get("pausa_aviso"))
-        self.assertIn(u"Pausada", f["regra"]["pausa_aviso"])
+        self.assertIsNotNone(f["rule"].get("pause_warning"))
+        self.assertIn(u"Pausada", f["rule"]["pause_warning"])
 
 
 class TestAuditInsert(_Base):

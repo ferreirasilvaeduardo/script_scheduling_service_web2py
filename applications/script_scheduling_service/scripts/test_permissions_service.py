@@ -49,20 +49,20 @@ class TestPermissions(unittest.TestCase):
 
     def test_admin_ve_frase_e_todas_as_telas(self):
         d = self.svc.build(self.ctx["admin"])
-        self.assertEqual(d["frase_admin"], svc_mod.ADMIN_PHRASE)
-        self.assertEqual(len(d["telas"]), 10)
-        self.assertEqual(d["ausentes"], [])
-        routes = dict((t["code"], t["rota"]) for t in d["telas"])
+        self.assertEqual(d["admin_phrase"], svc_mod.ADMIN_PHRASE)
+        self.assertEqual(len(d["screens"]), 10)
+        self.assertEqual(d["absent"], [])
+        routes = dict((t["code"], t["route"]) for t in d["screens"])
         self.assertEqual(routes["MANAGE_PROFILES"], ("admin_profiles", "index"))
         self.assertIsNone(routes["CANCEL_TICKET"])  # acao, nao tela
 
     def test_sem_exec_script_mostra_frase_e_motivo(self):
         d = self.svc.build(self.ctx["consulta"])
-        self.assertFalse(d["pode_executar"])
-        self.assertEqual(d["frase_sem_exec"], svc_mod.NO_EXEC_PHRASE)
+        self.assertFalse(d["can_execute"])
+        self.assertEqual(d["no_runs_phrase"], svc_mod.NO_EXEC_PHRASE)
         self.assertEqual(d["scripts"], [])
-        self.assertTrue(all(a["reason"] == svc_mod.REASON_NO_FEATURE for a in d["ausentes"]))
-        self.assertEqual([t["code"] for t in d["telas"]], ["VIEW_LOGS"])
+        self.assertTrue(all(a["reason"] == svc_mod.REASON_NO_FEATURE for a in d["absent"]))
+        self.assertEqual([t["code"] for t in d["screens"]], ["VIEW_LOGS"])
 
     def test_scripts_e_ambientes_iguais_aos_do_disparo(self):
         ctx = self.ctx["op.hml"]
@@ -81,16 +81,16 @@ class TestPermissions(unittest.TestCase):
         new = self.catalog.scripts_insert({"name": "So em PRODUCAO", "interpreter": "PYTHON3",
                                               "path_file": "/opt/scripts/x.py",
                                               "param_type": "NONE"}, actor="teste")["id"]
-        prod = [a for a in self.catalog.environments_list(page=1, size=50)["itens"] if a["name"] == "PRODUCAO"][0]
+        prod = [a for a in self.catalog.environments_list(page=1, size=50)["items"] if a["name"] == "PRODUCAO"][0]
         self.catalog.homologation_save(new, [prod["id"]], actor="teste")
         ctx["scripts"] = frozenset(ctx["scripts"]) | frozenset([new])
         ctx["environments"] = frozenset(a for a in ctx["environments"] if a != "PRODUCAO")
         d = self.svc.build(ctx)
-        reasons = dict((a["name"], a["reason"]) for a in d["ausentes"])
+        reasons = dict((a["name"], a["reason"]) for a in d["absent"])
         name_inactive = self.catalog.scripts_get(sid_inactive)["name"]
         self.assertEqual(reasons[name_inactive], svc_mod.REASON_SCRIPT_INACTIVE)
         self.assertEqual(reasons["So em PRODUCAO"], svc_mod.REASON_NOT_HOMOLOGATED)
-        outside = set(s["name"] for s in self.catalog.scripts_list(page=1, size=100)["itens"]
+        outside = set(s["name"] for s in self.catalog.scripts_list(page=1, size=100)["items"]
                    if s["id"] not in ctx["scripts"])
         self.assertFalse(outside & set(reasons))
         self.assertFalse(outside & set(s["name"] for s in d["scripts"]))

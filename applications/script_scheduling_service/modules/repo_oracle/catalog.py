@@ -75,7 +75,7 @@ _SQL_SCR_LOCK = "SELECT id FROM {scr} WHERE id = :id FOR UPDATE WAIT 5"
 _SQL_SCR_NAME_IN_USE = "SELECT id FROM {scr} WHERE name = :name AND id <> :id"
 _SQL_SCR_LIST = (
     "SELECT " + _column_list(_COLS_SCR, "s.") + ", "
-    "(SELECT COUNT(*) FROM {sprm} sp WHERE sp.script_id = s.id) qtd_parametros "
+    "(SELECT COUNT(*) FROM {sprm} sp WHERE sp.script_id = s.id) param_count "
     "FROM {scr} s{where} "
     "ORDER BY NLSSORT(s.name, 'NLS_SORT=BINARY'), s.id"
 )
@@ -111,7 +111,7 @@ _SQL_PRM_BY_CODE = "SELECT id FROM {prm} WHERE code = :code"
 _SQL_PRM_EXISTS = "SELECT id FROM {prm} WHERE id = :id"
 _SQL_PRM_LIST = (
     "SELECT " + _column_list(_COLS_PRM, "p.") + ", "
-    "(SELECT COUNT(*) FROM {sprm} sp WHERE sp.parameter_id = p.id) qtd_scripts "
+    "(SELECT COUNT(*) FROM {sprm} sp WHERE sp.parameter_id = p.id) script_count "
     "FROM {prm} p{where} "
     "ORDER BY NLSSORT(p.code, 'NLS_SORT=BINARY'), p.id"
 )
@@ -309,11 +309,11 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
         finally:
             cur.close()
         return {
-            "itens": items,
+            "items": items,
             "total": min(raw, _LIMIT_TOTAL),
-            "pagina": p,
-            "tamanho": t,
-            "total_limitado": raw >= _LIMIT_TOTAL,
+            "page": p,
+            "size": t,
+            "total_capped": raw >= _LIMIT_TOTAL,
         }
 
     def _auditar(self, conn, audit, entity, entity_id):
@@ -451,7 +451,7 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
         return result
 
     def scripts_list(self, filters=None, page=1, size=20, conn=None):
-        """Lista scripts por nome ASC, id ASC, com ambientes_homologados e qtd_parametros."""
+        """Lista scripts por nome ASC, id ASC, com homologated_environments e param_count."""
         filters = filters or {}
         clauses, binds = [], {}
         if filters.get("name"):
@@ -463,10 +463,10 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
                 binds[key + "_f"] = filters[key]
         with self.read_context(conn=conn) as c:
             page_ = self._listar(c, _SQL_SCR_LIST, _SQL_SCR_COUNT, _COLS_SCR, clauses, binds,
-                                   page, size, extras=("qtd_parametros",))
-            homolog = self._homologados_por_script(c, [it["id"] for it in page_["itens"]])
-        for item in page_["itens"]:
-            item["ambientes_homologados"] = homolog.get(item["id"], [])
+                                   page, size, extras=("param_count",))
+            homolog = self._homologados_por_script(c, [it["id"] for it in page_["items"]])
+        for item in page_["items"]:
+            item["homologated_environments"] = homolog.get(item["id"], [])
         return page_
 
     def scripts_get(self, id, conn=None):
@@ -661,7 +661,7 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
     # -------------------------------------------------------------------------
 
     def parameters_list(self, filters=None, page=1, size=20, conn=None):
-        """Lista parametros por codigo ASC, id ASC, com qtd_scripts na mesma consulta."""
+        """Lista parametros por codigo ASC, id ASC, com script_count na mesma consulta."""
         filters = filters or {}
         clauses, binds = [], {}
         if filters.get("code"):
@@ -676,7 +676,7 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
                 binds[key + "_f"] = filters[key]
         with self.read_context(conn=conn) as c:
             return self._listar(c, _SQL_PRM_LIST, _SQL_PRM_COUNT, _COLS_PRM, clauses, binds,
-                                page, size, extras=("qtd_scripts",))
+                                page, size, extras=("script_count",))
 
     def parameters_get(self, id, conn=None):
         """Retorna dict do parametro pelo ID ou lanca RepoNotFound."""

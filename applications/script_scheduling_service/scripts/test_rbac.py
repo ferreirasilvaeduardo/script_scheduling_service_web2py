@@ -23,8 +23,8 @@ from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 def _ctx(is_admin=False, active_user="Y", active_profile="Y", features_ids=("EXEC_SCRIPT",),
          envs=("PRODUCAO",), scrs=(1,), login="op.prod"):
     return rbac.user_context({
-        "user_id": 2, "login": login, "name": "Operador", "usuario_ativo": active_user,
-        "profile_id": 2, "perfil_nome": "OPERADOR", "perfil_ativo": active_profile,
+        "user_id": 2, "login": login, "name": "Operador", "active_user": active_user,
+        "profile_id": 2, "profile_name": "OPERADOR", "active_profile": active_profile,
         "is_admin": "Y" if is_admin else "N", "perm_version": 1,
         "features": features_ids, "environments": envs, "scripts": scrs,
     })
@@ -47,7 +47,7 @@ class TestContext(unittest.TestCase):
 
     def test_flag_n_nao_e_verdadeira(self):
         self.assertIs(_ctx(is_admin=False)["is_admin"], False)
-        self.assertIs(_ctx(active_user="N")["usuario_ativo"], False)
+        self.assertIs(_ctx(active_user="N")["active_user"], False)
 
     def test_modulo_puro_sem_gluon(self):
         with open(rbac.__file__, encoding="utf-8") as f:
@@ -243,10 +243,10 @@ class _BaseProfiles(unittest.TestCase):
         # ja que quem nao e admin nao altera perfil de admin (CR-008, E1).
         self.ctx["admin_externo"] = dict(self.ctx["admin"], profile_id=999)
         self.svc = AdminProfilesService(self.rbac_repo, self.catalog, self.users, self.log)
-        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["itens"]] or [0])
+        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["items"]] or [0])
 
     def _audits(self, action):
-        return [a for a in self.audit.list(filters={"action": action}, page=1, size=100)["itens"]
+        return [a for a in self.audit.list(filters={"action": action}, page=1, size=100)["items"]
                 if a["entity"] == "tbsss_profiles" and a["id"] > self.aud_base]
 
     def _version(self, profile_id):
@@ -341,14 +341,14 @@ class TestMatrix(_BaseProfiles):
 
     def test_tela_da_matriz(self):
         screen = self.svc.matrix(self.ctx["admin"], str(PERFIL_HML))
-        envs = [i for g in screen["ambs"] for i in g["itens"]]
+        envs = [i for g in screen["ambs"] for i in g["items"]]
         dev = [i for i in envs if i["label"] == "DESENV"][0]
-        self.assertTrue(dev["checked"] and dev["inativo"])
+        self.assertTrue(dev["checked"] and dev["inactive"])
         self.assertEqual([g["script_group"] for g in screen["funcs"]], ["ADMIN", "OPERATION"])
-        self.assertIsNone(screen["aviso_admin"])
-        self.assertEqual(self.svc.matrix(self.ctx["admin"], str(PERFIL_ADMIN))["aviso_admin"], perfis_mod.ADMIN_WARNING)
+        self.assertIsNone(screen["admin_warning"])
+        self.assertEqual(self.svc.matrix(self.ctx["admin"], str(PERFIL_ADMIN))["admin_warning"], perfis_mod.ADMIN_WARNING)
         screen_query = self.svc.matrix(self.ctx["admin"], str(PERFIL_CONSULTA))
-        self.assertNotIn("DESENV", [i["label"] for g in screen_query["ambs"] for i in g["itens"]])
+        self.assertNotIn("DESENV", [i["label"] for g in screen_query["ambs"] for i in g["items"]])
 
 
 class TestLastAdmin(_BaseProfiles):
@@ -427,7 +427,7 @@ class TestProfileRegistration(_BaseProfiles):
     def test_alteracao_concorrente_e_auditoria(self):
         aba1 = self.svc.form(self.ctx["admin"], str(PERFIL_CONSULTA))
         aba2 = self.svc.form(self.ctx["admin"], str(PERFIL_CONSULTA))
-        self.assertEqual(aba1["usuarios_ativos"], 1)
+        self.assertEqual(aba1["active_users"], 1)
         _id, errors = self.svc.save(self.ctx["admin"], IP, str(PERFIL_CONSULTA),
                                      {"name": "CONSULTA_GERAL", "description": aba2["description"], "version": aba2["version"]})
         self.assertEqual(errors, {})

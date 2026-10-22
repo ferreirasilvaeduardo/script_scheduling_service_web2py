@@ -11,7 +11,7 @@ class RepoRbac(object):
     """
 
     def profiles_list(self, filters=None, page=1, size=20):
-        """Lista perfis paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}."""
+        """Lista perfis paginados com formato {'items': [...], 'total': n, 'page': p, 'size': t}."""
         raise NotImplementedError
 
     def profiles_get(self, id):

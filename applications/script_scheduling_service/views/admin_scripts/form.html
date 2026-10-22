@@ -7,31 +7,31 @@ _s = scr
 _novo = not _s.get('id')
 _situacao = ui_helpers.ativo_info(_s.get('active'))
 _campos_a = [
-    {'name': 'name', 'label': 'Nome', 'value': _s.get('name'), 'error': erros.get('name'), 'required': True, 'maxlength': 60},
-    {'name': 'description', 'label': u'Descrição', 'kind': 'textarea', 'value': _s.get('description'), 'error': erros.get('description'), 'maxlength': 200},
+    {'name': 'name', 'label': 'Nome', 'value': _s.get('name'), 'error': errors.get('name'), 'required': True, 'maxlength': 60},
+    {'name': 'description', 'label': u'Descrição', 'kind': 'textarea', 'value': _s.get('description'), 'error': errors.get('description'), 'maxlength': 200},
 ]
 _campos_b = [
-    {'name': 'script_group', 'label': 'Grupo', 'value': _s.get('script_group'), 'error': erros.get('script_group'), 'maxlength': 30},
-    {'name': 'category', 'label': 'Categoria', 'value': _s.get('category'), 'error': erros.get('category'), 'maxlength': 30},
-    {'name': 'stage', 'label': 'Etapa', 'value': _s.get('stage'), 'error': erros.get('stage'), 'maxlength': 30},
+    {'name': 'script_group', 'label': 'Grupo', 'value': _s.get('script_group'), 'error': errors.get('script_group'), 'maxlength': 30},
+    {'name': 'category', 'label': 'Categoria', 'value': _s.get('category'), 'error': errors.get('category'), 'maxlength': 30},
+    {'name': 'stage', 'label': 'Etapa', 'value': _s.get('stage'), 'error': errors.get('stage'), 'maxlength': 30},
 ]
 _ajuda_path = (u'Caminho completo do arquivo, começando por / (ex.: /opt/automacoes/scripts/carga.py). '
-               u'Não pode ficar em pastas do sistema (/bin, /usr, /etc…). ' + _s['obs_validacao'])
+               u'Não pode ficar em pastas do sistema (/bin, /usr, /etc…). ' + _s['validation_note'])
 _campos_c = [
-    {'name': 'interpreter', 'label': 'Interpretador', 'kind': 'select', 'value': _s.get('interpreter'), 'error': erros.get('interpreter'), 'required': True, 'options': list(interpretadores),
+    {'name': 'interpreter', 'label': 'Interpretador', 'kind': 'select', 'value': _s.get('interpreter'), 'error': errors.get('interpreter'), 'required': True, 'options': list(interpreters),
      'help': u'Chave lógica: cada agente a traduz para o executável local.'},
-    {'name': 'path_file', 'label': 'Arquivo do script', 'value': _s.get('path_file'), 'error': erros.get('path_file'), 'required': True, 'maxlength': 500, 'help': _ajuda_path},
-    {'name': 'param_type', 'label': u'Montagem dos argumentos', 'kind': 'select', 'value': _s.get('param_type'), 'error': erros.get('param_type'), 'required': True, 'options': list(tipos_param),
+    {'name': 'path_file', 'label': 'Arquivo do script', 'value': _s.get('path_file'), 'error': errors.get('path_file'), 'required': True, 'maxlength': 500, 'help': _ajuda_path},
+    {'name': 'param_type', 'label': u'Montagem dos argumentos', 'kind': 'select', 'value': _s.get('param_type'), 'error': errors.get('param_type'), 'required': True, 'options': list(param_types),
      'help': u'Trocar a montagem revalida os parâmetros já vinculados.'},
 ]
 _campos_d = [
-    {'name': 'max_parallel_env', 'label': u'Execuções simultâneas por ambiente', 'kind': 'number', 'value': _s.get('max_parallel_env'), 'error': erros.get('max_parallel_env'), 'required': True, 'help': u'De 1 a 999.'},
-    {'name': 'timeout_s', 'label': 'Tempo limite (segundos)', 'kind': 'number', 'value': _s.get('timeout_s'), 'error': erros.get('timeout_s'), 'help': u'Em branco usa o padrão do agente.'},
+    {'name': 'max_parallel_env', 'label': u'Execuções simultâneas por ambiente', 'kind': 'number', 'value': _s.get('max_parallel_env'), 'error': errors.get('max_parallel_env'), 'required': True, 'help': u'De 1 a 999.'},
+    {'name': 'timeout_s', 'label': 'Tempo limite (segundos)', 'kind': 'number', 'value': _s.get('timeout_s'), 'error': errors.get('timeout_s'), 'help': u'Em branco usa o padrão do agente.'},
 ]
 if not _novo:
     _desativar = _s.get('active') == 'Y'
     if _desativar:
-        _texto_modal = u'%s Agendamentos ativos afetados: %d.' % (aviso_desativacao, _s.get('agendamentos_ativos') or 0)
+        _texto_modal = u'%s Agendamentos ativos afetados: %d.' % (deactivation_warning, _s.get('active_schedules') or 0)
     else:
         _texto_modal = u'O script voltará a aceitar tickets e agendamentos.'
     pass
@@ -67,25 +67,25 @@ pass
     <input type="hidden" name="id" value="{{=_s['id']}}">
     <input type="hidden" name="version" value="{{=_s['version']}}">
     {{pass}}
-    {{if erro_geral:}}
+    {{if general_error:}}
     <div class="alert alert-danger sss-alerta" role="alert">
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#icon-alert"></use></svg>
-      <span>{{=erro_geral}}</span>
+      <span>{{=general_error}}</span>
     </div>
     {{pass}}
-    {{for campo in _campos_a:}}
+    {{for field in _campos_a:}}
     {{include 'components/form_field.html'}}
     {{pass}}
     <div class="sss-form-linha">
-      {{for campo in _campos_b:}}
+      {{for field in _campos_b:}}
       {{include 'components/form_field.html'}}
       {{pass}}
     </div>
-    {{for campo in _campos_c:}}
+    {{for field in _campos_c:}}
     {{include 'components/form_field.html'}}
     {{pass}}
     <div class="sss-form-linha">
-      {{for campo in _campos_d:}}
+      {{for field in _campos_d:}}
       {{include 'components/form_field.html'}}
       {{pass}}
     </div>
@@ -96,7 +96,7 @@ pass
   </form>
 </section>
 
-{{if not _novo and _s.get('registro'):}}
-{{registro = _s['registro']}}
+{{if not _novo and _s.get('record'):}}
+{{record = _s['record']}}
 {{include 'components/record.html'}}
 {{pass}}

@@ -34,11 +34,11 @@ def shell():
         "script": script,
         "environment": amb,
         "status": ui_helpers.status_info(st),
-        "inicio": ui_helpers.formatar_data(ini),
-        "duracao": ui_helpers.formatar_duracao(ini, fim),
+        "start": ui_helpers.formatar_data(ini),
+        "duration": ui_helpers.formatar_duracao(ini, fim),
     } for tid, script, amb, st, ini, fim in amostras]
 
-    return dict(tickets=tickets, status_desconhecido=ui_helpers.status_info("EM_ANALISE"))
+    return dict(tickets=tickets, unknown_status=ui_helpers.status_info("EM_ANALISE"))
 
 
 _STATUS_DEMO = (
@@ -76,8 +76,8 @@ def _tickets_demo():
             "status": status,
             "status_reason": motivo,
             "data": inicio.strftime("%Y-%m-%d"),
-            "inicio": ui_helpers.formatar_data(None if status == "PENDING" else inicio),
-            "duracao": ui_helpers.formatar_duracao(None if status == "PENDING" else inicio, fim),
+            "start": ui_helpers.formatar_data(None if status == "PENDING" else inicio),
+            "duration": ui_helpers.formatar_duracao(None if status == "PENDING" else inicio, fim),
         })
     return tickets
 
@@ -130,8 +130,8 @@ def components():
     status = _texto_var("status", 9)
     if status not in ("PENDING", "RUNNING", "SUCCESS", "FAILED", "CANCELLED"):
         status = ""
-    de = _texto_var("de", 10)
-    ate = _texto_var("ate", 10)
+    de = _texto_var("date_from", 10)
+    ate = _texto_var("date_to", 10)
     de = de if re.fullmatch(_RE_DATA_FILTRO, de) else ""
     ate = ate if re.fullmatch(_RE_DATA_FILTRO, ate) else ""
     tamanho = ui_helpers.sanitizar_tamanho(request.vars.get("size"))
@@ -143,52 +143,52 @@ def components():
                and (not de or t["data"] >= de)
                and (not ate or t["data"] <= ate)]
     pag = ui_helpers.paginacao_info(pagina, tamanho, len(tickets))
-    inicio = (pag["pagina"] - 1) * pag["tamanho"]
+    inicio = (pag["page"] - 1) * pag["size"]
 
     colunas = [
         {"key": "id", "label": u"Ticket", "kind": "mono", "css_class": "sss-col-id"},
         {"key": "script", "label": u"Script", "kind": "mono"},
         {"key": "environment", "label": u"Ambiente"},
         {"key": "status", "label": u"Status", "kind": "status"},
-        {"key": "inicio", "label": u"Início", "kind": "mono", "css_class": "sss-col-data"},
-        {"key": "duracao", "label": u"Duração", "kind": "mono", "css_class": "sss-col-num"},
+        {"key": "start", "label": u"Início", "kind": "mono", "css_class": "sss-col-data"},
+        {"key": "duration", "label": u"Duração", "kind": "mono", "css_class": "sss-col-num"},
     ]
-    filtros_ativos = {"q": q, "status": status, "de": de, "ate": ate}
+    filtros_ativos = {"q": q, "status": status, "date_from": de, "date_to": ate}
     campos_form, form_enviado = _formulario_demo()
 
     return dict(
         badges=[(s, m) for s, m in _STATUS_DEMO[:5]] + [("EM_ANALISE", None)],
-        tabela={
+        table={
             "caption": u"Tickets fictícios",
             "columns": colunas,
-            "rows": tickets[inicio:inicio + pag["tamanho"]],
+            "rows": tickets[inicio:inicio + pag["size"]],
         },
-        tabela_vazia={"caption": u"Tabela sem registros", "columns": colunas[:4], "rows": []},
-        tabela_erro={"caption": u"Tabela com erro", "columns": colunas[:4], "rows": [],
+        empty_table={"caption": u"Tabela sem registros", "columns": colunas[:4], "rows": []},
+        error_table={"caption": u"Tabela com erro", "columns": colunas[:4], "rows": [],
                      "error": u"Não foi possível carregar os tickets. Tente novamente em instantes."},
-        pagina=pag["pagina"],
-        tamanho=pag["tamanho"],
+        page=pag["page"],
+        size=pag["size"],
         total=pag["total"],
         url_base=(request.controller, request.function),
         query_params=filtros_ativos,
-        filtros={
+        filters={
             "id": "filtro-tickets",
             "url_base": (request.controller, request.function),
-            "keep": {"size": pag["tamanho"]},
+            "keep": {"size": pag["size"]},
             "fields": [
                 {"name": "q", "label": u"Script", "kind": "text", "value": q},
                 {"name": "status", "label": u"Status", "kind": "select", "value": status,
                  "options": [("", u"Todos")] + [(c, ui_helpers.status_info(c)["label"]) for c in
                                                ("PENDING", "RUNNING", "SUCCESS", "FAILED", "CANCELLED")]},
-                {"name": "de", "label": u"Data início", "kind": "date", "value": de},
-                {"name": "ate", "label": u"Data fim", "kind": "date", "value": ate},
+                {"name": "date_from", "label": u"Data início", "kind": "date", "value": de},
+                {"name": "date_to", "label": u"Data fim", "kind": "date", "value": ate},
             ],
         },
-        tamanhos=(20, 50, 100),
-        campos_form=campos_form,
-        form_enviado=form_enviado,
-        foco_campo=ui_helpers.primeiro_campo_invalido(campos_form),
-        modais=[
+        sizes=(20, 50, 100),
+        form_fields=campos_form,
+        form_sent=form_enviado,
+        focus_field=ui_helpers.primeiro_campo_invalido(campos_form),
+        modals=[
             {"id": "modal-cancelar", "title": u"Cancelar ticket 1024?",
              "text": u"O processo em execução será interrompido. Esta ação não pode ser desfeita.",
              "trigger_label": u"Cancelar ticket", "confirm_label": u"Sim, cancelar",
@@ -198,12 +198,12 @@ def components():
              "trigger_label": u"Reexecutar", "confirm_label": u"Reexecutar",
              "variant": "normal", "action": URL("dev", "components"), "hidden_fields": {"ticket_id": 1023}},
         ],
-        alertas=[ui_helpers.alerta_info({"kind": t, "message": m}) for t, m in (
+        alerts=[ui_helpers.alerta_info({"kind": t, "message": m}) for t, m in (
             ("success", u"Usuário salvo com sucesso."),
             ("warning", u"O agente srv-linux-prod-02 está sem heartbeat há 2 minutos."),
             ("error", u"Não foi possível salvar: o login já está em uso."),
         )],
-        texto_copia=u"/opt/sss/scripts/carga_diaria.py --data 2026-10-14",
+        copy_text=u"/opt/sss/scripts/carga_diaria.py --data 2026-10-14",
     )
 
 

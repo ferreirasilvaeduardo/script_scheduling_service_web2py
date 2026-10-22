@@ -16,14 +16,14 @@ As regras de negócio estão no README §4.4 e §10 (padrões globais e tabela 1
 | Controller | `controllers/admin_<entidade>.py` | Aplica o guarda `_exigir_func('<FUNC>')`, restringe o método HTTP, lê `request.vars` com um teto defensivo por campo (sempre **acima** do limite do campo, para que o service veja o excesso e o recuse; nada é cortado sem aviso), chama o service, define o flash e renderiza ou redireciona. Não contém regra de negócio. |
 | Service | `modules/admin_<entity>_service.py` | Não importa `gluon` e recebe `ctx` e `ip` como parâmetros. Reconfirma a funcionalidade com `admin_crud.require_feature`, valida os campos, calcula a versão e o detalhe de auditoria e chama o repositório. O serviço padrão do processo é obtido sob demanda (`_servico()`). |
 | Base comum | `modules/admin_crud.py` | Fornece `version` (com `sensiveis=`), `esperado`, `texto`, `identificador`, `free_text`, `changes_detail`, `insert_detail`, `free_detail`, `auditoria`, `AccessDenied`, `OperationDenied` e as mensagens padrão (`MSG_CONFLICT` vem de `ui_helpers.MENSAGENS`). |
-| Repositório | `repo_<agregado>` | A inclusão e a alteração recebem `auditoria=` e gravam a linha de `tbsss_audit` na **mesma** operação. A alteração recebe `esperado=` e faz um `UPDATE` condicional. O ator da auditoria também preenche as colunas de registro (`created_*` na inclusão, `updated_*` na alteração; CR-006, README §10); sem ator, a gravação é recusada. |
+| Repositório | `repo_<agregado>` | A inclusão e a alteração recebem `audit=` e gravam a linha de `tbsss_audit` na **mesma** operação. A alteração recebe `esperado=` e faz um `UPDATE` condicional. O ator da auditoria também preenche as colunas de registro (`created_*` na inclusão, `updated_*` na alteração; CR-006, README §10); sem ator, a gravação é recusada. |
 
 ## Telas e ações
 
 | Ação | Método | Comportamento |
 |---|---|---|
-| `lista` | GET | Filtros com `components/filters.html`, tabela com `components/table.html` (colunas `active` e `action`) e paginação com `components/pagination.html`. Ordenação definida pelo repositório. O `total` vem limitado a 10.001: acima de 10.000, a paginação mostra "mais de 10.000 registros" e não oferece "Última" (CR-007, R-29). |
-| `form[/id]` | GET | Uma única view para inclusão (sem id) e edição. Campos com `components/form_field.html`. Na edição, a chave natural fica `somente_leitura` e o servidor ignora o valor enviado. Também na edição, o quadro **Registro** (`components/record.html`, CR-006) mostra quem criou o registro e quando, e a última alteração ("Nunca alterado" enquanto `updated_at` for nulo). O service entrega `created_at`, `created_by`, `updated_at` e `updated_by` no dicionário do `formulario()`, por `ui_helpers.registro(reg, ctx)`: o login do ator só vai para quem tem `VIEW_AUDIT` ou é administrador; os demais veem "você", "Sistema (…)" ou "outra pessoa" (CR-007, D6). |
+| `index` | GET | Filtros com `components/filters.html`, tabela com `components/table.html` (colunas `active` e `action`) e paginação com `components/pagination.html`. Ordenação definida pelo repositório. O `total` vem limitado a 10.001: acima de 10.000, a paginação mostra "mais de 10.000 registros" e não oferece "Última" (CR-007, R-29). |
+| `form[/id]` | GET | Uma única view para inclusão (sem id) e edição. Campos com `components/form_field.html`. Na edição, a chave natural fica `read_only` e o servidor ignora o valor enviado. Também na edição, o quadro **Registro** (`components/record.html`, CR-006) mostra quem criou o registro e quando, e a última alteração ("Nunca alterado" enquanto `updated_at` for nulo). O service entrega `created_at`, `created_by`, `updated_at` e `updated_by` no dicionário do `formulario()`, por `ui_helpers.registro(reg, ctx)`: o login do ator só vai para quem tem `VIEW_AUDIT` ou é administrador; os demais veem "você", "Sistema (…)" ou "outra pessoa" (CR-007, D6). |
 | `salvar` | POST + CSRF | Em caso de sucesso, grava o flash e redireciona para a `lista`. A exceção é o cadastro de scripts, que volta ao `form` para mostrar avisos e atalhos (README §8.5). Em caso de erro, responde **200**, reapresenta o que foi digitado e destaca os campos. O primeiro campo inválido recebe `autofocus`. Valor acima do limite ou fora do formato é recusado, nunca truncado (README §10, "Texto nos cadastros"). |
 | `alternar_ativo` | POST + CSRF | O botão fica no **formulário de edição**, e não na lista, e abre `components/confirm_modal.html`. O modal diz a consequência e o impacto da ação: no ambiente, os agendamentos ativos afetados e a quantidade de scripts homologados nele; no perfil, a quantidade e os logins dos usuários ativos afetados (README §4.3.B.1); no parâmetro vinculado a script ativo, a desativação é bloqueada e os scripts são listados. Depois redireciona de volta para o `form`. |
 
@@ -48,11 +48,11 @@ As entidades mestras nunca são excluídas, apenas desativadas (README §10).
 
 | Origem | Apresentação |
 |---|---|
-| Validação do service | Mensagem em português no campo (`erros['<campo>']`), e no topo a mensagem-padrão em duas partes: "Alguns campos precisam de correção. Os campos estão marcados em vermelho, com a explicação embaixo de cada um." (README §2.4.2) |
+| Validação do service | Mensagem em português no campo (`errors['<campo>']`), e no topo a mensagem-padrão em duas partes: "Alguns campos precisam de correção. Os campos estão marcados em vermelho, com a explicação embaixo de cada um." (README §2.4.2) |
 | `RepoViolation` | Mapeada por `constraint` para o campo. Exemplo: `uk_tbsss_env_name` vira "Já existe um ambiente com este nome." |
-| `RepoConflict` | `erros['_geral']`, com a mensagem de conflito |
-| Outra `RepoError` | `erros['_geral']` com "Não foi possível salvar...". O detalhe técnico (ORA-, SQL, traceback) vai só para o log. |
-| Regra de negócio (ex.: último administrador, desativar o próprio usuário, tirar o próprio perfil de administrador) | `RepoViolation` com constraint de aplicação (`sss_*`), traduzida para `erros['_geral']` ou `OperationDenied(message)`, que o controller exibe no flash |
+| `RepoConflict` | `errors['_geral']`, com a mensagem de conflito |
+| Outra `RepoError` | `errors['_geral']` com "Não foi possível salvar...". O detalhe técnico (ORA-, SQL, traceback) vai só para o log. |
+| Regra de negócio (ex.: último administrador, desativar o próprio usuário, tirar o próprio perfil de administrador) | `RepoViolation` com constraint de aplicação (`sss_*`), traduzida para `errors['_geral']` ou `OperationDenied(message)`, que o controller exibe no flash |
 | Sem funcionalidade | 403 no controller (guarda) e `AccessDenied` no service |
 | ID inexistente ou inválido | 404 |
 

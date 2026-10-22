@@ -73,10 +73,10 @@ class TestAuthService(unittest.TestCase):
             audit=self.audit, max_attempts=MAX, lockout_s=LOCKOUT_S, log=log,
         )
         self.users.update(5, {"password_hash": security.hash_password(self.password)}, actor="teste")
-        self.aud_base = max(a["id"] for a in self.audit.list(size=1000)["itens"])
+        self.aud_base = max(a["id"] for a in self.audit.list(size=1000)["items"])
 
     def _actions(self, actor):
-        items = self.audit.list({"actor": actor}, page=1, size=100)["itens"]
+        items = self.audit.list({"actor": actor}, page=1, size=100)["items"]
         return [a["action"] for a in items if a["actor"] == actor and a["id"] > self.aud_base]
 
     def _fail_login(self, login, times):
@@ -115,7 +115,7 @@ class TestAuthService(unittest.TestCase):
 
     def test_detalhe_da_falha_com_a_contagem_do_repositorio(self):
         self._fail_login("admin", 2)
-        items = self.audit.list({"actor": "admin"}, page=1, size=100)["itens"]
+        items = self.audit.list({"actor": "admin"}, page=1, size=100)["items"]
         details = sorted(a["detail"] for a in items if a["action"] == "LOGIN_FAILED" and a["id"] > self.aud_base)
         self.assertEqual(details, ["Falha de login: senha incorreta (tentativa 1 de 5)",
                                     "Falha de login: senha incorreta (tentativa 2 de 5)"])
@@ -261,7 +261,7 @@ class TestAuthService(unittest.TestCase):
     def test_auditoria_sem_senha(self):
         self.service.authenticate("admin", self.password, "10.0.0.1")
         self.service.authenticate("admin", "senha-errada-123", "10.0.0.1")
-        for reg in self.audit.list(size=1000)["itens"]:
+        for reg in self.audit.list(size=1000)["items"]:
             self.assertNotIn(self.password, reg.get("detail") or "")
             self.assertNotIn("senha-errada-123", reg.get("detail") or "")
             self.assertNotIn("pbkdf2", reg.get("detail") or "")
@@ -293,7 +293,7 @@ class TestAuthService(unittest.TestCase):
         self.assertGreater(ctx["perm_version"], session["perm_version"])
 
     def _last_logout(self, actor):
-        items = [r for r in self.audit.list({"action": "LOGOUT"}, page=1, size=10)["itens"]
+        items = [r for r in self.audit.list({"action": "LOGOUT"}, page=1, size=10)["items"]
                  if r["actor"] == actor and r["id"] > self.aud_base]
         return items[0] if items else None
 
@@ -351,7 +351,7 @@ class TestSeedDev(unittest.TestCase):
 
     def _hashes(self):
         repo = repo_factory.get("users")
-        return dict((u["login"], u["password_hash"]) for u in repo.list(size=100)["itens"])
+        return dict((u["login"], u["password_hash"]) for u in repo.list(size=100)["items"])
 
     def test_sem_variavel_logins_impossiveis(self):
         with mock.patch.dict(os.environ):

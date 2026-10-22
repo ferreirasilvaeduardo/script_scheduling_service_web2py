@@ -50,7 +50,7 @@ STATUS_TICKET = ("PENDING", "RUNNING", "SUCCESS", "FAILED", "CANCELLED")
 TERMINAL_STATUSES = ("SUCCESS", "FAILED", "CANCELLED")
 CANCELLABLE_STATUSES = ("PENDING", "RUNNING")
 SOURCES = (("manual", u"Manual"), ("agendamento", u"Agendamento"))
-FILTERS = ("status", "environment", "script", "requested_by", "criado_de", "criado_ate", "origem")
+FILTERS = ("status", "environment", "script", "requested_by", "created_from", "created_to", "source")
 
 MSG_CANCEL = {
     "TERMINAL": u"O ticket já estava encerrado.",
@@ -179,13 +179,13 @@ def normalize_filters(input_value):
         requester = requester.strip().lower()
         if _RE_LOGIN.fullmatch(requester):
             cleaned["requested_by"] = requester
-    for key in ("criado_de", "criado_ate"):
+    for key in ("created_from", "created_to"):
         day = _day(_last(input_value.get(key)))
         if day is not None:
             cleaned[key] = day.strftime(_DAY_FORMAT)
-    source = _last(input_value.get("origem"))
+    source = _last(input_value.get("source"))
     if source in dict(SOURCES):
-        cleaned["origem"] = source
+        cleaned["source"] = source
     return cleaned
 
 
@@ -200,12 +200,12 @@ def _repo_filters(cleaned):
         repo["script_id"] = cleaned["script"]
     if "requested_by" in cleaned:
         repo["requested_by"] = cleaned["requested_by"]
-    if "origem" in cleaned:
-        repo["origem"] = cleaned["origem"]
-    if "criado_de" in cleaned:
-        repo["criado_inicio"] = _day(cleaned["criado_de"])
-    if "criado_ate" in cleaned:
-        repo["criado_fim"] = _day(cleaned["criado_ate"]) + datetime.timedelta(days=1)
+    if "source" in cleaned:
+        repo["source"] = cleaned["source"]
+    if "created_from" in cleaned:
+        repo["created_from"] = _day(cleaned["created_from"])
+    if "created_to" in cleaned:
+        repo["created_to"] = _day(cleaned["created_to"]) + datetime.timedelta(days=1)
     return repo
 
 
@@ -263,7 +263,7 @@ class TicketService(object):
         if not isinstance(name, str) or not _RE_ENVIRONMENT.fullmatch(name):
             return None
         page = self._catalog.environments_list(filters={"name": name}, page=1, size=_ENVIRONMENTS_MAX)
-        for env in page["itens"]:
+        for env in page["items"]:
             if env.get("name") == name:
                 return env
         return None
@@ -397,7 +397,7 @@ class TicketService(object):
                 "required": v.get("required") == "Y",
                 "sensitive": sensitive,
                 "options": options,
-                "padrao": default,
+                "default": default,
                 "has_default": default_real is not None,
                 "default_text": default_text,
                 "value": value,
@@ -411,9 +411,9 @@ class TicketService(object):
             "script": {"id": script["id"], "name": script["name"], "description": script.get("description") or "",
                        "param_type": script["param_type"]},
             "environment": {"id": env["id"], "name": env["name"], "description": env.get("description") or "",
-                         "producao": env["name"] == PRODUCTION_ENVIRONMENT},
+                         "production": env["name"] == PRODUCTION_ENVIRONMENT},
             "fields": fields,
-            "prioridades": priorities,
+            "priorities": priorities,
         }
 
     # ------------------------------------------------------------- validacao
@@ -539,7 +539,7 @@ class TicketService(object):
         if sid is None or not environment:
             return None
         items = self._tickets.list(filters={"requested_by": ctx.get("login"), "script_id": sid,
-                                              "environment": environment}, page=1, size=1)["itens"]
+                                              "environment": environment}, page=1, size=1)["items"]
         return items[0] if items else None
 
     def has_last_run(self, ctx, script_id, environment):
@@ -660,18 +660,18 @@ class TicketService(object):
 
     def _script_names(self):
         page = self._catalog.scripts_list(page=1, size=_SCRIPTS_MAX)
-        return dict((s["id"], s["name"]) for s in page["itens"])
+        return dict((s["id"], s["name"]) for s in page["items"])
 
     def filter_options(self, ctx):
         """Opcoes dos selects de filtro: ambientes visiveis ao perfil e scripts do catalogo."""
         if rbac.has_feature(ctx, "VIEW_LOGS") and ctx.get("is_admin") is True:
             page = self._catalog.environments_list(page=1, size=_ENVIRONMENTS_MAX)
-            environments = sorted(a["name"] for a in page["itens"])
+            environments = sorted(a["name"] for a in page["items"])
         else:
             environments = sorted(ctx.get("environments") or ())
         scripts = sorted(self._script_names().items(), key=lambda pair: (pair[1], pair[0]))
         return {"environments": environments, "scripts": scripts, "status": list(STATUS_TICKET),
-                "origens": list(SOURCES)}
+                "sources": list(SOURCES)}
 
     def _query_scope(self, ctx, repo_filters):
         """(visivel, escopo_ambientes) da consulta; sem VIEW_LOGS fixa o solicitante em repo_filtros.
@@ -720,9 +720,9 @@ class TicketService(object):
                     last = {"id": u["id"], "state": info["label"], "css_class": info["css_class"],
                               "icon": info["icon"],
                               "when": u"há %s" % ui_helpers.tempo_simples((now - u["created_at"]).total_seconds())}
-                cards.append(dict(s, script_group=g["script_group"], category=g["category"], perguntas=questions,
-                                    environments=[a["name"] for a in environments], ultima=last))
-            result.append({"script_group": g["script_group"], "category": g["category"], "cartoes": cards})
+                cards.append(dict(s, script_group=g["script_group"], category=g["category"], questions=questions,
+                                    environments=[a["name"] for a in environments], last_run=last))
+            result.append({"script_group": g["script_group"], "category": g["category"], "cards": cards})
         return result
 
     def script_history(self, ctx, script_id):
@@ -765,25 +765,25 @@ class TicketService(object):
         return {
             "script": {"id": sid, "name": available[sid]["name"]},
             "total": len(items),
-            "contagem": count,
-            "taxa": rate,
-            "frase_taxa": (u"De cada 10 vezes, %d deram certo." % int(round(rate / 10.0))) if rate is not None
+            "counts": count,
+            "rate": rate,
+            "rate_phrase": (u"De cada 10 vezes, %d deram certo." % int(round(rate / 10.0))) if rate is not None
             else u"Ainda não há execuções terminadas no período.",
-            "duracao_tipica": (u"cerca de %s" % ui_helpers.tempo_simples(median)) if median is not None else u"-",
-            "duracao_maxima": ui_helpers.tempo_simples(durations[-1]) if durations else u"-",
-            "motivos": [{"reason": m, "name": ui_helpers.NOMES_MOTIVO.get(m, m), "quantidade": q}
+            "typical_duration": (u"cerca de %s" % ui_helpers.tempo_simples(median)) if median is not None else u"-",
+            "max_duration": ui_helpers.tempo_simples(durations[-1]) if durations else u"-",
+            "reasons": [{"reason": m, "name": ui_helpers.NOMES_MOTIVO.get(m, m), "quantity": q}
                         for m, q in sorted(reasons.items(), key=lambda x: (-x[1], x[0]))],
-            "dias": series,
-            "grafico": ui_helpers.barras_empilhadas(series),
-            "aviso_limite": (u"Mostrando os %d pedidos mais recentes." % HISTORY_LIMIT)
+            "days": series,
+            "chart": ui_helpers.barras_empilhadas(series),
+            "limit_warning": (u"Mostrando os %d pedidos mais recentes." % HISTORY_LIMIT)
             if len(items) >= HISTORY_LIMIT else None,
-            "filtro_lista": {"script": sid, "criado_de": since.strftime("%Y-%m-%d")},
+            "list_filter": {"script": sid, "created_from": since.strftime("%Y-%m-%d")},
         }
 
     def home_summary(self, ctx, hours=24, latest=5):
         """Cartoes do painel inicial no escopo da lista de tickets; None sem acesso a consulta.
 
-        Retorna {"contagem": [(status, quantidade)], "desde": datetime, "meus": [itens da lista]}:
+        Retorna {"counts": [(status, quantidade)], "since": datetime, "mine": [itens da lista]}:
         quantidade por status dos tickets criados nas ultimas `horas` e os `ultimos` tickets do
         proprio usuario.
         """
@@ -793,15 +793,15 @@ class TicketService(object):
         since = now - datetime.timedelta(hours=hours)
         count = []
         for status in STATUS_TICKET:
-            repo_filters = {"status": [status], "criado_inicio": since}
+            repo_filters = {"status": [status], "created_from": since}
             visible, scope = self._query_scope(ctx, repo_filters)
             total = 0
             if visible:
                 total = self._tickets.list(filters=repo_filters, page=1, size=1,
                                              environment_scope=scope)["total"]
             count.append((status, total))
-        mine = self.list(ctx, {"requested_by": ctx["login"]}, 1, latest)["itens"]
-        return {"contagem": count, "desde": since, "meus": mine}
+        mine = self.list(ctx, {"requested_by": ctx["login"]}, 1, latest)["items"]
+        return {"counts": count, "since": since, "mine": mine}
 
     def list(self, ctx, filters, page, size):
         """Lista paginada no escopo do perfil (README §4.3.C).
@@ -812,38 +812,38 @@ class TicketService(object):
         if not self.can_query(ctx):
             self._deny(ctx, rbac.Reason.NO_FEATURE, None, None)
         repo_filters = _repo_filters(normalize_filters(filters))
-        empty = {"itens": [], "total": 0, "pagina": 1, "tamanho": size}
+        empty = {"items": [], "total": 0, "page": 1, "size": size}
         visible, scope = self._query_scope(ctx, repo_filters)
         if not visible:
             return empty
         result = self._tickets.list(filters=repo_filters, page=page, size=size,
                                          environment_scope=scope)
         info = ui_helpers.paginacao_info(page, size, result["total"],
-                                         result.get("total_limitado", False), len(result["itens"]))
-        if not result["itens"] and info["pagina"] != result["pagina"]:
-            result = self._tickets.list(filters=repo_filters, page=info["pagina"], size=size,
+                                         result.get("total_capped", False), len(result["items"]))
+        if not result["items"] and info["page"] != result["page"]:
+            result = self._tickets.list(filters=repo_filters, page=info["page"], size=size,
                                              environment_scope=scope)
         now = self._tickets.now()
         names = self._script_names()
         items = []
-        for t in result["itens"]:
+        for t in result["items"]:
             items.append({
                 "id": t["id"],
-                "script_nome": names.get(t["script_id"], "#%s" % t["script_id"]),
+                "script_name": names.get(t["script_id"], "#%s" % t["script_id"]),
                 "environment": t["environment"],
                 "status": t["status"],
                 "status_reason": t.get("status_reason"),
-                "descricao_motivo": ui_helpers.descricao_motivo(t.get("status_reason")),
+                "reason_description": ui_helpers.descricao_motivo(t.get("status_reason")),
                 "cancel_requested": t.get("cancel_requested") == "Y",
                 "priority": t["priority"],
                 "requested_by": ui_helpers.ator_visivel(t["requested_by"], ctx),
-                "origem": "agendamento" if t.get("schedule_id") is not None else "manual",
+                "source": "agendamento" if t.get("schedule_id") is not None else "manual",
                 "created_at": t.get("created_at"),
                 "started_at": t.get("started_at"),
-                "duracao": _duration(t, now),
+                "duration": _duration(t, now),
             })
-        return {"itens": items, "total": result["total"], "pagina": result["pagina"],
-                "tamanho": result["tamanho"], "total_limitado": result.get("total_limitado", False)}
+        return {"items": items, "total": result["total"], "page": result["page"],
+                "size": result["size"], "total_capped": result.get("total_capped", False)}
 
     def _display_answers(self, ticket_id, snap):
         sensitive = set((snap or {}).get("sensitive") or ())
@@ -898,7 +898,7 @@ class TicketService(object):
                 parent = {"id": original["id"], "status": original["status"]}
         children = [{"id": f["id"], "status": f["status"]}
                   for f in self._tickets.list(filters={"parent_ticket_id": ticket["id"]}, page=1,
-                                                size=_CHILDREN_MAX)["itens"]
+                                                size=_CHILDREN_MAX)["items"]
                   if self._can_view(ctx, f)]
         children.sort(key=lambda f: f["id"])
 
@@ -918,20 +918,20 @@ class TicketService(object):
         if snap is not None:
             # Caminho completo para todos (README §8.5, CR-005 D8).
             snapshot = dict((k, snap.get(k)) for k in ("version", "interpreter", "path_file", "param_type"))
-            snapshot["compilado_em"] = snap.get("compiled_at")  # chave de tela (CR-016d)
+            snapshot["compiled_at"] = snap.get("compiled_at")  # chave de tela (CR-016d)
         return {
             "id": ticket["id"],
             "script_id": ticket["script_id"],
-            "script_nome": script_name,
+            "script_name": script_name,
             "environment": ticket["environment"],
             "status": status,
             "status_reason": ticket.get("status_reason"),
-            "descricao_motivo": ui_helpers.descricao_motivo(ticket.get("status_reason")),
+            "reason_description": ui_helpers.descricao_motivo(ticket.get("status_reason")),
             "return_code": ticket.get("return_code"),
             "cancel_requested": cancel_requested,
             "priority": ticket["priority"],
             "requested_by": ui_helpers.ator_visivel(ticket["requested_by"], ctx),
-            "origem": "agendamento" if ticket.get("schedule_id") is not None else "manual",
+            "source": "agendamento" if ticket.get("schedule_id") is not None else "manual",
             "schedule_id": ticket.get("schedule_id"),
             "agent_id": ticket.get("agent_id"),
             "process_id": ticket.get("process_id"),
@@ -940,22 +940,22 @@ class TicketService(object):
             "started_at": ticket.get("started_at"),
             "heartbeat_at": ticket.get("heartbeat_at"),
             "finished_at": ticket.get("finished_at"),
-            "duracao": _duration(ticket, now),
+            "duration": _duration(ticket, now),
             # CR-004 U2 (README §5.7): frase "o que aconteceu / o que fazer" e barra de etapas.
-            "explicacao": ui_helpers.explicacao_ticket(ticket, now, timeout_s),
-            "etapas": ui_helpers.etapas_ticket(ticket, now),
+            "explanation": ui_helpers.explicacao_ticket(ticket, now, timeout_s),
+            "steps": ui_helpers.etapas_ticket(ticket, now),
             "log_truncated": ticket.get("log_truncated") == "Y",
             "snapshot": snapshot,
-            "argv_para_exibicao": argv,
-            "comando_exibicao": " ".join(shlex.quote(str(t)) for t in argv) if argv else None,
+            "display_argv": argv,
+            "display_command": " ".join(shlex.quote(str(t)) for t in argv) if argv else None,
             "answers": self._display_answers(ticket["id"], snap),
-            "pai": parent,
-            "filhos": children,
-            "registro": ui_helpers.registro(ticket, ctx),
+            "parent": parent,
+            "children": children,
+            "record": ui_helpers.registro(ticket, ctx),
             # CR-012 (README §8.13): quadro Saida, com a mesma regra de leitura do log (ticket visivel).
-            "saida": ui_helpers.quadro_saida(self._tickets.output_get(ticket["id"]), now),
-            "pode_cancelar": can_cancel,
-            "pode_reexecutar": can_rerun,
+            "output": ui_helpers.quadro_saida(self._tickets.output_get(ticket["id"]), now),
+            "can_cancel": can_cancel,
+            "can_rerun": can_rerun,
         }
 
     # ------------------------------------------------------------------ log
@@ -1120,7 +1120,7 @@ class TicketService(object):
             "script_id": script["id"],
             "environment": env["name"],
             "priority": str(prio if prio is not None else DEFAULT_PRIORITY),
-            "valores": dict((k, v) for k, v in answers.items() if k not in sensitive),
+            "values": dict((k, v) for k, v in answers.items() if k not in sensitive),
             "errors": dict(errors),
         }
 

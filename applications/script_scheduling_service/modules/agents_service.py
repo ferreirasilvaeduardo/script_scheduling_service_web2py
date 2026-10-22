@@ -93,7 +93,7 @@ class AgentsService(object):
 
     def _script_names(self):
         page = self._catalog.scripts_list(page=1, size=1000)
-        return dict((s["id"], s["name"]) for s in page["itens"])
+        return dict((s["id"], s["name"]) for s in page["items"])
 
     def _tickets(self, code, now, names):
         items = []
@@ -101,11 +101,11 @@ class AgentsService(object):
             hb = t.get("heartbeat_at")
             items.append({
                 "id": t["id"],
-                "script_nome": names.get(t.get("script_id"), u"#%s" % t.get("script_id")),
+                "script_name": names.get(t.get("script_id"), u"#%s" % t.get("script_id")),
                 "environment": t.get("environment"),
                 "requested_by": t.get("requested_by"),
                 "started_at": t.get("started_at"),
-                "duracao": ui_helpers.formatar_duracao(t.get("started_at"), now),
+                "duration": ui_helpers.formatar_duracao(t.get("started_at"), now),
                 "heartbeat": format_age(None if hb is None else max(0, int((now - hb).total_seconds()))),
             })
         return items
@@ -119,7 +119,7 @@ class AgentsService(object):
     def dashboard(self, ctx, now=None):
         """Agentes com saude derivada, idade do heartbeat e tickets RUNNING (somente leitura).
 
-        Retorna {"agents": [...], "summary": {codigo_saude: quantidade}, "agora": datetime}.
+        Retorna {"agents": [...], "summary": {codigo_saude: quantidade}, "now": datetime}.
         """
         admin_crud.require_feature(ctx, FEATURE)
         now = now or self._clock()
@@ -146,13 +146,13 @@ class AgentsService(object):
                 # So os nomes logicos: os caminhos locais nunca vao para a tela (README §13).
                 "started_at": ag.get("started_at"),
                 "heartbeat_at": hb,
-                "idade_s": age,
-                "ha": format_age(age),
-                "saude": health_info(code_health),
+                "age_s": age,
+                "ago": format_age(age),
+                "health": health_info(code_health),
                 "running": len(tickets),
                 "tickets": tickets,
             })
-        return {"agents": agents, "summary": summary, "agora": now,
+        return {"agents": agents, "summary": summary, "now": now,
                 "unattended_queue": self._agents.unattended_queue(now, self._thresholds),
                 "running_without_pid": self._agents.running_without_pid(now, 2),
                 "config_mismatch": divergent, "config_web": self._critical_config}

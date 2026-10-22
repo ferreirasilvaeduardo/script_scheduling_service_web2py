@@ -150,7 +150,7 @@ class TestTicketService(_BaseTicket):
 
     def test_auditoria_gravada_sem_valor_sensivel(self):
         tid, _ = self._create(answers={"documento_cliente": SECRET})
-        regs = self.audit.list(filters={"action": "TICKET_CREATE", "entity_id": tid})["itens"]
+        regs = self.audit.list(filters={"action": "TICKET_CREATE", "entity_id": tid})["items"]
         self.assertEqual(len(regs), 1)
         self.assertEqual(regs[0]["actor"], "op.hml")
         self.assertEqual(regs[0]["source_ip"], IP)
@@ -236,7 +236,7 @@ class TestTicketService(_BaseTicket):
         self.assertIsNone(tid)
         self.assertEqual(list(errors), ["priority"])
         self.assertNotIn(1, [p for p, _ in self.svc.prepare_form(
-            self.ctx["op.hml"], "1", "HOMOLOGACAO")["prioridades"]])
+            self.ctx["op.hml"], "1", "HOMOLOGACAO")["priorities"]])
 
     def test_scheduled_at_no_passado(self):
         past = (self.tickets.now() - datetime.timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M")
@@ -291,7 +291,7 @@ class TestTicketService(_BaseTicket):
         self.assertEqual([c["code"] for c in form["fields"]],
                          ["data_ref", "limite_linhas", "modo_exec", "verbose", "documento_cliente"])
         self.assertIsNone(fields["documento_cliente"]["value"])
-        self.assertIsNone(fields["documento_cliente"]["padrao"])
+        self.assertIsNone(fields["documento_cliente"]["default"])
         self.assertTrue(fields["documento_cliente"]["has_default"])
         self.assertNotIn("00011122233", json.dumps(form, default=str))
         self.assertEqual(fields["data_ref"]["value"], "2026-01-01")
@@ -367,13 +367,13 @@ class TestTicketQuery(_BaseTicket):
         return self.tickets.create(ticket, [])
 
     def _ids(self, ctx, filters=None):
-        return set(t["id"] for t in self.svc.list(ctx, filters or {}, 1, 100)["itens"])
+        return set(t["id"] for t in self.svc.list(ctx, filters or {}, 1, 100)["items"])
 
     # ------------------------------------------------------------- escopo
 
     def test_escopo_da_lista_por_perfil(self):
         dev = self._insert_row(environment="DESENV")
-        by_env = dict((t["id"], t["environment"]) for t in self.tickets.list(page=1, size=1000)["itens"])
+        by_env = dict((t["id"], t["environment"]) for t in self.tickets.list(page=1, size=1000)["items"])
         self.assertEqual(self._ids(self.ctx["admin"]), set(by_env))
         query = self._ids(self.ctx["consulta"])
         self.assertNotIn(dev, query)
@@ -384,7 +384,7 @@ class TestTicketQuery(_BaseTicket):
 
     def test_sem_ver_logs_lista_apenas_proprios(self):
         ctx = self._without("op.hml", "VIEW_LOGS")
-        items = self.svc.list(ctx, {}, 1, 100)["itens"]
+        items = self.svc.list(ctx, {}, 1, 100)["items"]
         self.assertTrue(items)
         # Sem VIEW_AUDIT o proprio login aparece como "você" (CR-008, E5).
         self.assertEqual(set(t["requested_by"] for t in items), {u"você"})
@@ -393,7 +393,7 @@ class TestTicketQuery(_BaseTicket):
     def test_solicitante_mascarado_sem_auditoria(self):
         # CR-008, E5: consulta sem VIEW_AUDIT nao recebe login de terceiros; admin recebe.
         ctx = self._without("consulta", "VIEW_AUDIT")
-        items = self.svc.list(ctx, {}, 1, 100)["itens"]
+        items = self.svc.list(ctx, {}, 1, 100)["items"]
         self.assertTrue(items)
         self.assertEqual(set(t["requested_by"] for t in items), {u"outra pessoa"})
         self.assertEqual(self.svc.detail(ctx, 17)["requested_by"], u"outra pessoa")
@@ -417,12 +417,12 @@ class TestTicketQuery(_BaseTicket):
     def test_normalizar_filtros_allowlist(self):
         cleaned = ticket_service.normalize_filters({
             "status": ["RUNNING", "X", "PENDING", "RUNNING"], "environment": "producao", "script": "07",
-            "requested_by": " OP.Hml ", "criado_de": "2026-02-30", "criado_ate": "2026-10-14",
-            "origem": "agendamento", "sort_order": "id; DROP TABLE", "created_at": "x"})
+            "requested_by": " OP.Hml ", "created_from": "2026-02-30", "created_to": "2026-10-14",
+            "source": "agendamento", "sort_order": "id; DROP TABLE", "created_at": "x"})
         self.assertEqual(list(cleaned.items()), [
             ("status", ["PENDING", "RUNNING"]), ("script", 7), ("requested_by", "op.hml"),
-            ("criado_ate", "2026-10-14"), ("origem", "agendamento")])
-        self.assertEqual(ticket_service.normalize_filters({"status": "SUCCESS", "origem": "outro",
+            ("created_to", "2026-10-14"), ("source", "agendamento")])
+        self.assertEqual(ticket_service.normalize_filters({"status": "SUCCESS", "source": "outro",
                                                             "script": "0", "requested_by": "a"}),
                          {"status": ["SUCCESS"]})
 
@@ -435,26 +435,26 @@ class TestTicketQuery(_BaseTicket):
         after = self._insert_row(environment="DESENV", created_at=day + datetime.timedelta(days=1))
         admin = self.ctx["admin"]
         base = {"environment": "DESENV"}
-        self.assertEqual(self._ids(admin, dict(base, criado_de="2025-03-10", criado_ate="2025-03-10")),
+        self.assertEqual(self._ids(admin, dict(base, created_from="2025-03-10", created_to="2025-03-10")),
                          {start, end})
-        self.assertEqual(self._ids(admin, dict(base, criado_de="2025-03-10")), {start, end, after})
-        self.assertEqual(self._ids(admin, dict(base, criado_ate="2025-03-09")), {before})
-        self.assertEqual(self._ids(admin, dict(base, criado_de="2025-03-11", criado_ate="2025-03-10")), set())
+        self.assertEqual(self._ids(admin, dict(base, created_from="2025-03-10")), {start, end, after})
+        self.assertEqual(self._ids(admin, dict(base, created_to="2025-03-09")), {before})
+        self.assertEqual(self._ids(admin, dict(base, created_from="2025-03-11", created_to="2025-03-10")), set())
 
     def test_filtros_combinados_e_paginacao(self):
         admin = self.ctx["admin"]
         running = self._ids(admin, {"status": ["RUNNING"], "environment": "PRODUCAO"})
         self.assertTrue(running)
-        for t in self.svc.list(admin, {"status": ["RUNNING"], "environment": "PRODUCAO"}, 1, 100)["itens"]:
+        for t in self.svc.list(admin, {"status": ["RUNNING"], "environment": "PRODUCAO"}, 1, 100)["items"]:
             self.assertEqual((t["status"], t["environment"]), ("RUNNING", "PRODUCAO"))
-        sched_value = self.svc.list(admin, {"origem": "agendamento"}, 1, 100)["itens"]
+        sched_value = self.svc.list(admin, {"source": "agendamento"}, 1, 100)["items"]
         self.assertTrue(sched_value)
-        self.assertTrue(all(t["origem"] == "agendamento" for t in sched_value))
+        self.assertTrue(all(t["source"] == "agendamento" for t in sched_value))
         page2 = self.svc.list(admin, {"status": ["SUCCESS"]}, 2, 5)
-        self.assertEqual((page2["pagina"], len(page2["itens"])), (2, 5))
+        self.assertEqual((page2["page"], len(page2["items"])), (2, 5))
         beyond = self.svc.list(admin, {"status": ["SUCCESS"]}, 99, 5)
-        self.assertEqual(beyond["pagina"], (beyond["total"] + 4) // 5)
-        self.assertTrue(beyond["itens"])
+        self.assertEqual(beyond["page"], (beyond["total"] + 4) // 5)
+        self.assertTrue(beyond["items"])
 
     # --------------------------------------------------------- cancelamento
 
@@ -470,14 +470,14 @@ class TestTicketQuery(_BaseTicket):
         self.assertEqual(self.svc.cancel(ctx, IP, str(running)), "SINALIZADO")
         t = self.tickets.get(running)
         self.assertEqual((t["status"], t["cancel_requested"]), ("RUNNING", "Y"))
-        self.assertFalse(self.svc.detail(ctx, str(running))["pode_cancelar"])
+        self.assertFalse(self.svc.detail(ctx, str(running))["can_cancel"])
 
         # CR-003 P5 (README §5.6): pedido repetido e ticket encerrado tambem sao auditados, com o resultado.
         self.assertEqual(self.svc.cancel(ctx, IP, str(running)), "JA_SINALIZADO")
-        regs = self.audit.list(filters={"action": "TICKET_CANCEL", "entity_id": running})["itens"]
+        regs = self.audit.list(filters={"action": "TICKET_CANCEL", "entity_id": running})["items"]
         self.assertEqual([(r["actor"], r["source_ip"], r["detail"]) for r in regs],
                          [("op.hml", IP, u"resultado: já sinalizado"), ("op.hml", IP, u"resultado: sinalizado")])
-        regs = self.audit.list(filters={"action": "TICKET_CANCEL", "entity_id": pending})["itens"]
+        regs = self.audit.list(filters={"action": "TICKET_CANCEL", "entity_id": pending})["items"]
         self.assertEqual([r["detail"] for r in regs],
                          [u"resultado: sem efeito: ticket encerrado", u"resultado: cancelado"])
         self.assertEqual(set(ticket_service.MSG_CANCEL),
@@ -493,7 +493,7 @@ class TestTicketQuery(_BaseTicket):
     def test_cancelar_terceiro_sem_canc_ticket_negado(self):
         third = self._insert_row(requested_by="admin")
         ctx = self._without("op.hml", "CANCEL_TICKET")
-        self.assertFalse(self.svc.detail(ctx, str(third))["pode_cancelar"])
+        self.assertFalse(self.svc.detail(ctx, str(third))["can_cancel"])
         with self.assertRaises(AccessDenied):
             self.svc.cancel(ctx, IP, str(third))
         self.assertEqual(self.tickets.get(third)["status"], "PENDING")
@@ -510,9 +510,9 @@ class TestTicketQuery(_BaseTicket):
         original, _ = self._create(answers={"data_ref": "2026-10-20", "documento_cliente": SECRET}, priority="3")
         with self.assertRaises(AccessDenied):
             self.svc.rerun(ctx, IP, str(original))
-        self.assertFalse(self.svc.detail(ctx, str(original))["pode_reexecutar"])
+        self.assertFalse(self.svc.detail(ctx, str(original))["can_rerun"])
         self.svc.cancel(ctx, IP, str(original))
-        self.assertTrue(self.svc.detail(ctx, str(original))["pode_reexecutar"])
+        self.assertTrue(self.svc.detail(ctx, str(original))["can_rerun"])
 
         new = self.svc.rerun(ctx, IP, str(original))
         t_orig, t_new = self.tickets.get(original), self.tickets.get(new)
@@ -521,18 +521,18 @@ class TestTicketQuery(_BaseTicket):
         snap_orig, snap_new = json.loads(t_orig["submitted_params"]), json.loads(t_new["submitted_params"])
         self.assertEqual(snap_new["args"], snap_orig["args"])
         self.assertEqual(snap_new["answers"], snap_orig["answers"])
-        regs = self.audit.list(filters={"action": "TICKET_RERUN", "entity_id": new})["itens"]
+        regs = self.audit.list(filters={"action": "TICKET_RERUN", "entity_id": new})["items"]
         self.assertEqual(len(regs), 1)
         self.assertNotIn(SECRET, regs[0]["detail"] or "")
 
-        self.assertEqual([f["id"] for f in self.svc.detail(ctx, str(original))["filhos"]], [new])
-        self.assertEqual(self.svc.detail(ctx, str(new))["pai"]["id"], original)
+        self.assertEqual([f["id"] for f in self.svc.detail(ctx, str(original))["children"]], [new])
+        self.assertEqual(self.svc.detail(ctx, str(new))["parent"]["id"], original)
 
     def test_reexecucao_de_terceiro_por_nao_admin_negada(self):
         third = self._insert_row(requested_by="admin", status="SUCCESS")
         with self.assertRaises(AccessDenied):
             self.svc.rerun(self.ctx["op.hml"], IP, str(third))
-        self.assertFalse(self.svc.detail(self.ctx["op.hml"], str(third))["pode_reexecutar"])
+        self.assertFalse(self.svc.detail(self.ctx["op.hml"], str(third))["can_rerun"])
         with self.assertRaises(RepoNotFound):
             self.svc.rerun(self.ctx["consulta"], IP, str(self._insert_row(environment="DESENV", status="FAILED")))
 
@@ -554,10 +554,10 @@ class TestTicketQuery(_BaseTicket):
         prep = self.svc.prepare_rerun(ctx, str(original))
         self.assertEqual((prep["ticket_id"], prep["script_id"], prep["environment"]), (original, 1, "HOMOLOGACAO"))
         self.assertIn("descricao_lote", prep["errors"])
-        self.assertNotIn("documento_cliente", prep["valores"])
-        self.assertEqual(prep["valores"]["data_ref"], "2026-10-14")
+        self.assertNotIn("documento_cliente", prep["values"])
+        self.assertEqual(prep["values"]["data_ref"], "2026-10-14")
 
-        new, errors = self.svc.create_ticket(ctx, IP, "1", "HOMOLOGACAO", dict(prep["valores"], descricao_lote="x"),
+        new, errors = self.svc.create_ticket(ctx, IP, "1", "HOMOLOGACAO", dict(prep["values"], descricao_lote="x"),
                                             prep["priority"], "", rerun_of=str(original))
         self.assertEqual(errors, {})
         self.assertEqual(self.tickets.get(new)["parent_ticket_id"], original)
@@ -577,7 +577,7 @@ class TestTicketQuery(_BaseTicket):
                 self.assertEqual(answers["documento_cliente"]["value"], params_compiler.MASK)
                 self.assertTrue(answers["documento_cliente"]["sensitive"])
                 self.assertEqual(answers["data_ref"]["value"], "2026-10-14")
-                self.assertIn(params_compiler.MASK, det["argv_para_exibicao"])
+                self.assertIn(params_compiler.MASK, det["display_argv"])
             serial = json.dumps(det, default=str)
             self.assertNotIn(SECRET, serial)
             self.assertNotIn("00011122233", serial)
@@ -585,10 +585,10 @@ class TestTicketQuery(_BaseTicket):
     def test_detalhe_campos_e_descricao_motivo(self):
         det = self.svc.detail(self.ctx["admin"], "30")
         self.assertEqual((det["status"], det["status_reason"], det["return_code"]), ("FAILED", "TIMEOUT", -3))
-        self.assertEqual(det["descricao_motivo"], ui_helpers.descricao_motivo("TIMEOUT"))
-        self.assertNotEqual(det["duracao"], "-")
-        self.assertEqual(self.svc.detail(self.ctx["admin"], "25")["pai"]["id"], 17)
-        self.assertEqual([f["id"] for f in self.svc.detail(self.ctx["admin"], "17")["filhos"]], [25])
+        self.assertEqual(det["reason_description"], ui_helpers.descricao_motivo("TIMEOUT"))
+        self.assertNotEqual(det["duration"], "-")
+        self.assertEqual(self.svc.detail(self.ctx["admin"], "25")["parent"]["id"], 17)
+        self.assertEqual([f["id"] for f in self.svc.detail(self.ctx["admin"], "17")["children"]], [25])
 
     def test_caminho_completo_para_quem_nao_e_admin(self):
         """CR-005 D8: quem nao e admin ve o caminho completo no detalhe, no comando e na previa."""
@@ -597,8 +597,8 @@ class TestTicketQuery(_BaseTicket):
         path = os.path.join(self.base, "carga_diaria.py")
         det = self.svc.detail(self.ctx["op.hml"], str(tid))
         self.assertEqual(det["snapshot"]["path_file"], path)
-        self.assertEqual(det["argv_para_exibicao"][2], path)
-        self.assertIn(path, det["comando_exibicao"])
+        self.assertEqual(det["display_argv"][2], path)
+        self.assertIn(path, det["display_command"])
         argv, errors = self.svc.preview(self.ctx["op.hml"], "1", "HOMOLOGACAO",
                                       {"data_ref": "2026-10-20", "modo_exec": "SIMULACAO"})
         self.assertEqual(errors, {})
@@ -613,18 +613,18 @@ class TestTicketOutput(_BaseTicket):
     """CR-012 (README §8.13): quadro Saida e download do zip, com a regra de leitura do log."""
 
     def test_quadro_por_situacao(self):
-        available = self.svc.detail(self.ctx["admin"], 17)["saida"]
-        self.assertEqual((available["state"], available["css_class"], available["pode_baixar"]),
+        available = self.svc.detail(self.ctx["admin"], 17)["output"]
+        self.assertEqual((available["state"], available["css_class"], available["can_download"]),
                          ("AVAILABLE", "success", True))
         self.assertIn(u"2 arquivos", available["happened"])
-        exceeded = self.svc.detail(self.ctx["admin"], 29)["saida"]
-        self.assertFalse(exceeded["pode_baixar"])
+        exceeded = self.svc.detail(self.ctx["admin"], 29)["output"]
+        self.assertFalse(exceeded["can_download"])
         self.assertIn(u"quantidade de arquivos", exceeded["happened"])
         self.assertIn(u"agente agt-host02", exceeded["todo"])
-        failed = self.svc.detail(self.ctx["admin"], 30)["saida"]
-        self.assertEqual((failed["state"], failed["pode_baixar"]), ("FAILED", False))
+        failed = self.svc.detail(self.ctx["admin"], 30)["output"]
+        self.assertEqual((failed["state"], failed["can_download"]), ("FAILED", False))
         self.assertIn(u"agente agt-host01", failed["todo"])
-        self.assertIsNone(self.svc.detail(self.ctx["admin"], 18)["saida"], "sem saida, sem quadro")
+        self.assertIsNone(self.svc.detail(self.ctx["admin"], 18)["output"], "sem saida, sem quadro")
         for field in ("content", "base", "relativo"):
             self.assertNotIn(field, available)
 
@@ -632,7 +632,7 @@ class TestTicketOutput(_BaseTicket):
         now = datetime.datetime(2026, 10, 20, 12, 0, 0)
         recent = ui_helpers.quadro_saida({"state": "WRITING", "agent_id": "a1",
                                            "created_at": now - datetime.timedelta(minutes=5)}, now)
-        self.assertEqual((recent["css_class"], recent["pode_baixar"]), ("info", False))
+        self.assertEqual((recent["css_class"], recent["can_download"]), ("info", False))
         self.assertIn(u"em preparação", recent["happened"])
         stop = ui_helpers.quadro_saida({"state": "WRITING", "agent_id": "a1",
                                           "created_at": now - datetime.timedelta(hours=2)}, now)

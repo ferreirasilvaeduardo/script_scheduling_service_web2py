@@ -506,12 +506,12 @@ class TestOracleCatalog(unittest.TestCase):
 
             # 5. Listagens: total limitado, contagens e homologados na mesma leitura.
             items = self.cat.scripts_list(filters={"name": name_scr})
-            self.assertIn("total_limitado", items)
-            item = [i for i in items["itens"] if i["id"] == scr["id"]][0]
-            self.assertEqual(item["ambientes_homologados"], [env["name"]])
-            self.assertEqual(item["qtd_parametros"], 1)
-            prm = self.cat.parameters_list(filters={"code": "tst_cf_" + suffix})["itens"][0]
-            self.assertEqual(prm["qtd_scripts"], len(self.cat.parameter_links(with_flag["id"])))
+            self.assertIn("total_capped", items)
+            item = [i for i in items["items"] if i["id"] == scr["id"]][0]
+            self.assertEqual(item["homologated_environments"], [env["name"]])
+            self.assertEqual(item["param_count"], 1)
+            prm = self.cat.parameters_list(filters={"code": "tst_cf_" + suffix})["items"][0]
+            self.assertEqual(prm["script_count"], len(self.cat.parameter_links(with_flag["id"])))
 
             # 6. Executaveis do admin: script ativo homologado em ambiente ativo.
             executables = [s["id"] for s in self.cat.executable_scripts({"is_admin": True})]
@@ -718,8 +718,8 @@ class TestOracleTickets(unittest.TestCase):
         """Status e escopo por IN de placeholders; escopo vazio nao devolve nada; datas como bind."""
         conn = _ScriptedConnection([("SELECT COUNT(*)", 1, [(0,)])])
         with mock.patch.object(self.tck, "_obter_conexao", return_value=conn):
-            self.tck.list({"status": ["RUNNING", "PENDING"], "origem": "manual",
-                             "criado_inicio": datetime.datetime(2026, 1, 1)}, environment_scope=["HML", "PROD"])
+            self.tck.list({"status": ["RUNNING", "PENDING"], "source": "manual",
+                             "created_from": datetime.datetime(2026, 1, 1)}, environment_scope=["HML", "PROD"])
             self.tck.list({}, environment_scope=[])
         sql, binds = conn.executed[0]
         self.assertIn("ROWNUM <= 10001", sql)
@@ -862,17 +862,17 @@ class TestOracleTickets(unittest.TestCase):
             self.assertEqual(self.tck.log_read(t1, 0, 10)[:3], ("", 0, True))
 
             # 5. Leituras: listar sem CLOB, ultima execucao e historico (os mais recentes, crescente).
-            items = self.tck.list({"script_id": script_id, "criado_inicio": now}, size=50)
-            mine = [i["id"] for i in items["itens"] if i["id"] in ids]
+            items = self.tck.list({"script_id": script_id, "created_from": now}, size=50)
+            mine = [i["id"] for i in items["items"] if i["id"] in ids]
             self.assertEqual(sorted(mine, reverse=True), mine)
             self.assertEqual(set(mine), set(ids))
-            for item in items["itens"]:
+            for item in items["items"]:
                 self.assertNotIn("log_output", item)
                 self.assertNotIn("submitted_params", item)
-            self.assertIn("total_limitado", items)
+            self.assertIn("total_capped", items)
             only_cancelled = self.tck.list({"script_id": script_id, "status": ["CANCELLED"],
-                                             "criado_inicio": now}, environment_scope=[environment])
-            self.assertEqual(sorted(i["id"] for i in only_cancelled["itens"] if i["id"] in ids), sorted([t1, t3]))
+                                             "created_from": now}, environment_scope=[environment])
+            self.assertEqual(sorted(i["id"] for i in only_cancelled["items"] if i["id"] in ids), sorted([t1, t3]))
             self.assertEqual(self.tck.list({"script_id": script_id}, environment_scope=[])["total"], 0)
             last = self.tck.last_runs([script_id], environment_scope=[environment], requester=login)
             self.assertEqual(last[script_id]["id"], max(ids))
@@ -1117,10 +1117,10 @@ class TestOracleSchedules(unittest.TestCase):
 
             # 6. listar: filtro por trecho, escopo e parametros_json presente (excecao documentada).
             items = self.agd.list({"name": mark.lower()}, environment_scope=[environment])
-            self.assertEqual(sorted(i["id"] for i in items["itens"]), sorted(sch_ids))
-            self.assertTrue(all(i["params_json"] == '{"p": "v"}' for i in items["itens"]))
+            self.assertEqual(sorted(i["id"] for i in items["items"]), sorted(sch_ids))
+            self.assertTrue(all(i["params_json"] == '{"p": "v"}' for i in items["items"]))
             self.assertEqual(self.agd.list({"name": mark.lower()}, environment_scope=[])["total"], 0)
-            self.assertEqual([i["id"] for i in self.agd.list({"name": mark.lower(), "active": "N"})["itens"]], [])
+            self.assertEqual([i["id"] for i in self.agd.list({"name": mark.lower(), "active": "N"})["items"]], [])
 
             # 7. ticket_status e a ocorrencia unica do agendamento (ix_<prefixo>tck_ocor, CR-007 R-27).
             tck = repo_factory.get("tickets")
@@ -1267,16 +1267,16 @@ class TestOracleAuditAgents(unittest.TestCase):
             filters = {"actor": "TESTE_" + mark.upper(), "start_date": now - datetime.timedelta(minutes=5),
                        "end_date": now + datetime.timedelta(minutes=5)}
             items = self.aud.list(filters)
-            self.assertEqual([i["id"] for i in items["itens"]], sorted(aud_ids, reverse=True))
+            self.assertEqual([i["id"] for i in items["items"]], sorted(aud_ids, reverse=True))
             self.assertEqual(self.aud.list(dict(filters, id_max=aid))["total"], 1)
             self.assertEqual(self.aud.list(dict(filters, action="SCHEMA_MIGRATE", entity="tbsss_control",
                                                   entity_id=1))["total"], 1)
             self.assertEqual([r["id"] for r in self.aud.iterate(filters, limit=2)], sorted(aud_ids, reverse=True)[:2])
 
             # 2. Painel: agente ATIVO com heartbeat agora atende (ambiente, interpretador) do proprio teste.
-            script = repo_factory.get("catalog").scripts_list(size=1)["itens"][0]
-            environment = repo_factory.get("catalog").environments_list(size=1)["itens"][0]["name"]
-            login = repo_factory.get("users").list(size=1)["itens"][0]["login"]
+            script = repo_factory.get("catalog").scripts_list(size=1)["items"][0]
+            environment = repo_factory.get("catalog").environments_list(size=1)["items"][0]["name"]
+            login = repo_factory.get("users").list(size=1)["items"][0]["login"]
             c = self.aud._obter_conexao()
             try:
                 agt_id = db_conn.next_id(c, self.agt.qualify_sequence("agents"))
@@ -1318,9 +1318,9 @@ class TestOracleAuditAgents(unittest.TestCase):
             groups = dict(((g["environment"], g["interpreter"]), g)
                           for g in self.agt.unattended_queue(after, thresholds))
             self.assertIn(key, groups)
-            self.assertGreaterEqual(groups[key]["quantidade"], 1)
+            self.assertGreaterEqual(groups[key]["quantity"], 1)
             # scheduled_at no passado nao antecipa a espera: conta da criacao do ticket.
-            self.assertLessEqual(groups[key]["mais_antigo"], after)
+            self.assertLessEqual(groups[key]["oldest"], after)
         finally:
             cleanup = [("DELETE FROM " + self.aud._idents["aud"] + " WHERE id = :id", {"id": i}) for i in aud_ids]
             for tid in tck_ids:

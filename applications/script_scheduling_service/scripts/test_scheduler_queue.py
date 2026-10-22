@@ -333,10 +333,10 @@ class TestWithoutDb(unittest.TestCase):
                                                  "schedule_id": 12})
         self.assertEqual(ctx["script"]["path_file"], "/opt/x.sh")
         self.assertEqual(ctx["environment"]["description"], "Producao")
-        self.assertEqual(ctx["homologacoes"], frozenset({5}))
-        self.assertEqual(ctx["agendamento"], {"name": "Noturna", "recurrence_type": "DAILY"})
+        self.assertEqual(ctx["homologations"], frozenset({5}))
+        self.assertEqual(ctx["schedule"], {"name": "Noturna", "recurrence_type": "DAILY"})
         import rbac
-        self.assertEqual(rbac.can_execute(ctx["ctx"], ctx["script"], ctx["environment"], ctx["homologacoes"]),
+        self.assertEqual(rbac.can_execute(ctx["ctx"], ctx["script"], ctx["environment"], ctx["homologations"]),
                          (True, rbac.Reason.OK))
 
     def test_sql_sem_prefixo_fixo(self):

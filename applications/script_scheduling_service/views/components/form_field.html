@@ -16,46 +16,46 @@
 # tipo 'password' nunca reapresenta o valor recebido.
 #   foco_campo -- nome do primeiro campo inválido (ui_helpers.primeiro_campo_invalido);
 #                 esse campo recebe autofocus, sem JavaScript.
-_fc_id = 'campo-' + campo['name']
-_fc_tipo = campo.get('kind') or 'text'
-_fc_valor = campo.get('value')
+_fc_id = 'campo-' + field['name']
+_fc_tipo = field.get('kind') or 'text'
+_fc_valor = field.get('value')
 _fc_valor = '' if (_fc_valor is None or _fc_tipo == 'password') else _fc_valor
-_fc_erro = campo.get('error')
+_fc_erro = field.get('error')
 _fc_desc = []
-if campo.get('help'):
+if field.get('help'):
     _fc_desc.append(_fc_id + '-ajuda')
 pass
 if _fc_erro:
     _fc_desc.append(_fc_id + '-erro')
 pass
 _fc_classe = ('form-select' if _fc_tipo == 'select' else 'form-control') + (' is-invalid' if _fc_erro else '')
-_fc_attrs = {'id': _fc_id, 'name': campo['name'], 'class': _fc_classe}
+_fc_attrs = {'id': _fc_id, 'name': field['name'], 'class': _fc_classe}
 if _fc_desc:
     _fc_attrs['aria-describedby'] = ' '.join(_fc_desc)
 pass
-if campo.get('maxlength'):
-    _fc_attrs['maxlength'] = campo['maxlength']
+if field.get('maxlength'):
+    _fc_attrs['maxlength'] = field['maxlength']
 pass
-if campo.get('autocomplete'):
-    _fc_attrs['autocomplete'] = campo['autocomplete']
+if field.get('autocomplete'):
+    _fc_attrs['autocomplete'] = field['autocomplete']
 pass
-if campo.get('read_only'):
+if field.get('read_only'):
     _fc_attrs['readonly'] = 'readonly'
     _fc_attrs['aria-readonly'] = 'true'
 pass
 }}<div class="sss-form-campo mb-3">
-  <label class="form-label" for="{{=_fc_id}}">{{=campo['label']}}{{if campo.get('required'):}} <span class="sss-obrigatorio" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span>{{pass}}</label>
+  <label class="form-label" for="{{=_fc_id}}">{{=field['label']}}{{if field.get('required'):}} <span class="sss-obrigatorio" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span>{{pass}}</label>
   {{if _fc_tipo == 'select':}}
-  <select{{for _fc_k in sorted(_fc_attrs):}} {{=_fc_k}}="{{=_fc_attrs[_fc_k]}}"{{pass}}{{if campo.get('required'):}} required{{pass}}{{if _fc_erro:}} aria-invalid="true"{{pass}}{{if _fc_erro and campo['name'] == foco_campo:}} autofocus{{pass}}>
-    {{for _fc_ov, _fc_or in campo.get('options', ()):}}
+  <select{{for _fc_k in sorted(_fc_attrs):}} {{=_fc_k}}="{{=_fc_attrs[_fc_k]}}"{{pass}}{{if field.get('required'):}} required{{pass}}{{if _fc_erro:}} aria-invalid="true"{{pass}}{{if _fc_erro and field['name'] == focus_field:}} autofocus{{pass}}>
+    {{for _fc_ov, _fc_or in field.get('options', ()):}}
     <option value="{{=_fc_ov}}"{{if str(_fc_ov) == str(_fc_valor):}} selected{{pass}}>{{=_fc_or}}</option>
     {{pass}}
   </select>
   {{elif _fc_tipo == 'textarea':}}
-  <textarea rows="3"{{for _fc_k in sorted(_fc_attrs):}} {{=_fc_k}}="{{=_fc_attrs[_fc_k]}}"{{pass}}{{if campo.get('required'):}} required{{pass}}{{if _fc_erro:}} aria-invalid="true"{{pass}}{{if _fc_erro and campo['name'] == foco_campo:}} autofocus{{pass}}>{{=_fc_valor}}</textarea>
+  <textarea rows="3"{{for _fc_k in sorted(_fc_attrs):}} {{=_fc_k}}="{{=_fc_attrs[_fc_k]}}"{{pass}}{{if field.get('required'):}} required{{pass}}{{if _fc_erro:}} aria-invalid="true"{{pass}}{{if _fc_erro and field['name'] == focus_field:}} autofocus{{pass}}>{{=_fc_valor}}</textarea>
   {{else:}}
-  <input type="{{=_fc_tipo}}" value="{{=_fc_valor}}"{{for _fc_k in sorted(_fc_attrs):}} {{=_fc_k}}="{{=_fc_attrs[_fc_k]}}"{{pass}}{{if campo.get('required'):}} required{{pass}}{{if _fc_erro:}} aria-invalid="true"{{pass}}{{if _fc_erro and campo['name'] == foco_campo:}} autofocus{{pass}}>
+  <input type="{{=_fc_tipo}}" value="{{=_fc_valor}}"{{for _fc_k in sorted(_fc_attrs):}} {{=_fc_k}}="{{=_fc_attrs[_fc_k]}}"{{pass}}{{if field.get('required'):}} required{{pass}}{{if _fc_erro:}} aria-invalid="true"{{pass}}{{if _fc_erro and field['name'] == focus_field:}} autofocus{{pass}}>
   {{pass}}
-  {{if campo.get('help'):}}<div class="form-text" id="{{=_fc_id}}-ajuda">{{=campo['help']}}</div>{{pass}}
+  {{if field.get('help'):}}<div class="form-text" id="{{=_fc_id}}-ajuda">{{=field['help']}}</div>{{pass}}
   {{if _fc_erro:}}<div class="invalid-feedback" id="{{=_fc_id}}-erro">{{=_fc_erro}}</div>{{pass}}
 </div>

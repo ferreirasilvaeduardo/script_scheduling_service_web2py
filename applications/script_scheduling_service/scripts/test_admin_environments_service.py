@@ -52,10 +52,10 @@ class _Base(unittest.TestCase):
         self.ctx = dict((login, auth.revalidate(session)) for login, session in SESSIONS.items())
         self.svc = AdminEnvironmentsService(self.catalog, repo_factory.get("schedules"), self.log)
         # O seed ja tem auditorias de environments: so contam as gravadas pelo teste.
-        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["itens"]] or [0])
+        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["items"]] or [0])
 
     def _audits(self, action):
-        return [a for a in self.audit.list(filters={"action": action}, page=1, size=100)["itens"]
+        return [a for a in self.audit.list(filters={"action": action}, page=1, size=100)["items"]
                 if a["entity"] == "tbsss_environments" and a["id"] > self.aud_base]
 
     def _insert(self, name="QA_01", description="Ambiente de QA", connection="db-qa.local:1521/svc"):
@@ -227,7 +227,7 @@ class TestEdit(_Base):
 class TestDeactivation(_Base):
 
     def test_formulario_mostra_agendamentos_ativos(self):
-        self.assertEqual(self.svc.form(self.ctx["admin"], str(AMB_PRODUCAO))["agendamentos_ativos"], 2)
+        self.assertEqual(self.svc.form(self.ctx["admin"], str(AMB_PRODUCAO))["active_schedules"], 2)
 
     def test_desativacao_com_contagem_e_reativacao(self):
         form = self.svc.form(self.ctx["admin"], str(AMB_PRODUCAO))
@@ -289,7 +289,7 @@ class TestAccessAndAudit(_Base):
         self.assertEqual(svc_mod.normalize_filters({"name": "prod", "active": "Y"}), {"name": "prod", "active": "Y"})
         self.assertEqual(svc_mod.normalize_filters({"name": "<x>", "active": "Z"}), {})
         page = self.svc.list(self.ctx["admin"], {"active": "N"}, 1, 20)
-        self.assertEqual([a["name"] for a in page["itens"]], ["DESENV"])
+        self.assertEqual([a["name"] for a in page["items"]], ["DESENV"])
 
 
 if __name__ == "__main__":

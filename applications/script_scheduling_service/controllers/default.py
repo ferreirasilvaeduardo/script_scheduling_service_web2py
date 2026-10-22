@@ -43,11 +43,11 @@ def index():
         cartoes["tickets"] = _cartao(ctx, "tickets", lambda: ticket_service.home_summary(ctx))
     if rbac.has_feature(ctx, "MANAGE_SCHEDULES"):
         cartoes["schedules"] = _cartao(
-            ctx, "schedules", lambda: schedules_service.list_page(ctx, {"active": "Y"}, 1, 5)["itens"])
+            ctx, "schedules", lambda: schedules_service.list_page(ctx, {"active": "Y"}, 1, 5)["items"])
     if rbac.has_feature(ctx, "VIEW_AUDIT"):
         cartoes["agents"] = _cartao(ctx, "agents", lambda: agents_service.dashboard(ctx))
-    return dict(ctx=ctx, menu=response.sss_menu, pode_disparar=rbac.has_feature(ctx, "EXEC_SCRIPT"),
-                cartoes=cartoes)
+    return dict(ctx=ctx, menu=response.sss_menu, can_trigger=rbac.has_feature(ctx, "EXEC_SCRIPT"),
+                cards=cartoes)
 
 
 def login():
@@ -76,7 +76,7 @@ def login():
             session.session_epoch = ctx["session_epoch"]
             session.last_access = session.login_at = time.time()
             redirect(destino or URL(c="default", f="index"))
-    return dict(mensagem=mensagem, login_digitado=login_digitado, destino=destino or "")
+    return dict(message=mensagem, typed_login=login_digitado, next_url=destino or "")
 
 
 def logout():
@@ -105,7 +105,7 @@ def permissions():
     except RepoError:
         _log.exception("falha ao montar permissoes (login=%s)", ctx["login"], extra={"action": "PERMISSOES"})
         dados, erro = None, ui_helpers.mensagem("internal_error")
-    return dict(dados=dados, erro=erro)
+    return dict(data=dados, error=erro)
 
 
 def my_password():
@@ -139,5 +139,5 @@ def my_password():
             redirect(URL(c="default", f="index"))
         response.flash = {"kind": "error", "message": u"A senha não foi alterada. Veja os campos destacados."}
     campos = [{"name": n, "error": erros.get(n)} for n in _CAMPOS_MINHA_SENHA]
-    return dict(erros=erros, foco_campo=ui_helpers.primeiro_campo_invalido(campos),
-                ajuda_senha=u"Mínimo de %d caracteres. A senha nunca é exibida nem registrada." % security.PASSWORD_MIN)
+    return dict(errors=erros, focus_field=ui_helpers.primeiro_campo_invalido(campos),
+                password_help=u"Mínimo de %d caracteres. A senha nunca é exibida nem registrada." % security.PASSWORD_MIN)

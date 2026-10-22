@@ -101,8 +101,8 @@ class AdminEnvironmentsService(object):
         """Quantidade de scripts homologados no ambiente (deixam de poder rodar nele se for desativado)."""
         total, page = 0, 1
         while True:
-            items = self._catalog.scripts_list(page=page, size=_SCRIPTS_PAGE)["itens"]
-            total += sum(1 for s in items if name in (s.get("ambientes_homologados") or ()))
+            items = self._catalog.scripts_list(page=page, size=_SCRIPTS_PAGE)["items"]
+            total += sum(1 for s in items if name in (s.get("homologated_environments") or ()))
             if len(items) < _SCRIPTS_PAGE:
                 return total
             page += 1
@@ -120,7 +120,7 @@ class AdminEnvironmentsService(object):
         admin_crud.require_feature(ctx, FEATURE)
         if environment_id in (None, ""):
             return {"id": None, "name": "", "description": "", "connection": "", "active": "Y", "version": "",
-                    "agendamentos_ativos": 0, "scripts_homologados": 0, "registro": None}
+                    "active_schedules": 0, "homologated_scripts": 0, "record": None}
         env = self._get(environment_id)
         return {
             "id": env["id"],
@@ -129,9 +129,9 @@ class AdminEnvironmentsService(object):
             "connection": admin_crud.normalize(env.get("connection")) or "",
             "active": env["active"],
             "version": admin_crud.version(env, EDITABLE_FIELDS),
-            "agendamentos_ativos": self.active_schedules(env["name"]),
-            "scripts_homologados": self.homologated_scripts(env["name"]),
-            "registro": ui_helpers.registro(env, ctx),
+            "active_schedules": self.active_schedules(env["name"]),
+            "homologated_scripts": self.homologated_scripts(env["name"]),
+            "record": ui_helpers.registro(env, ctx),
         }
 
     def _validate(self, date, errors):

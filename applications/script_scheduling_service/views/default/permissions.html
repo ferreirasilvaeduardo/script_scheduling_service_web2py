@@ -1,32 +1,32 @@
 {{extend 'layout.html'}}
 {{
 # O que eu posso fazer (README §4.3.E, CR-004 T1): só leitura, em linguagem simples.
-_d = dados
+_d = data
 }}
 <div class="sss-page-header">
   <h1 class="sss-page-titulo">O que eu posso fazer</h1>
   <p class="sss-page-sub">Aqui você vê o que o seu perfil libera: as telas, os ambientes (onde os scripts rodam) e os scripts (as rotinas) que você pode rodar.</p>
 </div>
 
-{{if erro:}}
-<div class="alert alert-danger sss-alerta" role="alert"><span>{{=erro}}</span></div>
+{{if error:}}
+<div class="alert alert-danger sss-alerta" role="alert"><span>{{=error}}</span></div>
 {{else:}}
 <section class="sss-card" aria-labelledby="titulo-perfil">
   <h2 class="sss-card-titulo" id="titulo-perfil">Meu perfil</h2>
   <div class="sss-card-corpo">
-    <p class="mb-1">Seu perfil é <strong class="sss-mono">{{=_d['perfil']}}</strong>.</p>
-    {{if _d['frase_admin']:}}<p class="mb-0">{{=_d['frase_admin']}}</p>{{pass}}
+    <p class="mb-1">Seu perfil é <strong class="sss-mono">{{=_d['profile']}}</strong>.</p>
+    {{if _d['admin_phrase']:}}<p class="mb-0">{{=_d['admin_phrase']}}</p>{{pass}}
   </div>
 </section>
 
 <section class="sss-card" aria-labelledby="titulo-telas">
   <h2 class="sss-card-titulo" id="titulo-telas">Telas que posso usar</h2>
-  {{if _d['telas']:}}
+  {{if _d['screens']:}}
   <ul class="sss-card-corpo sss-lista-permissoes">
-    {{for _t in _d['telas']:}}
+    {{for _t in _d['screens']:}}
     <li>
-      {{if _t['rota']:}}<a href="{{=URL(c=_t['rota'][0], f=_t['rota'][1])}}">{{=_t['name']}}</a>{{else:}}<strong>{{=_t['name']}}</strong>{{pass}}
-      <span class="sss-texto-suave"> — {{=_t['finalidade']}}</span>
+      {{if _t['route']:}}<a href="{{=URL(c=_t['route'][0], f=_t['route'][1])}}">{{=_t['name']}}</a>{{else:}}<strong>{{=_t['name']}}</strong>{{pass}}
+      <span class="sss-texto-suave"> — {{=_t['purpose']}}</span>
     </li>
     {{pass}}
   </ul>
@@ -51,8 +51,8 @@ _d = dados
 <section class="sss-card" aria-labelledby="titulo-scripts">
   <h2 class="sss-card-titulo" id="titulo-scripts">Scripts que posso rodar</h2>
   <div class="sss-card-corpo">
-    {{if not _d['pode_executar']:}}
-    <p class="mb-0">{{=_d['frase_sem_exec']}}</p>
+    {{if not _d['can_execute']:}}
+    <p class="mb-0">{{=_d['no_runs_phrase']}}</p>
     {{elif not _d['scripts']:}}
     <p class="sss-texto-suave mb-0">Nenhum script pode ser rodado agora com o seu perfil.</p>
     {{else:}}
@@ -72,16 +72,16 @@ _d = dados
   </div>
 </section>
 
-{{if _d['ausentes']:}}
+{{if _d['absent']:}}
 <section class="sss-card" aria-labelledby="titulo-ausentes">
   <h2 class="sss-card-titulo" id="titulo-ausentes">Por que um script não aparece</h2>
   <ul class="sss-card-corpo sss-lista-permissoes">
-    {{for _x in _d['ausentes']:}}
+    {{for _x in _d['absent']:}}
     <li><strong class="sss-mono">{{=_x['name']}}</strong>: {{=_x['reason']}}.</li>
     {{pass}}
   </ul>
 </section>
 {{pass}}
 
-<p class="sss-texto-suave">{{=_d['frase_mais_acesso']}}</p>
+<p class="sss-texto-suave">{{=_d['more_access_phrase']}}</p>
 {{pass}}

@@ -3,26 +3,26 @@
 # Trilha de auditoria (README §4.4, §10 tabela 16). Somente leitura; o detalhe é sempre escapado.
 import ui_helpers
 icones = URL('static', 'img/icons.svg')
-_opc_acoes = [('', 'Todas')] + [(_a, _a) for _a in acoes]
-_opc_entidades = [('', 'Todas')] + [(_e, _e) for _e in entidades]
-_erros = resultado['errors']
-filtros = {'id': 'filtro-auditoria', 'url_base': ('audit', 'index'), 'keep': {'size': tamanho}, 'fields': [
-    {'name': 'de', 'label': 'De', 'kind': 'date', 'value': filtros_ativos.get('de')},
-    {'name': 'ate', 'label': u'Até', 'kind': 'date', 'value': filtros_ativos.get('ate')},
-    {'name': 'actor', 'label': 'Ator (login)', 'kind': 'text', 'value': filtros_ativos.get('actor')},
-    {'name': 'action', 'label': u'Ação', 'kind': 'select', 'value': filtros_ativos.get('action'), 'options': _opc_acoes},
-    {'name': 'entity', 'label': 'Entidade', 'kind': 'select', 'value': filtros_ativos.get('entity'), 'options': _opc_entidades},
-    {'name': 'entity_id', 'label': 'ID da entidade', 'kind': 'text', 'value': filtros_ativos.get('entity_id')},
-    {'name': 'ip', 'label': 'IP de origem', 'kind': 'text', 'value': filtros_ativos.get('ip')},
+_opc_acoes = [('', 'Todas')] + [(_a, _a) for _a in actions]
+_opc_entidades = [('', 'Todas')] + [(_e, _e) for _e in entities]
+_erros = result['errors']
+filters = {'id': 'filtro-auditoria', 'url_base': ('audit', 'index'), 'keep': {'size': size}, 'fields': [
+    {'name': 'date_from', 'label': 'De', 'kind': 'date', 'value': active_filters.get('date_from')},
+    {'name': 'date_to', 'label': u'Até', 'kind': 'date', 'value': active_filters.get('date_to')},
+    {'name': 'actor', 'label': 'Ator (login)', 'kind': 'text', 'value': active_filters.get('actor')},
+    {'name': 'action', 'label': u'Ação', 'kind': 'select', 'value': active_filters.get('action'), 'options': _opc_acoes},
+    {'name': 'entity', 'label': 'Entidade', 'kind': 'select', 'value': active_filters.get('entity'), 'options': _opc_entidades},
+    {'name': 'entity_id', 'label': 'ID da entidade', 'kind': 'text', 'value': active_filters.get('entity_id')},
+    {'name': 'ip', 'label': 'IP de origem', 'kind': 'text', 'value': active_filters.get('ip')},
 ]}
-_rotulos_campo = dict((_c['name'], _c['label']) for _c in filtros['fields'])
+_rotulos_campo = dict((_c['name'], _c['label']) for _c in filters['fields'])
 _colunas = ('Data/hora', 'Ator', u'Ação', 'Entidade', 'ID', 'IP de origem', 'Detalhe')
-pagina = resultado['pagina']
-total = resultado['total']
-total_limitado = resultado.get('total_limitado', False)
-quantidade_pagina = len(resultado['itens'])
+page = result['page']
+total = result['total']
+total_capped = result.get('total_capped', False)
+page_count = len(result['items'])
 url_base = ('audit', 'index')
-aba_ativa = 'index'
+active_tab = 'index'
 }}
 <div class="sss-page-header">
   <h1 class="sss-page-titulo">Auditoria</h1>
@@ -37,7 +37,7 @@ aba_ativa = 'index'
     <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
     <span>Filtros inválidos:</span>
     <ul class="mb-0 sss-alerta-lista">
-      {{for _campo in [c for c in ('de', 'ate', 'actor', 'action', 'entity', 'entity_id', 'ip') if c in _erros]:}}
+      {{for _campo in [c for c in ('date_from', 'date_to', 'actor', 'action', 'entity', 'entity_id', 'ip') if c in _erros]:}}
       <li><strong>{{=_rotulos_campo[_campo]}}:</strong> {{=_erros[_campo]}}</li>
       {{pass}}
     </ul>
@@ -51,44 +51,44 @@ aba_ativa = 'index'
     {{if not _erros:}}
     <form method="post" action="{{=URL(c='audit', f='export')}}" class="sss-exportar">
       {{=csrf_campo()}}
-      {{for _fk, _fv in filtros_ativos.items():}}
+      {{for _fk, _fv in active_filters.items():}}
       <input type="hidden" name="{{=_fk}}" value="{{=_fv}}">
       {{pass}}
       <button type="submit" class="btn btn-sm btn-outline-secondary">Exportar CSV</button>
     </form>
-    <span class="sss-texto-suave">Mesmos filtros da tela; no máximo {{='{:,}'.format(limite_exportacao).replace(',', '.')}} linhas, as mais recentes. A exportação é registrada na auditoria.</span>
+    <span class="sss-texto-suave">Mesmos filtros da tela; no máximo {{='{:,}'.format(export_limit).replace(',', '.')}} linhas, as mais recentes. A exportação é registrada na auditoria.</span>
     {{pass}}
   </div>
-  {{if total > limite_exportacao:}}
+  {{if total > export_limit:}}
   <div class="alert alert-warning mx-3 mt-3 mb-0" role="status">
     <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
-    <span>O resultado tem {{=total}} registros; a exportação levará apenas os {{='{:,}'.format(limite_exportacao).replace(',', '.')}} mais recentes. Refine os filtros para exportar tudo.</span>
+    <span>O resultado tem {{=total}} registros; a exportação levará apenas os {{='{:,}'.format(export_limit).replace(',', '.')}} mais recentes. Refine os filtros para exportar tudo.</span>
   </div>
   {{pass}}
   <div class="table-responsive">
     <table class="table table-sm sss-tabela mb-0">
-      <caption class="visually-hidden">Trilha de auditoria{{if erro:}} (erro ao carregar){{pass}}</caption>
+      <caption class="visually-hidden">Trilha de auditoria{{if error:}} (erro ao carregar){{pass}}</caption>
       <thead>
         <tr>
           {{for _col in _colunas:}}<th scope="col"{{if _col == 'Data/hora':}} class="sss-col-data"{{elif _col == 'ID':}} class="sss-col-num"{{pass}}>{{=_col}}</th>{{pass}}
         </tr>
       </thead>
       <tbody>
-        {{if erro:}}
+        {{if error:}}
         <tr>
           <td colspan="{{=len(_colunas)}}" class="sss-tabela-estado">
             <div class="alert alert-danger mb-0" role="alert">
               <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
-              <span>{{=erro}}</span>
+              <span>{{=error}}</span>
             </div>
           </td>
         </tr>
-        {{elif not resultado['itens']:}}
+        {{elif not result['items']:}}
         <tr>
           <td colspan="{{=len(_colunas)}}" class="sss-tabela-estado sss-tabela-vazia">{{if _erros:}}Corrija os filtros para consultar a trilha.{{else:}}Nenhum registro encontrado para os filtros informados.{{pass}}</td>
         </tr>
         {{else:}}
-        {{for _r in resultado['itens']:}}
+        {{for _r in result['items']:}}
         <tr>
           <td class="sss-col-data">{{=ui_helpers.formatar_data(_r['created_at'])}}</td>
           <td class="sss-mono">{{=_r['actor']}}</td>
@@ -101,7 +101,7 @@ aba_ativa = 'index'
           <td class="sss-aud-detalhe">
             {{if _r['truncated']:}}
             <details>
-              <summary><span>{{=_r['detalhe_curto']}}</span> <span class="sss-ver-mais">ver mais</span></summary>
+              <summary><span>{{=_r['short_detail']}}</span> <span class="sss-ver-mais">ver mais</span></summary>
               <div class="sss-aud-detalhe-completo">{{=_r['detail']}}</div>
             </details>
             {{else:}}{{=_r['detail'] or '-'}}{{pass}}

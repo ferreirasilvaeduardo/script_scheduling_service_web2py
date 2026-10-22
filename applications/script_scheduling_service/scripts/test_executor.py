@@ -426,7 +426,7 @@ class TestSpawnFailures(_Base):
         captured = {}
 
         def _captura(spec, log_fd, user):
-            captured.update(spec=spec, usuario=user)
+            captured.update(spec=spec, user=user)
             raise RuntimeError("sem sudo no teste")
 
         wd = executor.prepare_directory(self.work, 15)
@@ -435,7 +435,7 @@ class TestSpawnFailures(_Base):
                 self.assertLogs("sss_scheduler", "ERROR"):
             ex = executor.start(15, ["/usr/bin/python3", "-I", "/opt/s.py"], fd, {"PATH": "/usr/bin:/bin"}, wd,
                                   "sssprd", "/srv/exec", os_platform.DEFAULT_RLIMITS, "SSS-srv-01-15")
-        self.assertEqual(captured["usuario"], "sssprd")
+        self.assertEqual(captured["user"], "sssprd")
         self.assertEqual(captured["spec"], {
             "ticket_id": 15, "argv": ["/usr/bin/python3", "-I", "/opt/s.py"], "env": {"PATH": "/usr/bin:/bin"},
             "rlimits": {"RLIMIT_CORE": [0, 0], "RLIMIT_NOFILE": [1024, 1024]}, "base_dir": "/srv/exec/sssprd"})

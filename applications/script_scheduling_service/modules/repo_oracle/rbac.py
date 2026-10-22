@@ -159,11 +159,11 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                 items = [self.tuple_to_dict(_COLS_PROFILE, r[:-1]) for r in cur.fetchall()]
 
                 return {
-                    "itens": items,
+                    "items": items,
                     "total": total,
-                    "pagina": p,
-                    "tamanho": t,
-                    "total_limitado": total_capped,
+                    "page": p,
+                    "size": t,
+                    "total_capped": total_capped,
                 }
             finally:
                 cur.close()
