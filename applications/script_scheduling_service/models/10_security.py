@@ -55,13 +55,13 @@ def _encerrar_sessao(message):
 
 
 current.sss_ctx = None
-if session.usuario_id:
+if session.user_id:
     _agora = time.time()
-    if security.is_session_expired(session.ultimo_acesso, _agora, _cfg.web.session_idle_timeout_s):
+    if security.is_session_expired(session.last_access, _agora, _cfg.web.session_idle_timeout_s):
         # Expiracao por inatividade: so log, sem auditoria (README §4.2).
         _log.info("sessao expirada por inatividade (login=%s)", session.login, extra={"action": "SESSAO"})
         _encerrar_sessao(ui_helpers.mensagem("sessao_expirada"))
-    if security.is_session_expired(session.login_em, _agora, _cfg.web.session_max_hours * 3600):
+    if security.is_session_expired(session.login_at, _agora, _cfg.web.session_max_hours * 3600):
         # Vida maxima desde o login (CR-008, E2), mesmo com uso continuo: so log.
         _log.info("sessao encerrada pela vida maxima (login=%s)", session.login, extra={"action": "SESSAO"})
         _encerrar_sessao(ui_helpers.mensagem("sessao_max"))
@@ -70,14 +70,14 @@ if session.usuario_id:
             request.env.remote_addr, request.env.http_x_forwarded_for, _cfg.web.trusted_proxies))
     except RepoUnavailable:
         _log.exception("revalidacao de sessao indisponivel (usuario_id=%s caminho=%s)",
-                       session.usuario_id, request.env.path_info, extra={"action": "SESSAO"})
+                       session.user_id, request.env.path_info, extra={"action": "SESSAO"})
         raise HTTP(503)
     if _ctx is None:
         _encerrar_sessao(u"Seu acesso mudou e a sessão foi encerrada. Entre de novo para continuar.")
     current.sss_ctx = _ctx
-    session.perfil_id = _ctx["profile_id"]
-    session.perm_versao = _ctx["perm_version"]
-    session.ultimo_acesso = _agora
+    session.profile_id = _ctx["profile_id"]
+    session.perm_version = _ctx["perm_version"]
+    session.last_access = _agora
     response.headers["Cache-Control"] = "no-store"
     response.sss_menu = ui_menu.montar_menu(
         _ctx["features"], _ctx["is_admin"], (request.controller, request.function))

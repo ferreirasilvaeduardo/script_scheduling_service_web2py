@@ -4766,3 +4766,30 @@ Achado durante a aplicação e corrigido antes do commit: a regra que troca o pa
 Achado pela varredura das URLs geradas nas telas (todo endereço do app citado em `href`, `action` e `data-*`, pedido por GET): a aba "Trilha de auditoria" (`views/audit/_tabs.html`) montava `audit/lista`, porque o nome da ação estava numa tupla que as regras de troca não alcançam; corrigido para `index`. Os demais 404 da varredura são legítimos: links da trilha de auditoria para registros já apagados pelas baterias e `logs/download` sem argumento. Endereços antigos (`tickets/novo`, `admin_usuarios/lista`, `auditoria/agentes`) respondem 404 (D22).
 
 Validação: suítes em 3.6.0, 3.6.8 e 3.13.2 (1275 testes), bateria Oracle (1273), testes progressivos nos cinco agregados, ciclo real do agente, percurso real das telas com a varredura das URLs (baseline de 2 falhas conhecidas do fixture), conferência de resíduos.
+
+## 31. Sessão, campos de formulário e de URL (CR-016d, parte d2a)
+
+Plano do d2 aprovado pelo usuário (2026-10-22) com as decisões D26 (sessões abertas caem na atualização), D27 (links com `pagina`/`tamanho` abrem na primeira página) e D28 (campo de senha do login em inglês). Sem leitura do nome antigo.
+
+| Antes | Depois |
+|---|---|
+| `session.usuario_id`, `perfil_id`, `perm_versao`, `login_em`, `ultimo_acesso`, `sessao_epoch` | `user_id`, `profile_id`, `perm_version`, `login_at`, `last_access`, `session_epoch` |
+| parâmetros de URL `pagina`, `tamanho` (listas, paginação e filtros) | `page`, `size` |
+| campo `senha` (login e usuários), `senha_atual`, `nova`, `confirmacao` | `password`, `current_password`, `new_password`, `confirmation` |
+| `ambientes` (homologação), `vinculos_json`, `valor_teste`, `remover_padrao` | `environments`, `links_json`, `test_value`, `remove_default` |
+| `reexecucao` (GET), `reexecucao_de` (POST), `ultima=1`, `respostas` (JSON da prévia) | `rerun`, `rerun_of`, `last=1`, `answers` |
+| `ex_enviar`, `ex_timeout` (tela de componentes do DEV) | `demo_submit`, `demo_timeout` |
+| resultado do `change_password`: `ERRO`, `BLOQUEADO` | `ERROR`, `LOCKED` |
+
+As chaves de erro dos campos de senha (`errors["confirmation"]`…) acompanham o nome do campo, porque a tela marca o campo pelo nome. O teste de regressão `test_controllers_nao_leem_senha_direto_de_request` passou a procurar os nomes novos. As ferramentas de `dev/homologation` usam `#campo-password` e `input[name="password"]`.
+
+Achados no levantamento e corrigidos aqui (vinham do CR-016a, c48f1e2, que renomeou os campos do formulário sem o JavaScript que os lê):
+
+* **Disparo:** o `trigger.js` lia `form.elements.ambiente` e `form.elements.prioridade`, que não existem desde que os campos viraram `environment` e `priority`. O erro de JavaScript impedia a prévia do comando e o resumo em frase do modal de confirmação. Agora envia `environment`, `priority` e `answers`.
+* **Agendamento:** a prévia das próximas execuções enviava `dias_semana`, mas o controller lê `week_days`. Na recorrência semanal, os dias marcados eram ignorados na prévia. Agora envia `week_days`.
+
+Nem as suítes nem o percurso por GET executam JavaScript; por isso a validação deste passo inclui as requisições da prévia feitas como o navegador as monta.
+
+Achado na validação e corrigido antes do commit: sete chamadas dos testes passavam os nomes antigos como argumento nomeado (`dict(session, usuario_id=999)`, `_insert(confirmacao=...)`, `_edit(..., remover_padrao="Y")`), que a troca por texto entre aspas não alcança; as cinco falhas apontaram todas.
+
+Validação: suítes em 3.6.0, 3.6.8 e 3.13.2 (1275 testes), bateria Oracle (1273), testes progressivos nos cinco agregados, ciclo real do agente, percurso real das telas com login pelo campo `password`, varredura das URLs, paginação com `page`/`size`, prévia do disparo e prévia semanal do agendamento por POST JSON (com `week_days=1,3` devolve só segundas e quartas; sem os dias, recusa), conferência de resíduos.

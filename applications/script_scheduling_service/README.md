@@ -430,10 +430,10 @@ password = ...
   * Senhas com mais de 1.024 caracteres são recusadas sem calcular o hash (proteção contra negação de serviço).
 * **Sessão:**
   * Armazenada em **cookie cifrado** do web2py (`session.connect(request, response, cookie_key=<secrets>)`). Isso dispensa DAL e funciona com N nós web sem sessão aderente.
-  * O payload é mínimo: `user_id`, `login`, `profile_id`, `perm_version`, `session_epoch`, `login_em`, `csrf_token` e `ultimo_acesso`.
+  * O payload é mínimo: `user_id`, `login`, `profile_id`, `perm_version`, `session_epoch`, `login_at`, `csrf_token` e `last_access`.
   * A sessão é renovada no login (`session.renew()`).
   * O timeout por inatividade é `session_idle_timeout_s`. A expiração por inatividade é registrada só no log (INFO), sem auditoria.
-  * **Vida máxima (CR-008, E2/R-23):** além da inatividade, a sessão expira `[web] session_max_hours` horas (padrão 12) depois do login (`login_em`, relógio do nó web), mesmo com uso contínuo. A expiração é tratada como a de inatividade (log INFO, sem auditoria) e leva ao login com `next` e a mensagem-padrão "Sessão no tempo máximo" (§2.4.2).
+  * **Vida máxima (CR-008, E2/R-23):** além da inatividade, a sessão expira `[web] session_max_hours` horas (padrão 12) depois do login (`login_at`, relógio do nó web), mesmo com uso contínuo. A expiração é tratada como a de inatividade (log INFO, sem auditoria) e leva ao login com `next` e a mensagem-padrão "Sessão no tempo máximo" (§2.4.2).
   * **Revogação (CR-008, E2/R-23):** `tbsss_users.session_epoch` é gravado na sessão no login e comparado na revalidação. Incrementam o valor, na mesma transação da operação: sair (`LOGOUT`), trocar a própria senha, ter a senha redefinida, ser desativado e ter o perfil trocado. Uma sessão com `session_epoch` diferente do banco é encerrada pela revalidação e volta ao login, com log INFO `sessão revogada`; não há nova auditoria, porque a operação que revogou já foi auditada na origem (`LOGOUT`, `UPDATE` ou `DEACTIVATE`). Consequência declarada: sair em um navegador encerra **todas** as sessões daquele usuário, inclusive um cookie copiado.
   * Cookies com `HttpOnly` e `Secure`.
     * **Exceção de DEV:** com `sss_env = DEV` sobre HTTP (servidor de desenvolvimento), o atributo `Secure` é omitido, porque o navegador descartaria o cookie. Em HML e PROD, `Secure` é sempre enviado.
@@ -833,7 +833,7 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
   * valores sensíveis aparecem como `****`;
   * respostas vazias aparecem como "(sem resposta)";
   * o comando lógico (argv, §6.4) continua no modal, abaixo da frase, com o título "Comando que será executado".
-* **"Usar as respostas da minha última execução":** o botão aparece na etapa 3 quando existe um ticket **do próprio usuário** para o mesmo script e o mesmo ambiente. Ele usa `list` com os filtros `requested_by`, `script_id` e `environment`, `tamanho=1`, e depois `answers`, sem método novo no contrato.
+* **"Usar as respostas da minha última execução":** o botão aparece na etapa 3 quando existe um ticket **do próprio usuário** para o mesmo script e o mesmo ambiente. Ele usa `list` com os filtros `requested_by`, `script_id` e `environment`, `size=1`, e depois `answers`, sem método novo no contrato.
   * Preenche só as respostas **não sensíveis**; os campos sensíveis ficam vazios, com a nota "Por segurança, digite de novo." no início do texto de ajuda.
   * Uma resposta que não vale mais no catálogo atual (opção removida, formato novo) fica vazia, com o aviso "esta resposta mudou desde a última vez".
   * Nada é gravado até a confirmação, que segue o fluxo normal (§5.4).

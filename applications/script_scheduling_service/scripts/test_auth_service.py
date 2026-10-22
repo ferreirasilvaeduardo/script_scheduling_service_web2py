@@ -253,7 +253,7 @@ class TestAuthService(unittest.TestCase):
         self._fail_login("op.prod", MAX)
         self.clock.advance(LOCKOUT_S + 1)
         result, _errors = self.service.change_password(ctx, "10.0.0.1", "senha-errada-123", "x", "x")
-        self.assertEqual(result, "ERRO")
+        self.assertEqual(result, "ERROR")
         u = self.users.get_by_id(2)
         self.assertEqual(u["failed_attempts"], 1)
         self.assertIsNone(u["locked_until"])
@@ -275,8 +275,8 @@ class TestAuthService(unittest.TestCase):
 
     def _session(self, login):
         ctx, _ = self.service.authenticate(login, self.password, "10.0.0.1")
-        return {"usuario_id": ctx["user_id"], "login": ctx["login"],
-                "perfil_id": ctx["profile_id"], "perm_versao": ctx["perm_version"], "sessao_epoch": ctx["session_epoch"]}
+        return {"user_id": ctx["user_id"], "login": ctx["login"],
+                "profile_id": ctx["profile_id"], "perm_version": ctx["perm_version"], "session_epoch": ctx["session_epoch"]}
 
     def test_revalidar_ok(self):
         session = self._session("consulta")
@@ -290,7 +290,7 @@ class TestAuthService(unittest.TestCase):
         self.rbac.matrix_save(4, list(matrix["funcs"]) + [1], matrix["ambs"], matrix["scrs"], actor="teste")
         ctx = self.service.revalidate(session)
         self.assertIn("EXEC_SCRIPT", ctx["features"])
-        self.assertGreater(ctx["perm_version"], session["perm_versao"])
+        self.assertGreater(ctx["perm_version"], session["perm_version"])
 
     def _last_logout(self, actor):
         items = [r for r in self.audit.list({"action": "LOGOUT"}, page=1, size=10)["itens"]
@@ -314,14 +314,14 @@ class TestAuthService(unittest.TestCase):
 
     def test_revalidar_sessao_invalida_nao_audita(self):
         session = self._session("consulta")
-        self.assertIsNone(self.service.revalidate(dict(session, usuario_id=999)))
+        self.assertIsNone(self.service.revalidate(dict(session, user_id=999)))
         self.assertIsNone(self._last_logout("consulta"))
 
     def test_revalidar_sessao_invalida(self):
         session = self._session("consulta")
         self.assertIsNone(self.service.revalidate(dict(session, login="admin")))
-        self.assertIsNone(self.service.revalidate(dict(session, usuario_id=999)))
-        self.assertIsNone(self.service.revalidate(dict(session, usuario_id="4")))
+        self.assertIsNone(self.service.revalidate(dict(session, user_id=999)))
+        self.assertIsNone(self.service.revalidate(dict(session, user_id="4")))
         self.assertIsNone(self.service.revalidate({}))
 
     def test_mensagem_de_bloqueio_pela_funcao_do_modulo(self):

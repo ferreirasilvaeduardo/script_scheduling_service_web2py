@@ -27,12 +27,12 @@ class TestViewsCR007(unittest.TestCase):
     def test_paginacao_limitada_preserva_filtro_sem_ultima(self):
         html = _render("components/pagination.html", pagina=502, tamanho=20, total=10001,
                        total_limitado=True, quantidade_pagina=20, url_base=("tickets", "index"),
-                       query_params={"environment": "HOMOLOGACAO", "pagina": 1})
+                       query_params={"environment": "HOMOLOGACAO", "page": 1})
         self.assertIn("mais de 10.000 registros", html)
         self.assertNotIn("Última", html)
         self.assertNotIn("502 de", html)
         self.assertIn("Página 502", html)
-        self.assertIn("pagina=503", html)
+        self.assertIn("page=503", html)
         self.assertIn("environment=HOMOLOGACAO", html)
         exact = _render("components/pagination.html", pagina=1, tamanho=20, total=10000,
                         total_limitado=False, quantidade_pagina=20, url_base=("tickets", "index"),

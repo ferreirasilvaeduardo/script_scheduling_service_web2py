@@ -83,14 +83,14 @@ def _tickets_demo():
 
 
 def _formulario_demo():
-    enviado = request.vars.get("ex_enviar") == "1"
+    enviado = request.vars.get("demo_submit") == "1"
     nome = _texto_var("ex_nome")
-    timeout = _texto_var("ex_timeout", 9)
+    timeout = _texto_var("demo_timeout", 9)
     prioridade = _texto_var("ex_prioridade", 1)
     campos = [
         {"name": "ex_nome", "rotulo": u"Nome do agendamento", "tipo": "text", "valor": nome,
          "ajuda": u"Identificador exibido nas listagens.", "required": True},
-        {"name": "ex_timeout", "rotulo": u"Tempo limite (segundos)", "tipo": "number", "valor": timeout,
+        {"name": "demo_timeout", "rotulo": u"Tempo limite (segundos)", "tipo": "number", "valor": timeout,
          "ajuda": u"Entre 1 e 86400.", "required": True},
         {"name": "ex_prioridade", "rotulo": u"Prioridade", "tipo": "select", "valor": prioridade or "2",
          "opcoes": [("2", u"2 — Normal"), ("3", u"3 — Baixa"), ("4", u"4 — Mínima")]},
@@ -134,8 +134,8 @@ def components():
     ate = _texto_var("ate", 10)
     de = de if re.fullmatch(_RE_DATA_FILTRO, de) else ""
     ate = ate if re.fullmatch(_RE_DATA_FILTRO, ate) else ""
-    tamanho = ui_helpers.sanitizar_tamanho(request.vars.get("tamanho"))
-    pagina = ui_helpers.sanitizar_pagina(request.vars.get("pagina"))
+    tamanho = ui_helpers.sanitizar_tamanho(request.vars.get("size"))
+    pagina = ui_helpers.sanitizar_pagina(request.vars.get("page"))
 
     tickets = [t for t in _tickets_demo()
                if (not q or q.lower() in t["script"].lower())
@@ -174,7 +174,7 @@ def components():
         filtros={
             "id": "filtro-tickets",
             "url_base": (request.controller, request.function),
-            "preservar": {"tamanho": pag["tamanho"]},
+            "preservar": {"size": pag["tamanho"]},
             "campos": [
                 {"name": "q", "rotulo": u"Script", "tipo": "texto", "valor": q},
                 {"name": "status", "rotulo": u"Status", "tipo": "select", "valor": status,

@@ -8,8 +8,8 @@
 #                  opcoes (select: lista de (valor, rotulo); a primeira deve ser a opção "todos";
 #                  multipla: lista de (valor, rotulo) em caixas de seleção, valor = lista marcada)};
 #     preservar -- opcional; dict de parâmetros mantidos ao filtrar e ao limpar (ex.: tamanho).
-# 'pagina' nunca é preservada: filtrar ou limpar volta para a página 1.
-_flt_preservar = dict((k, v) for k, v in (filtros.get('preservar') or {}).items() if k != 'pagina')
+# 'page' nunca é preservada: filtrar ou limpar volta para a página 1.
+_flt_preservar = dict((k, v) for k, v in (filtros.get('preservar') or {}).items() if k != 'page')
 _flt_url = URL(c=filtros['url_base'][0], f=filtros['url_base'][1])
 }}<form class="sss-filtros" method="get" action="{{=_flt_url}}" role="search" x-data="filtros">
   {{for _flt_k, _flt_v in sorted(_flt_preservar.items()):}}

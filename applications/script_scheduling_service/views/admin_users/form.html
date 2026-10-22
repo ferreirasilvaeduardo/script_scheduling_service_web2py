@@ -14,8 +14,8 @@ _campos = [
     {'name': 'profile_id', 'rotulo': 'Perfil', 'tipo': 'select', 'valor': str(_u.get('profile_id') or ''), 'erro': erros.get('profile_id'), 'required': True, 'opcoes': _opc_perfil},
 ]
 if _novo:
-    _campos.append({'name': 'senha', 'rotulo': 'Senha inicial', 'tipo': 'password', 'erro': erros.get('senha'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024, 'ajuda': ajuda_senha})
-    _campos.append({'name': 'confirmacao', 'rotulo': u'Confirmação da senha', 'tipo': 'password', 'erro': erros.get('confirmacao'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024})
+    _campos.append({'name': 'password', 'rotulo': 'Senha inicial', 'tipo': 'password', 'erro': erros.get('password'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024, 'ajuda': ajuda_senha})
+    _campos.append({'name': 'confirmation', 'rotulo': u'Confirmação da senha', 'tipo': 'password', 'erro': erros.get('confirmation'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024})
 else:
     _desativar = _u.get('active') == 'Y'
     _modal_ativo = {'id': 'modal-ativo', 'titulo': (u'Desativar usuário %s' if _desativar else u'Reativar usuário %s') % _u['login'],
@@ -29,8 +29,8 @@ else:
                       'rotulo_confirmar': 'Confirmar desbloqueio', 'variante': 'normal', 'acao': URL(c='admin_users', f='unlock'),
                       'campos_ocultos': dict(id=_u['id'])}
     _campos_senha = [
-        {'name': 'senha', 'rotulo': 'Nova senha', 'tipo': 'password', 'erro': erros_senha.get('senha'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024, 'ajuda': ajuda_senha},
-        {'name': 'confirmacao', 'rotulo': u'Confirmação da nova senha', 'tipo': 'password', 'erro': erros_senha.get('confirmacao'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024},
+        {'name': 'password', 'rotulo': 'Nova senha', 'tipo': 'password', 'erro': erros_senha.get('password'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024, 'ajuda': ajuda_senha},
+        {'name': 'confirmation', 'rotulo': u'Confirmação da nova senha', 'tipo': 'password', 'erro': erros_senha.get('confirmation'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024},
     ]
 pass
 }}

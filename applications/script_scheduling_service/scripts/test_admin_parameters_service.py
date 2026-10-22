@@ -18,8 +18,8 @@ from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 IP = "10.3.3.3"
 SESSIONS = {
-    "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
-    "op.prod": {"usuario_id": 2, "login": "op.prod", "perfil_id": 2, "perm_versao": 1, "sessao_epoch": 0},
+    "admin": {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0},
+    "op.prod": {"user_id": 2, "login": "op.prod", "profile_id": 2, "perm_version": 1, "session_epoch": 0},
 }
 # Seed FAKE: 1 data_ref (DATE, carga_diaria NOMEADO e relatorio_mensal SEQUENCIAL), 5 codigo_filial
 # (TEXT com regex ^[0-9]{4}$, validacao_fiscal), 6 documento_cliente (TEXT sensivel), 10 descricao_lote (TEXT).
@@ -78,7 +78,7 @@ class TestRegistration(_Base):
         self._edit(P_CHAVE_API, default_value="tok-guardado-1234")
         _pid, errors = self._edit(P_CHAVE_API, sensitive="N")
         self.assertEqual(errors["sensitive"], prm_mod.MSG_SENSITIVE_ONE_WAY)
-        self._edit(P_CHAVE_API, remover_padrao="Y")
+        self._edit(P_CHAVE_API, remove_default="Y")
         _pid, errors = self._edit(P_CHAVE_API, sensitive="N")
         self.assertEqual(errors["sensitive"], prm_mod.MSG_SENSITIVE_ONE_WAY)
         self.assertEqual(self.catalog.parameters_get(P_CHAVE_API)["sensitive"], "Y")
@@ -248,7 +248,7 @@ class TestSensitiveAndTest(_Base):
         # Em branco mantem; marcar remover apaga.
         _pid, errors = self._edit(P_CHAVE_API, label="Token da API")
         self.assertEqual(self.catalog.parameters_get(P_CHAVE_API)["default_value"], "tok-padrao-secreto-1")
-        _pid, errors = self._edit(P_CHAVE_API, remover_padrao="Y")
+        _pid, errors = self._edit(P_CHAVE_API, remove_default="Y")
         self.assertIsNone(self.catalog.parameters_get(P_CHAVE_API)["default_value"])
         details = " | ".join(a["detail"] for a in self._audits("UPDATE"))
         self.assertNotIn("tok-padrao-secreto-1", details)

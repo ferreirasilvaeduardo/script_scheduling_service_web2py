@@ -92,7 +92,7 @@ def _pagina_novo(ctx, script_id, ambiente, valores=None, erros=None, prioridade=
 def new():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func("EXEC_SCRIPT")
-    reexecucao = _texto(request.get_vars.get("reexecucao"), 10)
+    reexecucao = _texto(request.get_vars.get("rerun"), 10)
     try:
         if reexecucao:
             dados = ticket_service.prepare_rerun(ctx, reexecucao)
@@ -100,7 +100,7 @@ def new():
                                 dados["priority"], reexecucao_de=dados["ticket_id"])
         script_id = _texto(request.get_vars.get("script_id"), 10)
         ambiente = _texto(request.get_vars.get("environment"), 30)
-        if script_id and ambiente and request.get_vars.get("ultima") == "1":
+        if script_id and ambiente and request.get_vars.get("last") == "1":
             # README §5.4: respostas da ultima execucao propria, sem sensiveis; nada e gravado.
             valores, avisos = ticket_service.last_answers(ctx, script_id, ambiente)
             return _pagina_novo(ctx, script_id, ambiente, valores, avisos=avisos)
@@ -143,7 +143,7 @@ def create():
     ambiente = _texto(request.post_vars.get("environment"), 30)
     prioridade = _texto(request.post_vars.get("priority"), 10)
     scheduled_at = _texto(request.post_vars.get("scheduled_at"), 40)
-    reexecucao_de = _texto(request.post_vars.get("reexecucao_de"), 10)
+    reexecucao_de = _texto(request.post_vars.get("rerun_of"), 10)
     respostas = _respostas_post()
     try:
         ticket_id, erros = ticket_service.create_ticket(ctx, _ip_origem(), script_id, ambiente, respostas,
@@ -166,7 +166,7 @@ def preview():
     # POST porque o corpo pode conter valores sensiveis: nunca na URL nem no log de acesso.
     _exigir_metodo("POST")
     ctx = _exigir_func("EXEC_SCRIPT")
-    respostas = request.post_vars.get("respostas")
+    respostas = request.post_vars.get("answers")
     try:
         # Mesmo endpoint da previa do comando e do resumo em frase do modal (README §5.4).
         dados = ticket_service.trigger_summary(ctx, _texto(request.post_vars.get("script_id"), 10),
@@ -186,8 +186,8 @@ def index():
         raise HTTP(404, **response.headers)
     ctx = _exigir_consulta()
     filtros = ticket_service.normalize_filters(request.get_vars)
-    pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("pagina"), 9))
-    tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("tamanho"), 3), _TAMANHOS)
+    pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("page"), 9))
+    tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("size"), 3), _TAMANHOS)
     erro = None
     try:
         resultado = ticket_service.list_page(ctx, filtros, pagina, tamanho)
@@ -197,11 +197,11 @@ def index():
         _log.exception("falha ao listar tickets (login=%s)", ctx["login"], extra={"action": "TICKET_LISTAR"})
         resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
         erro = _MSG_FALHA_LISTA
-    query_params = dict(filtros, tamanho=tamanho)
+    query_params = dict(filtros, size=tamanho)
     dados = dict(resultado=resultado, erro=erro, pagina=resultado["pagina"], tamanho=tamanho,
                  query_params=query_params,
                  url_fragmento=URL(c="tickets", f="index", extension="load",
-                                   vars=dict(query_params, pagina=resultado["pagina"])))
+                                   vars=dict(query_params, page=resultado["pagina"])))
     if request.extension == "load":
         return dados
     response.title = u"Tickets — SSS"
@@ -281,7 +281,7 @@ def rerun():
         _negado()
     except RerunError as e:
         session.flash = {"tipo": "aviso", "mensagem": _MSG_REEXECUCAO_REVISAR}
-        redirect(URL(c="tickets", f="new", vars={"reexecucao": e.ticket_id}))
+        redirect(URL(c="tickets", f="new", vars={"rerun": e.ticket_id}))
     session.flash = {"tipo": "sucesso",
                      "mensagem": u"Ticket #%s criado como reexecução do ticket #%s." % (novo_id, ticket_id)}
     redirect(URL(c="tickets", f="detail", args=[novo_id]))

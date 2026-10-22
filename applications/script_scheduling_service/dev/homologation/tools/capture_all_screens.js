@@ -75,12 +75,12 @@ async function sleep(ms) {
         await page.goto(`${BASE_URL}/default/login`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
             const l = document.querySelector('#campo-login');
-            const s = document.querySelector('#campo-senha');
+            const s = document.querySelector('#campo-password');
             if (l) l.value = '';
             if (s) s.value = '';
         });
         await page.type('#campo-login', user);
-        await page.type('#campo-senha', pass);
+        await page.type('#campo-password', pass);
         await Promise.all([
             page.waitForNavigation({ waitUntil: 'networkidle0' }),
             page.click('button[type="submit"]')
@@ -99,7 +99,7 @@ async function sleep(ms) {
         await snap(1, false);
 
         await page.type('#campo-login', 'op.hml');
-        await page.type('#campo-senha', 'senha-incorreta-teste');
+        await page.type('#campo-password', 'senha-incorreta-teste');
         await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), page.click('button[type="submit"]')]);
         await snap(2, false);
 
@@ -529,8 +529,8 @@ async function sleep(ms) {
         await login('op.prod');
         await page.goto(`${BASE_URL}/admin_users/form/1`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
-            const s = document.querySelector('input[name="senha"]');
-            const c = document.querySelector('input[name="confirmacao"]');
+            const s = document.querySelector('input[name="password"]');
+            const c = document.querySelector('input[name="confirmation"]');
             if (s) s.value = 'NovaSenha123!';
             if (c) c.value = 'NovaSenha123!';
         });

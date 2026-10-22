@@ -25,7 +25,7 @@ _rotulo_tipo = {'NAMED': u'por flag (NOMEADO)', 'POSITIONAL': u'posicional (SEQU
   {{=csrf_campo()}}
   <input type="hidden" name="id" value="{{=_sc['id']}}">
   <input type="hidden" name="version" value="{{=_v['version']}}">
-  <input type="hidden" name="vinculos_json" :value="vinculosJson">
+  <input type="hidden" name="links_json" :value="vinculosJson">
   <div class="sss-card-corpo">
     {{if _sc['param_type'] == 'NONE':}}
     <div class="alert alert-info sss-alerta" role="note"><span>Este script não recebe argumentos: não é possível vincular parâmetros.</span></div>

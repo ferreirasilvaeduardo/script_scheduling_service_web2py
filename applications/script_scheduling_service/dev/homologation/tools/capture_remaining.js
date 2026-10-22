@@ -78,10 +78,10 @@ async function sleep(ms) {
         await page.goto(`${BASE_URL}/default/login`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
             document.querySelector('#campo-login').value = '';
-            document.querySelector('#campo-senha').value = '';
+            document.querySelector('#campo-password').value = '';
         });
         await page.type('#campo-login', user);
-        await page.type('#campo-senha', pass);
+        await page.type('#campo-password', pass);
         await Promise.all([
             page.waitForNavigation({ waitUntil: 'networkidle0' }),
             page.click('button[type="submit"]')

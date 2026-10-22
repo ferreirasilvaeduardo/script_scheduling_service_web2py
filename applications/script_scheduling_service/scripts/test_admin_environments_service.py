@@ -19,8 +19,8 @@ from repo_errors import RepoConflict, RepoNotFound
 
 IP = "10.9.8.7"
 SESSIONS = {
-    "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
-    "op.prod": {"usuario_id": 2, "login": "op.prod", "perfil_id": 2, "perm_versao": 1, "sessao_epoch": 0},
+    "admin": {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0},
+    "op.prod": {"user_id": 2, "login": "op.prod", "profile_id": 2, "perm_version": 1, "session_epoch": 0},
 }
 # Seed FAKE: PRODUCAO (id 1) com os agendamentos 1 e 3 ativos e o 5 inativo; HOMOLOGACAO (id 2).
 AMB_PRODUCAO, AMB_HOMOLOGACAO = 1, 2

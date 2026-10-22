@@ -30,7 +30,7 @@ P_ADMIN, P_OPPROD, P_CONSULTA = 1, 2, 4
 
 
 def _session(uid, login, profile_id):
-    return {"usuario_id": uid, "login": login, "perfil_id": profile_id, "perm_versao": 1, "sessao_epoch": 0}
+    return {"user_id": uid, "login": login, "profile_id": profile_id, "perm_version": 1, "session_epoch": 0}
 
 
 class _Base(unittest.TestCase):
@@ -66,7 +66,7 @@ class TestAdminOnlyByAdmin(_Base):
 
     def test_gestor_nao_cria_usuario_admin(self):
         date = {"login": "novo.admin", "name": "Novo", "profile_id": str(P_ADMIN),
-                 "senha": NEW_PASSWORD, "confirmacao": NEW_PASSWORD}
+                 "password": NEW_PASSWORD, "confirmation": NEW_PASSWORD}
         uid, errors = self.svc_usr.save(self.ctx["gestor"], IP, None, date)
         self.assertEqual((uid, errors), (None, {"profile_id": usr_mod.MSG_ADMIN_ONLY}))
         self.assertIsNone(self.users.get_by_login("novo.admin"))
@@ -131,7 +131,7 @@ class TestRevocableSession(_Base):
         self.svc_usr.reset_password(self.ctx["admin"], IP, str(U_OPHML), NEW_PASSWORD, NEW_PASSWORD)
         self.assertEqual(self._epoch(U_OPHML), 1)
         self.assertIsNone(self.auth.revalidate(session))
-        session["sessao_epoch"] = 1
+        session["session_epoch"] = 1
         self.assertIsNotNone(self.auth.revalidate(session))
         form = self.svc_usr.form(self.ctx["admin"], str(U_OPHML))
         self.svc_usr.save(self.ctx["admin"], IP, str(U_OPHML),
@@ -160,12 +160,12 @@ class TestRevocableSession(_Base):
         result, errors = self.auth.change_password(self.ctx["op.prod"], IP, DEV_PASSWORD, NEW_PASSWORD, NEW_PASSWORD)
         self.assertEqual((result, errors), ("OK", {}))
         self.assertEqual(self.auth.session_epoch(U_OPPROD), epoch + 1)
-        self.assertIsNotNone(self.auth.revalidate(dict(_session(U_OPPROD, "op.prod", P_OPPROD), sessao_epoch=epoch + 1)))
-        self.assertIsNone(self.auth.revalidate(dict(_session(U_OPPROD, "op.prod", P_OPPROD), sessao_epoch=epoch)))
+        self.assertIsNotNone(self.auth.revalidate(dict(_session(U_OPPROD, "op.prod", P_OPPROD), session_epoch=epoch + 1)))
+        self.assertIsNone(self.auth.revalidate(dict(_session(U_OPPROD, "op.prod", P_OPPROD), session_epoch=epoch)))
 
     def test_sessao_sem_epoch_e_encerrada(self):
         session = _session(U_OPPROD, "op.prod", P_OPPROD)
-        del session["sessao_epoch"]
+        del session["session_epoch"]
         self.assertIsNone(self.auth.revalidate(session))
 
     def test_vida_maxima(self):

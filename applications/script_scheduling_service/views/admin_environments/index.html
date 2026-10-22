@@ -2,7 +2,7 @@
 {{
 # Lista de ambientes (padrão de CRUD administrativo, docs/ADMIN_CRUD_PATTERN.md).
 _opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
-filtros = {'id': 'filtro-ambientes', 'url_base': ('admin_environments', 'index'), 'preservar': {'tamanho': tamanho}, 'campos': [
+filtros = {'id': 'filtro-ambientes', 'url_base': ('admin_environments', 'index'), 'preservar': {'size': tamanho}, 'campos': [
     {'name': 'name', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('name')},
     {'name': 'active', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('active'), 'opcoes': _opc_ativo},
 ]}

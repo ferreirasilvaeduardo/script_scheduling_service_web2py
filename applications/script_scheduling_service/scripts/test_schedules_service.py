@@ -71,8 +71,8 @@ class _Base(unittest.TestCase):
         self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["itens"]] or [0])
 
     def _ctx(self, user_id, login, profile_id):
-        session = {"usuario_id": user_id, "login": login, "perfil_id": profile_id,
-                  "perm_versao": self.rbac.profiles_get(profile_id)["perm_version"], "sessao_epoch": 0}
+        session = {"user_id": user_id, "login": login, "profile_id": profile_id,
+                  "perm_version": self.rbac.profiles_get(profile_id)["perm_version"], "session_epoch": 0}
         return self.auth.revalidate(session)
 
     def _audits(self, action=None):

@@ -5,7 +5,7 @@
 import ui_helpers
 icones = URL('static', 'img/icons.svg')
 _opc_ativo = [('', 'Todas'), ('Y', 'Ativas'), ('N', 'Pausadas')]
-filtros = {'id': 'filtro-agendamentos', 'url_base': ('schedules', 'index'), 'preservar': {'tamanho': tamanho}, 'campos': [
+filtros = {'id': 'filtro-agendamentos', 'url_base': ('schedules', 'index'), 'preservar': {'size': tamanho}, 'campos': [
     {'name': 'name', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('name')},
     {'name': 'environment', 'rotulo': 'Ambiente', 'tipo': 'texto', 'valor': filtros_ativos.get('environment')},
     {'name': 'active', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('active'), 'opcoes': _opc_ativo},

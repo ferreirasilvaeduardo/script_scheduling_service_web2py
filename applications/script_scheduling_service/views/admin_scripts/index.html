@@ -3,7 +3,7 @@
 # Lista de scripts (padrão de CRUD administrativo). O caminho completo do arquivo é exibido (README §8.5, CR-005 D8).
 _opc_cmd = [('', 'Todos')] + [(_c, _c) for _c, _r in interpretadores]
 _opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
-filtros = {'id': 'filtro-scripts', 'url_base': ('admin_scripts', 'index'), 'preservar': {'tamanho': tamanho}, 'campos': [
+filtros = {'id': 'filtro-scripts', 'url_base': ('admin_scripts', 'index'), 'preservar': {'size': tamanho}, 'campos': [
     {'name': 'name', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('name')},
     {'name': 'script_group', 'rotulo': 'Grupo', 'tipo': 'texto', 'valor': filtros_ativos.get('script_group')},
     {'name': 'category', 'rotulo': 'Categoria', 'tipo': 'texto', 'valor': filtros_ativos.get('category')},

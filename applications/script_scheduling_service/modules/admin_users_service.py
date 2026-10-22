@@ -169,7 +169,7 @@ class AdminUsersService(object):
             return None, None
         return pid, all_value[pid]
 
-    def _password(self, password_value, confirmation, errors, field="senha"):
+    def _password(self, password_value, confirmation, errors, field="password"):
         if not isinstance(password_value, str) or not password_value:
             errors[field] = MSG_PASSWORD_REQUIRED
             return None
@@ -181,7 +181,7 @@ class AdminUsersService(object):
             errors[field] = problems[0]
             return None
         if confirmation != password_value:
-            errors["confirmacao"] = MSG_CONFIRMATION
+            errors["confirmation"] = MSG_CONFIRMATION
             return None
         return password_value
 
@@ -211,7 +211,7 @@ class AdminUsersService(object):
                 errors["login"] = MSG_LOGIN_INVALID
             name = self._name(date.get("name"), errors)
             profile_id, profile = self._active_profile(date.get("profile_id"), errors)
-            password = self._password(date.get("senha"), date.get("confirmacao"), errors)
+            password = self._password(date.get("password"), date.get("confirmation"), errors)
             if errors:
                 return None, errors
             try:

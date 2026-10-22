@@ -90,7 +90,7 @@
         carregar: function () {
           var self = this;
           var form = this.$root;
-          var corpo = { dias_semana: diasSemana(form) };
+          var corpo = { week_days: diasSemana(form) };
           var i;
           // Respostas fora de ordem sao descartadas: so a ultima requisicao atualiza a tela.
           var numero = ++this.sequencia;

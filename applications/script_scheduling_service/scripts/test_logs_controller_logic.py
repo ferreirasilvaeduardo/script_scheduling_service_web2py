@@ -15,9 +15,9 @@ from repo_errors import RepoUnavailable, RepoNotFound
 from ticket_service import LOG_MAX_CHARS, DOWNLOAD_INTERRUPTED_MARKER, InvalidOffset, TicketService
 
 SESSIONS = {
-    "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
-    "op.hml": {"usuario_id": 3, "login": "op.hml", "perfil_id": 3, "perm_versao": 1, "sessao_epoch": 0},
-    "consulta": {"usuario_id": 4, "login": "consulta", "perfil_id": 4, "perm_versao": 1, "sessao_epoch": 0},
+    "admin": {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0},
+    "op.hml": {"user_id": 3, "login": "op.hml", "profile_id": 3, "perm_version": 1, "session_epoch": 0},
+    "consulta": {"user_id": 4, "login": "consulta", "profile_id": 4, "perm_version": 1, "session_epoch": 0},
 }
 # Seed FAKE: 13 RUNNING (PRODUCAO, op.prod, carga_diaria com documento_cliente sensivel, 8 s/etapa),
 # 17 SUCCESS com log de ~2 MB, 35 FAILED/LOG_LIMIT com log_truncado = 'S'.

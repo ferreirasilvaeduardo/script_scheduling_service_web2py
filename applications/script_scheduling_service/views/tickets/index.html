@@ -14,7 +14,7 @@ _campos.append({'name': 'requested_by', 'rotulo': 'Solicitante (login)', 'tipo':
 _campos.append({'name': 'criado_de', 'rotulo': 'Criado de', 'tipo': 'data', 'valor': filtros_ativos.get('criado_de')})
 _campos.append({'name': 'criado_ate', 'rotulo': 'Criado até', 'tipo': 'data', 'valor': filtros_ativos.get('criado_ate')})
 _campos.append({'name': 'origem', 'rotulo': 'Origem', 'tipo': 'select', 'valor': filtros_ativos.get('origem'), 'opcoes': _opc_origens})
-filtros = {'id': 'filtro-tickets', 'url_base': ('tickets', 'index'), 'preservar': {'tamanho': tamanho}, 'campos': _campos}
+filtros = {'id': 'filtro-tickets', 'url_base': ('tickets', 'index'), 'preservar': {'size': tamanho}, 'campos': _campos}
 }}
 <div class="sss-page-header">
   <h1 class="sss-page-titulo">Tickets</h1>

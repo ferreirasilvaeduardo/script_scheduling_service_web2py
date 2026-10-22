@@ -4,7 +4,7 @@
 _rotulo_tipo = dict(tipos)
 _opc_tipo = [('', 'Todos')] + list(tipos)
 _opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
-filtros = {'id': 'filtro-parametros', 'url_base': ('admin_parameters', 'index'), 'preservar': {'tamanho': tamanho}, 'campos': [
+filtros = {'id': 'filtro-parametros', 'url_base': ('admin_parameters', 'index'), 'preservar': {'size': tamanho}, 'campos': [
     {'name': 'code', 'rotulo': u'Código', 'tipo': 'texto', 'valor': filtros_ativos.get('code')},
     {'name': 'label', 'rotulo': u'Rótulo', 'tipo': 'texto', 'valor': filtros_ativos.get('label')},
     {'name': 'component_type', 'rotulo': 'Tipo', 'tipo': 'select', 'valor': filtros_ativos.get('component_type'), 'opcoes': _opc_tipo},

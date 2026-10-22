@@ -3,7 +3,7 @@
 # Lista de perfis (padrão de CRUD administrativo, docs/ADMIN_CRUD_PATTERN.md).
 _opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
 _opc_admin = [('', 'Todos'), ('Y', 'Administrativos'), ('N', 'Operacionais')]
-filtros = {'id': 'filtro-perfis', 'url_base': ('admin_profiles', 'index'), 'preservar': {'tamanho': tamanho}, 'campos': [
+filtros = {'id': 'filtro-perfis', 'url_base': ('admin_profiles', 'index'), 'preservar': {'size': tamanho}, 'campos': [
     {'name': 'name', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('name')},
     {'name': 'is_admin', 'rotulo': 'Tipo', 'tipo': 'select', 'valor': filtros_ativos.get('is_admin'), 'opcoes': _opc_admin},
     {'name': 'active', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('active'), 'opcoes': _opc_ativo},

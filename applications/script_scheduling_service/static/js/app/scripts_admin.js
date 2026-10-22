@@ -64,7 +64,7 @@
           var mais = [];
           var menos = [];
           var afetados = 0;
-          caixas(this.$root, 'input[type="checkbox"][name="ambientes"]').forEach(function (cx) {
+          caixas(this.$root, 'input[type="checkbox"][name="environments"]').forEach(function (cx) {
             var inicial = cx.getAttribute('data-inicial') === 'Y';
             if (cx.disabled || cx.checked === inicial) {
               return;
@@ -186,7 +186,7 @@
           var corpo = new URLSearchParams();
           corpo.set('_csrf', form.querySelector('input[name="_csrf"]').value);
           corpo.set('id', form.querySelector('input[name="id"]').value);
-          corpo.set('vinculos_json', this.vinculosJson);
+          corpo.set('links_json', this.vinculosJson);
           this.carregando = true;
           this.previaTexto = '';
           this.previaErros = [];

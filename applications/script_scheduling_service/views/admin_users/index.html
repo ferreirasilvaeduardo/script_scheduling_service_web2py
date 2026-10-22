@@ -4,7 +4,7 @@
 import ui_helpers
 _opc_situacao = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos'), ('B', 'Bloqueados')]
 _opc_perfil = [('', 'Todos')] + [(str(_pf['id']), _pf['name']) for _pf in perfis]
-filtros = {'id': 'filtro-usuarios', 'url_base': ('admin_users', 'index'), 'preservar': {'tamanho': tamanho}, 'campos': [
+filtros = {'id': 'filtro-usuarios', 'url_base': ('admin_users', 'index'), 'preservar': {'size': tamanho}, 'campos': [
     {'name': 'login', 'rotulo': 'Login', 'tipo': 'texto', 'valor': filtros_ativos.get('login')},
     {'name': 'name', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('name')},
     {'name': 'profile_id', 'rotulo': 'Perfil', 'tipo': 'select', 'valor': str(filtros_ativos.get('profile_id') or ''), 'opcoes': _opc_perfil},

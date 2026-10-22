@@ -65,8 +65,8 @@ def index():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)
     filtros = servico.normalize_filters(request.get_vars)
-    pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("pagina"), 9))
-    tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("tamanho"), 3), _TAMANHOS)
+    pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("page"), 9))
+    tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("size"), 3), _TAMANHOS)
     erro = None
     try:
         resultado = servico.list_page(ctx, filtros, pagina, tamanho)
@@ -78,7 +78,7 @@ def index():
         erro = _MSG_FALHA_LISTA
     response.title = u"Scripts — SSS"
     return dict(resultado=resultado, erro=erro, filtros_ativos=filtros, tamanho=tamanho, interpretadores=servico.INTERPRETER_LABELS,
-                query_params=dict(filtros, tamanho=tamanho))
+                query_params=dict(filtros, size=tamanho))
 
 
 def form():
@@ -210,7 +210,7 @@ def save_parameters():
     script_id = _texto(request.post_vars.get("id"), 11)
     try:
         descricao, erros = servico.save_parameters(ctx, _ip_origem(), script_id,
-                                                     _texto(request.post_vars.get("vinculos_json"), _MAX_JSON),
+                                                     _texto(request.post_vars.get("links_json"), _MAX_JSON),
                                                      _texto(request.post_vars.get("version"), 64))
     except RepoNotFound:
         _nao_encontrado()
@@ -234,7 +234,7 @@ def preview():
     _exigir_metodo("POST")
     ctx = _exigir_func(_FUNC)
     response.headers["Cache-Control"] = "no-store"
-    vinculos_json = request.post_vars.get("vinculos_json")
+    vinculos_json = request.post_vars.get("links_json")
     try:
         resultado = servico.preview(ctx, _texto(request.post_vars.get("id"), 11),
                                    _texto(vinculos_json, _MAX_JSON) if vinculos_json is not None else None)

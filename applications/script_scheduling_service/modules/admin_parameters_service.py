@@ -273,7 +273,7 @@ class AdminParametersService(object):
 
         raw = date.get("default_value")
         raw = raw if isinstance(raw, str) and raw.strip() else None
-        if admin_crud.text(date.get("remover_padrao"), 1) == "Y":
+        if admin_crud.text(date.get("remove_default"), 1) == "Y":
             default = None
         elif raw is None and current_value is not None and (current_value.get("sensitive") == "Y" or sensitive == "Y"):
             # Padrao de sensivel e so de escrita: em branco mantem o gravado.

@@ -20,7 +20,7 @@ from schedules_service import SchedulesService
 from ticket_service import TicketService
 
 IP = "10.9.8.7"
-ADMIN_SESSION = {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0}
+ADMIN_SESSION = {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0}
 
 
 class TestRecordInServices(unittest.TestCase):

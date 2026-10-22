@@ -21,8 +21,8 @@ IP = "10.2.2.2"
 DEV_PASSWORD = "senha-dev-de-teste-123"
 NEW_PASSWORD = "Nova-Senha-Forte-2026"
 SESSIONS = {
-    "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
-    "op.prod": {"usuario_id": 2, "login": "op.prod", "perfil_id": 2, "perm_versao": 1, "sessao_epoch": 0},
+    "admin": {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0},
+    "op.prod": {"user_id": 2, "login": "op.prod", "profile_id": 2, "perm_version": 1, "session_epoch": 0},
 }
 # Seed FAKE: admin (1, perfil ADMINISTRADOR, unico admin), op.prod (2), op.hml (3), consulta (4),
 # inativo (5) e bloqueado (6, 5 tentativas, bloqueado por 30 min). Perfis 1-4 ativos.
@@ -66,7 +66,7 @@ class _Base(unittest.TestCase):
 
     def _insert(self, **changes):
         date = {"login": "maria.silva", "name": "Maria Silva", "profile_id": str(P_CONSULTA),
-                 "senha": NEW_PASSWORD, "confirmacao": NEW_PASSWORD}
+                 "password": NEW_PASSWORD, "confirmation": NEW_PASSWORD}
         date.update(changes)
         return self.svc.save(self.ctx["admin"], IP, None, date)
 
@@ -118,12 +118,12 @@ class TestInsert(_Base):
         self.assertEqual(self._audits("CREATE"), [])
 
     def test_senha_fraca_e_confirmacao_divergente(self):
-        _uid, errors = self._insert(senha="curta", confirmacao="curta")
-        self.assertEqual(errors, {"senha": security.validate_password_policy("curta")[0]})
-        _uid, errors = self._insert(confirmacao=NEW_PASSWORD + "x")
-        self.assertEqual(errors, {"confirmacao": usr_mod.MSG_CONFIRMATION})
-        _uid, errors = self._insert(senha="", confirmacao="")
-        self.assertEqual(errors, {"senha": usr_mod.MSG_PASSWORD_REQUIRED})
+        _uid, errors = self._insert(password="curta", confirmation="curta")
+        self.assertEqual(errors, {"password": security.validate_password_policy("curta")[0]})
+        _uid, errors = self._insert(confirmation=NEW_PASSWORD + "x")
+        self.assertEqual(errors, {"confirmation": usr_mod.MSG_CONFIRMATION})
+        _uid, errors = self._insert(password="", confirmation="")
+        self.assertEqual(errors, {"password": usr_mod.MSG_PASSWORD_REQUIRED})
 
     def test_perfil_inativo_ou_inexistente(self):
         form = self.rbac_repo.profiles_get(P_CONSULTA)
@@ -236,9 +236,9 @@ class TestPasswordAndLock(_Base):
 
     def test_redefinicao_valida_politica_e_confirmacao(self):
         self.assertEqual(self.svc.reset_password(self.ctx["admin"], IP, str(U_OPPROD), "fraca", "fraca"),
-                         {"senha": security.validate_password_policy("fraca")[0]})
+                         {"password": security.validate_password_policy("fraca")[0]})
         self.assertEqual(self.svc.reset_password(self.ctx["admin"], IP, str(U_OPPROD), NEW_PASSWORD, "x"),
-                         {"confirmacao": usr_mod.MSG_CONFIRMATION})
+                         {"confirmation": usr_mod.MSG_CONFIRMATION})
 
     def test_redefinir_a_propria_senha_pela_administracao_negado(self):
         with self.assertRaises(OperationDenied) as cm:
@@ -252,7 +252,7 @@ class TestPasswordAndLock(_Base):
 
     def test_minha_senha_com_atual_errada(self):
         res, errors = self.auth.change_password(self.ctx["op.prod"], IP, "errada-errada-1", NEW_PASSWORD, NEW_PASSWORD)
-        self.assertEqual((res, errors), ("ERRO", {"senha_atual": auth_service.MSG_CURRENT_PASSWORD}))
+        self.assertEqual((res, errors), ("ERROR", {"current_password": auth_service.MSG_CURRENT_PASSWORD}))
         u = self.users.get_by_id(U_OPPROD)
         self.assertEqual(u["failed_attempts"], 1)
         self.assertTrue(security.verify_password(DEV_PASSWORD, u["password_hash"]))
@@ -263,20 +263,20 @@ class TestPasswordAndLock(_Base):
     def test_minha_senha_bloqueia_apos_limite(self):
         for _ in range(4):
             self.assertEqual(self.auth.change_password(self.ctx["op.prod"], IP, "errada-errada-1", NEW_PASSWORD,
-                                                    NEW_PASSWORD)[0], "ERRO")
+                                                    NEW_PASSWORD)[0], "ERROR")
         res, _errors = self.auth.change_password(self.ctx["op.prod"], IP, "errada-errada-1", NEW_PASSWORD, NEW_PASSWORD)
-        self.assertEqual(res, "BLOQUEADO")
+        self.assertEqual(res, "LOCKED")
         self.assertIsNotNone(self.users.get_by_id(U_OPPROD)["locked_until"])
         # Mesmo com a senha certa, a conta bloqueada nao troca a senha.
         self.assertEqual(self.auth.change_password(self.ctx["op.prod"], IP, DEV_PASSWORD, NEW_PASSWORD, NEW_PASSWORD)[0],
-                         "BLOQUEADO")
+                         "LOCKED")
 
     def test_minha_senha_ok_e_validacoes(self):
         res, errors = self.auth.change_password(self.ctx["op.prod"], IP, DEV_PASSWORD, "curta", "curta")
-        self.assertEqual(res, "ERRO")
-        self.assertIn("nova", errors)
+        self.assertEqual(res, "ERROR")
+        self.assertIn("new_password", errors)
         res, errors = self.auth.change_password(self.ctx["op.prod"], IP, DEV_PASSWORD, NEW_PASSWORD, "outra")
-        self.assertEqual(errors, {"confirmacao": auth_service.MSG_CONFIRMATION})
+        self.assertEqual(errors, {"confirmation": auth_service.MSG_CONFIRMATION})
         res, errors = self.auth.change_password(self.ctx["op.prod"], IP, DEV_PASSWORD, NEW_PASSWORD, NEW_PASSWORD)
         self.assertEqual((res, errors), ("OK", {}))
         u = self.users.get_by_id(U_OPPROD)

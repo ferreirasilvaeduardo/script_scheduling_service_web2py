@@ -12,7 +12,7 @@ if (!process.env.SSS_HOMOLOG_PASSWORD) { console.error('Defina SSS_HOMOLOG_PASSW
     // Login admin
     await page.goto('http://127.0.0.1:8000/script_scheduling_service/default/login', { waitUntil: 'networkidle0' });
     await page.type('#campo-login', 'admin');
-    await page.type('#campo-senha', process.env.SSS_HOMOLOG_PASSWORD);
+    await page.type('#campo-password', process.env.SSS_HOMOLOG_PASSWORD);
     await Promise.all([
         page.waitForNavigation({ waitUntil: 'networkidle0' }),
         page.click('.sss-login button[type="submit"]')

@@ -6,12 +6,12 @@
 #   total        -- total de registros retornado pelo repositório;
 #   url_base     -- tupla (controller, funcao) da listagem;
 #   query_params -- dict com os filtros ativos, preservados em todos os links.
-# 'pagina' e 'tamanho' em query_params são sobrescritos pelos valores do link. Os links nunca herdam
+# 'page' e 'size' em query_params são sobrescritos pelos valores do link. Os links nunca herdam
 # a extensão da requisição (o componente também é usado em fragmentos .load).
 import ui_helpers
 _pag = ui_helpers.paginacao_info(pagina, tamanho, total, total_limitado, quantidade_pagina)
-_pag_vars = dict((k, v) for k, v in (query_params or {}).items() if k not in ('pagina', 'tamanho') and v not in (None, ''))
-_pag_vars['tamanho'] = _pag['tamanho']
+_pag_vars = dict((k, v) for k, v in (query_params or {}).items() if k not in ('page', 'size') and v not in (None, ''))
+_pag_vars['size'] = _pag['tamanho']
 _pag_links = (
     ('Primeira', 1, _pag['tem_anterior'], 'Primeira página'),
     ('Anterior', _pag['anterior'], _pag['tem_anterior'], 'Página anterior'),
@@ -32,7 +32,7 @@ pass
     {{pass}}
     {{if _pag_ativo:}}
     <li class="page-item"><a class="page-link"
-        href="{{=URL(c=url_base[0], f=url_base[1], vars=dict(_pag_vars, pagina=_pag_num), extension=False)}}"
+        href="{{=URL(c=url_base[0], f=url_base[1], vars=dict(_pag_vars, page=_pag_num), extension=False)}}"
         aria-label="{{=_pag_aria}}">{{=_pag_rotulo}}</a></li>
     {{else:}}
     <li class="page-item disabled"><span class="page-link" aria-disabled="true">{{=_pag_rotulo}}</span></li>

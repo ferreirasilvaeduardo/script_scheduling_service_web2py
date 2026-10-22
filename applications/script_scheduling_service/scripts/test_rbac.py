@@ -202,9 +202,9 @@ class TestPriority(unittest.TestCase):
 
 IP = "10.1.1.1"
 SESSIONS = {
-    "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
-    "op.prod": {"usuario_id": 2, "login": "op.prod", "perfil_id": 2, "perm_versao": 1, "sessao_epoch": 0},
-    "consulta": {"usuario_id": 4, "login": "consulta", "perfil_id": 4, "perm_versao": 1, "sessao_epoch": 0},
+    "admin": {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0},
+    "op.prod": {"user_id": 2, "login": "op.prod", "profile_id": 2, "perm_version": 1, "session_epoch": 0},
+    "consulta": {"user_id": 4, "login": "consulta", "profile_id": 4, "perm_version": 1, "session_epoch": 0},
 }
 # Seed FAKE: perfil 1 ADMINISTRADOR (unico admin), 3 OPERATOR_HML (ambiente DESENV inativo associado),
 # 4 CONSULTA (VIEW_LOGS; PRODUCAO e HOMOLOGACAO). Funcionalidades 1 EXEC_SCRIPT, 2 VIEW_LOGS, 3 CANCEL_TICKET.

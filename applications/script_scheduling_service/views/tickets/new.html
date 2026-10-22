@@ -90,7 +90,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
     <input type="hidden" name="script_id" value="{{=form['script']['id']}}">
     <input type="hidden" name="environment" value="{{=form['environment']['name']}}">
     {{if reexecucao_de:}}
-    <input type="hidden" name="reexecucao_de" value="{{=reexecucao_de}}">
+    <input type="hidden" name="rerun_of" value="{{=reexecucao_de}}">
     <div class="alert alert-info sss-alerta" role="note">
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
       <span>Reexecução do <a href="{{=URL(c='tickets', f='detail', args=[reexecucao_de])}}">ticket #{{=reexecucao_de}}</a>. As respostas originais foram carregadas; valores sigilosos não são exibidos e precisam ser informados novamente, se necessário.</span>
@@ -98,7 +98,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
     {{pass}}
 
     {{if tem_ultima and not usou_ultima:}}
-    <p class="mb-3"><a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='new', vars=dict(script_id=form['script']['id'], environment=form['environment']['name'], ultima='1'))}}">Usar as respostas da minha última execução</a></p>
+    <p class="mb-3"><a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='new', vars=dict(script_id=form['script']['id'], environment=form['environment']['name'], last='1'))}}">Usar as respostas da minha última execução</a></p>
     {{elif usou_ultima:}}
     <div class="alert alert-info sss-alerta" role="note"><span>Carregamos as respostas da sua última execução. Confira antes de criar; valores sigilosos precisam ser digitados de novo.</span></div>
     {{pass}}

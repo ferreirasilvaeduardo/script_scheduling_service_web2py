@@ -167,7 +167,7 @@ class AuthService(object):
 
         Encerramento por usuario ou perfil inativo e auditado como LOGOUT (README §4.2, D13).
         """
-        user_id = sessao.get("usuario_id")
+        user_id = sessao.get("user_id")
         if not isinstance(user_id, int) or isinstance(user_id, bool):
             return None
         try:
@@ -187,14 +187,14 @@ class AuthService(object):
             self._log.info("sessao encerrada: usuario ou perfil inativo (login=%s)", state.get("login"),
                            extra={"action": "SESSAO"})
             return None
-        if state.get("session_epoch", 0) != sessao.get("sessao_epoch"):
+        if state.get("session_epoch", 0) != sessao.get("session_epoch"):
             # Sessao revogada (CR-008, E2): logout em outro lugar, senha trocada ou redefinida, perfil
             # ou situacao do usuario alterados. Ja auditado na origem; aqui so o log.
             self._log.info("sessao encerrada: sessao revogada (login=%s)", state.get("login"),
                            extra={"action": "SESSAO"})
             return None
-        if state.get("perm_version") != sessao.get("perm_versao") \
-                or state.get("profile_id") != sessao.get("perfil_id"):
+        if state.get("perm_version") != sessao.get("perm_version") \
+                or state.get("profile_id") != sessao.get("profile_id"):
             self._log.info("permissoes recarregadas (login=%s profile_id=%s perm_version=%s)",
                            state.get("login"), state.get("profile_id"), state.get("perm_version"),
                            extra={"action": "SESSAO"})
@@ -239,14 +239,14 @@ class AuthService(object):
     def change_password(self, ctx, ip, current_value, new, confirmation):
         """Troca da propria senha (exige a atual). Retorna (resultado, erros por campo).
 
-        resultado: 'OK' | 'ERRO' | 'BLOQUEADO'. Senha atual errada conta como falha de login
+        resultado: 'OK' | 'ERROR' | 'LOCKED'. Senha atual errada conta como falha de login
         (mesmo limite e bloqueio do §4.2); ao bloquear, o chamador encerra a sessao.
         """
         now = self._clock()
         user = self._users.get_by_id(ctx["user_id"])
         if self._is_locked(user, now):
             self._record_failure(user, ip, "troca de senha com conta bloqueada")
-            return "BLOQUEADO", {"senha_atual": self.lockout_message}
+            return "LOCKED", {"current_password": self.lockout_message}
         user = self._reset_if_expired(user)
         stored = user.get("password_hash")
         current_ok = (isinstance(current_value, str) and 0 < len(current_value) <= PASSWORD_MAX
@@ -254,17 +254,17 @@ class AuthService(object):
         if not current_ok:
             _ctx, message = self._wrong_password(user, ip)
             if message == self.lockout_message:
-                return "BLOQUEADO", {"senha_atual": self.lockout_message}
-            return "ERRO", {"senha_atual": MSG_CURRENT_PASSWORD}
+                return "LOCKED", {"current_password": self.lockout_message}
+            return "ERROR", {"current_password": MSG_CURRENT_PASSWORD}
         errors = {}
         problems = security.validate_password_policy(new) if isinstance(new, str) and len(new) <= PASSWORD_MAX \
             else [u"Informe a nova senha."]
         if problems:
-            errors["nova"] = problems[0]
+            errors["new_password"] = problems[0]
         elif confirmation != new:
-            errors["confirmacao"] = MSG_CONFIRMATION
+            errors["confirmation"] = MSG_CONFIRMATION
         if errors:
-            return "ERRO", errors
+            return "ERROR", errors
         self._users.set_password(user["id"], security.hash_password(new), now,
                                      audit={"actor": user["login"], "ip": ip, "action": "UPDATE",
                                                 "detail": u"senha alterada pelo próprio usuário"})

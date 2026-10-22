@@ -13,7 +13,7 @@ from repo_errors import RepoConflict, RepoError, RepoNotFound
 _FUNC = "MANAGE_PARAMETERS"
 _TAMANHOS = (20, 50, 100)
 _CAMPOS = ("code", "param_flag", "label", "description", "component_type", "options_json", "default_value",
-           "remover_padrao", "validation_regex", "sensitive", "version")
+           "remove_default", "validation_regex", "sensitive", "version")
 _JS = "js/app/parameters.js"
 _MSG_FALHA_LISTA = u"Não foi possível carregar os parâmetros. Tente novamente em instantes."
 _MSG_FALHA_ACAO = u"Não foi possível concluir a operação. Tente novamente em instantes."
@@ -58,8 +58,8 @@ def index():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)
     filtros = servico.normalize_filters(request.get_vars)
-    pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("pagina"), 9))
-    tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("tamanho"), 3), _TAMANHOS)
+    pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("page"), 9))
+    tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("size"), 3), _TAMANHOS)
     erro = None
     try:
         resultado = servico.list_page(ctx, filtros, pagina, tamanho)
@@ -71,7 +71,7 @@ def index():
         erro = _MSG_FALHA_LISTA
     response.title = u"Parâmetros — SSS"
     return dict(resultado=resultado, erro=erro, filtros_ativos=filtros, tamanho=tamanho, tipos=servico.TYPE_LABELS,
-                query_params=dict(filtros, tamanho=tamanho))
+                query_params=dict(filtros, size=tamanho))
 
 
 def form():
@@ -158,7 +158,7 @@ def test_regex():
     response.headers["Cache-Control"] = "no-store"
     try:
         resultado = servico.test_regex(ctx, _texto(request.post_vars.get("id"), 11), _enviados(),
-                                   _texto(request.post_vars.get("valor_teste"), 1000))
+                                   _texto(request.post_vars.get("test_value"), 1000))
     except RepoNotFound:
         response.status = 404
         return response.json({"ok": False, "erro": u"Parâmetro não encontrado."})

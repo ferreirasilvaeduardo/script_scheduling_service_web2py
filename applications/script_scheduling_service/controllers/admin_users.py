@@ -14,7 +14,7 @@ from repo_errors import RepoConflict, RepoError, RepoNotFound
 
 _FUNC = "MANAGE_USERS"
 _TAMANHOS = (20, 50, 100)
-_CAMPOS_SENHA = ("senha", "confirmacao")
+_CAMPOS_SENHA = ("password", "confirmation")
 _MSG_FALHA_LISTA = u"Não foi possível carregar os usuários. Tente novamente em instantes."
 _MSG_FALHA_ACAO = u"Não foi possível concluir a operação. Tente novamente em instantes."
 
@@ -49,7 +49,7 @@ def _pagina_form(ctx, dados, erros=None, erros_senha=None):
     response.title = (u"Usuário %s — SSS" % dados["login"]) if dados.get("id") else u"Novo usuário — SSS"
     response.view = "admin_users/form.html"
     erros = erros or {}
-    campos = [{"name": n, "erro": erros.get(n)} for n in ("login", "name", "profile_id", "senha", "confirmacao")]
+    campos = [{"name": n, "erro": erros.get(n)} for n in ("login", "name", "profile_id", "password", "confirmation")]
     # Perfil de administrador so e oferecido a administrador (CR-008, E1), salvo o perfil atual.
     perfis = [p for p in servico.profiles()
               if p["id"] == dados.get("profile_id") or (p["active"] == "Y" and (ctx["is_admin"] or p["is_admin"] != "Y"))]
@@ -63,8 +63,8 @@ def index():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)
     filtros = servico.normalize_filters(request.get_vars)
-    pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("pagina"), 9))
-    tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("tamanho"), 3), _TAMANHOS)
+    pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("page"), 9))
+    tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("size"), 3), _TAMANHOS)
     erro = None
     perfis = []
     try:
@@ -78,7 +78,7 @@ def index():
         erro = _MSG_FALHA_LISTA
     response.title = u"Usuários — SSS"
     return dict(resultado=resultado, erro=erro, filtros_ativos=filtros, tamanho=tamanho, perfis=perfis,
-                query_params=dict(filtros, tamanho=tamanho))
+                query_params=dict(filtros, size=tamanho))
 
 
 def form():
@@ -157,7 +157,7 @@ def reset_password():
     senhas = _retirar_senhas()
     usuario_id = _texto(request.post_vars.get("id"), 11)
     try:
-        erros = servico.reset_password(ctx, _ip_origem(), usuario_id, senhas["senha"], senhas["confirmacao"])
+        erros = servico.reset_password(ctx, _ip_origem(), usuario_id, senhas["password"], senhas["confirmation"])
     except RepoNotFound:
         _nao_encontrado()
     except AccessDenied:

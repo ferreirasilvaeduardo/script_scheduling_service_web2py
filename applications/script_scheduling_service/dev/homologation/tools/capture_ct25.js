@@ -49,10 +49,10 @@ async function sleep(ms) {
         await page.goto(`${BASE_URL}/default/login`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
             document.querySelector('#campo-login').value = '';
-            document.querySelector('#campo-senha').value = '';
+            document.querySelector('#campo-password').value = '';
         });
         await page.type('#campo-login', user);
-        await page.type('#campo-senha', pass);
+        await page.type('#campo-password', pass);
         await Promise.all([
             page.waitForNavigation({ waitUntil: 'networkidle0' }),
             page.click('button[type="submit"]')
@@ -82,8 +82,8 @@ async function sleep(ms) {
         
         // Preencher senha e confirmacao
         await page.evaluate(() => {
-            const s = document.querySelector('input[name="senha"]');
-            const c = document.querySelector('input[name="confirmacao"]');
+            const s = document.querySelector('input[name="password"]');
+            const c = document.querySelector('input[name="confirmation"]');
             if (s) s.value = 'NovaSenha123!';
             if (c) c.value = 'NovaSenha123!';
         });

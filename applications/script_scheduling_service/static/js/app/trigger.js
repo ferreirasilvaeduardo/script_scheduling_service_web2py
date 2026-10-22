@@ -102,10 +102,10 @@
           var form = this.$root.closest('form');
           var corpo = {
             script_id: form.elements.script_id.value,
-            ambiente: form.elements.ambiente.value,
-            prioridade: form.elements.prioridade ? form.elements.prioridade.value : '',
+            environment: form.elements.environment.value,
+            priority: form.elements.priority ? form.elements.priority.value : '',
             scheduled_at: form.elements.scheduled_at ? form.elements.scheduled_at.value : '',
-            respostas: coletarRespostas(form)
+            answers: coletarRespostas(form)
           };
           this.carregando = true;
           this.script = '';
@@ -172,8 +172,8 @@
           var form = this.$root.closest('form');
           var corpo = {
             script_id: form.elements.script_id.value,
-            ambiente: form.elements.ambiente.value,
-            respostas: coletarRespostas(form)
+            environment: form.elements.environment.value,
+            answers: coletarRespostas(form)
           };
           this.carregando = true;
           this.comando = '';

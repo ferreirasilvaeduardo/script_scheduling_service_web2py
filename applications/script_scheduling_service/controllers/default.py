@@ -63,18 +63,18 @@ def login():
     login_digitado = ""
     if metodo == "POST":
         login_digitado = _texto_post("login", 30).strip()
-        senha = security.strip_passwords((request.post_vars, request.vars), ("senha",))["senha"]
+        senha = security.strip_passwords((request.post_vars, request.vars), ("password",))["password"]
         ctx, mensagem = auth_service.authenticate(login_digitado, senha, _ip_origem())
         if ctx is not None:
             # Em sessao por cookie, renew() apenas limpa: o cookie e regravado com conteudo novo.
             session.renew(clear_session=True)
             session.csrf_token = security.generate_csrf_token()
-            session.usuario_id = ctx["user_id"]
+            session.user_id = ctx["user_id"]
             session.login = ctx["login"]
-            session.perfil_id = ctx["profile_id"]
-            session.perm_versao = ctx["perm_version"]
-            session.sessao_epoch = ctx["session_epoch"]
-            session.ultimo_acesso = session.login_em = time.time()
+            session.profile_id = ctx["profile_id"]
+            session.perm_version = ctx["perm_version"]
+            session.session_epoch = ctx["session_epoch"]
+            session.last_access = session.login_at = time.time()
             redirect(destino or URL(c="default", f="index"))
     return dict(mensagem=mensagem, login_digitado=login_digitado, destino=destino or "")
 
@@ -90,7 +90,7 @@ def logout():
     redirect(URL(c="default", f="login"))
 
 
-_CAMPOS_MINHA_SENHA = ("senha_atual", "nova", "confirmacao")
+_CAMPOS_MINHA_SENHA = ("current_password", "new_password", "confirmation")
 
 
 def permissions():
@@ -117,9 +117,9 @@ def my_password():
     erros = {}
     if metodo == "POST":
         senhas = security.strip_passwords((request.post_vars, request.vars), _CAMPOS_MINHA_SENHA)
-        resultado, erros = auth_service.change_password(ctx, _ip_origem(), senhas["senha_atual"], senhas["nova"],
-                                                     senhas["confirmacao"])
-        if resultado == "BLOQUEADO":
+        resultado, erros = auth_service.change_password(ctx, _ip_origem(), senhas["current_password"], senhas["new_password"],
+                                                     senhas["confirmation"])
+        if resultado == "LOCKED":
             session.clear()
             session.csrf_token = security.generate_csrf_token()
             session.flash = {"tipo": "aviso", "mensagem": auth_service.lock_message()}
@@ -128,13 +128,13 @@ def my_password():
             # Nova senha, nova sessao: o cookie e regravado com conteudo novo e outro token CSRF.
             session.renew(clear_session=True)
             session.csrf_token = security.generate_csrf_token()
-            session.usuario_id = ctx["user_id"]
+            session.user_id = ctx["user_id"]
             session.login = ctx["login"]
-            session.perfil_id = ctx["profile_id"]
-            session.perm_versao = ctx["perm_version"]
+            session.profile_id = ctx["profile_id"]
+            session.perm_version = ctx["perm_version"]
             # A troca incrementou session_epoch (CR-008, E2): as outras sessoes caem, esta continua.
-            session.sessao_epoch = auth_service.session_epoch(ctx["user_id"])
-            session.ultimo_acesso = session.login_em = time.time()
+            session.session_epoch = auth_service.session_epoch(ctx["user_id"])
+            session.last_access = session.login_at = time.time()
             session.flash = {"tipo": "sucesso", "mensagem": u"Senha alterada com sucesso."}
             redirect(URL(c="default", f="index"))
         response.flash = {"tipo": "erro", "mensagem": u"A senha não foi alterada. Veja os campos destacados."}

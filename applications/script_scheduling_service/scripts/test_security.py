@@ -92,12 +92,12 @@ class TestPasswordPolicy(unittest.TestCase):
 class TestStripPasswords(unittest.TestCase):
 
     def test_remove_de_todas_as_origens(self):
-        post_vars = {"login": "admin", "senha": "Segredo-123456", "outra": "x"}
-        all_value = dict(post_vars, pagina="1")
-        passwords = security.strip_passwords((post_vars, all_value), ("senha", "confirmacao"))
-        self.assertEqual(passwords, {"senha": "Segredo-123456", "confirmacao": None})
-        self.assertNotIn("senha", post_vars)
-        self.assertNotIn("senha", all_value)
+        post_vars = {"login": "admin", "password": "Segredo-123456", "outra": "x"}
+        all_value = dict(post_vars, page="1")
+        passwords = security.strip_passwords((post_vars, all_value), ("password", "confirmation"))
+        self.assertEqual(passwords, {"password": "Segredo-123456", "confirmation": None})
+        self.assertNotIn("password", post_vars)
+        self.assertNotIn("password", all_value)
         self.assertEqual(post_vars, {"login": "admin", "outra": "x"})
         self.assertNotIn("Segredo", repr(post_vars) + repr(all_value))
 
@@ -107,9 +107,9 @@ class TestStripPasswords(unittest.TestCase):
         self.assertEqual(security.strip_passwords(({"s": 123},), ("s",)), {"s": None})
 
     def test_controllers_nao_leem_senha_direto_de_request(self):
-        # Regressao: login lia request.post_vars.get("senha") e a senha ia parar no ticket de erro.
+        # Regressao: login lia request.post_vars.get() do campo de senha e a senha ia parar no ticket de erro.
         root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "controllers")
-        default = re.compile(r"request\.(post_vars|vars)\.get\(\s*[\'\"](senha|senha_atual|nova|confirmacao)[\'\"]")
+        default = re.compile(r"request\.(post_vars|vars)\.get\(\s*[\'\"](password|current_password|new_password|confirmation)[\'\"]")
         for name in sorted(os.listdir(root)):
             if name.endswith(".py"):
                 with open(os.path.join(root, name), encoding="utf-8") as f:
@@ -292,7 +292,7 @@ class TestValidateNext(unittest.TestCase):
 
     def test_validos(self):
         for v in ("/script_scheduling_service/default/index",
-                  "/script_scheduling_service/dev/components?pagina=2&status=FAILED"):
+                  "/script_scheduling_service/dev/components?page=2&status=FAILED"):
             self.assertEqual(security.validate_next(v), v)
 
     def test_rejeitados(self):

@@ -6,7 +6,7 @@ icones = URL('static', 'img/icons.svg')
 _opc_acoes = [('', 'Todas')] + [(_a, _a) for _a in acoes]
 _opc_entidades = [('', 'Todas')] + [(_e, _e) for _e in entidades]
 _erros = resultado['erros']
-filtros = {'id': 'filtro-auditoria', 'url_base': ('audit', 'index'), 'preservar': {'tamanho': tamanho}, 'campos': [
+filtros = {'id': 'filtro-auditoria', 'url_base': ('audit', 'index'), 'preservar': {'size': tamanho}, 'campos': [
     {'name': 'de', 'rotulo': 'De', 'tipo': 'data', 'valor': filtros_ativos.get('de')},
     {'name': 'ate', 'rotulo': u'Até', 'tipo': 'data', 'valor': filtros_ativos.get('ate')},
     {'name': 'actor', 'rotulo': 'Ator (login)', 'tipo': 'texto', 'valor': filtros_ativos.get('actor')},

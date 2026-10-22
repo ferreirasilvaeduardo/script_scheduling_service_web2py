@@ -142,7 +142,7 @@
             }
           });
           corpo.set('options_json', this.opcoesJson);
-          corpo.set('valor_teste', this.$refs.valorTeste.value);
+          corpo.set('test_value', this.$refs.valorTeste.value);
           this.testando = true;
           this.limparTeste();
           window.SSS.fetch(form.getAttribute('data-url-testar'), {

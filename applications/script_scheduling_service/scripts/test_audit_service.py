@@ -69,8 +69,8 @@ class _Base(unittest.TestCase):
             repo_factory.get("users"), self.rbac, self.catalog, self.audit, 5, 900, self.log)
         self.ctx = {}
         for uid, login, profile_id in ((1, "admin", 1), (2, "op.prod", 2), (4, "consulta", 4)):
-            session = {"usuario_id": uid, "login": login, "perfil_id": profile_id,
-                      "perm_versao": self.rbac.profiles_get(profile_id)["perm_version"], "sessao_epoch": 0}
+            session = {"user_id": uid, "login": login, "profile_id": profile_id,
+                      "perm_version": self.rbac.profiles_get(profile_id)["perm_version"], "session_epoch": 0}
             self.ctx[login] = auth.revalidate(session)
         self.svc = AuditService(self.audit, lambda: self.now, self.log)
         self.svc_agentes = AgentsService(self.agents, self.catalog, lambda: self.now, THRESHOLDS, self.log, CRITICAL_CONFIG)

@@ -47,8 +47,8 @@ def _entrada(fonte):
 def index():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)
-    pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("pagina"), 9))
-    tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("tamanho"), 3), _TAMANHOS)
+    pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("page"), 9))
+    tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("size"), 3), _TAMANHOS)
     entrada = _entrada(request.get_vars)
     erro = None
     try:
@@ -69,7 +69,7 @@ def index():
                                                        pode_ver_tickets)
     response.title = u"Auditoria — SSS"
     return dict(resultado=resultado, erro=erro, tamanho=tamanho, filtros_ativos=resultado["filtros"],
-                query_params=dict(resultado["filtros"], tamanho=tamanho),
+                query_params=dict(resultado["filtros"], size=tamanho),
                 acoes=audit_service.ACTIONS, entidades=audit_service.ENTITIES,
                 limite_exportacao=audit_service.EXPORT_LIMIT)
 

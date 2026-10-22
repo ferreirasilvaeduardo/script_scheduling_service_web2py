@@ -150,8 +150,8 @@ pass
       {{if erros.get('default_value'):}}<div class="invalid-feedback" id="campo-valor_padrao-erro">{{=erros['default_value']}}</div>{{pass}}
       {{if _sensivel and _p.get('tem_padrao'):}}
       <div class="form-check mt-1">
-        <input class="form-check-input" type="checkbox" id="campo-remover_padrao" name="remover_padrao" value="Y">
-        <label class="form-check-label" for="campo-remover_padrao">Remover o padrão sigiloso gravado</label>
+        <input class="form-check-input" type="checkbox" id="campo-remove_default" name="remove_default" value="Y">
+        <label class="form-check-label" for="campo-remove_default">Remover o padrão sigiloso gravado</label>
       </div>
       {{pass}}
     </div>

@@ -93,8 +93,8 @@ def index():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)
     filtros = servico.normalize_filters(request.get_vars)
-    pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("pagina"), 9))
-    tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("tamanho"), 3), _TAMANHOS)
+    pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("page"), 9))
+    tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("size"), 3), _TAMANHOS)
     erro = None
     try:
         resultado = servico.list_page(ctx, filtros, pagina, tamanho)
@@ -107,7 +107,7 @@ def index():
     response.title = u"Regras de agendamento — SSS"
     response.sss_scripts = [_JS]
     return dict(resultado=resultado, erro=erro, filtros_ativos=filtros, tamanho=tamanho,
-                query_params=dict(filtros, tamanho=tamanho))
+                query_params=dict(filtros, size=tamanho))
 
 
 def agenda():
