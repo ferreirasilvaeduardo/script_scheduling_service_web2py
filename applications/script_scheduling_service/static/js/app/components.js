@@ -25,7 +25,42 @@
     return ok;
   }
 
+  function normalize(text) {
+    return String(text || '').toLowerCase().replace(/^\s+|\s+$/g, '');
+  }
+
   document.addEventListener('alpine:init', function () {
+    // Busca por grupo de [data-search] (Rodar um script e nova regra de agendamento, CR-017c).
+    window.Alpine.data('scriptSearch', function () {
+      return {
+        noResult: false,
+        filter: function () {
+          var term = normalize(this.$refs.searchTerm.value);
+          var groups = this.$root.querySelectorAll('[data-group]');
+          var visibleTotal = 0;
+          var g;
+          var items;
+          var i;
+          var visible;
+          var show;
+          for (g = 0; g < groups.length; g++) {
+            items = groups[g].querySelectorAll('[data-search]');
+            visible = 0;
+            for (i = 0; i < items.length; i++) {
+              show = term === '' || items[i].getAttribute('data-search').indexOf(term) !== -1;
+              items[i].hidden = !show;
+              if (show) {
+                visible++;
+              }
+            }
+            groups[g].hidden = visible === 0;
+            visibleTotal += visible;
+          }
+          this.noResult = visibleTotal === 0;
+        }
+      };
+    });
+
     window.Alpine.data('confirmation', function () {
       return {
         isOpen: false,

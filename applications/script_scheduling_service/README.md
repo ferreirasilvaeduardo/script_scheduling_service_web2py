@@ -154,7 +154,7 @@ Todas as telas, quem pode abrir cada uma e para que servem. Telas marcadas com *
 | Detalhe do ticket | `tickets/detail/<id>` | Quem pode ver o ticket | Saber o que aconteceu, ver o log, cancelar ou repetir (§5.7, **CR-004**: frase-resumo e etapas) |
 | **Saída do ticket** (CR-012) | `tickets/output/<id>` | Quem pode ler o log do ticket | Baixar o zip com os arquivos que o script deixou na pasta de saída (§8.13) |
 | Agendamentos | `schedules/index`, `form` | `MANAGE_SCHEDULES` | Criar e cuidar das regras que rodam sozinhas (§7.6) |
-| **Agenda** (CR-004) | `schedules/agenda` | `MANAGE_SCHEDULES` | Ver o que vai rodar hoje e nos próximos 7 dias (§7.7) |
+| **Agenda** (CR-004) | `schedules/agenda` | `MANAGE_SCHEDULES` | Ver o que vai rodar hoje e nos próximos 7 dias (§7.7). Item próprio no menu Operação (CR-017c) |
 | Ambientes | `admin_environments/*` | `MANAGE_ENVIRONMENTS` | Cadastrar onde os scripts rodam |
 | Perfis e permissões | `admin_profiles/*` | `MANAGE_PROFILES` | Definir o que cada perfil pode fazer (§4.3.B.1) |
 | **Quem pode o quê** (CR-004) | `admin_profiles/who_can` | `MANAGE_PROFILES` | Descobrir quem pode rodar um script ou usar um ambiente (§4.3.B.2) |
@@ -162,7 +162,7 @@ Todas as telas, quem pode abrir cada uma e para que servem. Telas marcadas com *
 | Parâmetros | `admin_parameters/*` | `MANAGE_PARAMETERS` | Cadastrar as perguntas que os scripts fazem (§6.2) |
 | Scripts | `admin_scripts/*` | `MANAGE_SCRIPTS` | Cadastrar scripts, onde podem rodar e que perguntas fazem (§8.5) |
 | Auditoria | `audit/index` | `VIEW_AUDIT` | Ver quem fez o quê e quando (§4.4) |
-| Agentes | `audit/agents` | `VIEW_AUDIT` | Ver se os servidores que rodam os scripts estão bem (§13) |
+| Agentes | `audit/agents` | `VIEW_AUDIT` | Ver se os servidores que rodam os scripts estão bem (§13). Item próprio no menu Operação; a Auditoria não tem mais abas (CR-017c) |
 
 As telas novas do CR-004 são **somente de consulta**: não gravam nada, não auditam e usam `GET`. Elas seguem os mesmos guardas, o mesmo escopo de ambiente e o §2.4.1.
 
@@ -951,6 +951,7 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
 * O **escopo da última execução** é o mesmo da lista de tickets (§4.3.C): com `VIEW_LOGS`, os tickets dos ambientes autorizados (admin: todos); sem `VIEW_LOGS`, só os próprios.
 * **Contrato (leitura nova):** `RepoTickets.last_runs(script_ids, environment_scope=None, requested_by=None)` devolve `{script_id: {id, status, status_reason, created_at, finished_at}}` com o ticket mais recente (`created_at DESC, id DESC`) de cada script no escopo. No Oracle, a consulta usa `ix_tbsss_tck_scr` e um `ROW_NUMBER()` por script, que é sintaxe 11gR2 e não carrega `log_output`.
 * O menu Operação tem um único item para rodar, "Rodar um script" (`EXEC_SCRIPT`), que abre esta tela (CR-017b). "Disparar Scripts" saiu do menu: o disparo abre pelos cartões.
+* **Agendar (CR-017c):** para quem tem `MANAGE_SCHEDULES`, cada cartão traz o botão "Agendar", que abre a nova regra já com o script (§7.6). O cartão só existe com `can_execute`, a mesma regra que o agendamento exige.
 
 **Histórico do script** (`tickets/history/<script_id>`, exige `EXEC_SCRIPT`): responde "esse script costuma dar certo?".
 
@@ -1375,6 +1376,7 @@ Implementação: `controllers/schedules.py`, `modules/schedules_service.py` e `v
 
 * **Validação estrita (sem truncamento):** todo campo recebido é validado no tamanho e no formato exatos. Um valor mais longo ou fora do formato é **recusado** com mensagem no campo, nunca cortado. Exemplos: dia do mês `100` ou `311`, hora `03:000`, data com segundos ou frações (`…T10:00:00.999`).
 * **Escolha de script e ambiente:** na inclusão, a escolha é feita em etapas e usa os mesmos filtros do disparo (§4.3.A): só aparecem scripts e ambientes em que o editor tem `can_execute`. Por isso, quem não é admin precisa também de `EXEC_SCRIPT`.
+  * **Mesma forma do disparo (CR-017c):** os scripts aparecem numa lista clicável, agrupada por grupo e categoria, com a busca dos cartões de Rodar um script (§5.8); os ambientes, numa lista clicável com o selo "Produção" (§5.4). Com um único ambiente para o editor, a tela vai direto à recorrência e ao questionário, sem "Trocar ambiente".
 * **Edição (D2):** script e ambiente ficam **fixos**. Para usar outro script ou ambiente, cria-se uma nova regra.
 * **`user_id`:** a inclusão e a edição gravam o editor, que precisa ter `can_execute` vigente (§10). Sem essa permissão, a operação é negada e a regra fica intacta. A tela de edição sempre avisa: "Ao salvar, esta regra passará a executar com as suas permissões." O criador original fica em `created_by`, que nunca muda (§10, CR-006).
 * **Datas:**
@@ -1433,7 +1435,7 @@ Responde "o que vai rodar hoje e nos próximos dias?". Exige `MANAGE_SCHEDULES` 
 * **Previsão fiel ao daemon (CR-007, R-26):** cada regra recebe as checagens do desdobro (§7.5, passos 2, 4 e 5). A regra que será pausada aparece com "Será pausada: {motivo}", e a regra cuja execução anterior ainda está na fila ou rodando, com "Pode ser pulada: a execução #{id} ainda está {situação}". Regras `CRON` sem ocorrência no horizonte aparecem num bloco "Regras com problema", e não somem.
 * A tela traz a nota "É uma previsão: a execução real depende de um servidor livre."
 * Usa as leituras existentes de `RepoSchedules` (listagem com filtro de ativos). Não grava nada e não audita.
-* A lista de agendamentos ganha o botão "Ver agenda".
+* A lista de agendamentos ganha o botão "Ver agenda", e o menu Operação tem o item "Agenda" (CR-017c).
 
 ## 8. Motor de Execução (ciclo 2 do daemon)
 

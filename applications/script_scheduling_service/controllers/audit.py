@@ -118,11 +118,6 @@ def agents():
         return data
     response.title = u"Agentes — SSS"
     response.sss_scripts = [_JS_AGENTS]
-    # A aba Agentes pertence ao item de menu Auditoria (audit/index).
-    for section in response.sss_menu or []:
-        for item in section["items"]:
-            if item["route"] == ("audit", "index"):
-                item["active"] = True
     data["legend"] = agents_service.legend()
     data["thresholds"] = current.sss_cfg.agent
     return data

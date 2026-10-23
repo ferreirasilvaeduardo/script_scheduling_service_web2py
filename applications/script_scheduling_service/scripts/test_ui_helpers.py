@@ -322,7 +322,7 @@ class TestBuildMenu(unittest.TestCase):
     def test_admin_ve_catalogo_completo_na_ordem(self):
         menu = ui_menu.build_menu([], True)
         self.assertEqual(self._codes(menu), [
-            ("OPERATION", ["EXEC_SCRIPT", "VIEW_LOGS"]),
+            ("OPERATION", ["EXEC_SCRIPT", "VIEW_LOGS", "MANAGE_SCHEDULES", "VIEW_AUDIT"]),
             ("ADMIN", ["MANAGE_USERS", "MANAGE_PROFILES", "MANAGE_ENVIRONMENTS", "MANAGE_SCRIPTS",
                        "MANAGE_PARAMETERS", "MANAGE_SCHEDULES", "VIEW_AUDIT"]),
         ])
@@ -336,7 +336,7 @@ class TestBuildMenu(unittest.TestCase):
     def test_filtra_por_funcionalidade_e_omite_secao_vazia(self):
         menu = ui_menu.build_menu(["VIEW_LOGS", "MANAGE_SCHEDULES"], False)
         self.assertEqual(self._codes(menu), [
-            ("OPERATION", ["VIEW_LOGS"]),
+            ("OPERATION", ["VIEW_LOGS", "MANAGE_SCHEDULES"]),
             ("ADMIN", ["MANAGE_SCHEDULES"]),
         ])
         self.assertEqual(self._codes(ui_menu.build_menu(["EXEC_SCRIPT"], False)),
@@ -351,6 +351,16 @@ class TestBuildMenu(unittest.TestCase):
         item = [i for s in ui_menu.build_menu(["EXEC_SCRIPT"], False) for i in s["items"]
                 if i["route"] == ("tickets", "index")][0]
         self.assertEqual(item["label"], u"Tickets")
+
+    def test_agenda_e_agentes_no_menu_operacao(self):
+        # CR-017c: Agenda (MANAGE_SCHEDULES) e Agentes (VIEW_AUDIT) deixam de depender de botao ou aba.
+        menu = ui_menu.build_menu(["MANAGE_SCHEDULES", "VIEW_AUDIT"], False, ("audit", "agents"))
+        ops = [i for s in menu if s["section"] == "OPERATION" for i in s["items"]]
+        self.assertEqual([(i["label"], i["route"]) for i in ops],
+                         [(u"Agenda", ("schedules", "agenda")), (u"Agentes", ("audit", "agents"))])
+        self.assertEqual([i["active"] for i in ops], [False, True])
+        admin = [i for s in menu if s["section"] == "ADMIN" for i in s["items"]]
+        self.assertFalse(any(i["active"] for i in admin))
 
     def test_codigo_desconhecido_ou_caixa_diferente_ignorado(self):
         self.assertEqual(ui_menu.build_menu(["exec_script", "CANCEL_TICKET", "XYZ"], False), [])

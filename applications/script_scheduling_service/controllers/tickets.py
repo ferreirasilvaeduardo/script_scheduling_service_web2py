@@ -5,6 +5,7 @@ CSRF e Origin de todo POST sao validados em models/10_security.py.
 """
 from gluon import current
 
+import rbac
 import ticket_service
 import ui_helpers
 from repo_errors import RepoError, RepoNotFound
@@ -123,12 +124,12 @@ def catalog():
     _require_method("GET", "HEAD")
     ctx = _require_func("EXEC_SCRIPT")
     response.title = u"Rodar um script — SSS"
-    response.sss_scripts = [_JS_TRIGGER]
+    can_schedule = rbac.has_feature(ctx, "MANAGE_SCHEDULES")
     try:
-        return dict(groups=ticket_service.routine_catalog(ctx), error=None)
+        return dict(groups=ticket_service.routine_catalog(ctx), error=None, can_schedule=can_schedule)
     except RepoError:
         _log.exception("falha ao montar o catalogo de rotinas (login=%s)", ctx["login"], extra={"action": "CATALOGO"})
-        return dict(groups=[], error=ui_helpers.message("internal_error"))
+        return dict(groups=[], error=ui_helpers.message("internal_error"), can_schedule=can_schedule)
 
 
 def history():

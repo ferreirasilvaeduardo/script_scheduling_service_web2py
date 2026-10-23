@@ -41,6 +41,7 @@ icons = URL('static', 'img/icons.svg')
             {{for _env in _c['environments']:}}
             <a class="btn btn-sm btn-primary" href="{{=URL(c='tickets', f='new', vars=dict(script_id=_c['id'], environment=_env))}}">Rodar em {{=_env}}</a>
             {{pass}}
+            {{if can_schedule:}}<a class="btn btn-sm btn-outline-primary" href="{{=URL(c='schedules', f='form', vars=dict(script_id=_c['id']))}}">Agendar</a>{{pass}}
             <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='history', args=[_c['id']])}}">Ver histórico</a>
           </div>
         </li>

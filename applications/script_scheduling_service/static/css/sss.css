@@ -1296,10 +1296,6 @@
 }
 
 /* Auditoria e painel de agentes (F6.1) */
-.sss-tabs-audit {
-  margin-bottom: var(--sss-space-3);
-}
-
 .sss-export {
   margin: 0;
 }

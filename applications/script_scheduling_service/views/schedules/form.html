@@ -23,26 +23,32 @@ _help_end = u'Opcional. A última execução acontece até esta data e hora (inc
 </div>
 
 {{if not editing and step == 1:}}
-<section class="sss-card" aria-labelledby="title-script">
-  <h2 class="sss-card-title" id="title-script">1. Script</h2>
+<section class="sss-card" aria-labelledby="title-script" x-data="scriptSearch">
+  <h2 class="sss-card-title" id="title-script">1. Escolha o script que a regra vai rodar.</h2>
   <div class="sss-card-body">
     {{if not groups:}}
     <p class="mb-0">Nenhum script está liberado para o seu perfil em ambientes homologados. A regra roda com as suas permissões; procure um administrador.</p>
     {{else:}}
-    <form class="sss-form-row" method="get" action="{{=URL(c='schedules', f='form')}}">
-      <div class="sss-form-field mb-3">
-        <label class="form-label" for="field-script_id">Script <span class="sss-required" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span></label>
-        <select class="form-select" id="field-script_id" name="script_id" required>
-          <option value="">Selecione…</option>
-          {{for _g in groups:}}
-          <optgroup label="{{=_g['script_group']}} / {{=_g['category']}}">
-            {{for _s in _g['scripts']:}}<option value="{{=_s['id']}}">{{=_s['name']}}{{if _s['description']:}} — {{=_s['description']}}{{pass}}</option>{{pass}}
-          </optgroup>
-          {{pass}}
-        </select>
-      </div>
-      <div class="sss-form-actions"><button type="submit" class="btn btn-primary">Continuar</button></div>
-    </form>
+    <div class="sss-search mb-3">
+      <label class="form-label" for="search-script">Buscar script</label>
+      <input class="form-control form-control-sm" type="search" id="search-script" maxlength="60" autocomplete="off" placeholder="Nome, descrição, grupo ou categoria" x-ref="searchTerm" @input="filter">
+    </div>
+    <p class="sss-search-empty" x-show="noResult" x-cloak role="status">Nenhum script corresponde à busca.</p>
+    {{for _g in groups:}}
+    <section class="sss-group-scripts" data-group>
+      <h3 class="sss-group-title">{{=_g['script_group']}} <span class="sss-group-category">/ {{=_g['category']}}</span></h3>
+      <ul class="sss-list-choice">
+        {{for _s in _g['scripts']:}}
+        <li data-search="{{=(' '.join((_s['name'], _s['description'], _g['script_group'], _g['category'], _s['stage']))).lower()}}">
+          <a class="sss-choice" href="{{=URL(c='schedules', f='form', vars={'script_id': _s['id']})}}">
+            <span class="sss-choice-name sss-mono">{{=_s['name']}}</span>
+            <span class="sss-choice-desc">{{=_s['description']}}</span>
+          </a>
+        </li>
+        {{pass}}
+      </ul>
+    </section>
+    {{pass}}
     {{pass}}
   </div>
 </section>
@@ -55,7 +61,7 @@ _help_end = u'Opcional. A última execução acontece até esta data e hora (inc
     {{if not editing:}}
     <span class="sss-actions">
       <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='schedules', f='form')}}">Trocar script</a>
-      {{if form:}}<a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='schedules', f='form', vars={'script_id': form['script']['id']})}}">Trocar ambiente</a>{{pass}}
+      {{if form and not single_environment:}}<a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='schedules', f='form', vars={'script_id': form['script']['id']})}}">Trocar ambiente</a>{{pass}}
     </span>
     {{else:}}
     <span class="sss-text-muted">Para usar outro script ou ambiente, crie uma nova regra.</span>
@@ -66,18 +72,19 @@ _help_end = u'Opcional. A última execução acontece até esta data e hora (inc
 
 {{if not editing and step == 2:}}
 <section class="sss-card" aria-labelledby="title-environment">
-  <h2 class="sss-card-title" id="title-environment">2. Ambiente</h2>
-  <form class="sss-card-body sss-form-row" method="get" action="{{=URL(c='schedules', f='form')}}">
-    <input type="hidden" name="script_id" value="{{=script['id']}}">
-    <div class="sss-form-field mb-3">
-      <label class="form-label" for="field-environment">Ambiente <span class="sss-required" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span></label>
-      <select class="form-select" id="field-environment" name="environment" required>
-        <option value="">Selecione…</option>
-        {{for _a in environments:}}<option value="{{=_a['name']}}">{{=_a['name']}}{{if _a['description']:}} — {{=_a['description']}}{{pass}}</option>{{pass}}
-      </select>
-    </div>
-    <div class="sss-form-actions"><button type="submit" class="btn btn-primary">Continuar</button></div>
-  </form>
+  <h2 class="sss-card-title" id="title-environment">2. Escolha o ambiente, que é onde a regra vai rodar.</h2>
+  <div class="sss-card-body">
+    <ul class="sss-list-choice">
+      {{for _a in environments:}}
+      <li>
+        <a class="sss-choice" href="{{=URL(c='schedules', f='form', vars={'script_id': script['id'], 'environment': _a['name']})}}">
+          <span class="sss-choice-name">{{=_a['name']}}{{if _a['production']:}} <span class="badge text-bg-danger">Produção</span>{{pass}}</span>
+          <span class="sss-choice-desc">{{=_a['description']}}</span>
+        </a>
+      </li>
+      {{pass}}
+    </ul>
+  </div>
 </section>
 {{pass}}
 

@@ -543,6 +543,29 @@ class TestPauseResume(_Base):
         self.assertIn(svc_mod.PAUSE_REASONS["INVALID_PARAM"], cm.exception.message)
 
 
+class TestNewRuleSteps(_Base):
+    """CR-017c (README §7.6): escolha como no disparo; um ambiente so vai direto ao formulario."""
+
+    def test_sem_script_lista_os_grupos(self):
+        data = self.svc.form(self.ctx["admin"])
+        self.assertEqual(data["step"], 1)
+        self.assertTrue(data["groups"])
+
+    def test_varios_ambientes_param_na_etapa_2(self):
+        data = self.svc.form(self.ctx["admin"], script_id="1")
+        self.assertEqual(data["step"], 2)
+        self.assertFalse(data["single_environment"])
+        self.assertEqual(sorted(a["name"] for a in data["environments"]), ["HOMOLOGACAO", "PRODUCAO"])
+        self.assertEqual([a["production"] for a in data["environments"] if a["name"] == "PRODUCAO"], [True])
+
+    def test_um_ambiente_so_vai_direto_ao_formulario(self):
+        # op.hml so tem HOMOLOGACAO entre os ambientes do script 1.
+        data = self.svc.form(self.ctx["op.hml"], script_id="1")
+        self.assertEqual(data["step"], 3)
+        self.assertTrue(data["single_environment"])
+        self.assertEqual(data["form"]["environment"]["name"], "HOMOLOGACAO")
+
+
 class TestPreviewList(_Base):
 
     def test_lista_no_escopo_com_colunas(self):

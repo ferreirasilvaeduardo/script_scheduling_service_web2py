@@ -1,4 +1,4 @@
-/* SSS - disparo de script (tickets/new) e busca dos cartoes de Rodar um script (tickets/catalog).
+/* SSS - tela de disparo de script (tickets/new).
  * Carregado com defer ANTES do alpine.min.js. Nenhuma regra decisoria fica aqui: o servidor
  * revalida tudo; o cliente apenas filtra a lista e exibe a previa devolvida pelo servidor.
  */
@@ -7,10 +7,6 @@
 
   var PARAM_PREFIX = 'p_';
   var RE_SIMPLE_TOKEN = /^[A-Za-z0-9_@%+=:,.\/-]+$/;
-
-  function normalize(text) {
-    return String(text || '').toLowerCase().replace(/^\s+|\s+$/g, '');
-  }
 
   // Apenas para exibicao: o argv real e uma lista e nunca passa por shell.
   function displayToken(token) {
@@ -45,36 +41,6 @@
   }
 
   document.addEventListener('alpine:init', function () {
-    window.Alpine.data('scriptSearch', function () {
-      return {
-        noResult: false,
-        filter: function () {
-          var term = normalize(this.$refs.searchTerm.value);
-          var groups = this.$root.querySelectorAll('[data-group]');
-          var visibleTotal = 0;
-          var g;
-          var items;
-          var i;
-          var visible;
-          var show;
-          for (g = 0; g < groups.length; g++) {
-            items = groups[g].querySelectorAll('[data-search]');
-            visible = 0;
-            for (i = 0; i < items.length; i++) {
-              show = term === '' || items[i].getAttribute('data-search').indexOf(term) !== -1;
-              items[i].hidden = !show;
-              if (show) {
-                visible++;
-              }
-            }
-            groups[g].hidden = visible === 0;
-            visibleTotal += visible;
-          }
-          this.noResult = visibleTotal === 0;
-        }
-      };
-    });
-
     // Resumo em frase do modal de confirmacao (README §5.4): montado pelo servidor ao abrir o modal.
     window.Alpine.data('triggerSummary', function () {
       return {

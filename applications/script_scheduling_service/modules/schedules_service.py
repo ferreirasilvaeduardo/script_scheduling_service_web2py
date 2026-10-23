@@ -657,7 +657,7 @@ class SchedulesService(object):
         errors = errors or {}
         submitted = submitted or {}
         date = {"editing": False, "step": 1, "groups": [], "script": None, "environments": [], "form": None,
-                 "rule": None, "errors": errors}
+                 "rule": None, "errors": errors, "single_environment": False}
         current = None
         if schedule_id not in (None, ""):
             current = self._get_visible(ctx, schedule_id)
@@ -669,7 +669,11 @@ class SchedulesService(object):
         try:
             if not date["editing"]:
                 script, environments = self._trigger_service.available_environments(ctx, script_id)
-                date.update(step=2, script=script, environments=environments)
+                date.update(step=2, script=script, environments=environments,
+                            single_environment=len(environments) == 1)
+                if not environment and len(environments) == 1:
+                    # Um ambiente so: vai direto a recorrencia e ao questionario, como no disparo (CR-017c).
+                    environment = environments[0]["name"]
                 if not environment:
                     return date
             previous = _parameters(current) if current else {}

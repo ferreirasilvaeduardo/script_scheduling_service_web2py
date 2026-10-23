@@ -1,15 +1,13 @@
 {{extend 'layout.html'}}
 {{
 # Painel de agentes (README §8.7-8.9, §13). Somente leitura; o fragmento agents.load é
-# recarregado a cada intervalo_s segundos por static/js/app/agents.js.
+# recarregado a cada interval_s segundos por static/js/app/agents.js.
 icons = URL('static', 'img/icons.svg')
-active_tab = 'agents'
 }}
 <div class="sss-page-header">
-  <h1 class="sss-page-title">Auditoria</h1>
-  <p class="sss-page-sub">Saúde dos agentes executores, medida pelo relógio do banco. Painel somente leitura.</p>
+  <h1 class="sss-page-title">Agentes</h1>
+  <p class="sss-page-sub">Agentes são os servidores que rodam os scripts. Aqui você vê se cada um está bem, pelo relógio do banco. Painel somente leitura.</p>
 </div>
-{{include 'audit/_tabs.html'}}
 
 <section class="sss-card" aria-labelledby="title-agents" x-data="agentsRefresh" data-url="{{=fragment_url}}" data-interval="{{=interval_s}}">
   <div class="sss-card-title sss-title-row">

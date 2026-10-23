@@ -22,13 +22,11 @@ total = result['total']
 total_capped = result.get('total_capped', False)
 page_count = len(result['items'])
 url_base = ('audit', 'index')
-active_tab = 'index'
 }}
 <div class="sss-page-header">
   <h1 class="sss-page-title">Auditoria</h1>
   <p class="sss-page-sub">Trilha das ações sensíveis do sistema, da mais recente para a mais antiga. Sem filtro de data, mostra os últimos 7 dias.</p>
 </div>
-{{include 'audit/_tabs.html'}}
 
 <section class="sss-card" aria-label="Filtros">
   {{include 'components/filters.html'}}
