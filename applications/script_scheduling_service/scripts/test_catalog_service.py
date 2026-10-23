@@ -67,6 +67,47 @@ class TestLastRuns(_Base):
         self.assertEqual(self.tickets.last_runs([], None), {})
 
 
+class _Counting(object):
+    """Repositorio que conta as chamadas por metodo (CR-018c)."""
+
+    def __init__(self, inner):
+        self._inner, self.calls = inner, {}
+
+    def __getattr__(self, name):
+        target = getattr(self._inner, name)
+        if not callable(target):
+            return target
+
+        def counted(*args, **kwargs):
+            self.calls[name] = self.calls.get(name, 0) + 1
+            return target(*args, **kwargs)
+        return counted
+
+
+class TestQueries(_Base):
+    """CR-018c: as telas de execucao leem o catalogo uma vez, nao uma homologacao e um ambiente por script."""
+
+    def test_cartoes_sem_leitura_por_script_do_catalogo(self):
+        counting = _Counting(self.catalog)
+        svc = TicketService(counting, self.tickets, self.svc._log)
+        groups = svc.routine_catalog(self.ctx["admin"])
+        cards = sum(len(g["cards"]) for g in groups)
+        self.assertTrue(cards)
+        calls = counting.calls
+        self.assertEqual(calls.get("homologation_get", 0) + calls.get("environments_get", 0) +
+                         calls.get("scripts_get", 0), 0, calls)
+        self.assertEqual((calls["environments_list"], calls["scripts_list"], calls["executable_scripts"]), (1, 1, 1))
+        # Sobram as perguntas de cada cartao (vinculos do script).
+        self.assertEqual(calls["script_params_get"], cards)
+        self.assertEqual(groups, self.svc.routine_catalog(self.ctx["admin"]))
+
+    def test_disparo_e_permissoes_com_tres_leituras(self):
+        counting = _Counting(self.catalog)
+        svc = TicketService(counting, self.tickets, self.svc._log)
+        svc.available_scripts(self.ctx["op.hml"])
+        self.assertEqual(sum(counting.calls.values()), 3, counting.calls)
+
+
 class TestRoutineCatalog(_Base):
 
     def test_agendar_so_com_manage_schedules(self):

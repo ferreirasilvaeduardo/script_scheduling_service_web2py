@@ -24,6 +24,10 @@ class RepoAudit(object):
         """
         raise NotImplementedError
 
+    def count(self, filters=None, limit=50000):
+        """Quantidade de registros com os filtros de listar, no maximo `limite` (CR-018c), sem ler as linhas."""
+        raise NotImplementedError
+
     def iterate(self, filters=None, limit=50000):
         """Iterador de no maximo `limite` registros, na ordem e com os filtros de listar (exportacao em streaming)."""
         raise NotImplementedError

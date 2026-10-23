@@ -220,6 +220,19 @@ class BaseRepoContractTest(object):
             cat.environments_update(env["id"], {"connection": "app@host/svc"}, actor="teste")
         self.assertEqual(ctx.exception.constraint, self.cn("ck", "environments", "connection"))
 
+    def test_03c_contagem_da_auditoria_igual_ao_iterador(self):
+        # CR-018c: count tem o filtro e o teto do iterate, sem ler as linhas (exportacao CSV).
+        cat, aud = self.obter_repo("catalog"), self.obter_repo("audit")
+        env = self.m.environment("CNT")
+        for n in range(3):
+            cat.environments_update(env["id"], {"description": "contagem %d" % n},
+                                    audit={"actor": "admin", "ip": None, "action": "UPDATE", "detail": "x"})
+        filters = {"entity": "tbsss_environments", "entity_id": env["id"]}
+        self.assertEqual(aud.count(filters=filters), len(list(aud.iterate(filters=filters))))
+        self.assertEqual(aud.count(filters=filters), 3)
+        self.assertEqual(aud.count(filters=filters, limit=2), 2)
+        self.assertEqual(aud.count(filters=dict(filters, action="CREATE")), 0)
+
     def test_03b_ambiente_producao(self):
         # CR-017: is_production nasce 'N', aceita 'Y' na inclusao e na alteracao; outro valor viola a CK.
         cat = self.obter_repo("catalog")

@@ -74,6 +74,11 @@ class RepoAuditFake(RepoAudit):
         with self._store.lock_audit:
             return paginate(self._filtrar(filters), page=page, size=size)
 
+    def count(self, filters=None, limit=50000):
+        """Quantidade filtrada, no maximo `limite` (no Oracle: COUNT com ROWNUM)."""
+        with self._store.lock_audit:
+            return min(len(self._filtrar(filters)), max(0, int(limit)))
+
     def iterate(self, filters=None, limit=50000):
         """Iterador de copias, no maximo `limite` registros (no Oracle: cursor com arraysize, sem offset)."""
         with self._store.lock_audit:

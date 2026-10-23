@@ -291,18 +291,48 @@ class TicketService(object):
         """(script, ambiente) recarregados do repositorio e autorizados por can_execute; lanca AccessDenied."""
         return self._authorize(ctx, script_id, environment)
 
-    def _executable_environments(self, ctx, script):
+    def _catalog_view(self):
+        """Retrato do catalogo para uma tela (CR-018c): ({nome: ambiente}, {script_id: [nomes homologados]}).
+
+        Tres consultas no lugar de uma homologacao e um ambiente por script: a lista de ambientes e a de
+        scripts, que ja traz a homologacao em lote. A decisao continua em rbac.can_execute, ambiente a ambiente.
+        """
+        envs = dict((a["name"], a) for a in self._catalog.environments_list(page=1, size=_ENVIRONMENTS_MAX)["items"])
+        homolog = dict((s["id"], s.get("homologated_environments") or [])
+                       for s in self._catalog.scripts_list(page=1, size=_SCRIPTS_MAX)["items"])
+        return envs, homolog
+
+    def _executable_environments(self, ctx, script, view=None):
+        envs, homolog = view or self._catalog_view()
+        names = homolog.get(script["id"])
+        if names is None:
+            # Script alem do teto da listagem: le a homologacao dele (mesmo resultado, uma consulta).
+            by_id = dict((a["id"], a["name"]) for a in envs.values())
+            names = [by_id[aid] for aid in self._catalog.homologation_get(script["id"]) if aid in by_id]
         environments = []
-        for aid in self._catalog.homologation_get(script["id"]):
-            try:
-                env = self._catalog.environments_get(aid)
-            except RepoNotFound:
+        for name in names:
+            env = envs.get(name)
+            if env is None:
                 continue
-            ok, _reason = rbac.can_execute(ctx, script, env, (aid,))
+            ok, _reason = rbac.can_execute(ctx, script, env, (env["id"],))
             if ok:
                 environments.append(env)
         environments.sort(key=lambda a: a["name"])
         return environments
+
+    def _executable(self, ctx, view=None):
+        """[(script, ambientes)] dos scripts que o usuario roda em ao menos um ambiente, na ordem do disparo."""
+        if not rbac.has_feature(ctx, "EXEC_SCRIPT"):
+            return []
+        view = view or self._catalog_view()
+        candidates = sorted(self._catalog.executable_scripts(ctx),
+                            key=lambda s: ((s.get("script_group") or ""), (s.get("category") or ""), s["name"]))
+        result = []
+        for script in candidates:
+            environments = self._executable_environments(ctx, script, view)
+            if environments:
+                result.append((script, environments))
+        return result
 
     # ----------------------------------------------------------- formulario
 
@@ -311,14 +341,12 @@ class TicketService(object):
 
         Retorna lista ordenada de {script_group, category, scripts: [{id, name, description, stage}]}.
         """
-        if not rbac.has_feature(ctx, "EXEC_SCRIPT"):
-            return []
+        return self._groups(self._executable(ctx))
+
+    @staticmethod
+    def _groups(executable):
         groups = collections.OrderedDict()
-        candidates = sorted(self._catalog.executable_scripts(ctx),
-                            key=lambda s: ((s.get("script_group") or ""), (s.get("category") or ""), s["name"]))
-        for script in candidates:
-            if not self._executable_environments(ctx, script):
-                continue
+        for script, _environments in executable:
             key = (script.get("script_group") or u"Sem grupo", script.get("category") or u"Sem categoria")
             groups.setdefault(key, []).append({
                 "id": script["id"],
@@ -328,15 +356,19 @@ class TicketService(object):
             })
         return [{"script_group": g, "category": c, "scripts": items} for (g, c), items in groups.items()]
 
+    @staticmethod
+    def _environment_items(environments):
+        return [{"id": a["id"], "name": a["name"], "description": a.get("description") or "",
+                 "production": a.get("is_production") == "Y"}
+                for a in environments]
+
     def available_environments(self, ctx, script_id):
         """Script e ambientes homologados E autorizados para ele; lanca AccessDenied se nenhum."""
         script = self._script(ctx, script_id)
         environments = self._executable_environments(ctx, script)
         if not environments:
             self._deny(ctx, rbac.Reason.NO_ENVIRONMENT, script["id"], None)
-        return script, [{"id": a["id"], "name": a["name"], "description": a.get("description") or "",
-                         "production": a.get("is_production") == "Y"}
-                        for a in environments]
+        return script, self._environment_items(environments)
 
     def _links(self, script_id):
         return [v for v in self._catalog.script_params_get(script_id) if v.get("active") == "Y"]
@@ -703,7 +735,9 @@ class TicketService(object):
         Cada cartao: id, name, description, script_group, category, questions [{label, required}],
         environments (nomes) e last_run (None ou {id, state, css_class, icon, when}). So leitura.
         """
-        groups = self.available_scripts(ctx)
+        executable = self._executable(ctx)
+        environments_of = dict((script["id"], environments) for script, environments in executable)
+        groups = self._groups(executable)
         ids = [s["id"] for g in groups for s in g["scripts"]]
         scope, requester = self._runs_scope(ctx)
         recent_runs = self._tickets.last_runs(ids, scope, requester) if ids else {}
@@ -712,7 +746,7 @@ class TicketService(object):
         for g in groups:
             cards = []
             for s in g["scripts"]:
-                _script, environments = self.available_environments(ctx, s["id"])
+                environments = environments_of[s["id"]]
                 questions = [{"label": v.get("label") or v["code"], "required": v.get("required") == "Y"}
                              for v in _sorted_items(self._links(s["id"]))]
                 last = None

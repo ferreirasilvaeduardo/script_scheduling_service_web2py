@@ -325,7 +325,8 @@ class AuditService(object):
         # linha; a quantidade registrada e o arquivo correspondem ao mesmo conjunto.
         aid = self._audit.reserve_id()
         repo_filters_dict["id_max"] = aid - 1
-        total = sum(1 for _ in self._audit.iterate(filters=repo_filters_dict, limit=EXPORT_LIMIT))
+        # CR-018c: COUNT no banco, sem ler o conjunto duas vezes (a contagem e o arquivo usam o mesmo recorte).
+        total = self._audit.count(filters=repo_filters_dict, limit=EXPORT_LIMIT)
         rows = min(total, EXPORT_LIMIT)
         detail = admin_crud.free_detail(u"filtros: %s; linhas: %d (limite %d)" % (
             _describe_filters(filters), rows, EXPORT_LIMIT))

@@ -146,6 +146,21 @@ class RepoAuditOracle(BaseRepoOracle, RepoAudit):
             "total_capped": raw >= _LIMIT_TOTAL,
         }
 
+    def count(self, filters=None, limit=50000):
+        """COUNT com os filtros de listar e o teto `limite` (ROWNUM), sem ler as linhas (CR-018c)."""
+        clauses, binds, dates = self._filtros(filters)
+        sql = _SQL_COUNT.format(where_count=" AND ".join(clauses + ["ROWNUM <= :cutoff"]), **self._idents)
+        binds["cutoff"] = max(0, int(limit))
+        with self.read_context() as c:
+            cur = c.cursor()
+            try:
+                if dates:
+                    db_conn.set_input_types(cur, **dates)
+                cur.execute(sql, binds)
+                return int(cur.fetchone()[0])
+            finally:
+                cur.close()
+
     def iterate(self, filters=None, limit=50000):
         """Iterador de ate `limite` registros na ordem de listar, por cursor (arraysize), sem offset."""
         clauses, binds, dates = self._filtros(filters)
