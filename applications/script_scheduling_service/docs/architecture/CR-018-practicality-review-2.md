@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Em andamento.** Aprovado pelo responsável pelo produto em 2026-10-23. 018a a 018d concluídos |
+| Status | **Em andamento.** Aprovado pelo responsável pelo produto em 2026-10-23. 018a a 018d, 018f e 018g concluídos; falta o 018e (evidências) |
 | Origem | Segunda e terceira revisões tela a tela e processo a processo (2026-10-23), depois do CR-017 |
 | Restrições | Sem dependência nova. Python 3.6. Sem mudança de esquema |
 | Afeta | README §4.3.C, §5.2.1, §6.5. `AGENTS.md` §3.4 e §7. Código: `rbac`, `ticket_service`, `ui_helpers`, `schedules_service`, `admin_parameters_service`, `admin_scripts_service`, controllers e telas de tickets, parâmetros e scripts |
@@ -41,5 +41,5 @@
 | 018c | Desempenho (A5) | Concluído |
 | 018d | `interpreters` no config do DEV (arquivo local, fora do git) e nota no `DEV_ENVIRONMENT.md` §6.3 | Concluído |
 | 018g | DSN Easy Connect com a porta opcional (`host[:porta]/serviço`): os DSNs do seed, sem porta, eram recusados e impediam editar qualquer ambiente do seed. Achado durante o 018f2 | Concluído |
-| 018f | Limpeza de código: f1 guardas no model e f2 `date` → `data` concluídos; f3 e f4 a seguir | Em andamento |
+| 018f | Limpeza de código: f1 guardas comuns no model, f2 `date` → `data` onde é dicionário, f3 comentários sem nomes antigos e f4 README sem notas históricas (a regra vigente fica; o histórico fica nos CRs) | Concluído |
 | 018e | Nova rodada de evidências (por último, para cobrir o 018f) | Pendente |

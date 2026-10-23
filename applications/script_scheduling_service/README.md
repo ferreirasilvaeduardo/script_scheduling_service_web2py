@@ -2,7 +2,7 @@
 
 Serviço web corporativo para gestão, agendamento e execução distribuída de rotinas em Python e Shell em servidores Unix/Linux restritos, integrado ao Oracle Database >= 11gR2 e com arquitetura multi-ambiente e multi-nó.
 
-> **Change requests aplicados:** CR-001 (agente com interpretador lógico; a parte Windows foi revogada pelo CR-005), CR-002 (Oracle único e driver adaptativo), CR-003 (correções da análise funcional pós-F6.1; a D16, várias pastas base, foi substituída pelo CR-005), CR-004 (telas de consulta e linguagem clara) e CR-005 (somente POSIX, caminho livre do script e pastas de log por minuto), em `docs/architecture/`. O texto abaixo já os incorpora.
+> **Change requests aplicados:** os CRs estão em `docs/architecture/`; o texto abaixo já os incorpora.
 >
 > **Autoridade documental:** este README é a autoridade máxima de **negócio, dados e algoritmos**. O `AGENTS.md` é a autoridade sobre **como codificar**. Em conflito sobre regra de negócio ou modelo de dados, prevalece este documento. Em caso de lacuna, o desenvolvedor ou agente deve **parar e perguntar**, sem presumir.
 
@@ -135,8 +135,6 @@ Regras para todo texto de interface (rótulos, títulos, mensagens, modais e aju
 | Só administrador, perfis (CR-008, E1) | "Só um administrador pode alterar um perfil de administrador, mudar o seu próprio perfil ou marcar um perfil como administrador." | "Peça a um administrador." |
 | Sessão no tempo máximo (CR-008, E2) | "A sua sessão chegou ao tempo máximo e foi encerrada por segurança." | "Entre de novo." |
 
-A mensagem antiga de conflito, "O registro foi alterado por outra pessoa. Recarregue a página.", é substituída pela mensagem acima (§10).
-
 #### 2.4.3 Mapa de telas
 
 Todas as telas, quem pode abrir cada uma e para que servem. Telas marcadas com **(CR-004)** são novas ou mudam no CR-004.
@@ -147,7 +145,7 @@ Todas as telas, quem pode abrir cada uma e para que servem. Telas marcadas com *
 | Painel inicial | `default/index` | Logado | Resumo do que importa para o seu perfil (§13) |
 | Minha senha | `default/my_password` | Logado | Trocar a própria senha (§4.2) |
 | **O que eu posso fazer** (CR-004) | `default/permissions` | Logado | Ver o que o seu perfil libera e por que algo não aparece (§4.3.E) |
-| **Rodar um script** (CR-004; nome do CR-017b) | `tickets/catalog` | `EXEC_SCRIPT` | Escolher o script que você quer rodar e onde, com as perguntas que ele faz e como foi a última vez (§5.8). É a entrada do disparo e o único item de menu para rodar |
+| **Rodar um script** (CR-004) | `tickets/catalog` | `EXEC_SCRIPT` | Escolher o script que você quer rodar e onde, com as perguntas que ele faz e como foi a última vez (§5.8). É a entrada do disparo e o único item de menu para rodar |
 | **Histórico do script** (CR-004) | `tickets/history/<script_id>` | `EXEC_SCRIPT` | Ver como o script se saiu nos últimos 30 dias (§5.8) |
 | Disparar script | `tickets/new` | `EXEC_SCRIPT` | Escolher o ambiente, responder às perguntas e pedir para rodar agora ou num horário (§5.4, **CR-004**: resumo em frase e exemplos). Abre a partir de Rodar um script; sem script, redireciona para lá (CR-017b) |
 | Tickets | `tickets/index` | `EXEC_SCRIPT` ou `VIEW_LOGS` | Acompanhar os pedidos e o que está rodando (§4.3.C). No menu Operação, o item "Tickets" aparece com qualquer uma das duas (CR-017) |
@@ -632,7 +630,7 @@ Qualquer usuário logado pode abrir. Ela responde, em linguagem simples (§2.4.2
 * **Meu perfil:** nome do perfil e, se for administrador, a frase "Seu perfil é de administrador: você pode usar todas as telas e rodar qualquer script ativo, nos ambientes ativos onde ele foi liberado."
 * **Telas que posso usar:** as funcionalidades do perfil, com o nome e a finalidade do §4.3.D e um link para cada tela.
 * **Onde posso rodar scripts:** os ambientes ativos do perfil, com a descrição de cada um.
-* **Scripts que posso rodar (CR-018b):** quantos scripts o usuário pode rodar, com o botão "Abrir Rodar um script". Os ambientes de cada script, as perguntas e a última execução ficam só nos cartões (§5.8); antes, esta seção repetia os cartões com um botão "Rodar aqui" por ambiente.
+* **Scripts que posso rodar (CR-018b):** quantos scripts o usuário pode rodar, com o botão "Abrir Rodar um script". Os ambientes de cada script, as perguntas e a última execução ficam só nos cartões (§5.8).
 * **Por que um script não aparece:** só para os scripts **associados ao perfil** (`profile_script`) que não podem rodar em nenhum ambiente. O motivo vem de `can_execute` em frase simples:
   * "o script está desativado";
   * "o script não foi liberado em nenhum dos seus ambientes";
@@ -759,13 +757,13 @@ Os estados `SUCCESS`, `FAILED` e `CANCELLED` são **terminais e imutáveis**. To
 
 Na interface, a situação do ticket usa **nomes simples** (§2.4.2), sempre com ícone e cor. O código técnico fica como informação secundária no detalhe.
 
-| Status | Nome na tela | Antes do CR-004 |
-|---|---|---|
-| `PENDING` | Esperando | Pendente |
-| `RUNNING` | Rodando | Em execução |
-| `SUCCESS` | Deu certo | Sucesso |
-| `FAILED` | Deu erro | Falha |
-| `CANCELLED` | Cancelado | Cancelado |
+| Status | Nome na tela |
+|---|---|
+| `PENDING` | Esperando |
+| `RUNNING` | Rodando |
+| `SUCCESS` | Deu certo |
+| `FAILED` | Deu erro |
+| `CANCELLED` | Cancelado |
 
 Os filtros da lista de tickets usam os mesmos nomes. A auditoria, o CSV e o banco continuam com os códigos.
 
@@ -801,7 +799,7 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
 
 * Escala de **1 (mais alta) a 4 (mais baixa)**, padrão 2.
 * Prioridade 1 é reservada a perfis admin. No desdobro, se o responsável pela regra deixou de ser admin, o ticket sai com prioridade 2 (§7.5, passo 2).
-* A fila ordena pela **prioridade efetiva**, depois pelo início da espera (`GREATEST(scheduled_at, created_at)`) e depois `id` (§8.2; CR-013: até lá o desempate era `scheduled_at`, que só difere para tickets criados já vencidos).
+* A fila ordena pela **prioridade efetiva**, depois pelo início da espera (`GREATEST(scheduled_at, created_at)`) e depois `id` (§8.2, CR-013).
 * **Envelhecimento (CR-007, R-07):** a prioridade efetiva é `GREATEST(1, priority − FLOOR(minutos na fila / queue_aging_min))`, com os minutos contados desde `GREATEST(scheduled_at, created_at)` (CR-008, R-20): um ticket criado já vencido (desdobro atrasado, R-27 do CR-007, ou disparo com horário passado na fila) não herda a idade da ocorrência e não passa à frente de quem já esperava. Com `queue_aging_min = 60`, um ticket de prioridade 4 chega a 1 depois de 3 horas na fila; com `0`, o envelhecimento fica desligado. A prioridade gravada no ticket não muda.
 
 ### 5.4 Criação manual de ticket (transação única)
@@ -942,14 +940,14 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
 
    * Um ticket cancelado ainda na fila mostra a etapa "Rodando" como "não chegou a rodar" e a etapa final como "Cancelado".
    * A etapa atual de um ticket `RUNNING` mostra "há {tempo}".
-3. Depois disso vêm: resumo, comando executado, respostas, reexecuções e log. A situação aparece só no quadro do item 1 e no cabeçalho do log, que se atualiza sozinho; não há selo ao lado do número do ticket nem linha "Situação" no resumo, e a barra de etapas substitui a antiga linha do tempo (CR-017b). Enquanto o ticket roda, o resumo mostra "Último sinal do servidor" (`heartbeat_at`). A linha "Detalhe técnico" do resumo traz o status, o `status_reason`, o `return_code` e a descrição técnica (`reason_description`). O bloco do snapshot mostra o **arquivo do script** (`path_file`, snapshot v5), com o caminho completo para todos (CR-005, D8). Logo depois do resumo vem o quadro **Registro** (§10, CR-006): quem criou o pedido e quando, e a última alteração, que normalmente é a última mudança de situação feita pelo agente.
+3. Depois disso vêm: resumo, comando executado, respostas, reexecuções e log. A situação aparece só no quadro do item 1 e no cabeçalho do log, que se atualiza sozinho; não há selo ao lado do número do ticket, linha "Situação" no resumo nem linha do tempo (CR-017b). Enquanto o ticket roda, o resumo mostra "Último sinal do servidor" (`heartbeat_at`). A linha "Detalhe técnico" do resumo traz o status, o `status_reason`, o `return_code` e a descrição técnica (`reason_description`). O bloco do snapshot mostra o **arquivo do script** (`path_file`, snapshot v5), com o caminho completo para todos (CR-005, D8). Logo depois do resumo vem o quadro **Registro** (§10, CR-006): quem criou o pedido e quando, e a última alteração, que normalmente é a última mudança de situação feita pelo agente.
 4. **Quadro Saída (CR-012):** depois do log, quando o ticket tem linha em `tbsss_ticket_output`, com a situação e o botão **Baixar** (§8.13).
 5. **Botões com o efeito escrito:** "Cancelar este pedido" (com a consequência no modal) e "Rodar de novo com as mesmas respostas" (reexecução, §5.5).
 6. A página continua se atualizando sozinha enquanto o ticket não termina, e a frase e a barra acompanham. Quando o polling do log (§8.10) recebe uma situação diferente da que a página mostrou ao abrir, o visualizador para, mostra "A situação mudou; atualizando a página…" e recarrega a página após 1,5 s. Num ticket que já estava encerrado ao abrir, o visualizador lê o log até o fim e mostra "Log completo." (CR-018b).
 
 ### 5.8 Rodar um script e histórico do script (CR-004)
 
-**Rodar um script** (`tickets/catalog`, exige `EXEC_SCRIPT`; até o CR-017b, "Rotinas disponíveis"): responde "o que eu posso rodar?" e é a entrada do disparo (§5.4).
+**Rodar um script** (`tickets/catalog`, exige `EXEC_SCRIPT`): responde "o que eu posso rodar?" e é a entrada do disparo (§5.4).
 
 * Um cartão por script em que o usuário tem `can_execute` em **pelo menos um** ambiente (admin: todo script ativo homologado em ambiente ativo). Cada cartão traz:
   * nome, descrição, grupo e categoria;
@@ -961,7 +959,7 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
 * Uma busca no topo filtra os cartões por nome, descrição, grupo e categoria, no navegador (Alpine, `static/js/app/`). A lista completa já vem do servidor. Os cartões ficam agrupados por grupo, como no disparo.
 * O **escopo da última execução** é o mesmo da lista de tickets (§4.3.C): com `VIEW_LOGS`, os tickets dos ambientes autorizados (admin: todos); sem `VIEW_LOGS`, só os próprios.
 * **Contrato (leitura nova):** `RepoTickets.last_runs(script_ids, environment_scope=None, requested_by=None)` devolve `{script_id: {id, status, status_reason, created_at, finished_at}}` com o ticket mais recente (`created_at DESC, id DESC`) de cada script no escopo. No Oracle, a consulta usa `ix_tbsss_tck_scr` e um `ROW_NUMBER()` por script, que é sintaxe 11gR2 e não carrega `log_output`.
-* O menu Operação tem um único item para rodar, "Rodar um script" (`EXEC_SCRIPT`), que abre esta tela (CR-017b). A funcionalidade correspondente se chama "Rodar Scripts" (CR-018b; antes, "Disparar Scripts"), e o disparo abre pelos cartões.
+* O menu Operação tem um único item para rodar, "Rodar um script" (`EXEC_SCRIPT`), que abre esta tela (CR-017b). A funcionalidade correspondente se chama "Rodar Scripts" (CR-018b), e o disparo abre pelos cartões.
 * **Agendar (CR-017c):** para quem tem `MANAGE_SCHEDULES`, cada cartão traz o botão "Agendar", que abre a nova regra já com o script (§7.6). O cartão só existe com `can_execute`, a mesma regra que o agendamento exige.
 
 **Histórico do script** (`tickets/history/<script_id>`, exige `EXEC_SCRIPT`): responde "esse script costuma dar certo?".
@@ -1488,7 +1486,7 @@ O daemon chama apenas a interface abaixo, implementada em `posix.py` (Linux e de
 * **`pack <base> <relativo> <max_bytes> <max_arquivos>`, `clean-output <base> <relativo>` e `purge-output <base> <dias> [count]` (CR-012):** zip da pasta de saída na saída padrão, remoção da pasta do ticket e retenção (com `count`, só a contagem, para o `--dry-run` do purge, §11.3), com a mesma validação da `base` (`output_dir/<ambiente>`, do próprio usuário, sem link). Detalhes no §8.13.
 * Códigos de saída: 0 sucesso, 2 uso inválido, 3 recusado (identidade divergente), 4 erro do sistema, 5 não suportado nesta plataforma (`stop-ticket`), 6 pasta de saída vazia ou inexistente, 7 saída acima do limite de arquivos e 8 acima do limite de bytes (`pack`, CR-012). As mensagens vão para o stderr, sem valores sensíveis.
 * **O que o agente acompanha:** o `Popen` do `sudo`, filho direto do agente. O `sudo` devolve o código de saída do script; morte por sinal vira `returncode` negativo, convertido como no §5.2. O PID registrado (`process_id`, nome do log) é o do `sudo`, que lidera o grupo, e `process_start` é a identidade dele.
-* **DEV:** com `[agent] exec_users` vazio (permitido só com `sss_env = DEV`), o agente executa direto, como antes, com WARN `SEM_USUARIO_EXECUCAO` na subida.
+* **DEV:** com `[agent] exec_users` vazio (permitido só com `sss_env = DEV`), o agente executa direto, com WARN `SEM_USUARIO_EXECUCAO` na subida.
 
 O arquivo `work_dir/sss-<agent_id>.stop` também aciona a flag.
 
@@ -2747,7 +2745,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 * O CRITICAL vai para o log da aplicação do minuto atual (§13, `<log_name>` `sss_web` ou `sss_scheduler`) sempre que o `[logging] log_dir` do `config.ini`, lido mesmo que outras chaves estejam inválidas, existe e aceita escrita. Falhas repetidas no mesmo minuto e no mesmo processo vão para o mesmo arquivo (sem sufixo `_<n>`). Sem `log_dir` utilizável, vai para o stderr do processo, no mesmo formato do §13.
 * No nó web, a requisição recebe a página de erro genérica (500), sem o detalhe.
 
-A chave `driver_mode` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR-002); até lá, o código atual (backend FAKE) ainda lê as chaves antigas. A chave `interpreters` passa a ser lida e validada a partir do F8.0 (CR-001). **CR-007:** entram `exec_users`, `exec_work_dir`, `queue_aging_min` e `purge_user`; `table_prefix` passa a aceitar só minúsculas; as faixas de `cron_horizon_days`, `max_log_size_bytes` e `audit_retention_days` sobem; as invariantes I3 e I4 passam a ser validadas. **CR-008:** entram `[web] session_max_hours`, `[agent] ambientes_exigem_hash` (removida no CR-011) e `[agent] log_dir_min_free_mb` (todas opcionais, com padrão); o mínimo de `cron_horizon_days` sobe para 1.461; `[oracle] user` igual ao `owner` passa a ser recusado fora de DEV. **CR-005:** saem `base_script_dirs` (a antiga `base_script_dir` também continua recusada) e `script_owner_sids`; `app_log_backups` é substituída por `app_log_retention_days`. As chaves que saem passam a ser recusadas como desconhecidas. **CR-011:** saem `[agent] script_owner_uids` e `ambientes_exigem_hash`; uma chave removida é recusada com a mensagem "apague a linha".
+Chaves que saíram ou mudaram de nome são recusadas na subida, nunca ignoradas: uma chave removida (`[app] data_backend`, `[agent] script_owner_uids` e `[agent] ambientes_exigem_hash`) é recusada com a mensagem "apague a linha"; uma chave renomeada (§2.8, `sss_config.RENAMED_KEYS`), com o nome novo; e qualquer outra chave desconhecida, como chave desconhecida da seção. O histórico das chaves por CR fica nos documentos de `docs/architecture/`.
 
 ### 12.2 Launchers
 
