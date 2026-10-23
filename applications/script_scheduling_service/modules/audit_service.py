@@ -26,7 +26,7 @@ ACTIONS = (
     "TICKET_CREATE", "TICKET_CANCEL", "TICKET_RERUN",
     "CREATE", "UPDATE", "DEACTIVATE", "PERM_UPDATE",
     "SCHEDULE_PAUSE", "AGENT_START", "AGENT_STOP", "PURGE",
-    "AUDIT_EXPORT", "SCHEMA_MIGRATE",
+    "AUDIT_EXPORT", "SCHEMA_MIGRATE", "OUTPUT_DOWNLOAD",
 )
 # Nomes simples das acoes e entidades na tela (CR-018b); o CSV e o banco continuam com os codigos.
 ACTION_LABELS = {
@@ -36,6 +36,7 @@ ACTION_LABELS = {
     "DEACTIVATE": u"Desativação", "PERM_UPDATE": u"Permissões do perfil", "SCHEDULE_PAUSE": u"Regra pausada",
     "AGENT_START": u"Agente iniciado", "AGENT_STOP": u"Agente parado", "PURGE": u"Limpeza por retenção",
     "AUDIT_EXPORT": u"Exportação da auditoria", "SCHEMA_MIGRATE": u"Atualização do esquema",
+    "OUTPUT_DOWNLOAD": u"Download de saída",
 }
 ENTITY_LABELS = {
     "tbsss_schedules": u"Regras de agendamento", "tbsss_agents": u"Agentes", "tbsss_environments": u"Ambientes",

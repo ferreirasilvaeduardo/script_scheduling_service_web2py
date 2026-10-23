@@ -90,3 +90,21 @@ class RepoTickets(object):
         So para situacao DISPONIVEL; outra situacao, ou sem saida, lanca RepoNotFound. Fim do zip: b''.
         """
         raise NotImplementedError
+
+    def output_summary(self, level, environment_scope=None, environment=None, script_id=None):
+        """Resumo das saidas AVAILABLE para a tela de Saidas (CR-020a), sem ler o BLOB.
+
+        level 'environment': [{environment, count, last_at}] por nome; 'script' (com environment):
+        [{script_id, script_name, count, last_at}] por nome do script; 'day' (com environment e script_id):
+        [{day, count}] do dia mais recente ao mais antigo (day = datetime a 00:00 do started_at).
+        environment_scope: ambientes autorizados (None = todos; vazio = nenhum). Outro level: RepoViolation.
+        """
+        raise NotImplementedError
+
+    def output_tickets(self, environment, script_id, day_from, day_to, page=1, size=20, environment_scope=None):
+        """Tickets com saida AVAILABLE do ambiente e script, com started_at em [day_from, day_to) (CR-020a).
+
+        Retorna {items, total, page, size}; cada item tem id, environment, script_id, requested_by, status,
+        started_at, finished_at, file_count e size_bytes, por started_at DESC, id DESC.
+        """
+        raise NotImplementedError

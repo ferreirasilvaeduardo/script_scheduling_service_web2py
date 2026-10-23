@@ -191,6 +191,7 @@ A pasta `dev/scripts/` contém scripts de exemplo **sem lógica perigosa**, usad
 | `carga_diaria.py`, `relatorio_mensal.py`, `validacao_fiscal.py`, `cleanup_tmp.sh`, `sync_tabelas.sh`, `backup_extra.sh` | Correspondem aos `path_file` do seed FAKE e imprimem os argumentos |
 | `utilitarios/*.py` e `utilitarios/*.sh` | 14 scripts utilitários de arquivos (zip, tar.gz, divisão, concatenação, encoding, substituição, deduplicação, hash, contagem, filtros, ordenação e limpeza). Detalhes em `docs/UTILITY_SCRIPTS.md` |
 | `diagnostico/pasta_trabalho.sh` | Diagnóstico do CR-019: confere `SSS_WORK_DIR`, grava `diagnostico.txt` e `sub/arquivo.txt` na pasta de trabalho e lista o que gravou. Sai com 1 sem a variável e com 2 se a pasta não existir |
+| `diagnostico/gerar_saida.sh` | Diagnóstico do CR-020a: grava `resumo.txt` e `detalhes/relatório de testes.csv` em `SSS_OUTPUT_DIR`, para gerar uma saída real e testar a tela de Saídas. Sai com 1 sem a variável |
 
 ### 6.1 O que o `path_guard` confere (CR-005, CR-011)
 

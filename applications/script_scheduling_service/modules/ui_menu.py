@@ -12,6 +12,8 @@ _CATALOG = (
         # Um so caminho para rodar: os cartoes levam ao disparo ja com script e ambiente (CR-017b).
         ("EXEC_SCRIPT", u"Rodar um script", "tickets", "catalog", "icon-play"),
         (("VIEW_LOGS", "EXEC_SCRIPT"), u"Tickets", "tickets", "index", "icon-list"),
+        # Navegacao pelas saidas guardadas no banco, com download do zip ou de um arquivo (CR-020a).
+        ("DOWNLOAD_OUTPUT", u"Saídas", "outputs", "index", "icon-download"),
         # Telas que antes so abriam por botao ou aba (CR-017c): o que vai rodar e a saude dos agentes.
         ("MANAGE_SCHEDULES", u"Agenda", "schedules", "agenda", "icon-calendar"),
         ("VIEW_AUDIT", u"Agentes", "audit", "agents", "icon-server"),

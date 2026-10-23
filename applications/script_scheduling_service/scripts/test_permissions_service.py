@@ -50,9 +50,10 @@ class TestPermissions(unittest.TestCase):
     def test_admin_ve_frase_e_todas_as_telas(self):
         d = self.svc.build(self.ctx["admin"])
         self.assertEqual(d["admin_phrase"], svc_mod.ADMIN_PHRASE)
-        self.assertEqual(len(d["screens"]), 10)
+        self.assertEqual(len(d["screens"]), 11)
         self.assertEqual(d["absent"], [])
         routes = dict((t["code"], t["route"]) for t in d["screens"])
+        self.assertEqual(routes["DOWNLOAD_OUTPUT"], ("outputs", "index"), "Saidas no menu (CR-020a)")
         self.assertEqual(routes["MANAGE_PROFILES"], ("admin_profiles", "index"))
         self.assertIsNone(routes["CANCEL_TICKET"])  # acao, nao tela
         # CR-017b: Rodar Scripts leva aos cartoes de Rodar um script; Consultar Tickets, a lista de tickets.

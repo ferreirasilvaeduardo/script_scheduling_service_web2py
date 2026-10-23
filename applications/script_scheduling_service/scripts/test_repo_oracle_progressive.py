@@ -631,6 +631,40 @@ class TestOracleTickets(unittest.TestCase):
                 repo.create({"script_id": 1, "environment": "X", "requested_by": "u", "priority": 9}, [])
         self.assertEqual(ctx.exception.constraint, "ck_abc_tck_prio")
 
+    def test_cr020a_saidas_por_nivel_por_bind_e_sem_funcao_no_where(self):
+        """Tela de Saidas: so AVAILABLE, escopo e filtros por bind; TRUNC so no SELECT/GROUP BY (AGENTS §4.12)."""
+        with mock.patch.object(self.tck, "_obter_conexao", side_effect=AssertionError("abriu conexao")):
+            with self.assertRaises(repo_errors.RepoViolation):
+                self.tck.output_summary("ticket")
+        conn = _ScriptedConnection([("GROUP BY t.environment", 1, [("GFPREPROD", 3, datetime.datetime(2026, 10, 23, 9, 0))]),
+                                    ("GROUP BY t.script_id", 1, [(8, "gerar_hash_arquivo", 2, None)]),
+                                    ("GROUP BY TRUNC", 1, [(datetime.datetime(2026, 10, 23), 2)]),
+                                    ("SELECT COUNT(*) FROM (", 1, [(1,)])])
+        with mock.patch.object(self.tck, "_obter_conexao", return_value=conn):
+            envs = self.tck.output_summary("environment", environment_scope=("GFPREPROD", "CLONE6"))
+            scripts = self.tck.output_summary("script", environment_scope=None, environment="GFPREPROD")
+            days = self.tck.output_summary("day", environment_scope=(), environment="GFPREPROD", script_id="8")
+            page = self.tck.output_tickets("GFPREPROD", 8, datetime.datetime(2026, 10, 23),
+                                           datetime.datetime(2026, 10, 24), page=2, size=20,
+                                           environment_scope=("GFPREPROD",))
+        self.assertEqual((envs[0]["environment"], envs[0]["count"]), ("GFPREPROD", 3))
+        self.assertEqual((scripts[0]["script_id"], scripts[0]["script_name"]), (8, "gerar_hash_arquivo"))
+        self.assertEqual(days[0]["day"], datetime.datetime(2026, 10, 23))
+        self.assertEqual(page["total"], 1)
+        (sql_env, b_env), (sql_scr, b_scr), (sql_day, b_day) = conn.executed[:3]
+        for sql in (sql_env, sql_scr, sql_day) + tuple(x[0] for x in conn.executed[3:]):
+            self.assertIn("o.state = 'AVAILABLE'", sql)
+            self.assertNotIn("content", sql, "nunca le o BLOB")
+            self.assertNotIn("TRUNC", sql.split(" WHERE ", 1)[1].split(" GROUP BY ")[0], "sem funcao no WHERE")
+        self.assertIn("t.environment IN (:e0, :e1)", sql_env)
+        self.assertEqual((b_env["e0"], b_env["e1"]), ("CLONE6", "GFPREPROD"))
+        self.assertNotIn(" IN (", sql_scr, "admin: sem escopo")
+        self.assertIn("1 = 0", sql_day, "escopo vazio nao ve nada")
+        self.assertEqual((b_day["environment_f"], b_day["script_id_f"]), ("GFPREPROD", 8))
+        sql_page, b_page = conn.executed[-1]
+        self.assertIn("t.started_at >= :day_from AND t.started_at < :day_to", sql_page)
+        self.assertEqual((b_page["start_ts"], b_page["end_ts"]), (20, 40))
+
     def test_cancelamento_usa_os_updates_literais_do_readme(self):
         """README §5.6: os dois UPDATEs e a leitura pela PK com FOR UPDATE WAIT 5."""
         tck = self.tck._idents["tck"]

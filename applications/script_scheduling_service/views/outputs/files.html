@@ -1,0 +1,64 @@
+{{extend 'layout.html'}}
+{{
+# Arquivos da saída de um ticket (README §5.9, CR-020a): índice do zip guardado no banco, só leitura.
+import ui_helpers
+}}
+<div class="sss-page-header sss-detail-header">
+  <div>
+    <h1 class="sss-page-title">Saída do ticket {{if result:}}#{{=result['ticket']['id']}}{{pass}}</h1>
+    <p class="sss-page-sub">Os arquivos dentro do zip que o agente guardou. Baixe o zip inteiro ou só o arquivo de que precisa.</p>
+  </div>
+  {{if result:}}
+  <div class="sss-actions">
+    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='detail', args=[result['ticket']['id']])}}">Ver o ticket</a>
+    <a class="btn btn-sm btn-primary" href="{{=URL(c='outputs', f='download_zip', args=[result['ticket']['id']])}}" download>Baixar zip</a>
+  </div>
+  {{pass}}
+</div>
+
+{{if error:}}
+<div class="alert alert-danger sss-alert" role="alert"><span>{{=error}}</span></div>
+{{else:}}
+{{_t = result['ticket']}}
+<nav aria-label="Caminho">
+  <ol class="breadcrumb sss-breadcrumb">
+    <li class="breadcrumb-item"><a href="{{=URL(c='outputs', f='index')}}">Saídas</a></li>
+    <li class="breadcrumb-item sss-mono"><a href="{{=URL(c='outputs', f='index', vars=dict(environment=_t['environment']))}}">{{=_t['environment']}}</a></li>
+    <li class="breadcrumb-item sss-mono"><a href="{{=URL(c='outputs', f='index', vars=dict(environment=_t['environment'], script_id=_t['script_id']))}}">{{=_t['script_name']}}</a></li>
+    {{if _t['started_at']:}}<li class="breadcrumb-item"><a href="{{=URL(c='outputs', f='index', vars=dict(environment=_t['environment'], script_id=_t['script_id'], day=_t['started_at'].strftime('%Y-%m-%d')))}}">{{=_t['started_at'].strftime('%d/%m/%Y')}}</a></li>{{pass}}
+    <li class="breadcrumb-item active" aria-current="page">#{{=_t['id']}}</li>
+  </ol>
+</nav>
+
+<section class="sss-card" aria-labelledby="title-files">
+  <h2 class="sss-card-title" id="title-files">Arquivos</h2>
+  <div class="sss-card-body">
+    <p class="mb-0">{{=result['total']}} arquivo(s), {{=ui_helpers.readable_size(result['output'].get('size_bytes'))}} compactados. Solicitado por {{=_t['requested_by'] or '-'}}, início em {{=ui_helpers.format_date(_t['started_at'])}}.</p>
+  </div>
+  {{if result['items']:}}
+  <div class="table-responsive">
+    <table class="table table-sm sss-table mb-0">
+      <thead><tr><th scope="col">Arquivo</th><th scope="col">Pasta</th><th scope="col">Tamanho</th><th scope="col">Data</th><th scope="col"><span class="visually-hidden">Ações</span></th></tr></thead>
+      <tbody>
+        {{for _f in result['items']:}}
+        <tr>
+          <th scope="row" class="sss-mono sss-break">{{=_f['base']}}</th>
+          <td class="sss-mono sss-break">{{=_f['folder'] or '-'}}</td>
+          <td>{{=ui_helpers.readable_size(_f['size'])}}</td>
+          <td>{{=ui_helpers.format_date(_f['date'])}}</td>
+          <td><a class="btn btn-sm btn-outline-primary" href="{{=URL(c='outputs', f='download_file', args=[_t['id']], vars=dict(name=_f['name']))}}" download>Baixar</a></td>
+        </tr>
+        {{pass}}
+      </tbody>
+    </table>
+  </div>
+  {{
+  page = result['page']; size = result['size']; total = result['total']; total_capped = False
+  page_count = len(result['items']); url_base = ('outputs', 'files'); query_params = dict(ticket=_t['id'])
+  }}
+  <div class="sss-card-body">{{include 'components/pagination.html'}}</div>
+  {{else:}}
+  <p class="sss-card-body sss-text-muted mb-0">O zip não tem arquivos.</p>
+  {{pass}}
+</section>
+{{pass}}

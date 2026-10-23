@@ -212,7 +212,7 @@ def output():
     _require_method("GET", "HEAD")
     ctx = _require_query()
     try:
-        ticket_id, size, parts = ticket_service.output_chunks(ctx, request.args(0))
+        ticket_id, size, parts = ticket_service.output_chunks(ctx, request.args(0), _client_ip())
     except RepoNotFound:
         _not_found(_MSG_NOT_FOUND)
     except RepoError:

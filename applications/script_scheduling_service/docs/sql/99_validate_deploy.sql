@@ -150,8 +150,8 @@ WITH chk AS (
   SELECT 10 AS sort_order, 'VERSAO DO ESQUEMA' AS verificacao, '=' AS regra, 1 AS esperado, (SELECT MAX(schema_version) FROM openrisow.tbsss_control) AS encontrado FROM DUAL
   UNION ALL SELECT 11 AS sort_order, 'LINHAS TBSSS_ENVIRONMENTS' AS verificacao, '>=' AS regra, 5 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_environments) AS encontrado FROM DUAL
   UNION ALL SELECT 12 AS sort_order, 'LINHAS TBSSS_PROFILES' AS verificacao, '>=' AS regra, 4 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_profiles) AS encontrado FROM DUAL
-  UNION ALL SELECT 13 AS sort_order, 'LINHAS TBSSS_FEATURES' AS verificacao, '>=' AS regra, 10 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_features) AS encontrado FROM DUAL
-  UNION ALL SELECT 14 AS sort_order, 'LINHAS TBSSS_PROFILE_FEATURE' AS verificacao, '>=' AS regra, 17 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_profile_feature) AS encontrado FROM DUAL
+  UNION ALL SELECT 13 AS sort_order, 'LINHAS TBSSS_FEATURES' AS verificacao, '>=' AS regra, 11 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_features) AS encontrado FROM DUAL
+  UNION ALL SELECT 14 AS sort_order, 'LINHAS TBSSS_PROFILE_FEATURE' AS verificacao, '>=' AS regra, 20 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_profile_feature) AS encontrado FROM DUAL
   UNION ALL SELECT 15 AS sort_order, 'LINHAS TBSSS_PROFILE_ENV' AS verificacao, '>=' AS regra, 18 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_profile_env) AS encontrado FROM DUAL
   UNION ALL SELECT 16 AS sort_order, 'LINHAS TBSSS_SCRIPTS' AS verificacao, '>=' AS regra, 14 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_scripts) AS encontrado FROM DUAL
   UNION ALL SELECT 17 AS sort_order, 'LINHAS TBSSS_PROFILE_SCRIPT' AS verificacao, '>=' AS regra, 56 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_profile_script) AS encontrado FROM DUAL
@@ -176,8 +176,8 @@ WITH chk AS (
   SELECT 10 AS sort_order, 'VERSAO DO ESQUEMA' AS verificacao, '=' AS regra, 1 AS esperado, (SELECT MAX(schema_version) FROM openrisow.tbsss_control) AS encontrado FROM DUAL
   UNION ALL SELECT 11 AS sort_order, 'LINHAS TBSSS_ENVIRONMENTS' AS verificacao, '>=' AS regra, 5 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_environments) AS encontrado FROM DUAL
   UNION ALL SELECT 12 AS sort_order, 'LINHAS TBSSS_PROFILES' AS verificacao, '>=' AS regra, 4 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_profiles) AS encontrado FROM DUAL
-  UNION ALL SELECT 13 AS sort_order, 'LINHAS TBSSS_FEATURES' AS verificacao, '>=' AS regra, 10 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_features) AS encontrado FROM DUAL
-  UNION ALL SELECT 14 AS sort_order, 'LINHAS TBSSS_PROFILE_FEATURE' AS verificacao, '>=' AS regra, 17 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_profile_feature) AS encontrado FROM DUAL
+  UNION ALL SELECT 13 AS sort_order, 'LINHAS TBSSS_FEATURES' AS verificacao, '>=' AS regra, 11 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_features) AS encontrado FROM DUAL
+  UNION ALL SELECT 14 AS sort_order, 'LINHAS TBSSS_PROFILE_FEATURE' AS verificacao, '>=' AS regra, 20 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_profile_feature) AS encontrado FROM DUAL
   UNION ALL SELECT 15 AS sort_order, 'LINHAS TBSSS_PROFILE_ENV' AS verificacao, '>=' AS regra, 18 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_profile_env) AS encontrado FROM DUAL
   UNION ALL SELECT 16 AS sort_order, 'LINHAS TBSSS_SCRIPTS' AS verificacao, '>=' AS regra, 14 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_scripts) AS encontrado FROM DUAL
   UNION ALL SELECT 17 AS sort_order, 'LINHAS TBSSS_PROFILE_SCRIPT' AS verificacao, '>=' AS regra, 56 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_profile_script) AS encontrado FROM DUAL

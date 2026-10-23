@@ -1573,3 +1573,13 @@
 .sss-legend-color.sss-graf-error { background: var(--sss-graf-error); }
 .sss-legend-color.sss-graf-cancelled { background: var(--sss-graf-cancelled); }
 .sss-legend-color.sss-graf-in_progress { background: var(--sss-graf-in_progress); }
+
+/* Saídas (README §5.9, CR-020a): caminho da navegação e nomes de arquivo longos. */
+.sss-breadcrumb {
+  margin-bottom: var(--sss-space-3);
+  overflow-wrap: anywhere;
+}
+
+.sss-break {
+  overflow-wrap: anywhere;
+}

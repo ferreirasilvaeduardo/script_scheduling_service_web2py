@@ -244,10 +244,12 @@ def _display_argv(snap):
 class TicketService(object):
     """Servico de disparo com dependencias injetadas (repositorios, arvore de scripts e log)."""
 
-    def __init__(self, catalog, tickets, log):
+    def __init__(self, catalog, tickets, log, audit=None):
         self._catalog = catalog
         self._tickets = tickets
         self._log = log
+        # CR-020a: o download da saida pelo detalhe do ticket grava OUTPUT_DOWNLOAD, como a tela de Saidas.
+        self._audit = audit
 
     # ------------------------------------------------------------ autorizacao
 
@@ -1021,7 +1023,7 @@ class TicketService(object):
         return {"text": text, "next_offset": next_value, "terminal": bool(terminal),
                 "truncated": bool(truncated), "status": status}
 
-    def output_chunks(self, ctx, ticket_id):
+    def output_chunks(self, ctx, ticket_id, ip=None):
         """Valida o escopo (regra do log) e a situacao DISPONIVEL; retorna (id, tamanho, gerador de fatias).
 
         Lanca RepoNotFound fora do escopo, sem saida ou fora de DISPONIVEL. Uma falha de leitura no meio
@@ -1033,6 +1035,9 @@ class TicketService(object):
         if not output or output.get("state") != "AVAILABLE" or not output.get("size_bytes"):
             raise RepoNotFound("saida do ticket indisponivel")
         size = int(output["size_bytes"])
+        if self._audit is not None:
+            self._audit.register(ctx.get("login"), ip, "OUTPUT_DOWNLOAD", "tbsss_tickets", tid,
+                                 u"saída do ticket #%s: zip completo (%d bytes), pelo detalhe do ticket" % (tid, size))
         self._log.info("download da saida (login=%s ticket=%s bytes=%s)", ctx.get("login"), tid, size,
                        extra={"action": "SAIDA_BAIXAR"})
 
@@ -1185,6 +1190,7 @@ def _service():
                 catalog=factory.get("catalog"),
                 tickets=factory.get("tickets"),
                 log=sss_logging.get_logger("sss_web", cfg),
+                audit=factory.get("audit"),
             )
         return _default
 
@@ -1295,6 +1301,6 @@ def log_chunks(ctx, ticket_id):
     return _service().log_chunks(ctx, ticket_id)
 
 
-def output_chunks(ctx, ticket_id):
+def output_chunks(ctx, ticket_id, ip=None):
     """(id, tamanho, gerador) do zip da saida do ticket visivel e DISPONIVEL (servico padrao, CR-012)."""
-    return _service().output_chunks(ctx, ticket_id)
+    return _service().output_chunks(ctx, ticket_id, ip)

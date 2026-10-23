@@ -1,0 +1,89 @@
+{{extend 'layout.html'}}
+{{
+# Saídas (README §5.9, CR-020a): navegação ambiente > script > dia > ticket, só leitura, a partir do banco.
+import ui_helpers
+_lv = level
+_q = dict(environment=environment, script_id=script_id)
+}}
+<div class="sss-page-header">
+  <h1 class="sss-page-title">Saídas</h1>
+  <p class="sss-page-sub">Os arquivos que os scripts deixaram na pasta de saída, organizados como no servidor: ambiente, script, dia e ticket. Só aparecem as saídas guardadas no banco.</p>
+</div>
+
+<nav aria-label="Caminho">
+  <ol class="breadcrumb sss-breadcrumb">
+    {{if _lv == 'environment':}}<li class="breadcrumb-item active" aria-current="page">Saídas</li>{{else:}}<li class="breadcrumb-item"><a href="{{=URL(c='outputs', f='index')}}">Saídas</a></li>{{pass}}
+    {{if _lv in ('script', 'day', 'ticket'):}}
+    {{if _lv == 'script':}}<li class="breadcrumb-item active sss-mono" aria-current="page">{{=environment}}</li>{{else:}}<li class="breadcrumb-item sss-mono"><a href="{{=URL(c='outputs', f='index', vars=dict(environment=environment))}}">{{=environment}}</a></li>{{pass}}
+    {{pass}}
+    {{if _lv in ('day', 'ticket'):}}
+    {{if _lv == 'day':}}<li class="breadcrumb-item active sss-mono" aria-current="page">{{=script_name}}</li>{{else:}}<li class="breadcrumb-item sss-mono"><a href="{{=URL(c='outputs', f='index', vars=_q)}}">{{=script_name}}</a></li>{{pass}}
+    {{pass}}
+    {{if _lv == 'ticket':}}<li class="breadcrumb-item active" aria-current="page">{{='%s/%s/%s' % (day[8:10], day[5:7], day[:4])}}</li>{{pass}}
+  </ol>
+</nav>
+
+{{if error:}}
+<div class="alert alert-danger sss-alert" role="alert"><span>{{=error}}</span></div>
+{{elif not rows:}}
+<section class="sss-card">
+  <div class="sss-card-body">
+    <p class="mb-1">Nenhuma saída disponível aqui.</p>
+    <p class="sss-text-muted mb-0">Só aparecem as saídas que o agente gravou no banco. Se uma saída passou do limite de tamanho ou não foi gravada, o detalhe do ticket explica e os arquivos ficaram no servidor do agente.</p>
+  </div>
+</section>
+{{else:}}
+<section class="sss-card" aria-labelledby="title-level">
+  <h2 class="sss-card-title" id="title-level">{{={'environment': u'Ambientes', 'script': u'Scripts', 'day': u'Dias', 'ticket': u'Tickets'}[_lv]}}</h2>
+  <div class="table-responsive">
+    <table class="table table-sm sss-table mb-0">
+      {{if _lv == 'environment':}}
+      <thead><tr><th scope="col">Ambiente</th><th scope="col">Saídas</th><th scope="col">Última</th></tr></thead>
+      <tbody>
+        {{for _r in rows:}}
+        <tr><th scope="row"><a class="sss-mono" href="{{=URL(c='outputs', f='index', vars=dict(environment=_r['environment']))}}">{{=_r['environment']}}</a></th><td>{{=_r['count']}}</td><td>{{=ui_helpers.format_date(_r['last_at'])}}</td></tr>
+        {{pass}}
+      </tbody>
+      {{elif _lv == 'script':}}
+      <thead><tr><th scope="col">Script</th><th scope="col">Saídas</th><th scope="col">Última</th></tr></thead>
+      <tbody>
+        {{for _r in rows:}}
+        <tr><th scope="row"><a class="sss-mono" href="{{=URL(c='outputs', f='index', vars=dict(environment=environment, script_id=_r['script_id']))}}">{{=_r['script_name'] or _r['script_id']}}</a></th><td>{{=_r['count']}}</td><td>{{=ui_helpers.format_date(_r['last_at'])}}</td></tr>
+        {{pass}}
+      </tbody>
+      {{elif _lv == 'day':}}
+      <thead><tr><th scope="col">Dia</th><th scope="col">Saídas</th></tr></thead>
+      <tbody>
+        {{for _r in rows:}}
+        <tr><th scope="row"><a href="{{=URL(c='outputs', f='index', vars=dict(_q, day=_r['day'].strftime('%Y-%m-%d')))}}">{{=_r['day'].strftime('%d/%m/%Y')}}</a></th><td>{{=_r['count']}}</td></tr>
+        {{pass}}
+      </tbody>
+      {{else:}}
+      <thead><tr><th scope="col">Ticket</th><th scope="col">Início</th><th scope="col">Solicitante</th><th scope="col">Arquivos</th><th scope="col">Tamanho</th><th scope="col"><span class="visually-hidden">Ações</span></th></tr></thead>
+      <tbody>
+        {{for _r in rows:}}
+        <tr>
+          <th scope="row"><a href="{{=URL(c='outputs', f='files', vars=dict(ticket=_r['id']))}}">#{{=_r['id']}}</a></th>
+          <td>{{=ui_helpers.format_date(_r['started_at'])}}</td>
+          <td>{{=_r['requested_by'] or '-'}}</td>
+          <td>{{=_r['file_count'] if _r['file_count'] is not None else '-'}}</td>
+          <td>{{=ui_helpers.readable_size(_r['size_bytes'])}}</td>
+          <td class="sss-actions-inline">
+            <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='outputs', f='files', vars=dict(ticket=_r['id']))}}">Ver arquivos</a>
+            <a class="btn btn-sm btn-primary" href="{{=URL(c='outputs', f='download_zip', args=[_r['id']])}}" download>Baixar zip</a>
+          </td>
+        </tr>
+        {{pass}}
+      </tbody>
+      {{pass}}
+    </table>
+  </div>
+  {{if _lv == 'ticket':}}
+  {{
+  page = result['page']; size = result['size']; total = result['total']; total_capped = False
+  page_count = len(rows); url_base = ('outputs', 'index'); query_params = dict(_q, day=day)
+  }}
+  <div class="sss-card-body">{{include 'components/pagination.html'}}</div>
+  {{pass}}
+</section>
+{{pass}}

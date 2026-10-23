@@ -102,6 +102,30 @@ _COLS_OUTPUT = ("state", "reason", "agent_id", "file_count", "size_bytes",
 _SQL_OUTPUT = "SELECT " + _column_list(_COLS_OUTPUT) + " FROM {tout} WHERE ticket_id = :ticket_id"
 _SQL_OUTPUT_CONTENT = "SELECT state, content FROM {tout} WHERE ticket_id = :ticket_id"
 OUTPUT_SLICE_MAX = 1024 * 1024
+# Tela de Saidas (CR-020a): so saidas AVAILABLE, por nivel; {scope} e {extra} sao clausulas fixas do codigo.
+_SQL_OUTPUT_ENVIRONMENTS = (
+    "SELECT t.environment, COUNT(*), MAX(t.started_at) FROM {tck} t JOIN {tout} o ON o.ticket_id = t.id "
+    "WHERE o.state = 'AVAILABLE'{scope} GROUP BY t.environment ORDER BY t.environment"
+)
+_SQL_OUTPUT_SCRIPTS = (
+    "SELECT t.script_id, s.name, COUNT(*), MAX(t.started_at) FROM {tck} t JOIN {tout} o ON o.ticket_id = t.id "
+    "JOIN {scr} s ON s.id = t.script_id WHERE o.state = 'AVAILABLE' AND t.environment = :environment_f{scope} "
+    "GROUP BY t.script_id, s.name ORDER BY s.name, t.script_id"
+)
+_SQL_OUTPUT_DAYS = (
+    "SELECT TRUNC(t.started_at), COUNT(*) FROM {tck} t JOIN {tout} o ON o.ticket_id = t.id "
+    "WHERE o.state = 'AVAILABLE' AND t.environment = :environment_f AND t.script_id = :script_id_f{scope} "
+    "GROUP BY TRUNC(t.started_at) ORDER BY 1 DESC"
+)
+_COLS_OUTPUT_TCK = ("id", "environment", "script_id", "requested_by", "status", "started_at", "finished_at",
+                    "file_count", "size_bytes")
+_SQL_OUTPUT_TICKETS = (
+    "SELECT t.id, t.environment, t.script_id, t.requested_by, t.status, t.started_at, t.finished_at, "
+    "o.file_count, o.size_bytes FROM {tck} t JOIN {tout} o ON o.ticket_id = t.id "
+    "WHERE o.state = 'AVAILABLE' AND t.environment = :environment_f AND t.script_id = :script_id_f "
+    "AND t.started_at >= :day_from AND t.started_at < :day_to{scope} ORDER BY t.started_at DESC, t.id DESC"
+)
+_OUTPUT_SUMMARY_MAX = 1000
 
 
 def _read_lob(value):
@@ -130,7 +154,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
         self._sql = {}
         for name, template in globals().items():
             if name.startswith("_SQL_") and "{where" not in template and "{ids}" not in template \
-                    and "{scope}" not in template:
+                    and "{scope}" not in template and "{extra}" not in template:
                 self._sql[name[5:]] = template.format(**self._idents)
         self._tbl_aud = self.qualify_table("audit")
         self._seq_aud = self.qualify_sequence("audit")
@@ -379,6 +403,62 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
             finally:
                 cur.close()
         return self.tuple_to_dict(_COLS_OUTPUT, row) if row else None
+
+    def output_summary(self, level, environment_scope=None, environment=None, script_id=None, conn=None):
+        """Resumo das saidas AVAILABLE por ambiente, script ou dia (CR-020a), sem ler o BLOB."""
+        binds = {}
+        if level == "environment":
+            template, cols = _SQL_OUTPUT_ENVIRONMENTS, ("environment", "count", "last_at")
+        elif level == "script":
+            template, cols = _SQL_OUTPUT_SCRIPTS, ("script_id", "script_name", "count", "last_at")
+            binds["environment_f"] = environment
+        elif level == "day":
+            template, cols = _SQL_OUTPUT_DAYS, ("day", "count")
+            binds["environment_f"] = environment
+            binds["script_id_f"] = int(script_id)
+        else:
+            raise repo_errors.RepoViolation("Nivel do resumo de saidas invalido")
+        scope = "".join(" AND " + c for c in self._escopo("t.", environment_scope, None, binds))
+        sql = self._sql_dinamico(template, scope=scope)
+        with self.read_context(conn=conn) as c:
+            cur = c.cursor()
+            try:
+                cur.execute(sql, binds)
+                rows = cur.fetchmany(_OUTPUT_SUMMARY_MAX)
+            finally:
+                cur.close()
+        return [self.tuple_to_dict(cols, r) for r in rows]
+
+    def output_tickets(self, environment, script_id, day_from, day_to, page=1, size=20, environment_scope=None,
+                       conn=None):
+        """Tickets com saida AVAILABLE do ambiente e script no intervalo de started_at (CR-020a)."""
+        binds = {"environment_f": environment, "script_id_f": int(script_id), "day_from": day_from,
+                 "day_to": day_to}
+        scope = "".join(" AND " + c for c in self._escopo("t.", environment_scope, None, binds))
+        base = self._sql_dinamico(_SQL_OUTPUT_TICKETS, scope=scope)
+        p = max(1, int(page or 1))
+        t = int(size or 20)
+        t = 20 if t < 1 else t
+        start = (p - 1) * t
+        sql_count = "SELECT COUNT(*) FROM (" + base + ")"
+        sql_page = ("SELECT * FROM (SELECT a.*, ROWNUM rn FROM (" + base + ") a WHERE ROWNUM <= :end_ts) "
+                    "WHERE rn > :start_ts")
+        with self.read_context(conn=conn) as c:
+            cur = c.cursor()
+            try:
+                db_conn.set_input_types(cur, day_from=db_conn.TIPO_DATE, day_to=db_conn.TIPO_DATE)
+                cur.execute(sql_count, binds)
+                total = cur.fetchone()[0]
+            finally:
+                cur.close()
+            cur = c.cursor()
+            try:
+                db_conn.set_input_types(cur, day_from=db_conn.TIPO_DATE, day_to=db_conn.TIPO_DATE)
+                cur.execute(sql_page, dict(binds, start_ts=start, end_ts=start + t))
+                items = [self.tuple_to_dict(_COLS_OUTPUT_TCK, r[:len(_COLS_OUTPUT_TCK)]) for r in cur.fetchall()]
+            finally:
+                cur.close()
+        return {"items": items, "total": total, "page": p, "size": t}
 
     def output_read(self, ticket_id, offset, size, conn=None):
         """Fatia do zip por locator (offset base 0 na API, offset + 1 no LOB); so DISPONIVEL."""

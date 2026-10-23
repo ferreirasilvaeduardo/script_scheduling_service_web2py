@@ -584,6 +584,7 @@ Responde às duas perguntas mais comuns do administrador, sem abrir perfil por p
 | `EXEC_SCRIPT` | Criar tickets e reexecutar tickets próprios, sujeito a `can_execute`. **Perfil admin** reexecuta qualquer ticket que consegue ver. O novo ticket registra o admin como solicitante, então não há uso de privilégio alheio |
 | `VIEW_LOGS` | Tickets de ambientes autorizados ao perfil (admin: todos). Respostas de parâmetros `sensitive = 'Y'` aparecem mascaradas. **Sem** `VIEW_LOGS`, quem tem `EXEC_SCRIPT` vê, lista e lê o log apenas dos **próprios** tickets |
 | `CANCEL_TICKET` | Cancelar ticket de terceiro em ambiente autorizado, **junto com** `VIEW_LOGS` (CR-018a): só cancela quem enxerga o ticket na lista e no detalhe. Sem `VIEW_LOGS`, `CANCEL_TICKET` não vale para tickets de terceiros. A decisão é de `rbac.can_cancel`. **Sem** esta funcionalidade, o solicitante com `EXEC_SCRIPT` pode cancelar apenas os próprios tickets, mesmo que tenha perdido o acesso ao ambiente |
+| `DOWNLOAD_OUTPUT` (CR-020a) | Navegar pelas saídas `AVAILABLE` dos tickets de ambientes autorizados ao perfil (admin: todos), inclusive de outras pessoas, e baixar o zip ou um arquivo dele (§5.9). O download pelo detalhe do ticket continua com a regra do log |
 | `MANAGE_SCHEDULES` | Criar e editar regras. O `user_id` da regra é o criador, e cada desdobro roda sob os privilégios vigentes desse usuário |
 
 #### D. Catálogo canônico de funcionalidades (seed)
@@ -593,6 +594,7 @@ Responde às duas perguntas mais comuns do administrador, sem abrir perfil por p
 | `OPERATION` | `EXEC_SCRIPT` | Rodar Scripts | Preencher questionários e abrir tickets |
 | `OPERATION` | `VIEW_LOGS` | Consultar Tickets | Acompanhar os tickets e ler o log em tempo quase real |
 | `OPERATION` | `CANCEL_TICKET` | Cancelar Tickets | Cancelar tickets de terceiros nos ambientes consultados (com Consultar Tickets) |
+| `OPERATION` | `DOWNLOAD_OUTPUT` | Baixar Saídas | Navegar pelas saídas dos tickets nos ambientes do perfil e baixar o zip ou um arquivo (CR-020a; no seed, com ADMINISTRATOR, OPERATOR_PROD e OPERATOR_HML) |
 | `ADMIN` | `MANAGE_USERS` | Gestão de Usuários | Gerenciar operadores e credenciais |
 | `ADMIN` | `MANAGE_PROFILES` | Gestão de Perfis | Gerenciar perfis e matrizes de permissão |
 | `ADMIN` | `MANAGE_ENVIRONMENTS` | Gestão de Ambientes | Gerenciar ambientes e DSNs |
@@ -648,6 +650,7 @@ Toda ação sensível grava uma linha em `tbsss_audit` **na mesma transação** 
 
 * login (OK, falha, bloqueio) e logout (o logout também revoga as sessões do usuário, §4.2, CR-008 E2);
 * criação, cancelamento e reexecução de ticket;
+* download da saída de um ticket, pela tela de Saídas ou pelo detalhe do ticket (`OUTPUT_DOWNLOAD`, CR-020a). É uma leitura: a linha é gravada pelo service antes do envio, como a exportação da auditoria;
 * inserção, alteração e desativação em qualquer cadastro;
 * alteração de matriz de permissão;
 * pausa automática de agendamento;
@@ -656,7 +659,7 @@ Toda ação sensível grava uma linha em `tbsss_audit` **na mesma transação** 
 
 O campo `detail` nunca contém segredos nem valores de parâmetros sensíveis.
 
-* **Mesma transação:** a linha de auditoria é gravada pelo **próprio repositório**, na operação que recebe `audit=`. Isso vale também para o login (§4.2). O service nunca grava a auditoria numa chamada separada.
+* **Mesma transação:** a linha de auditoria é gravada pelo **próprio repositório**, na operação que recebe `audit=`. Isso vale também para o login (§4.2). O service nunca grava a auditoria numa chamada separada, salvo nas **leituras auditadas** (`AUDIT_EXPORT` e `OUTPUT_DOWNLOAD`), que não têm gravação de negócio para acompanhar: a linha é gravada por `RepoAudit.register` antes do envio.
 * **Entidade de cada ação:**
 
 | Ação | `entity` | `entity_id` |
@@ -670,6 +673,7 @@ O campo `detail` nunca contém segredos nem valores de parâmetros sensíveis.
 | `PURGE` | tabela purgada (`tbsss_tickets` ou `tbsss_audit`), uma linha por tabela, **sempre** que a execução obtém a concessão, mesmo com 0 linhas apagadas (CR-008, R-16) | nulo |
 | `SCHEMA_MIGRATE` (CR-007, D4) | `tbsss_control` | `1` (a linha de controle) |
 | `AUDIT_EXPORT` | `tbsss_audit` | nulo |
+| `OUTPUT_DOWNLOAD` (CR-020a) | `tbsss_tickets` | id do ticket; o `detail` diz se foi o zip completo ou qual arquivo, com o tamanho |
 
   O filtro "Entidade" da consulta oferece exatamente as tabelas acima.
 * **Atores do sistema:** `SYSTEM:<agent_id>` (agente), `SYSTEM:init_db` (`init_db.py`), `SYSTEM:purge` (`purge.py`) e `SYSTEM:seed` (seed FAKE). Por isso `init_db`, `seed` e `purge` não podem ser `agent_id` (§8.12).
@@ -987,6 +991,20 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
   * o link "Ver estes pedidos", que abre a lista de tickets filtrada por script e período.
 * **Contrato (leitura nova):** `RepoTickets.script_history(script_id, since, environment_scope=None, requested_by=None, limit=5000)` devolve só `{id, status, status_reason, created_at, started_at, finished_at}`, sem LOB, ordenado por `created_at`. A agregação é feita no service. Acima do limite, a tela avisa "mostrando os 5.000 mais recentes".
 * Não grava nada e não audita.
+
+### 5.9 Saídas (CR-020a)
+
+**Saídas** (`outputs/index`, exige `DOWNLOAD_OUTPUT`, item "Saídas" do menu Operação): navegação pelas saídas dos tickets com a estrutura da pasta de saída (§8.13), montada a partir do banco, porque o web não enxerga o disco dos agentes.
+
+* **Níveis:** Ambientes → Scripts → Dias → Tickets → Arquivos, com o caminho percorrido no topo e a quantidade de saídas em cada nível. Os dias vêm do `started_at` do ticket, o mesmo minuto da pasta.
+* **Só `AVAILABLE`:** as saídas `EXCEEDED` e `FAILED` estão só no disco do agente e não aparecem; o detalhe do ticket explica cada caso (§8.13).
+* **Escopo:** os ambientes do perfil (admin: todos), com tickets de outras pessoas; o solicitante aparece mascarado como no resto do sistema (`ui_helpers.visible_actor`). Ambiente, ticket ou arquivo fora do escopo, sem saída disponível ou com parâmetro fora do formato: **404**, nunca 403.
+* **Tickets:** número, início, solicitante, quantidade de arquivos e tamanho, paginados de 20 em 20, com "Ver arquivos" e "Baixar zip".
+* **Arquivos** (`outputs/files?ticket=<id>`): o índice do zip guardado no banco, sem as pastas, com pasta, nome, tamanho e data, de 100 em 100, e o botão "Baixar" em cada um.
+* **Leitura do zip:** `output_browse_service.BlobReader` lê o BLOB por `RepoTickets.output_read` em blocos de 256 KiB, com `seek`; o `zipfile` lê só o diretório central do fim do zip e, no download de um arquivo, só aquele item. O zip nunca é carregado inteiro na memória.
+* **Downloads** (`GET`): `outputs/download_zip/<id>` (o zip inteiro, `application/zip`) e `outputs/download_file/<id>?name=<nome>` (um arquivo, `application/octet-stream`). O nome pedido precisa ser **exatamente** um item do índice do zip; caminho montado, pasta ou nome acima de 500 caracteres são recusados. O `Content-Disposition` leva só o último nível do nome, sem aspas, barra nem caractere de controle, com versão ASCII e `filename*` UTF-8; com `Content-Length`, `Cache-Control: no-store` e `X-Content-Type-Options: nosniff`.
+* **Auditoria:** todo download grava `OUTPUT_DOWNLOAD` (§4.4) antes do envio; navegar não audita.
+* **Contrato (leituras novas):** `RepoTickets.output_summary(level, environment_scope, environment, script_id)`, com `level` em `environment`, `script` ou `day`, e `RepoTickets.output_tickets(environment, script_id, day_from, day_to, page, size, environment_scope)`. Só leem `tbsss_ticket_output` sem o BLOB, com escopo e filtros por bind; o dia é um intervalo de `started_at`, sem função na coluna no `WHERE` (AGENTS §4.12).
 
 ## 6. Parâmetros, Validação e Compilação do Snapshot
 
@@ -2481,7 +2499,7 @@ END;
   * `entity_id NUMBER(10)`
   * `detail VARCHAR2(1000 CHAR)`
   * `created_at DATE DEFAULT SYSDATE NOT NULL`
-* **Ações:** `LOGIN_OK`, `LOGIN_FAILED`, `LOGIN_LOCKED`, `LOGOUT`, `TICKET_CREATE`, `TICKET_CANCEL`, `TICKET_RERUN`, `CREATE`, `UPDATE`, `DEACTIVATE`, `PERM_UPDATE`, `SCHEDULE_PAUSE`, `AGENT_START`, `AGENT_STOP`, `PURGE`, `AUDIT_EXPORT` (exportação CSV da trilha, F6.1), `SCHEMA_MIGRATE` (migração de versão do esquema, CR-007). O catálogo é mantido em código (`audit_service.ACOES`) e não usa CK, para permitir extensão.
+* **Ações:** `LOGIN_OK`, `LOGIN_FAILED`, `LOGIN_LOCKED`, `LOGOUT`, `TICKET_CREATE`, `TICKET_CANCEL`, `TICKET_RERUN`, `CREATE`, `UPDATE`, `DEACTIVATE`, `PERM_UPDATE`, `SCHEDULE_PAUSE`, `AGENT_START`, `AGENT_STOP`, `PURGE`, `AUDIT_EXPORT` (exportação CSV da trilha, F6.1), `SCHEMA_MIGRATE` (migração de versão do esquema, CR-007), `OUTPUT_DOWNLOAD` (download de saída, CR-020a). O catálogo é mantido em código (`audit_service.ACOES`) e não usa CK, para permitir extensão.
 * A tabela não tem FKs intencionalmente: a trilha sobrevive a exclusões.
 * **Privilégios (CR-007, D1b):** web com `SELECT` e `INSERT`; agente só com `INSERT`; purge com `SELECT`, `INSERT` e `DELETE`. Nenhuma conta tem `UPDATE`.
 

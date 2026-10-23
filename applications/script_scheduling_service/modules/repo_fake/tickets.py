@@ -343,6 +343,67 @@ class RepoTicketsFake(RepoTickets):
                     return dict((k, v) for k, v in s.items() if k not in ("id", "ticket_id", "content"))
         return None
 
+    def _available_outputs(self, environment_scope):
+        """[(ticket, saida)] com saida AVAILABLE no escopo de ambientes (CR-020a)."""
+        allowed = None if environment_scope is None else set(environment_scope)
+        by_ticket = dict((s["ticket_id"], s) for s in self._store.ticket_output.values() if s["state"] == "AVAILABLE")
+        pairs = []
+        for t in self._store.tickets.values():
+            out = by_ticket.get(t["id"])
+            if out is None or (allowed is not None and t.get("environment") not in allowed):
+                continue
+            pairs.append((t, out))
+        return pairs
+
+    def output_summary(self, level, environment_scope=None, environment=None, script_id=None):
+        """Resumo das saidas AVAILABLE por ambiente, script ou dia (CR-020a), como no Oracle."""
+        if level not in ("environment", "script", "day"):
+            raise RepoViolation("Nivel do resumo de saidas invalido")
+        with self._store.lock_tickets:
+            pairs = self._available_outputs(environment_scope)
+            groups = {}
+            for t, _out in pairs:
+                if level == "environment":
+                    key = t["environment"]
+                elif t["environment"] != environment:
+                    continue
+                elif level == "script":
+                    key = t["script_id"]
+                elif t["script_id"] != int(script_id):
+                    continue
+                else:
+                    key = t["started_at"].replace(hour=0, minute=0, second=0, microsecond=0)
+                g = groups.setdefault(key, {"count": 0, "last_at": None})
+                g["count"] += 1
+                if g["last_at"] is None or t["started_at"] > g["last_at"]:
+                    g["last_at"] = t["started_at"]
+        if level == "environment":
+            return [{"environment": k, "count": g["count"], "last_at": g["last_at"]} for k, g in sorted(groups.items())]
+        if level == "script":
+            names = dict((sid, (self._store.scripts.get(sid) or {}).get("name")) for sid in groups)
+            return [{"script_id": k, "script_name": names[k], "count": g["count"], "last_at": g["last_at"]}
+                    for k, g in sorted(groups.items(), key=lambda kv: (names[kv[0]] or "", kv[0]))]
+        return [{"day": k, "count": g["count"]} for k, g in sorted(groups.items(), reverse=True)]
+
+    def output_tickets(self, environment, script_id, day_from, day_to, page=1, size=20, environment_scope=None):
+        """Tickets com saida AVAILABLE do ambiente e script no intervalo de started_at (CR-020a)."""
+        with self._store.lock_tickets:
+            rows = []
+            for t, out in self._available_outputs(environment_scope):
+                if t["environment"] != environment or t["script_id"] != int(script_id):
+                    continue
+                if not (day_from <= t["started_at"] < day_to):
+                    continue
+                item = dict((k, t.get(k)) for k in ("id", "environment", "script_id", "requested_by", "status",
+                                                    "started_at", "finished_at"))
+                item.update(file_count=out.get("file_count"), size_bytes=out.get("size_bytes"))
+                rows.append(item)
+        rows.sort(key=lambda r: (r["started_at"], r["id"]), reverse=True)
+        p = max(1, int(page or 1))
+        t = int(size or 20)
+        t = 20 if t < 1 else t
+        return {"items": rows[(p - 1) * t:p * t], "total": len(rows), "page": p, "size": t}
+
     def output_read(self, ticket_id, offset, size):
         """Fatia do zip (offset base 0); so DISPONIVEL, como no Oracle."""
         off = int(offset)
