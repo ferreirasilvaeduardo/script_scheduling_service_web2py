@@ -742,6 +742,10 @@ class TestConfigCR007(unittest.TestCase):
                                                  "input_dir": os.path.join(base, "s", "input")})
         for v in ("0", "366"):
             self._refusal("script_work_retention_days", logging={"script_work_retention_days": v})
+        # CR-020e: retencao dos envios da tela de Entrada.
+        self.assertEqual(self._load().retention.input_retention_days, 30)
+        for v in ("0", "3651"):
+            self._refusal("input_retention_days", retention={"input_retention_days": v})
         # CR-020d: limite do envio pela tela de Entrada.
         for v in ("1048575", "209715201"):
             self._refusal("input_upload_max_bytes", web={"input_upload_max_bytes": v})

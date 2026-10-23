@@ -4,12 +4,14 @@
 Roda no servidor do agente, agendado pelo cron, com a conta Oracle de purge ([retention] purge_user e
 [purge] password). Uso:
 
-    python scripts/purge.py [--config <config.ini>] [--dry-run] [--target tickets|audit|local_logs|output|script_work|all]
+    python scripts/purge.py [--config <config.ini>] [--dry-run] [--target tickets|audit|inputs|local_logs|output|script_work|all]
                             [--export-audit <pasta>]
 
 * tickets e auditoria: so com a concessao em tbsss_control (um no por vez), DELETE em lotes com COMMIT por lote
   (a excecao do AGENTS §4.9), concessao renovada a cada lote e liberada no fim; uma linha PURGE por tabela,
   inclusive com 0 linhas. Sem a concessao: INFO e saida 0.
+* inputs (CR-020e): sob a mesma concessao, esvazia o conteudo dos envios da tela de Entrada com todas as entregas
+  terminadas e apaga os envios alem de input_retention_days (entregas em cascata); um PURGE com as duas contagens.
 * local_logs: pastas de minuto de log_dir/<environment>/<script>/AAAA/MM/DD/HH/MI vencidas, menos as de tickets
   RUNNING; nunca log_dir/internal/. Em todo agente, sem concessao.
 * output: pastas de minuto de output_dir/<environment>/... vencidas, pelo helper purge-output. Sem concessao.
@@ -44,9 +46,9 @@ EXIT_DATABASE = 1
 EXIT_CONFIG = 2
 EXIT_LOCAL = 3
 
-TARGETS = ("tickets", "audit", "local_logs", "output", "script_work")
+TARGETS = ("tickets", "audit", "inputs", "local_logs", "output", "script_work")
 # Valores do --target (CR-016b); "all" roda todos os TARGETS.
-CLI_TARGETS = ("tickets", "audit", "local_logs", "output", "script_work", "all")
+CLI_TARGETS = ("tickets", "audit", "inputs", "local_logs", "output", "script_work", "all")
 LOCK_NAME = "sss-purge.lock"
 _PURGE_LOGGERS = ("sss_db_conn", "sss_config")
 _EXTRA = {"agent": "-", "ticket": "-", "action": "PURGE"}
@@ -96,7 +98,7 @@ class Purge(object):
         now = db_conn.db_now(self.conn)  # uma vez: todos os limites partem deste instante
         self.log.info("purge iniciado (alvos=%s dry_run=%s agora_banco=%s)", ",".join(targets), dry_run,
                       now.strftime("%Y-%m-%d %H:%M:%S"), extra=_EXTRA)
-        tables = [a for a in ("tickets", "audit") if a in targets]
+        tables = [a for a in ("tickets", "audit", "inputs") if a in targets]
         try:
             if tables:
                 if dry_run:
@@ -130,12 +132,17 @@ class Purge(object):
     # ------------------------------------------------------------------ tickets e auditoria
 
     def _cutoff(self, table, now):
-        days = (self.cfg.retention.ticket_retention_days if table == "tickets"
-                else self.cfg.retention.audit_retention_days)
+        days = {"tickets": self.cfg.retention.ticket_retention_days,
+                "inputs": getattr(self.cfg.retention, "input_retention_days", 30)}.get(
+                    table, self.cfg.retention.audit_retention_days)
         return now - datetime.timedelta(days=days)
 
     def _count_tables(self, tables, now):
         for table in tables:
+            if table == "inputs":
+                self.summary.append("inputs: %d conteudos a esvaziar e %d envios elegiveis (estimativa)" % (
+                    self.repo.count_input_contents(self.conn), self.repo.count_inputs(self.conn, self._cutoff(table, now))))
+                continue
             count = self.repo.count_tickets if table == "tickets" else self.repo.count_audit
             n = count(self.conn, self._cutoff(table, now))
             self.summary.append("%s: %d linhas elegiveis (estimativa)" % (table, n))
@@ -151,6 +158,9 @@ class Purge(object):
         self.conn.commit()
         try:
             for table in tables:
+                if table == "inputs":
+                    self._purge_inputs(now)
+                    continue
                 file = AuditExport(export, now) if table == "audit" and export else None
                 try:
                     total = self._purge_table(table, self._cutoff(table, now), file)
@@ -168,6 +178,32 @@ class Purge(object):
             raise
         finally:
             self._release()
+
+    def _batches(self, step):
+        """Lotes ate rowcount 0, com a concessao renovada e COMMIT a cada lote (AGENTS §4.9)."""
+        total = 0
+        while True:
+            n = step()
+            if not n:
+                self.conn.rollback()
+                return total
+            if not self.repo.take_lease(self.conn, self.owner):
+                self.conn.rollback()
+                raise LeaseLost()
+            self.conn.commit()
+            total += n
+
+    def _purge_inputs(self, now):
+        """CR-020e: esvazia o conteudo dos envios ja entregues e apaga os envios alem da retencao."""
+        batch = self.cfg.retention.purge_batch_size
+        limit = self._cutoff("inputs", now)
+        cleared = self._batches(lambda: self.repo.clear_input_contents(self.conn, batch))
+        deleted = self._batches(lambda: self.repo.delete_inputs(self.conn, limit, batch))
+        self.repo.audit(self.conn, "input_upload", deleted,
+                        detail="%d conteudos esvaziados; %d envios apagados" % (cleared, deleted))
+        self.conn.commit()
+        self.log.info("purge da entrada: %d conteudos esvaziados, %d envios apagados", cleared, deleted, extra=_EXTRA)
+        self.summary.append("inputs: %d conteudos esvaziados, %d envios apagados" % (cleared, deleted))
 
     def _purge_table(self, table, limit, file):
         batch = self.cfg.retention.purge_batch_size

@@ -26,6 +26,10 @@ class RepoPurge(object):
     def __init__(self, owner, prefix):
         t = lambda name: sql_ident.table(owner, prefix, name)  # noqa: E731
         self._tck, self._aud, self._ctl, self._scr = t("tickets"), t("audit"), t("control"), t("scripts")
+        self._iup, self._idl = t("input_upload"), t("input_delivery")
+        # Envio com todas as entregas terminadas (nenhuma PENDING): o conteudo ja pode sair (CR-020e).
+        self._input_done = ("u.content IS NOT NULL AND NOT EXISTS (SELECT 1 FROM " + self._idl + " d "
+                            "WHERE d.upload_id = u.id AND d.state = 'PENDING')")
         self._seq_aud = sql_ident.sequence(owner, prefix, "audit")
         self._prefixo = prefix
 
@@ -103,13 +107,38 @@ class RepoPurge(object):
         finally:
             cur.close()
 
-    def audit(self, conn, table, deleted):
+    # ------------------------------------------------------------------ entrada pela tela (CR-020e)
+
+    def count_input_contents(self, conn):
+        """Envios cujo conteudo pode ser esvaziado (todas as entregas terminadas)."""
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT COUNT(*) FROM " + self._iup + " u WHERE " + self._input_done, {})
+            return int(cur.fetchone()[0])
+        finally:
+            cur.close()
+
+    def clear_input_contents(self, conn, batch):
+        """Um lote de content = NULL nos envios ja entregues (rotina tecnica, sem updated_*). Sem COMMIT."""
+        return self._executar(conn, "UPDATE " + self._iup + " u SET u.content = NULL WHERE " + self._input_done +
+                              " AND ROWNUM <= :batch_size", {"batch_size": int(batch)})
+
+    def count_inputs(self, conn, limit):
+        return self._contar(conn, "SELECT COUNT(*) FROM " + self._iup + " WHERE created_at < :cutoff", {"cutoff": limit})
+
+    def delete_inputs(self, conn, limit, batch):
+        """Um lote do DELETE dos envios alem de input_retention_days (entregas em cascata). Sem COMMIT."""
+        return self._executar(conn, "DELETE FROM " + self._iup + " WHERE created_at < :cutoff AND ROWNUM <= :batch_size",
+                              {"cutoff": limit, "batch_size": int(batch)}, dates=("cutoff",))
+
+    def audit(self, conn, table, deleted, detail=None):
         """PURGE com uma linha por tabela purgada, entidade = a tabela, entity_id nulo (README §4.4; CR-008 R-16:
         tambem com 0 linhas). Sem COMMIT."""
         self._executar(conn, "INSERT INTO " + self._aud + " (id, actor, source_ip, action, entity, entity_id, detail,"
                        " created_at) VALUES (:id, :actor, NULL, 'PURGE', :entity, NULL, :detail, SYSDATE)",
                        {"id": db_conn.next_id(conn, self._seq_aud), "actor": ACTOR,
-                        "entity": self._prefixo_padrao(table), "detail": "%d linhas" % int(deleted)})
+                        "entity": self._prefixo_padrao(table),
+                        "detail": detail if detail is not None else "%d linhas" % int(deleted)})
 
     def _prefixo_padrao(self, table):
         # A entidade da auditoria usa o nome tbsss_<tabela fisica> (README §4.4), como as demais acoes.

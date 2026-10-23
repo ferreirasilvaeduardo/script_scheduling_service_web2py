@@ -2709,7 +2709,7 @@ END;
 ### 11.3 `scripts/purge.py` (retenção)
 
 * Roda no servidor do agente, com a conta Oracle de purge (`[retention] purge_user` e `[purge] password`, §4.1), e audita com o ator `SYSTEM:purge` (CR-007, R-21). Com `purge_user` vazio (só aceito em DEV), recusa rodar com o código 2.
-* **Uso (F9.1):** `python scripts/purge.py [--config <config.ini>] [--dry-run] [--target tickets|audit|local_logs|output|script_work|all] [--export-audit <pasta>]`. O padrão é `all`. O resumo vai para o stdout, uma linha por alvo, e o log para `log_dir/internal/app/.../purge_<PID>.log` (§13).
+* **Uso (F9.1):** `python scripts/purge.py [--config <config.ini>] [--dry-run] [--target tickets|audit|inputs|local_logs|output|script_work|all] [--export-audit <pasta>]`. O padrão é `all`. O resumo vai para o stdout, uma linha por alvo, e o log para `log_dir/internal/app/.../purge_<PID>.log` (§13).
 * **Trava local:** fora do `--dry-run`, `os_platform.lock_instance` em `work_dir/sss-purge.lock`. Com outro purge em execução no mesmo servidor, registra INFO e sai com 0, sem conectar.
 * **Concessão no banco:** só um nó purga tickets e auditoria por vez. Antes, o purge toma a concessão:
   ```sql
@@ -2732,6 +2732,10 @@ END;
 * `tbsss_audit` usa `audit_retention_days` e o mesmo padrão de lote. Com `--export-audit <pasta>`, as linhas de cada lote são gravadas antes em CSV (mesmo formato da exportação do §4.4, arquivo `0600`), para arquivamento (CR-007, R-22). Nesse caso, cada lote é lido com `FOR UPDATE`, gravado e sincronizado no disco (`auditoria_purge_AAAAMMDD_HHMMSS.csv`, pelo `db_now()`), e só então apagado pelo `id` das linhas gravadas e confirmado. A pasta precisa existir (senão, código 2).
 * **Logs de execução** (§8.4, passo 3): remove as pastas de minuto `log_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/` cuja data é anterior a `local_log_retention_days` dias, e depois as pastas de hora, dia, mês, ano, script e ambiente que ficarem vazias. A data vem do próprio caminho, não do `mtime`. A pasta `log_dir/internal/` (logs da aplicação) nunca é tocada pelo purge (§13, CR-009). Só entram pastas cujo caminho tem o formato exato `<ambiente>/<pasta>/AAAA/MM/DD/HH/MI`; qualquer outra coisa em `log_dir` é ignorada. **Uma pasta que contém o log de um ticket ainda `RUNNING` é mantida** (CR-007, R-32). Esta etapa roda em todo agente, sem concessão.
 * **Pastas de saída** (CR-012, §8.13): com `output_dir`, remove as pastas de minuto de `output_dir/<ambiente>/...` mais antigas que `output_retention_days`, pela mesma regra de data no caminho. Fora de DEV, pelo helper `purge-output`, com o usuário de execução de cada ambiente atendido; ambiente sem pasta é pulado. Sem concessão. O limite usa a data do servidor do agente (o helper não recebe o instante do banco). No `--dry-run`, o helper só conta (`purge-output <base> <dias> contar`).
+* **Envios da tela de Entrada** (CR-020e, §5.10, alvo `inputs`), sob a mesma concessão de tickets e auditoria e em lotes de `purge_batch_size` com COMMIT por lote:
+  * `content = NULL` nos envios em que nenhuma entrega está mais `PENDING` (o arquivo sai do banco no primeiro purge depois da última entrega; a linha fica para a tela e a auditoria; rotina técnica, sem `updated_*`);
+  * `DELETE` dos envios com `created_at` além de `[retention] input_retention_days` (padrão 30), com as entregas em cascata. Isso também limpa entregas presas em `PENDING` de um agente que nunca voltou;
+  * uma linha `PURGE` com a entidade `tbsss_input_upload` e as duas contagens no `detail`, inclusive com zero. Os retratos (`tbsss_input_listing`) ficam: é uma linha por agente, ambiente e script.
 * **Pastas de trabalho** (CR-019, §8.15, alvo `script_work`): com `script_work_dir`, a mesma regra, para `script_work_dir/<ambiente>/...`, com `script_work_retention_days`. A pasta de minuto vencida sai com todo o conteúdo que o script deixou.
 * A execução é agendada pelo cron no servidor do agente e auditada como `PURGE`: **sempre** que obtém a concessão, uma linha por tabela (`tbsss_tickets` e `tbsss_audit`), com a contagem no `detail`, inclusive `0 linhas` (CR-008, R-16). Sem a concessão, não audita (outro nó audita a sua execução).
 * **Códigos de saída:** 0 sucesso (inclusive "outro nó está purgando" e "outro purge neste servidor"), 1 falha de banco (inclusive concessão perdida), 2 configuração inválida, 3 falha na remoção de logs locais, de pastas de saída ou de pastas de trabalho (os demais alvos seguem). O `scripts/health.py` alerta se não houver `PURGE` auditado nos últimos 2 dias (§13).
@@ -2877,6 +2881,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[retention]` | `audit_retention_days` | inteiro | 365 a 3.650, e `>= ticket_retention_days` (CR-007, R-22) |
 | `[retention]` | `purge_user` (CR-007) | texto | obrigatório fora de DEV; em `sss_env = DEV`, vazio significa **purge desligado** (o `scripts/purge.py` recusa rodar); quando informado, diferente de `[oracle] user` e de `owner` |
 | `[retention]` | `purge_batch_size` | inteiro | 1 a 100.000 |
+| `[retention]` | `input_retention_days` (CR-020e) | inteiro | 1 a 3.650, padrão 30; envios da tela de Entrada apagados depois disso (§11.3) |
 
 **Falha de configuração (web e daemon):**
 * A subida é abortada com um registro **CRITICAL** contendo a seção, a chave e o motivo, sem nunca o valor de um segredo.

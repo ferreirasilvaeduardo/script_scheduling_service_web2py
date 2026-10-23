@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Em andamento.** Aprovado pelo responsável pelo produto em 2026-10-23. 020a a 020d concluídos |
+| Status | **Concluído** em 2026-10-23. Aprovado pelo responsável pelo produto em 2026-10-23 |
 | Origem | Pedido do responsável pelo produto (2026-10-23): tela de upload para a pasta de entrada e tela de download da pasta de saída, navegando no diretório correspondente |
 | Restrições | Sem dependência nova. Python 3.6. SQL Oracle 11gR2 só em `repo_oracle/`. Sem nada inline (CSP) |
 | Afeta | README §4.3, §4.4, §5.9 (nova), §8.13, §8.14 e §10. `AGENTS.md`. Código: `ddl_builder`, `repo_oracle/tickets`, `repo_fake`, `output_browse_service` (novo), `controllers/outputs` (novo), `ui_menu`, `audit_service`, `ticket_service`; depois agente e helper (020c) |
@@ -34,4 +34,4 @@
 | 020b | Esquema e repositórios da entrada: `tbsss_input_upload`, `tbsss_input_delivery` (uma linha por agente vivo; sem nenhum, `NoLiveAgent`) e `tbsss_input_listing` (retrato JSON até 2.000 itens, `refresh_requested_at`); repositório `inputs` (FAKE e Oracle 11gR2), GRANTs por papel, `INPUT_UPLOAD` e `INPUT_DELIVERY`, `ROLLBACK_ENTITY_ORDER` completo; banco do DEV recriado (`02` → `01` → `99`) | Concluído |
 | 020c | Agente e helper: `modules/input_phase.py` (baixar em partes, gravar pelo helper `put-input`, marcar), helper `put-input` e `list-input` (códigos 9 `EXISTS`, 10 `SPACE`, 11 `HASH`), retrato a pedido e depois de cada entrega, limpeza dos temporários na subida; falha da entrada isolada do ciclo dos tickets | Concluído |
 | 020d | Tela de Entrada (`inputs/index`, `upload`, `refresh`): `UPLOAD_INPUT` com ambiente e script do perfil, pasta pelos retratos, envio com subpasta e confirmação para substituir, situação por servidor; `[web] input_upload_max_bytes` com 413 antes da leitura do corpo | Concluído |
-| 020e | Purge da fila, documentação (README, AGENTS, DEPLOYMENT) e ensaio real no DEV | Pendente |
+| 020e | Purge (alvo `inputs`): conteúdo esvaziado depois da última entrega e envios apagados por `[retention] input_retention_days` (30), sob a concessão e em lotes; DEPLOYMENT (proxy com limite de corpo, checklist); ensaio no DEV (5 conteúdos esvaziados com `PURGE`; `DELETE` validado no Oracle dentro de transação desfeita) | Concluído |

@@ -368,7 +368,7 @@ bin/sss-scheduler.sh                       # ou: bin/sss-scheduler.sh --config /
 
 ### 10.4 Acesso dos usuários
 
-* **Proxy reverso HTTPS** [não ensaiado]: em HML e PROD, o nó web fica atrás de um proxy (nginx, Apache ou o balanceador da empresa) que termina o TLS e repassa para `http://127.0.0.1:8000`. Inclua a URL pública em `[web] allowed_origins` e o endereço do proxy em `[web] trusted_proxies`. Com `sss_env = HML` ou `PROD`, o cookie de sessão é `Secure`: sem HTTPS, ninguém consegue entrar.
+* **Proxy reverso HTTPS** [não ensaiado]: em HML e PROD, o nó web fica atrás de um proxy (nginx, Apache ou o balanceador da empresa) que termina o TLS e repassa para `http://127.0.0.1:8000`. Inclua a URL pública em `[web] allowed_origins` e o endereço do proxy em `[web] trusted_proxies`. Com `sss_env = HML` ou `PROD`, o cookie de sessão é `Secure`: sem HTTPS, ninguém consegue entrar. **Tamanho do corpo (CR-020d):** o limite de corpo do proxy (por exemplo, `client_max_body_size` do nginx ou `LimitRequestBody` do Apache) precisa ser pelo menos `[web] input_upload_max_bytes` mais 64 KiB, senão o envio da tela de Entrada para no proxy com um erro dele, antes de chegar ao SSS.
 * **Túnel SSH** (homologação e suporte): `ssh -N -L 8000:127.0.0.1:8000 <usuário>@<servidor>` e, no navegador, `http://localhost:8000/`. Inclua `http://localhost:8000` em `allowed_origins`.
 
 ### 10.5 Units do `systemd` (exemplo) [não ensaiado]
@@ -745,6 +745,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 ## 19. Checklist pré-produção
 
 - [ ] `[app] sss_env = PROD` (ou `HML`) em todos os servidores
+- [ ] Tela de Entrada (CR-020): cada agente com `[agent] input_dir` e a pasta `input_dir/<ambiente>` criada pelo root (§8), o helper novo instalado, e o proxy com limite de corpo acima de `[web] input_upload_max_bytes`
 - [ ] Nenhuma linha `data_backend` no `config.ini` (removida no F7.3; a aplicação usa sempre o Oracle)
 - [ ] `[oracle] user` de cada servidor é a conta do papel, nunca a dona do esquema
 - [ ] `[retention] purge_user` informado e `[purge] password` no agente do purge; `purge.py --dry-run` com código 0

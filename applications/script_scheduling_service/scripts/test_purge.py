@@ -41,19 +41,21 @@ def _cfg(root, **extra):
               secrets=NS(secrets_file=os.path.join(root, "secrets.cfg")), agent=NS(**agent),
               logging=NS(log_dir=os.path.join(root, "logs"), local_log_retention_days=30, output_retention_days=7,
                          script_work_retention_days=7),
-              retention=NS(ticket_retention_days=90, audit_retention_days=365, purge_batch_size=2,
+              retention=NS(ticket_retention_days=90, audit_retention_days=365, purge_batch_size=2, input_retention_days=30,
                           purge_user=extra.get("purge_user", "sss_purge")))
 
 
 class _Db(object):
     """Tickets, auditoria e tbsss_control em memoria, respondendo ao SQL do RepoPurge."""
 
-    def __init__(self, tickets=(), audit=(), owner=None, until=None, running=()):
+    def __init__(self, tickets=(), audit=(), owner=None, until=None, running=(), inputs=()):
         self.tickets = [dict(id=i, created_at=c, status=s) for i, c, s in tickets]
         self.audit = [dict(id=i, created_at=c, actor="admin", source_ip="10.0.0.1", action="LOGIN",
                                entity="tbsss_users", entity_id=7, detail="d%d" % i) for i, c in audit]
         self.ctl = {"dono": owner, "ate": until}
         self.running = list(running)
+        # Envios da tela de Entrada (CR-020e): (id, created_at, tem conteudo, tem entrega PENDING).
+        self.inputs = [dict(id=i, created_at=c, content=ct, pending=pd) for i, c, ct, pd in inputs]
         self.sqls = []
         self.commits = self.rollbacks = self.closed = 0
         self.seq = 1000
@@ -96,6 +98,25 @@ class _Cursor(object):
             raise RuntimeError("ORA-03113: end-of-file on communication channel")
         table = "tickets" if "tbsss_tickets" in sql else "audit"
         self._lines, self.rowcount = [], 0
+        if "tbsss_input_upload" in sql and not sql.startswith("INSERT"):
+            done = [u for u in b.inputs if u["content"] and not u["pending"]]
+            if sql.startswith("SELECT COUNT(*)"):
+                rows = done if "content IS NOT NULL" in sql else [u for u in b.inputs if u["created_at"] < binds["cutoff"]]
+                self._lines = [(len(rows),)]
+            elif sql.startswith("UPDATE") and "content = NULL" in sql:
+                for u in done[:binds["batch_size"]]:
+                    u["content"] = False
+                    b.pending.append((None, u))
+                self.rowcount = min(len(done), binds["batch_size"])
+            elif sql.startswith("DELETE"):
+                target = [u for u in b.inputs if u["created_at"] < binds["cutoff"]][:binds["batch_size"]]
+                for u in target:
+                    b.inputs.remove(u)
+                    b.pending.append((b.inputs, u))
+                self.rowcount = len(target)
+            else:
+                raise AssertionError("SQL inesperado: %s" % sql)
+            return
         if sql == "SELECT SYSDATE FROM DUAL":
             self._lines = [(NOW.replace(microsecond=123),)]
         elif "NEXTVAL" in sql:
@@ -158,7 +179,10 @@ class _Conn(object):
     def rollback(self):
         self.b.rollbacks += 1
         for items, line in self.b.pending:
-            items.append(line)
+            if items is None:
+                line["content"] = True  # o UPDATE do conteudo e desfeito
+            else:
+                items.append(line)
         items_order = sorted(self.b.tickets, key=lambda t: t["id"])
         self.b.tickets[:] = items_order
         self.b.pending = []
@@ -332,6 +356,7 @@ class TestDryRun(_Base):
         self.assertEqual(plat.calls, [(os.path.join(self.root, "saida", "producao"), 7, None, True)])
         self.assertEqual(p.summary, ["tickets: 1 linhas elegiveis (estimativa)",
                                     "audit: 1 linhas elegiveis (estimativa)",
+                                    "inputs: 0 conteudos a esvaziar e 0 envios elegiveis (estimativa)",
                                     "local_logs: 1 pastas de minuto elegiveis (estimativa)",
                                     "output: 4 pastas de minuto elegiveis (estimativa)",
                                     "script_work: desligada (script_work_dir vazio)"])
@@ -402,6 +427,48 @@ class TestOutput(_Base):
         cfg = _cfg(self.root, agent={"output_dir": base})
         self.assertEqual(self._purge(_Db(), plat=_Plat(fail=True), cfg=cfg).run(("output",)),
                          purge_cli.EXIT_LOCAL)
+
+
+class TestInputs(_Base):
+    """CR-020e (README §11.3): conteudo dos envios ja entregues esvaziado; envios alem da retencao apagados."""
+
+    def _db(self):
+        return _Db(inputs=[(1, _days(40), True, False), (2, _days(2), True, False), (3, _days(1), True, True),
+                           (4, _days(50), True, True), (5, _days(3), False, False)])
+
+    def test_esvazia_entregues_apaga_antigos_e_audita(self):
+        db = self._db()
+        p = self._purge(db)
+        self.assertEqual(p.run(("inputs",)), 0)
+        remaining = dict((u["id"], (u["content"], u["pending"])) for u in db.inputs)
+        self.assertEqual(remaining, {2: (False, False), 3: (True, True), 5: (False, False)},
+                         "pendente mantem o conteudo; alem de 30 dias sai inteiro")
+        purge = [a for a in db.audit if a.get("action") == "PURGE"]
+        self.assertEqual([(a["entity"], a["detail"]) for a in purge],
+                         [("tbsss_input_upload", "2 conteudos esvaziados; 2 envios apagados")])
+        self.assertEqual(p.summary, ["inputs: 2 conteudos esvaziados, 2 envios apagados"])
+        self.assertIsNone(db.ctl["dono"], "concessao liberada")
+
+    def test_auditado_com_zero_e_dry_run_so_conta(self):
+        db = _Db()
+        p = self._purge(db)
+        self.assertEqual(p.run(("inputs",)), 0)
+        self.assertEqual([a["detail"] for a in db.audit if a.get("action") == "PURGE"],
+                         ["0 conteudos esvaziados; 0 envios apagados"])
+        db = self._db()
+        p = self._purge(db)
+        self.assertEqual(p.run(("inputs",), dry_run=True), 0)
+        self.assertEqual(p.summary[0], "inputs: 2 conteudos a esvaziar e 2 envios elegiveis (estimativa)")
+        self.assertTrue(all(s.startswith("SELECT") for s in db.sqls))
+        self.assertEqual(len(db.inputs), 5)
+
+    def test_concessao_de_outro_no_pula_os_envios(self):
+        db = self._db()
+        db.ctl = {"dono": "srv-outro", "ate": NOW + datetime.timedelta(minutes=30)}
+        p = self._purge(db)
+        self.assertEqual(p.run(("inputs",)), 0)
+        self.assertEqual(len(db.inputs), 5)
+        self.assertEqual(p.summary, ["inputs: pulado (outro no esta purgando)"])
 
 
 class TestScriptWork(_Base):

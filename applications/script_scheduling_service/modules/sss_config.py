@@ -211,6 +211,8 @@ SCHEMA = collections.OrderedDict([
         ("ticket_retention_days", FieldDef("int", required=True, min_val=1, max_val=3650)),
         ("audit_retention_days", FieldDef("int", required=True, min_val=365, max_val=3650)),
         ("purge_batch_size", FieldDef("int", required=True, min_val=1, max_val=100000)),
+        # CR-020e: envios da tela de Entrada apagados depois de N dias (o conteudo sai antes, apos as entregas).
+        ("input_retention_days", FieldDef("int", required=False, min_val=1, max_val=3650, default=30)),
         ("purge_user", FieldDef("str", required=False, default=None, regex=r"^[A-Za-z][A-Za-z0-9_$#]{0,29}$")),
     ])),
 ])
@@ -275,7 +277,7 @@ class WebConfig(_ItemAccessMixin, collections.namedtuple("WebConfig", [
 
 
 class RetentionConfig(_ItemAccessMixin, collections.namedtuple("RetentionConfig", [
-    "ticket_retention_days", "audit_retention_days", "purge_batch_size", "purge_user"
+    "ticket_retention_days", "audit_retention_days", "purge_batch_size", "purge_user", "input_retention_days"
 ])):
     __slots__ = ()
 
