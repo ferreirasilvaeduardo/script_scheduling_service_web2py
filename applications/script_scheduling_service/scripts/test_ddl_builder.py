@@ -59,13 +59,18 @@ class TestDdlBuilder(unittest.TestCase):
                     % (default.pattern, item.kind, item.name, sql)
                 )
 
+    def test_rollback_cobre_todas_as_tabelas_do_registro(self):
+        """Toda tabela do registro sai no 02_rollback (a lista e fixa, na ordem de dependencia; CR-020b)."""
+        self.assertEqual(sorted(ddl_builder.ROLLBACK_ENTITY_ORDER), sorted(sql_ident.TABLES))
+        self.assertEqual(len(set(ddl_builder.ROLLBACK_ENTITY_ORDER)), len(ddl_builder.ROLLBACK_ENTITY_ORDER))
+
     def test_triggers_bi_e_bu_literais(self):
         """Valida que toda trigger _bi segue o template do AGENTS §4.2 e _bu aplica imutabilidade."""
         triggers = [item for item in self.statements if item.kind == "TRIGGER"]
-        self.assertEqual(len(triggers), 20, "Devem existir 18 triggers _bi e 2 _bu")
+        self.assertEqual(len(triggers), 23, "Devem existir 21 triggers _bi e 2 _bu")
 
         bi_triggers = [t for t in triggers if t.name.endswith("_bi")]
-        self.assertEqual(len(bi_triggers), 18)
+        self.assertEqual(len(bi_triggers), 21)
 
         template_expected = (
             "BEGIN\n"
@@ -472,17 +477,17 @@ class TestDdlSeedAndRollback(unittest.TestCase):
         self.assertIn("COMMIT;", sql_seed)
 
     def test_gerar_script_rollback(self):
-        """Script de rollback contem drop de 20 triggers, 18 tabelas CASCADE PURGE e 18 sequences."""
+        """Script de rollback contem drop de 23 triggers, 21 tabelas CASCADE PURGE e 21 sequences."""
         sql_rb = ddl_builder.build_rollback_script(self.owner, self.prefixo)
 
-        # 20 triggers
-        self.assertEqual(sql_rb.count("DROP TRIGGER openrisow.tr_"), 20)
+        # 23 triggers
+        self.assertEqual(sql_rb.count("DROP TRIGGER openrisow.tr_"), 23)
 
-        # 18 tabelas
-        self.assertEqual(sql_rb.count("CASCADE CONSTRAINTS PURGE;"), 18)
+        # 21 tabelas
+        self.assertEqual(sql_rb.count("CASCADE CONSTRAINTS PURGE;"), 21)
 
-        # 18 sequences
-        self.assertEqual(sql_rb.count("DROP SEQUENCE openrisow.sq_"), 18)
+        # 21 sequences
+        self.assertEqual(sql_rb.count("DROP SEQUENCE openrisow.sq_"), 21)
 
         # Ordem de remocao: ticket_answer e tickets antes de ambientes e perfis
         pos_tck = sql_rb.index("DROP TABLE openrisow.tbsss_tickets")
@@ -562,3 +567,7 @@ class TestInitDbReal(unittest.TestCase):
         if not dsn or not owner or disposable != "1":
             self.skipTest("Schema descartavel real nao configurado (SSS_TEST_DSN/OWNER/DISPOSABLE); marcado como NAO TESTADO")
 
+
+
+if __name__ == "__main__":
+    unittest.main()

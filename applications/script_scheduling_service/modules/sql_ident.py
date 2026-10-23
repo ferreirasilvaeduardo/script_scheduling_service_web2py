@@ -35,6 +35,9 @@ FBI_TCK_RUN_AGENT_CASE = "CASE WHEN status = 'RUNNING' THEN agent_id END"
 # Saidas ainda em gravacao, por agente (CR-012): o startup check acha so as linhas GRAVANDO dele.
 FBI_TOUT_WRITE_EXPR = "((CASE WHEN state = 'WRITING' THEN agent_id END))"
 FBI_TOUT_WRITE_CASE = "CASE WHEN state = 'WRITING' THEN agent_id END"
+# CR-020b: entregas da entrada pendentes de cada agente (o agente le so as proprias).
+FBI_IDL_PEND_EXPR = "((CASE WHEN state = 'PENDING' THEN agent_id END))"
+FBI_IDL_PEND_CASE = "CASE WHEN state = 'PENDING' THEN agent_id END"
 
 # Indice unico da ocorrencia de agendamento (CR-007, R-27): so tickets de agendamento entram no indice.
 FBI_TCK_OCCUR_EXPR = (
@@ -760,6 +763,116 @@ def _build_table_registry():
         ])),
         ('trigger_bu', None),
         ('colunas_lob', ('content',)),
+    ])
+
+    # 19. Envio para a pasta de entrada (CR-020b): o arquivo enviado pela tela, ate a entrega aos agentes.
+    r['input_upload'] = OrderedDict([
+        ('entity', 'input_upload'),
+        ('fisico', 'input_upload'),
+        ('abrev', 'iup'),
+        ('rotulo', 'Envio para a entrada'),
+        ('colunas', OrderedDict([
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('environment', {'name': 'environment', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
+            ('script_id', {'name': 'script_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('relative_dir', {'name': 'relative_dir', 'tipo': 'VARCHAR2(400 CHAR)', 'not_null': False, 'default': None}),
+            ('file_name', {'name': 'file_name', 'tipo': 'VARCHAR2(255 CHAR)', 'not_null': True, 'default': None}),
+            ('size_bytes', {'name': 'size_bytes', 'tipo': 'NUMBER(12)', 'not_null': True, 'default': None}),
+            ('sha256', {'name': 'sha256', 'tipo': 'VARCHAR2(64 CHAR)', 'not_null': True, 'default': None}),
+            ('replace_existing', {'name': 'replace_existing', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'N'"}),
+            ('source_ip', {'name': 'source_ip', 'tipo': 'VARCHAR2(45 CHAR)', 'not_null': False, 'default': None}),
+            ('content', {'name': 'content', 'tipo': 'BLOB', 'not_null': False, 'default': None}),
+            ('created_at', {'name': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
+        ])),
+        ('pk', {'colunas': ('id',), 'sufixo': None}),
+        ('uks', OrderedDict()),
+        ('fks', OrderedDict([
+            ('env', {'sufixo': 'env', 'colunas': ('environment',), 'ref_tabela': 'environments', 'ref_colunas': ('name',), 'on_delete': None}),
+            ('scr', {'sufixo': 'scr', 'colunas': ('script_id',), 'ref_tabela': 'scripts', 'ref_colunas': ('id',), 'on_delete': None}),
+        ])),
+        ('cks', OrderedDict([
+            ('repl', {'sufixo': 'repl', 'expr': "replace_existing IN ('Y','N')"}),
+            ('size', {'sufixo': 'size', 'expr': "size_bytes >= 0"}),
+            ('sha', {'sufixo': 'sha', 'expr': "LENGTH(sha256) = 64"}),
+        ])),
+        ('indices', OrderedDict([
+            ('env', {'sufixo': 'env', 'colunas': ('environment', 'script_id', 'created_at'), 'expr': None, 'fbi': False}),
+            ('scr', {'sufixo': 'scr', 'colunas': ('script_id',), 'expr': None, 'fbi': False}),
+            ('crt', {'sufixo': 'crt', 'colunas': ('created_at', 'id'), 'expr': None, 'fbi': False}),
+        ])),
+        ('trigger_bu', None),
+        ('colunas_lob', ('content',)),
+    ])
+
+    # 20. Entrega do envio a cada agente do ambiente (CR-020b): uma linha por agente.
+    r['input_delivery'] = OrderedDict([
+        ('entity', 'input_delivery'),
+        ('fisico', 'input_delivery'),
+        ('abrev', 'idl'),
+        ('rotulo', 'Entrega para a entrada'),
+        ('colunas', OrderedDict([
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('upload_id', {'name': 'upload_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('agent_id', {'name': 'agent_id', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
+            ('state', {'name': 'state', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': True, 'default': "'PENDING'"}),
+            ('reason', {'name': 'reason', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': False, 'default': None}),
+            ('delivered_at', {'name': 'delivered_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+            ('created_at', {'name': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
+        ])),
+        ('pk', {'colunas': ('id',), 'sufixo': None}),
+        ('uks', OrderedDict([
+            ('upl_agt', {'sufixo': 'upl_agt', 'colunas': ('upload_id', 'agent_id')}),
+        ])),
+        ('fks', OrderedDict([
+            ('upl', {'sufixo': 'upl', 'colunas': ('upload_id',), 'ref_tabela': 'input_upload', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
+        ])),
+        ('cks', OrderedDict([
+            ('state', {'sufixo': 'state', 'expr': "state IN ('PENDING','DELIVERED','FAILED')"}),
+            ('rsn', {'sufixo': 'rsn', 'expr': "(state = 'FAILED' AND reason IN ('EXISTS','NAME','SPACE','HASH','ERROR')) OR (state <> 'FAILED' AND reason IS NULL)"}),
+        ])),
+        ('indices', OrderedDict([
+            ('pend', {'sufixo': 'pend', 'colunas': (), 'expr': FBI_IDL_PEND_EXPR, 'fbi': True}),
+        ])),
+        ('trigger_bu', None),
+        ('colunas_lob', ()),
+    ])
+
+    # 21. Retrato da pasta de entrada (CR-020b): gerado pelo agente, por ambiente e script.
+    r['input_listing'] = OrderedDict([
+        ('entity', 'input_listing'),
+        ('fisico', 'input_listing'),
+        ('abrev', 'ils'),
+        ('rotulo', 'Retrato da entrada'),
+        ('colunas', OrderedDict([
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('agent_id', {'name': 'agent_id', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
+            ('environment', {'name': 'environment', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
+            ('script_id', {'name': 'script_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('listing', {'name': 'listing', 'tipo': 'CLOB', 'not_null': False, 'default': None}),
+            ('file_count', {'name': 'file_count', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
+            ('truncated', {'name': 'truncated', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'N'"}),
+            ('listed_at', {'name': 'listed_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+            ('refresh_requested_at', {'name': 'refresh_requested_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+            ('created_at', {'name': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
+        ])),
+        ('pk', {'colunas': ('id',), 'sufixo': None}),
+        ('uks', OrderedDict([
+            ('agt', {'sufixo': 'agt', 'colunas': ('agent_id', 'environment', 'script_id')}),
+        ])),
+        ('fks', OrderedDict([
+            ('env', {'sufixo': 'env', 'colunas': ('environment',), 'ref_tabela': 'environments', 'ref_colunas': ('name',), 'on_delete': None}),
+            ('scr', {'sufixo': 'scr', 'colunas': ('script_id',), 'ref_tabela': 'scripts', 'ref_colunas': ('id',), 'on_delete': None}),
+        ])),
+        ('cks', OrderedDict([
+            ('trunc', {'sufixo': 'trunc', 'expr': "truncated IN ('Y','N')"}),
+            ('count', {'sufixo': 'count', 'expr': "file_count IS NULL OR file_count >= 0"}),
+        ])),
+        ('indices', OrderedDict([
+            ('env', {'sufixo': 'env', 'colunas': ('environment', 'script_id'), 'expr': None, 'fbi': False}),
+            ('scr', {'sufixo': 'scr', 'colunas': ('script_id',), 'expr': None, 'fbi': False}),
+        ])),
+        ('trigger_bu', None),
+        ('colunas_lob', ('listing',)),
     ])
 
     for entity, defn in r.items():

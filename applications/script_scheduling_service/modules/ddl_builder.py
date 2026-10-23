@@ -188,6 +188,10 @@ TABLE_COMMENTS = {
     "agents": "Registro, versao e sinais de vida dos daemons executores instalados",
     "audit": "Trilha de auditoria imutavel para conformidade e rastreabilidade",
     "control": "Parametros de controle global, versao de esquema e concessao de limpeza",
+    "ticket_output": "Zip da pasta de saida de cada ticket, gravado pelo agente (CR-012)",
+    "input_upload": "Arquivos enviados pela tela para a pasta de entrada dos scripts (CR-020)",
+    "input_delivery": "Entrega de cada envio a cada agente que atende o ambiente (CR-020)",
+    "input_listing": "Retrato das pastas de entrada gerado por cada agente (CR-020)",
 }
 
 COLUMN_COMMENTS = {
@@ -372,6 +376,37 @@ COLUMN_COMMENTS = {
         "file_count": "Quantidade de arquivos no zip",
         "size_bytes": "Tamanho do zip em bytes",
         "content": "Zip da pasta de saida do script (BLOB)",
+    },
+    "input_upload": {
+        "id": "Identificador unico sequencial do envio (chave primaria)",
+        "environment": "Ambiente de destino (FK para tbsss_environments)",
+        "script_id": "Script dono da pasta de entrada de destino (FK para tbsss_scripts)",
+        "relative_dir": "Subpasta dentro da pasta do script; nulo e a propria pasta",
+        "file_name": "Nome do arquivo na pasta de entrada",
+        "size_bytes": "Tamanho do arquivo em bytes",
+        "sha256": "Hash SHA-256 do conteudo, conferido pelo agente na entrega",
+        "replace_existing": "Se pode substituir um arquivo com o mesmo nome (Y ou N)",
+        "source_ip": "Endereco IP de quem enviou",
+        "content": "Conteudo do arquivo (BLOB), esvaziado pelo purge depois das entregas",
+    },
+    "input_delivery": {
+        "id": "Identificador unico sequencial da entrega (chave primaria)",
+        "upload_id": "Envio entregue (FK para tbsss_input_upload, removida em cascata)",
+        "agent_id": "Agente que deve gravar o arquivo na sua pasta de entrada",
+        "state": "Situacao da entrega (PENDING, DELIVERED, FAILED)",
+        "reason": "Motivo da falha (EXISTS, NAME, SPACE, HASH, ERROR)",
+        "delivered_at": "Data e hora em que o agente concluiu a entrega",
+    },
+    "input_listing": {
+        "id": "Identificador unico sequencial do retrato (chave primaria)",
+        "agent_id": "Agente que gerou o retrato da sua pasta de entrada",
+        "environment": "Ambiente da pasta (FK para tbsss_environments)",
+        "script_id": "Script dono da pasta (FK para tbsss_scripts)",
+        "listing": "Arquivos da pasta em JSON (caminho, tamanho e data), com teto de itens",
+        "file_count": "Quantidade de arquivos na pasta",
+        "truncated": "Se a lista passou do teto de itens (Y ou N)",
+        "listed_at": "Data e hora do retrato",
+        "refresh_requested_at": "Data e hora em que a tela pediu um retrato novo",
     },
 }
 
@@ -738,7 +773,17 @@ def build_grants_by_role(owner, prefix, user_roles):
             owner, schema["ticket_output"]["tabela"], usr_web
         ))
 
-        # Sequences para web (todas exceto agentes, controle e ticket_output, que a web nao insere)
+        # Entrada (CR-020b): a web grava o envio e as entregas e pede um retrato novo da pasta (criando a
+        # linha do agente que ainda nao tem retrato; so refresh_requested_at e alterado)
+        for ent in ("input_upload", "input_delivery"):
+            commands.append("GRANT SELECT, INSERT ON {}.{} TO {};".format(
+                owner, schema[ent]["tabela"], usr_web
+            ))
+        commands.append("GRANT SELECT, INSERT, UPDATE (refresh_requested_at) ON {}.{} TO {};".format(
+            owner, schema["input_listing"]["tabela"], usr_web
+        ))
+
+        # Sequences para web (todas exceto as das tabelas que a web nao insere)
         for ent, t in schema.items():
             if ent not in ("agents", "control", "ticket_output"):
                 commands.append("GRANT SELECT ON {}.{} TO {};".format(
@@ -779,8 +824,19 @@ def build_grants_by_role(owner, prefix, user_roles):
             owner, schema["ticket_output"]["tabela"], usr_agt
         ))
 
-        # Sequences do agente: tickets, respostas, agentes, auditoria e saida (CR-012)
-        for ent in ("tickets", "ticket_answer", "agents", "audit", "ticket_output"):
+        # Entrada (CR-020b): o agente le o envio, marca a propria entrega e publica o retrato da pasta
+        commands.append("GRANT SELECT ON {}.{} TO {};".format(
+            owner, schema["input_upload"]["tabela"], usr_agt
+        ))
+        commands.append("GRANT SELECT, UPDATE ON {}.{} TO {};".format(
+            owner, schema["input_delivery"]["tabela"], usr_agt
+        ))
+        commands.append("GRANT SELECT, INSERT, UPDATE ON {}.{} TO {};".format(
+            owner, schema["input_listing"]["tabela"], usr_agt
+        ))
+
+        # Sequences do agente: tickets, respostas, agentes, auditoria, saida (CR-012) e retrato (CR-020b)
+        for ent in ("tickets", "ticket_answer", "agents", "audit", "ticket_output", "input_listing"):
             commands.append("GRANT SELECT ON {}.{} TO {};".format(
                 owner, schema[ent]["sequence"], usr_agt
             ))
@@ -799,6 +855,13 @@ def build_grants_by_role(owner, prefix, user_roles):
         ))
         commands.append("GRANT SELECT ON {}.{} TO {};".format(
             owner, schema["audit"]["sequence"], usr_purge
+        ))
+        # Entrada (CR-020b): esvaziar o conteudo entregue e apagar envios antigos (as entregas vao em cascata)
+        commands.append("GRANT SELECT, UPDATE (content), DELETE ON {}.{} TO {};".format(
+            owner, schema["input_upload"]["tabela"], usr_purge
+        ))
+        commands.append("GRANT SELECT ON {}.{} TO {};".format(
+            owner, schema["input_delivery"]["tabela"], usr_purge
         ))
 
     # 4. PAPEL: monitor (CR-008, E3/R-04)
@@ -1237,6 +1300,9 @@ def build_seed_script(owner, prefix, admin_login=None, admin_name=None, admin_pa
 
 
 ROLLBACK_ENTITY_ORDER = (
+    "input_delivery",
+    "input_listing",
+    "input_upload",
     "ticket_output",
     "ticket_answer",
     "tickets",

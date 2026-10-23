@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Em andamento.** Aprovado pelo responsável pelo produto em 2026-10-23. 020a concluído |
+| Status | **Em andamento.** Aprovado pelo responsável pelo produto em 2026-10-23. 020a e 020b concluídos |
 | Origem | Pedido do responsável pelo produto (2026-10-23): tela de upload para a pasta de entrada e tela de download da pasta de saída, navegando no diretório correspondente |
 | Restrições | Sem dependência nova. Python 3.6. SQL Oracle 11gR2 só em `repo_oracle/`. Sem nada inline (CSP) |
 | Afeta | README §4.3, §4.4, §5.9 (nova), §8.13, §8.14 e §10. `AGENTS.md`. Código: `ddl_builder`, `repo_oracle/tickets`, `repo_fake`, `output_browse_service` (novo), `controllers/outputs` (novo), `ui_menu`, `audit_service`, `ticket_service`; depois agente e helper (020c) |
@@ -31,7 +31,7 @@
 | Passo | Conteúdo | Situação |
 |---|---|---|
 | 020a | Tela de Saídas: `DOWNLOAD_OUTPUT` no seed (ADMINISTRATOR, OPERATOR_PROD, OPERATOR_HML), leituras `output_summary` e `output_tickets`, `output_browse_service` com o `BlobReader`, `controllers/outputs`, item de menu, `OUTPUT_DOWNLOAD`, README §4.3, §4.4, §5.9 e §10, AGENTS e testes; DEV atualizado por MERGE | Concluído |
-| 020b | Esquema e repositórios da entrada: fila de envio e retrato das pastas, GRANTs, contrato FAKE × Oracle | Pendente |
+| 020b | Esquema e repositórios da entrada: `tbsss_input_upload`, `tbsss_input_delivery` (uma linha por agente vivo; sem nenhum, `NoLiveAgent`) e `tbsss_input_listing` (retrato JSON até 2.000 itens, `refresh_requested_at`); repositório `inputs` (FAKE e Oracle 11gR2), GRANTs por papel, `INPUT_UPLOAD` e `INPUT_DELIVERY`, `ROLLBACK_ENTITY_ORDER` completo; banco do DEV recriado (`02` → `01` → `99`) | Concluído |
 | 020c | Agente e helper: entrega dos envios a todos os agentes do ambiente e retrato das pastas | Pendente |
 | 020d | Tela de Entrada: navegação, envio, situação de cada envio e substituição com confirmação | Pendente |
 | 020e | Purge da fila, documentação (README, AGENTS, DEPLOYMENT) e ensaio real no DEV | Pendente |

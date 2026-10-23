@@ -94,6 +94,9 @@ def _oracle_class(normalized_name):
     if normalized_name == "agents":
         from repo_oracle.agents import RepoAgentsOracle
         return RepoAgentsOracle
+    if normalized_name == "inputs":
+        from repo_oracle.inputs import RepoInputsOracle
+        return RepoInputsOracle
     return None
 
 
@@ -137,6 +140,7 @@ def get(name, config=None):
             from repo_fake.agents import RepoAgentsFake
             from repo_fake.audit import RepoAuditFake
             from repo_fake.catalog import RepoCatalogFake
+            from repo_fake.inputs import RepoInputsFake
             from repo_fake.rbac import RepoRbacFake
             from repo_fake.seed import load_seed
             from repo_fake.store import FakeDataStore
@@ -152,6 +156,7 @@ def get(name, config=None):
             _singletons["schedules"] = RepoSchedulesFake(_fake_store)
             _singletons["audit"] = RepoAuditFake(_fake_store)
             _singletons["agents"] = RepoAgentsFake(_fake_store)
+            _singletons["inputs"] = RepoInputsFake(_fake_store)
 
         if name_norm not in _singletons:
             raise ValueError("Repositorio desconhecido: %s" % name)

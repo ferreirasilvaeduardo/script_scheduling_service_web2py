@@ -651,6 +651,7 @@ Toda ação sensível grava uma linha em `tbsss_audit` **na mesma transação** 
 * login (OK, falha, bloqueio) e logout (o logout também revoga as sessões do usuário, §4.2, CR-008 E2);
 * criação, cancelamento e reexecução de ticket;
 * download da saída de um ticket, pela tela de Saídas ou pelo detalhe do ticket (`OUTPUT_DOWNLOAD`, CR-020a). É uma leitura: a linha é gravada pelo service antes do envio, como a exportação da auditoria;
+* envio de arquivo para a pasta de entrada (`INPUT_UPLOAD`, pela web) e a entrega de cada agente (`INPUT_DELIVERY`, pelo agente), CR-020b;
 * inserção, alteração e desativação em qualquer cadastro;
 * alteração de matriz de permissão;
 * pausa automática de agendamento;
@@ -674,6 +675,8 @@ O campo `detail` nunca contém segredos nem valores de parâmetros sensíveis.
 | `SCHEMA_MIGRATE` (CR-007, D4) | `tbsss_control` | `1` (a linha de controle) |
 | `AUDIT_EXPORT` | `tbsss_audit` | nulo |
 | `OUTPUT_DOWNLOAD` (CR-020a) | `tbsss_tickets` | id do ticket; o `detail` diz se foi o zip completo ou qual arquivo, com o tamanho |
+| `INPUT_UPLOAD` (CR-020b) | `tbsss_input_upload` | id do envio; o `detail` traz o arquivo, o tamanho, o destino e os agentes que vão receber |
+| `INPUT_DELIVERY` (CR-020b) | `tbsss_input_upload` | id do envio; o `detail` traz o agente e o resultado (com o motivo da falha); ator `SYSTEM:<agent_id>` |
 
   O filtro "Entidade" da consulta oferece exatamente as tabelas acima.
 * **Atores do sistema:** `SYSTEM:<agent_id>` (agente), `SYSTEM:init_db` (`init_db.py`), `SYSTEM:purge` (`purge.py`) e `SYSTEM:seed` (seed FAKE). Por isso `init_db`, `seed` e `purge` não podem ser `agent_id` (§8.12).
@@ -2083,10 +2086,13 @@ UK/FK/CK/IX = {uk|fk|ck|ix}_{prefixo}{abrev}_{sufixo}   ix_tbsss_tck_queue
 | Auditoria | `tbsss_audit` | `aud` | `sq_tbsss_audit` | `tr_tbsss_aud_bi` | `pk_tbsss_audit` |
 | Controle (CR-007) | `tbsss_control` | `ctl` | `sq_tbsss_control` | `tr_tbsss_ctl_bi` | `pk_tbsss_control` |
 | Saída do ticket (CR-012) | `tbsss_ticket_output` | `tout` | `sq_tbsss_ticket_output` | `tr_tbsss_tout_bi` | `pk_tbsss_ticket_output` |
+| Envio para a entrada (CR-020) | `tbsss_input_upload` | `iup` | `sq_tbsss_input_upload` | `tr_tbsss_iup_bi` | `pk_tbsss_input_upload` |
+| Entrega para a entrada (CR-020) | `tbsss_input_delivery` | `idl` | `sq_tbsss_input_delivery` | `tr_tbsss_idl_bi` | `pk_tbsss_input_delivery` |
+| Retrato da entrada (CR-020) | `tbsss_input_listing` | `ils` | `sq_tbsss_input_listing` | `tr_tbsss_ils_bi` | `pk_tbsss_input_listing` |
 
 ---
 
-## 10. Modelo de Dados Completo (18 tabelas)
+## 10. Modelo de Dados Completo (21 tabelas)
 
 **Padrões globais:**
 
@@ -2499,7 +2505,7 @@ END;
   * `entity_id NUMBER(10)`
   * `detail VARCHAR2(1000 CHAR)`
   * `created_at DATE DEFAULT SYSDATE NOT NULL`
-* **Ações:** `LOGIN_OK`, `LOGIN_FAILED`, `LOGIN_LOCKED`, `LOGOUT`, `TICKET_CREATE`, `TICKET_CANCEL`, `TICKET_RERUN`, `CREATE`, `UPDATE`, `DEACTIVATE`, `PERM_UPDATE`, `SCHEDULE_PAUSE`, `AGENT_START`, `AGENT_STOP`, `PURGE`, `AUDIT_EXPORT` (exportação CSV da trilha, F6.1), `SCHEMA_MIGRATE` (migração de versão do esquema, CR-007), `OUTPUT_DOWNLOAD` (download de saída, CR-020a). O catálogo é mantido em código (`audit_service.ACOES`) e não usa CK, para permitir extensão.
+* **Ações:** `LOGIN_OK`, `LOGIN_FAILED`, `LOGIN_LOCKED`, `LOGOUT`, `TICKET_CREATE`, `TICKET_CANCEL`, `TICKET_RERUN`, `CREATE`, `UPDATE`, `DEACTIVATE`, `PERM_UPDATE`, `SCHEDULE_PAUSE`, `AGENT_START`, `AGENT_STOP`, `PURGE`, `AUDIT_EXPORT` (exportação CSV da trilha, F6.1), `SCHEMA_MIGRATE` (migração de versão do esquema, CR-007), `OUTPUT_DOWNLOAD` (download de saída, CR-020a), `INPUT_UPLOAD` e `INPUT_DELIVERY` (envio e entrega na pasta de entrada, CR-020b). O catálogo é mantido em código (`audit_service.ACOES`) e não usa CK, para permitir extensão.
 * A tabela não tem FKs intencionalmente: a trilha sobrevive a exclusões.
 * **Privilégios (CR-007, D1b):** web com `SELECT` e `INSERT`; agente só com `INSERT`; purge com `SELECT`, `INSERT` e `DELETE`. Nenhuma conta tem `UPDATE`.
 
@@ -2539,6 +2545,70 @@ END;
   * `updated_by VARCHAR2(40 CHAR)`
 * **Gravação:** só pelo agente, na fase de saída (§8.13). A troca de situação é alteração de negócio (grava `updated_*`); o envio das partes do zip é rotina técnica.
 * **Privilégios:** agente com `SELECT`, `INSERT` e `UPDATE` (e a sequence); web com `SELECT`; purge sem privilégio próprio (a linha sai em cascata com o ticket, §11.3).
+
+### 19. `tbsss_input_upload` (CR-020)
+* PK `pk_tbsss_input_upload`
+* FK `fk_tbsss_iup_env → tbsss_environments(name)` e `fk_tbsss_iup_scr → tbsss_scripts(id)`
+* IX `ix_tbsss_iup_env (environment, script_id, created_at)` (lista de envios da pasta; cobre a FK de ambiente), `ix_tbsss_iup_scr (script_id)` (FK) e `ix_tbsss_iup_crt (created_at, id)` (retenção)
+* CK: `ck_tbsss_iup_repl (replace_existing IN ('Y','N'))`, `ck_tbsss_iup_size (size_bytes >= 0)`, `ck_tbsss_iup_sha (LENGTH(sha256) = 64)` e `ck_tbsss_iup_upd` (colunas de registro, CR-006)
+* **Colunas:**
+  * `id`
+  * `environment VARCHAR2(30 CHAR) NOT NULL`
+  * `script_id NUMBER(10) NOT NULL`
+  * `relative_dir VARCHAR2(400 CHAR)` (subpasta dentro da pasta do script; nula é a própria pasta)
+  * `file_name VARCHAR2(255 CHAR) NOT NULL`
+  * `size_bytes NUMBER(12) NOT NULL`
+  * `sha256 VARCHAR2(64 CHAR) NOT NULL` (conferido pelo agente na entrega)
+  * `replace_existing CHAR(1) DEFAULT 'N' NOT NULL`
+  * `source_ip VARCHAR2(45 CHAR)`
+  * `content BLOB` (o arquivo; esvaziado pelo purge depois das entregas)
+  * `created_at DATE DEFAULT SYSDATE NOT NULL`
+  * `created_by VARCHAR2(40 CHAR) NOT NULL` (quem enviou)
+  * `updated_at DATE`
+  * `updated_by VARCHAR2(40 CHAR)`
+* **Gravação:** só pela web, numa transação com as entregas (§20) e a auditoria `INPUT_UPLOAD`. O conteúdo é gravado num bind BLOB (o arquivo já chegou inteiro à web, até o limite da tela) e lido em partes de até 1 MiB; nunca entra em listagem.
+* **Privilégios:** web com `SELECT` e `INSERT` (e a sequence); agente com `SELECT`; purge com `SELECT`, `UPDATE (content)` e `DELETE`.
+
+### 20. `tbsss_input_delivery` (CR-020)
+* PK `pk_tbsss_input_delivery` · UK `uk_tbsss_idl_upl_agt (upload_id, agent_id)`
+* FK `fk_tbsss_idl_upl → tbsss_input_upload(id) ON DELETE CASCADE` (coberta pela UK)
+* IX `ix_tbsss_idl_pend` (função: `((CASE WHEN state = 'PENDING' THEN agent_id END))`; só as entregas pendentes, para cada agente ler as suas)
+* CK: `ck_tbsss_idl_state (state IN ('PENDING','DELIVERED','FAILED'))`, `ck_tbsss_idl_rsn` (motivo só em `FAILED`: `EXISTS`, `NAME`, `SPACE`, `HASH` ou `ERROR`) e `ck_tbsss_idl_upd` (colunas de registro, CR-006)
+* **Colunas:**
+  * `id`
+  * `upload_id NUMBER(10) NOT NULL`
+  * `agent_id VARCHAR2(30 CHAR) NOT NULL`
+  * `state VARCHAR2(10 CHAR) DEFAULT 'PENDING' NOT NULL`
+  * `reason VARCHAR2(10 CHAR)`
+  * `delivered_at DATE`
+  * `created_at DATE DEFAULT SYSDATE NOT NULL`
+  * `created_by VARCHAR2(40 CHAR) NOT NULL`
+  * `updated_at DATE`
+  * `updated_by VARCHAR2(40 CHAR)` (`SYSTEM:<agent_id>` quando o agente marca a entrega)
+* **Gravação:** a web cria uma linha `PENDING` por agente vivo que atende o ambiente (heartbeat dentro de `node_offline_timeout_s`); sem nenhum, o envio é recusado. O agente marca a sua linha exigindo a posse (`agent_id = :agent_id`), com a auditoria `INPUT_DELIVERY` na mesma transação.
+* **Privilégios:** web com `SELECT` e `INSERT` (e a sequence); agente com `SELECT` e `UPDATE`; purge com `SELECT` (a linha sai em cascata com o envio).
+
+### 21. `tbsss_input_listing` (CR-020)
+* PK `pk_tbsss_input_listing` · UK `uk_tbsss_ils_agt (agent_id, environment, script_id)`
+* FK `fk_tbsss_ils_env → tbsss_environments(name)` e `fk_tbsss_ils_scr → tbsss_scripts(id)`
+* IX `ix_tbsss_ils_env (environment, script_id)` (a tela lê os retratos da pasta; cobre a FK de ambiente) e `ix_tbsss_ils_scr (script_id)` (FK)
+* CK: `ck_tbsss_ils_trunc (truncated IN ('Y','N'))`, `ck_tbsss_ils_count` (contagem não negativa) e `ck_tbsss_ils_upd` (colunas de registro, CR-006)
+* **Colunas:**
+  * `id`
+  * `agent_id VARCHAR2(30 CHAR) NOT NULL`
+  * `environment VARCHAR2(30 CHAR) NOT NULL`
+  * `script_id NUMBER(10) NOT NULL`
+  * `listing CLOB` (JSON com caminho, tamanho e data de cada arquivo, até 2.000 itens)
+  * `file_count NUMBER(10)`
+  * `truncated CHAR(1) DEFAULT 'N' NOT NULL`
+  * `listed_at DATE`
+  * `refresh_requested_at DATE` (a tela pede um retrato novo; o agente atende na volta seguinte)
+  * `created_at DATE DEFAULT SYSDATE NOT NULL`
+  * `created_by VARCHAR2(40 CHAR) NOT NULL`
+  * `updated_at DATE`
+  * `updated_by VARCHAR2(40 CHAR)`
+* **Gravação:** o agente insere e atualiza o retrato (rotina técnica, sem auditoria). A web pede um retrato novo a cada agente vivo do ambiente: grava `refresh_requested_at` e, para o agente que ainda não tem retrato, cria a linha (`MERGE`). O agente refaz o retrato quando `refresh_requested_at >= listed_at` (DATE tem precisão de segundo).
+* **Privilégios:** agente com `SELECT`, `INSERT` e `UPDATE` (e a sequence); web com `SELECT`, `INSERT` e `UPDATE (refresh_requested_at)` (e a sequence).
 
 ---
 

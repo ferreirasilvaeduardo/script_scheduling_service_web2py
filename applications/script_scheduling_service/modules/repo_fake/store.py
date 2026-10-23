@@ -27,6 +27,7 @@ class FakeDataStore(object):
         self.lock_schedules = threading.RLock()
         self.lock_audit = threading.RLock()
         self.lock_agents = threading.RLock()
+        self.lock_inputs = threading.RLock()
 
         self._clock_fn = clock or (lambda: datetime.datetime.now().replace(microsecond=0))
 
@@ -47,6 +48,10 @@ class FakeDataStore(object):
         # Saida do ticket (tabela 18, CR-012): {id: linha}, com o zip em bytes em 'conteudo'.
         self.ticket_output = collections.OrderedDict()
         self.agents = collections.OrderedDict()
+        # Pasta de entrada pela tela (tabelas 19 a 21, CR-020b): o arquivo em bytes em 'content'.
+        self.input_upload = collections.OrderedDict()
+        self.input_delivery = collections.OrderedDict()
+        self.input_listing = collections.OrderedDict()
         self.audit = collections.OrderedDict()
         # Linha unica de controle (tabela 17, CR-007 D4): versao do esquema e concessao do purge.
         self.control = collections.OrderedDict()
@@ -143,7 +148,7 @@ class FakeDataStore(object):
                     with self.lock_tickets:
                         with self.lock_schedules:
                             with self.lock_audit:
-                                with self.lock_agents:
+                                with self.lock_agents, self.lock_inputs:
                                     self.environments.clear()
                                     self.profiles.clear()
                                     self.features.clear()
@@ -160,6 +165,9 @@ class FakeDataStore(object):
                                     self.ticket_answer.clear()
                                     self.ticket_output.clear()
                                     self.agents.clear()
+                                    self.input_upload.clear()
+                                    self.input_delivery.clear()
+                                    self.input_listing.clear()
                                     self.audit.clear()
                                     self.control.clear()
                                     self.seqs.clear()

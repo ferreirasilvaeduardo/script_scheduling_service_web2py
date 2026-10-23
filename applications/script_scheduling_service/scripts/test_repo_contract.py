@@ -1192,3 +1192,7 @@ class TestFailFastRegression(unittest.TestCase):
             tck.log_read(11, offset=0, max_chars="muito")
         self.assertEqual(tck.log_read(11, offset=-3, max_chars=5)[0],
                          tck.log_read(11, offset=0, max_chars=5)[0])
+
+
+if __name__ == "__main__":
+    unittest.main()

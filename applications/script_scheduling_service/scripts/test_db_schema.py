@@ -52,7 +52,8 @@ class TestDbSchema(unittest.TestCase):
         return "tbsss_"
 
     def test_dezessete_tabelas_exatas(self):
-        """Verifica presenca e contagem exata das 18 tabelas do README §9.2 e §10 (CR-007: controle; CR-012: ticket_output)."""
+        """Verifica presenca e contagem exata das 21 tabelas do README §9.2 e §10 (CR-007: controle; CR-012: ticket_output;
+        CR-020b: input_upload, input_delivery e input_listing)."""
         entities_expected = [
             "environments",
             "profiles",
@@ -72,8 +73,11 @@ class TestDbSchema(unittest.TestCase):
             "audit",
             "control",
             "ticket_output",
+            "input_upload",
+            "input_delivery",
+            "input_listing",
         ]
-        self.assertEqual(len(TABLES), 18, "Devem existir exatamente 18 tabelas")
+        self.assertEqual(len(TABLES), 21, "Devem existir exatamente 21 tabelas")
         self.assertEqual(list(TABLES.keys()), entities_expected)
 
     def test_reproducao_exata_readme_9_2(self):
@@ -98,6 +102,9 @@ class TestDbSchema(unittest.TestCase):
             ("audit", "aud", "sq_tbsss_audit", "tr_tbsss_aud_bi", "pk_tbsss_audit"),
             ("control", "ctl", "sq_tbsss_control", "tr_tbsss_ctl_bi", "pk_tbsss_control"),
             ("ticket_output", "tout", "sq_tbsss_ticket_output", "tr_tbsss_tout_bi", "pk_tbsss_ticket_output"),
+            ("input_upload", "iup", "sq_tbsss_input_upload", "tr_tbsss_iup_bi", "pk_tbsss_input_upload"),
+            ("input_delivery", "idl", "sq_tbsss_input_delivery", "tr_tbsss_idl_bi", "pk_tbsss_input_delivery"),
+            ("input_listing", "ils", "sq_tbsss_input_listing", "tr_tbsss_ils_bi", "pk_tbsss_input_listing"),
         ]
 
         schema = names("tbsss_")
@@ -261,7 +268,7 @@ class TestDbSchema(unittest.TestCase):
             self.assertIn("ck_tbsss_{}_upd".format(abbr), schema[entity]["cks"])
         self.assertEqual(sql_ident.TABLES_WITHOUT_RECORD, ("audit", "control"))
         self.assertEqual(
-            sum(1 for e in TABLES if "upd" in TABLES[e]["cks"]), 16)
+            sum(1 for e in TABLES if "upd" in TABLES[e]["cks"]), 19)
 
     def test_registro_cr007(self):
         """CR-007: versao do esquema, controle de linha unica, indice unico da ocorrencia, colunas e tamanhos."""
@@ -320,8 +327,12 @@ class TestDbSchema(unittest.TestCase):
         )
         self.assertEqual(TABLES["ticket_output"]["colunas_lob"], ("content",))
         self.assertEqual(TABLES["ticket_output"]["colunas"]["content"]["tipo"], "BLOB")
+        # CR-020b: o arquivo enviado (BLOB) e o retrato da pasta (CLOB JSON).
+        self.assertEqual(TABLES["input_upload"]["colunas_lob"], ("content",))
+        self.assertEqual(TABLES["input_upload"]["colunas"]["content"]["tipo"], "BLOB")
+        self.assertEqual(TABLES["input_listing"]["colunas_lob"], ("listing",))
         for ent, defn in TABLES.items():
-            if ent not in ("schedules", "tickets", "ticket_output"):
+            if ent not in ("schedules", "tickets", "ticket_output", "input_upload", "input_listing"):
                 self.assertEqual(
                     defn["colunas_lob"],
                     (),

@@ -53,6 +53,12 @@ CREATE SEQUENCE openrisow.sq_tbsss_control START WITH 1 INCREMENT BY 1 CACHE 20 
 
 CREATE SEQUENCE openrisow.sq_tbsss_ticket_output START WITH 1 INCREMENT BY 1 CACHE 20 NOCYCLE;
 
+CREATE SEQUENCE openrisow.sq_tbsss_input_upload START WITH 1 INCREMENT BY 1 CACHE 20 NOCYCLE;
+
+CREATE SEQUENCE openrisow.sq_tbsss_input_delivery START WITH 1 INCREMENT BY 1 CACHE 20 NOCYCLE;
+
+CREATE SEQUENCE openrisow.sq_tbsss_input_listing START WITH 1 INCREMENT BY 1 CACHE 20 NOCYCLE;
+
 -- ------------------------------------------------------------------------------
 -- FASE 2: TABELAS
 -- ------------------------------------------------------------------------------
@@ -328,6 +334,54 @@ CREATE TABLE openrisow.tbsss_ticket_output (
 )
 LOB (content) STORE AS SECUREFILE (CACHE);
 
+CREATE TABLE openrisow.tbsss_input_upload (
+    id NUMBER(10) NOT NULL,
+    environment VARCHAR2(30 CHAR) NOT NULL,
+    script_id NUMBER(10) NOT NULL,
+    relative_dir VARCHAR2(400 CHAR),
+    file_name VARCHAR2(255 CHAR) NOT NULL,
+    size_bytes NUMBER(12) NOT NULL,
+    sha256 VARCHAR2(64 CHAR) NOT NULL,
+    replace_existing CHAR(1) DEFAULT 'N' NOT NULL,
+    source_ip VARCHAR2(45 CHAR),
+    content BLOB,
+    created_at DATE DEFAULT SYSDATE NOT NULL,
+    created_by VARCHAR2(40 CHAR) NOT NULL,
+    updated_at DATE,
+    updated_by VARCHAR2(40 CHAR)
+)
+LOB (content) STORE AS SECUREFILE (CACHE);
+
+CREATE TABLE openrisow.tbsss_input_delivery (
+    id NUMBER(10) NOT NULL,
+    upload_id NUMBER(10) NOT NULL,
+    agent_id VARCHAR2(30 CHAR) NOT NULL,
+    state VARCHAR2(10 CHAR) DEFAULT 'PENDING' NOT NULL,
+    reason VARCHAR2(10 CHAR),
+    delivered_at DATE,
+    created_at DATE DEFAULT SYSDATE NOT NULL,
+    created_by VARCHAR2(40 CHAR) NOT NULL,
+    updated_at DATE,
+    updated_by VARCHAR2(40 CHAR)
+);
+
+CREATE TABLE openrisow.tbsss_input_listing (
+    id NUMBER(10) NOT NULL,
+    agent_id VARCHAR2(30 CHAR) NOT NULL,
+    environment VARCHAR2(30 CHAR) NOT NULL,
+    script_id NUMBER(10) NOT NULL,
+    listing CLOB,
+    file_count NUMBER(10),
+    truncated CHAR(1) DEFAULT 'N' NOT NULL,
+    listed_at DATE,
+    refresh_requested_at DATE,
+    created_at DATE DEFAULT SYSDATE NOT NULL,
+    created_by VARCHAR2(40 CHAR) NOT NULL,
+    updated_at DATE,
+    updated_by VARCHAR2(40 CHAR)
+)
+LOB (listing) STORE AS SECUREFILE (CACHE);
+
 -- ------------------------------------------------------------------------------
 -- FASE 3: CONSTRAINTS (PK, UK, CK)
 -- ------------------------------------------------------------------------------
@@ -524,6 +578,36 @@ ALTER TABLE openrisow.tbsss_ticket_output ADD CONSTRAINT ck_tbsss_tout_size CHEC
 
 ALTER TABLE openrisow.tbsss_ticket_output ADD CONSTRAINT ck_tbsss_tout_upd CHECK ((updated_at IS NULL AND updated_by IS NULL) OR (updated_at IS NOT NULL AND updated_by IS NOT NULL));
 
+ALTER TABLE openrisow.tbsss_input_upload ADD CONSTRAINT pk_tbsss_input_upload PRIMARY KEY (id);
+
+ALTER TABLE openrisow.tbsss_input_upload ADD CONSTRAINT ck_tbsss_iup_repl CHECK (replace_existing IN ('Y','N'));
+
+ALTER TABLE openrisow.tbsss_input_upload ADD CONSTRAINT ck_tbsss_iup_size CHECK (size_bytes >= 0);
+
+ALTER TABLE openrisow.tbsss_input_upload ADD CONSTRAINT ck_tbsss_iup_sha CHECK (LENGTH(sha256) = 64);
+
+ALTER TABLE openrisow.tbsss_input_upload ADD CONSTRAINT ck_tbsss_iup_upd CHECK ((updated_at IS NULL AND updated_by IS NULL) OR (updated_at IS NOT NULL AND updated_by IS NOT NULL));
+
+ALTER TABLE openrisow.tbsss_input_delivery ADD CONSTRAINT pk_tbsss_input_delivery PRIMARY KEY (id);
+
+ALTER TABLE openrisow.tbsss_input_delivery ADD CONSTRAINT uk_tbsss_idl_upl_agt UNIQUE (upload_id, agent_id);
+
+ALTER TABLE openrisow.tbsss_input_delivery ADD CONSTRAINT ck_tbsss_idl_state CHECK (state IN ('PENDING','DELIVERED','FAILED'));
+
+ALTER TABLE openrisow.tbsss_input_delivery ADD CONSTRAINT ck_tbsss_idl_rsn CHECK ((state = 'FAILED' AND reason IN ('EXISTS','NAME','SPACE','HASH','ERROR')) OR (state <> 'FAILED' AND reason IS NULL));
+
+ALTER TABLE openrisow.tbsss_input_delivery ADD CONSTRAINT ck_tbsss_idl_upd CHECK ((updated_at IS NULL AND updated_by IS NULL) OR (updated_at IS NOT NULL AND updated_by IS NOT NULL));
+
+ALTER TABLE openrisow.tbsss_input_listing ADD CONSTRAINT pk_tbsss_input_listing PRIMARY KEY (id);
+
+ALTER TABLE openrisow.tbsss_input_listing ADD CONSTRAINT uk_tbsss_ils_agt UNIQUE (agent_id, environment, script_id);
+
+ALTER TABLE openrisow.tbsss_input_listing ADD CONSTRAINT ck_tbsss_ils_trunc CHECK (truncated IN ('Y','N'));
+
+ALTER TABLE openrisow.tbsss_input_listing ADD CONSTRAINT ck_tbsss_ils_count CHECK (file_count IS NULL OR file_count >= 0);
+
+ALTER TABLE openrisow.tbsss_input_listing ADD CONSTRAINT ck_tbsss_ils_upd CHECK ((updated_at IS NULL AND updated_by IS NULL) OR (updated_at IS NOT NULL AND updated_by IS NOT NULL));
+
 -- ------------------------------------------------------------------------------
 -- FASE 4: CONSTRAINTS (FK)
 -- ------------------------------------------------------------------------------
@@ -571,6 +655,16 @@ ALTER TABLE openrisow.tbsss_ticket_answer ADD CONSTRAINT fk_tbsss_tans_tck FOREI
 ALTER TABLE openrisow.tbsss_ticket_answer ADD CONSTRAINT fk_tbsss_tans_prm FOREIGN KEY (parameter_id) REFERENCES openrisow.tbsss_parameters (id);
 
 ALTER TABLE openrisow.tbsss_ticket_output ADD CONSTRAINT fk_tbsss_tout_tck FOREIGN KEY (ticket_id) REFERENCES openrisow.tbsss_tickets (id) ON DELETE CASCADE;
+
+ALTER TABLE openrisow.tbsss_input_upload ADD CONSTRAINT fk_tbsss_iup_env FOREIGN KEY (environment) REFERENCES openrisow.tbsss_environments (name);
+
+ALTER TABLE openrisow.tbsss_input_upload ADD CONSTRAINT fk_tbsss_iup_scr FOREIGN KEY (script_id) REFERENCES openrisow.tbsss_scripts (id);
+
+ALTER TABLE openrisow.tbsss_input_delivery ADD CONSTRAINT fk_tbsss_idl_upl FOREIGN KEY (upload_id) REFERENCES openrisow.tbsss_input_upload (id) ON DELETE CASCADE;
+
+ALTER TABLE openrisow.tbsss_input_listing ADD CONSTRAINT fk_tbsss_ils_env FOREIGN KEY (environment) REFERENCES openrisow.tbsss_environments (name);
+
+ALTER TABLE openrisow.tbsss_input_listing ADD CONSTRAINT fk_tbsss_ils_scr FOREIGN KEY (script_id) REFERENCES openrisow.tbsss_scripts (id);
 
 -- ------------------------------------------------------------------------------
 -- FASE 5: INDICES
@@ -625,6 +719,18 @@ CREATE INDEX openrisow.ix_tbsss_aud_ent ON openrisow.tbsss_audit (entity, entity
 CREATE INDEX openrisow.ix_tbsss_aud_actor ON openrisow.tbsss_audit (actor);
 
 CREATE INDEX openrisow.ix_tbsss_tout_write ON openrisow.tbsss_ticket_output ((CASE WHEN state = 'WRITING' THEN agent_id END));
+
+CREATE INDEX openrisow.ix_tbsss_iup_env ON openrisow.tbsss_input_upload (environment, script_id, created_at);
+
+CREATE INDEX openrisow.ix_tbsss_iup_scr ON openrisow.tbsss_input_upload (script_id);
+
+CREATE INDEX openrisow.ix_tbsss_iup_crt ON openrisow.tbsss_input_upload (created_at, id);
+
+CREATE INDEX openrisow.ix_tbsss_idl_pend ON openrisow.tbsss_input_delivery ((CASE WHEN state = 'PENDING' THEN agent_id END));
+
+CREATE INDEX openrisow.ix_tbsss_ils_env ON openrisow.tbsss_input_listing (environment, script_id);
+
+CREATE INDEX openrisow.ix_tbsss_ils_scr ON openrisow.tbsss_input_listing (script_id);
 
 -- ------------------------------------------------------------------------------
 -- FASE 6: TRIGGERS
@@ -990,6 +1096,60 @@ BEGIN
 END;
 /
 
+-- ==============================================================================
+-- TRIGGER: openrisow.tr_tbsss_iup_bi
+-- TABELA ALVO: openrisow.tbsss_input_upload
+-- EVENTO: BEFORE INSERT ON openrisow.tbsss_input_upload FOR EACH ROW
+-- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
+-- openrisow.sq_tbsss_input_upload. Preserva ID explicitamente informado (migracoes/carga).
+-- REGRA: AGENTS.md §4.2 e README §10.
+-- ==============================================================================
+CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_iup_bi
+BEFORE INSERT ON openrisow.tbsss_input_upload
+FOR EACH ROW
+BEGIN
+    IF :NEW.id IS NULL THEN
+        SELECT openrisow.sq_tbsss_input_upload.NEXTVAL INTO :NEW.id FROM DUAL;
+    END IF;
+END;
+/
+
+-- ==============================================================================
+-- TRIGGER: openrisow.tr_tbsss_idl_bi
+-- TABELA ALVO: openrisow.tbsss_input_delivery
+-- EVENTO: BEFORE INSERT ON openrisow.tbsss_input_delivery FOR EACH ROW
+-- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
+-- openrisow.sq_tbsss_input_delivery. Preserva ID explicitamente informado (migracoes/carga).
+-- REGRA: AGENTS.md §4.2 e README §10.
+-- ==============================================================================
+CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_idl_bi
+BEFORE INSERT ON openrisow.tbsss_input_delivery
+FOR EACH ROW
+BEGIN
+    IF :NEW.id IS NULL THEN
+        SELECT openrisow.sq_tbsss_input_delivery.NEXTVAL INTO :NEW.id FROM DUAL;
+    END IF;
+END;
+/
+
+-- ==============================================================================
+-- TRIGGER: openrisow.tr_tbsss_ils_bi
+-- TABELA ALVO: openrisow.tbsss_input_listing
+-- EVENTO: BEFORE INSERT ON openrisow.tbsss_input_listing FOR EACH ROW
+-- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
+-- openrisow.sq_tbsss_input_listing. Preserva ID explicitamente informado (migracoes/carga).
+-- REGRA: AGENTS.md §4.2 e README §10.
+-- ==============================================================================
+CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_ils_bi
+BEFORE INSERT ON openrisow.tbsss_input_listing
+FOR EACH ROW
+BEGIN
+    IF :NEW.id IS NULL THEN
+        SELECT openrisow.sq_tbsss_input_listing.NEXTVAL INTO :NEW.id FROM DUAL;
+    END IF;
+END;
+/
+
 -- ------------------------------------------------------------------------------
 -- FASE 7: DICIONARIO E GOVERNANCA DE DADOS (COMMENTS)
 -- ------------------------------------------------------------------------------
@@ -1213,7 +1373,7 @@ COMMENT ON COLUMN openrisow.tbsss_control.version_applied_at IS 'Data e hora de 
 COMMENT ON COLUMN openrisow.tbsss_control.version_applied_by IS 'Identificador de quem realizou a aplicacao do esquema';
 COMMENT ON COLUMN openrisow.tbsss_control.purge_owner IS 'Identificador do no que detem a concessao de purga de dados';
 COMMENT ON COLUMN openrisow.tbsss_control.purge_lease_until IS 'Data e hora limite de expiracao da concessao de purga';
-COMMENT ON TABLE openrisow.tbsss_ticket_output IS 'Tabela tbsss_ticket_output';
+COMMENT ON TABLE openrisow.tbsss_ticket_output IS 'Zip da pasta de saida de cada ticket, gravado pelo agente (CR-012)';
 COMMENT ON COLUMN openrisow.tbsss_ticket_output.id IS 'Identificador unico sequencial da saida (chave primaria)';
 COMMENT ON COLUMN openrisow.tbsss_ticket_output.ticket_id IS 'Ticket dono da saida (FK para tbsss_tickets, removida em cascata)';
 COMMENT ON COLUMN openrisow.tbsss_ticket_output.state IS 'Situacao do zip (WRITING, AVAILABLE, EXCEEDED, FAILED)';
@@ -1226,6 +1386,46 @@ COMMENT ON COLUMN openrisow.tbsss_ticket_output.created_at IS 'Data e hora da cr
 COMMENT ON COLUMN openrisow.tbsss_ticket_output.created_by IS 'Identificador do usuario ou servico responsavel pela criacao (imutavel)';
 COMMENT ON COLUMN openrisow.tbsss_ticket_output.updated_at IS 'Data e hora da ultima alteracao de negocio (nulo ate a primeira alteracao)';
 COMMENT ON COLUMN openrisow.tbsss_ticket_output.updated_by IS 'Identificador do usuario ou servico responsavel pela ultima alteracao';
+COMMENT ON TABLE openrisow.tbsss_input_upload IS 'Arquivos enviados pela tela para a pasta de entrada dos scripts (CR-020)';
+COMMENT ON COLUMN openrisow.tbsss_input_upload.id IS 'Identificador unico sequencial do envio (chave primaria)';
+COMMENT ON COLUMN openrisow.tbsss_input_upload.environment IS 'Ambiente de destino (FK para tbsss_environments)';
+COMMENT ON COLUMN openrisow.tbsss_input_upload.script_id IS 'Script dono da pasta de entrada de destino (FK para tbsss_scripts)';
+COMMENT ON COLUMN openrisow.tbsss_input_upload.relative_dir IS 'Subpasta dentro da pasta do script; nulo e a propria pasta';
+COMMENT ON COLUMN openrisow.tbsss_input_upload.file_name IS 'Nome do arquivo na pasta de entrada';
+COMMENT ON COLUMN openrisow.tbsss_input_upload.size_bytes IS 'Tamanho do arquivo em bytes';
+COMMENT ON COLUMN openrisow.tbsss_input_upload.sha256 IS 'Hash SHA-256 do conteudo, conferido pelo agente na entrega';
+COMMENT ON COLUMN openrisow.tbsss_input_upload.replace_existing IS 'Se pode substituir um arquivo com o mesmo nome (Y ou N)';
+COMMENT ON COLUMN openrisow.tbsss_input_upload.source_ip IS 'Endereco IP de quem enviou';
+COMMENT ON COLUMN openrisow.tbsss_input_upload.content IS 'Conteudo do arquivo (BLOB), esvaziado pelo purge depois das entregas';
+COMMENT ON COLUMN openrisow.tbsss_input_upload.created_at IS 'Data e hora da criacao do registro no banco de dados (imutavel)';
+COMMENT ON COLUMN openrisow.tbsss_input_upload.created_by IS 'Identificador do usuario ou servico responsavel pela criacao (imutavel)';
+COMMENT ON COLUMN openrisow.tbsss_input_upload.updated_at IS 'Data e hora da ultima alteracao de negocio (nulo ate a primeira alteracao)';
+COMMENT ON COLUMN openrisow.tbsss_input_upload.updated_by IS 'Identificador do usuario ou servico responsavel pela ultima alteracao';
+COMMENT ON TABLE openrisow.tbsss_input_delivery IS 'Entrega de cada envio a cada agente que atende o ambiente (CR-020)';
+COMMENT ON COLUMN openrisow.tbsss_input_delivery.id IS 'Identificador unico sequencial da entrega (chave primaria)';
+COMMENT ON COLUMN openrisow.tbsss_input_delivery.upload_id IS 'Envio entregue (FK para tbsss_input_upload, removida em cascata)';
+COMMENT ON COLUMN openrisow.tbsss_input_delivery.agent_id IS 'Agente que deve gravar o arquivo na sua pasta de entrada';
+COMMENT ON COLUMN openrisow.tbsss_input_delivery.state IS 'Situacao da entrega (PENDING, DELIVERED, FAILED)';
+COMMENT ON COLUMN openrisow.tbsss_input_delivery.reason IS 'Motivo da falha (EXISTS, NAME, SPACE, HASH, ERROR)';
+COMMENT ON COLUMN openrisow.tbsss_input_delivery.delivered_at IS 'Data e hora em que o agente concluiu a entrega';
+COMMENT ON COLUMN openrisow.tbsss_input_delivery.created_at IS 'Data e hora da criacao do registro no banco de dados (imutavel)';
+COMMENT ON COLUMN openrisow.tbsss_input_delivery.created_by IS 'Identificador do usuario ou servico responsavel pela criacao (imutavel)';
+COMMENT ON COLUMN openrisow.tbsss_input_delivery.updated_at IS 'Data e hora da ultima alteracao de negocio (nulo ate a primeira alteracao)';
+COMMENT ON COLUMN openrisow.tbsss_input_delivery.updated_by IS 'Identificador do usuario ou servico responsavel pela ultima alteracao';
+COMMENT ON TABLE openrisow.tbsss_input_listing IS 'Retrato das pastas de entrada gerado por cada agente (CR-020)';
+COMMENT ON COLUMN openrisow.tbsss_input_listing.id IS 'Identificador unico sequencial do retrato (chave primaria)';
+COMMENT ON COLUMN openrisow.tbsss_input_listing.agent_id IS 'Agente que gerou o retrato da sua pasta de entrada';
+COMMENT ON COLUMN openrisow.tbsss_input_listing.environment IS 'Ambiente da pasta (FK para tbsss_environments)';
+COMMENT ON COLUMN openrisow.tbsss_input_listing.script_id IS 'Script dono da pasta (FK para tbsss_scripts)';
+COMMENT ON COLUMN openrisow.tbsss_input_listing.listing IS 'Arquivos da pasta em JSON (caminho, tamanho e data), com teto de itens';
+COMMENT ON COLUMN openrisow.tbsss_input_listing.file_count IS 'Quantidade de arquivos na pasta';
+COMMENT ON COLUMN openrisow.tbsss_input_listing.truncated IS 'Se a lista passou do teto de itens (Y ou N)';
+COMMENT ON COLUMN openrisow.tbsss_input_listing.listed_at IS 'Data e hora do retrato';
+COMMENT ON COLUMN openrisow.tbsss_input_listing.refresh_requested_at IS 'Data e hora em que a tela pediu um retrato novo';
+COMMENT ON COLUMN openrisow.tbsss_input_listing.created_at IS 'Data e hora da criacao do registro no banco de dados (imutavel)';
+COMMENT ON COLUMN openrisow.tbsss_input_listing.created_by IS 'Identificador do usuario ou servico responsavel pela criacao (imutavel)';
+COMMENT ON COLUMN openrisow.tbsss_input_listing.updated_at IS 'Data e hora da ultima alteracao de negocio (nulo ate a primeira alteracao)';
+COMMENT ON COLUMN openrisow.tbsss_input_listing.updated_by IS 'Identificador do usuario ou servico responsavel pela ultima alteracao';
 
 
 -- ------------------------------------------------------------------------------

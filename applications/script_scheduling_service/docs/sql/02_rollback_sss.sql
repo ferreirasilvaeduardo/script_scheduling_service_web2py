@@ -11,6 +11,9 @@ WHENEVER SQLERROR CONTINUE;
 -- ------------------------------------------------------------------------------
 -- 1. DROP TRIGGERS
 -- ------------------------------------------------------------------------------
+DROP TRIGGER openrisow.tr_tbsss_idl_bi;
+DROP TRIGGER openrisow.tr_tbsss_ils_bi;
+DROP TRIGGER openrisow.tr_tbsss_iup_bi;
 DROP TRIGGER openrisow.tr_tbsss_tout_bi;
 DROP TRIGGER openrisow.tr_tbsss_tans_bi;
 DROP TRIGGER openrisow.tr_tbsss_tck_bi;
@@ -35,6 +38,9 @@ DROP TRIGGER openrisow.tr_tbsss_ctl_bi;
 -- ------------------------------------------------------------------------------
 -- 2. DROP TABELAS (CASCADE CONSTRAINTS PURGE)
 -- ------------------------------------------------------------------------------
+DROP TABLE openrisow.tbsss_input_delivery CASCADE CONSTRAINTS PURGE;
+DROP TABLE openrisow.tbsss_input_listing CASCADE CONSTRAINTS PURGE;
+DROP TABLE openrisow.tbsss_input_upload CASCADE CONSTRAINTS PURGE;
 DROP TABLE openrisow.tbsss_ticket_output CASCADE CONSTRAINTS PURGE;
 DROP TABLE openrisow.tbsss_ticket_answer CASCADE CONSTRAINTS PURGE;
 DROP TABLE openrisow.tbsss_tickets CASCADE CONSTRAINTS PURGE;
@@ -57,6 +63,9 @@ DROP TABLE openrisow.tbsss_control CASCADE CONSTRAINTS PURGE;
 -- ------------------------------------------------------------------------------
 -- 3. DROP SEQUENCES
 -- ------------------------------------------------------------------------------
+DROP SEQUENCE openrisow.sq_tbsss_input_delivery;
+DROP SEQUENCE openrisow.sq_tbsss_input_listing;
+DROP SEQUENCE openrisow.sq_tbsss_input_upload;
 DROP SEQUENCE openrisow.sq_tbsss_ticket_output;
 DROP SEQUENCE openrisow.sq_tbsss_ticket_answer;
 DROP SEQUENCE openrisow.sq_tbsss_tickets;

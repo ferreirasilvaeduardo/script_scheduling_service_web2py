@@ -26,7 +26,7 @@ ACTIONS = (
     "TICKET_CREATE", "TICKET_CANCEL", "TICKET_RERUN",
     "CREATE", "UPDATE", "DEACTIVATE", "PERM_UPDATE",
     "SCHEDULE_PAUSE", "AGENT_START", "AGENT_STOP", "PURGE",
-    "AUDIT_EXPORT", "SCHEMA_MIGRATE", "OUTPUT_DOWNLOAD",
+    "AUDIT_EXPORT", "SCHEMA_MIGRATE", "OUTPUT_DOWNLOAD", "INPUT_UPLOAD", "INPUT_DELIVERY",
 )
 # Nomes simples das acoes e entidades na tela (CR-018b); o CSV e o banco continuam com os codigos.
 ACTION_LABELS = {
@@ -36,13 +36,14 @@ ACTION_LABELS = {
     "DEACTIVATE": u"Desativação", "PERM_UPDATE": u"Permissões do perfil", "SCHEDULE_PAUSE": u"Regra pausada",
     "AGENT_START": u"Agente iniciado", "AGENT_STOP": u"Agente parado", "PURGE": u"Limpeza por retenção",
     "AUDIT_EXPORT": u"Exportação da auditoria", "SCHEMA_MIGRATE": u"Atualização do esquema",
-    "OUTPUT_DOWNLOAD": u"Download de saída",
+    "OUTPUT_DOWNLOAD": u"Download de saída", "INPUT_UPLOAD": u"Envio para a entrada",
+    "INPUT_DELIVERY": u"Entrega na entrada",
 }
 ENTITY_LABELS = {
     "tbsss_schedules": u"Regras de agendamento", "tbsss_agents": u"Agentes", "tbsss_environments": u"Ambientes",
     "tbsss_audit": u"Auditoria", "tbsss_control": u"Controle do esquema", "tbsss_parameters": u"Parâmetros",
     "tbsss_profiles": u"Perfis", "tbsss_scripts": u"Scripts", "tbsss_tickets": u"Tickets",
-    "tbsss_users": u"Usuários",
+    "tbsss_users": u"Usuários", "tbsss_input_upload": u"Envios para a entrada",
 }
 
 
@@ -61,7 +62,7 @@ AUDIT_ENTITY = "tbsss_audit"
 
 ENTITIES = (
     "tbsss_schedules", "tbsss_agents", "tbsss_environments", "tbsss_audit", "tbsss_control",
-    "tbsss_parameters", "tbsss_profiles", "tbsss_scripts", "tbsss_tickets", "tbsss_users",
+    "tbsss_parameters", "tbsss_profiles", "tbsss_scripts", "tbsss_tickets", "tbsss_users", "tbsss_input_upload",
 )
 
 # Rota da tela de cada entidade e funcionalidade exigida para exibir o link (decisao D6 do F6.1).

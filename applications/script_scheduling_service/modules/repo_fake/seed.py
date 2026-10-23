@@ -165,6 +165,40 @@ def _seed_outputs(store):
     store.seqs["tbsss_ticket_output"] = len(rows)
 
 
+def _seed_inputs(store, base_dt):
+    """Pasta de entrada pela tela (tabelas 19 a 21, CR-020b): dois envios, uma entrega de cada situacao e um
+    retrato publicado pelo agt-host01."""
+    import hashlib
+    import json
+    h = datetime.timedelta(hours=1)
+    files = ((1, "PRODUCAO", 1, "lotes", "clientes_outubro.csv", b"cliente;valor\n1;10\n2;20\n", "op.prod", 3),
+             (2, "HOMOLOGACAO", 2, None, "parametros.txt", b"modo=simulacao\n", "op.hml", 2))
+    for uid, env, sid, folder, name, data, actor, hours in files:
+        store.input_upload[uid] = {
+            "id": uid, "environment": env, "script_id": sid, "relative_dir": folder, "file_name": name,
+            "size_bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(), "replace_existing": "N",
+            "source_ip": "10.0.0.15", "content": data, "created_at": base_dt - hours * h, "created_by": actor,
+            "updated_at": None, "updated_by": None}
+    deliveries = ((1, 1, "agt-host01", "DELIVERED", None), (2, 2, "agt-host01", "PENDING", None),
+                  (3, 2, "agt-host02", "FAILED", "EXISTS"))
+    for did, uid, agent, state, reason in deliveries:
+        up = store.input_upload[uid]
+        done = state != "PENDING"
+        when = up["created_at"] + datetime.timedelta(minutes=1)
+        store.input_delivery[did] = {
+            "id": did, "upload_id": uid, "agent_id": agent, "state": state, "reason": reason,
+            "delivered_at": when if done else None, "created_at": up["created_at"], "created_by": up["created_by"],
+            "updated_at": when if done else None, "updated_by": "SYSTEM:%s" % agent if done else None}
+    listing = json.dumps([{"path": "lotes/clientes_outubro.csv", "size": 22, "mtime": (base_dt - 3 * h + datetime.timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")}])
+    store.input_listing[1] = {
+        "id": 1, "agent_id": "agt-host01", "environment": "PRODUCAO", "script_id": 1, "listing": listing,
+        "file_count": 1, "truncated": "N", "listed_at": base_dt - h, "refresh_requested_at": base_dt - h,
+        "created_at": base_dt - h, "created_by": "op.prod", "updated_at": None, "updated_by": None}
+    store.seqs["tbsss_input_upload"] = 2
+    store.seqs["tbsss_input_delivery"] = 3
+    store.seqs["tbsss_input_listing"] = 1
+
+
 def load_seed(store, force=False, dev_password=None):
     """Carrega dados iniciais deterministicos no store FAKE de forma idempotente.
 
@@ -588,6 +622,7 @@ def load_seed(store, force=False, dev_password=None):
 
                                 store.seqs["tbsss_tickets"] = 40
                                 _seed_outputs(store)
+                                _seed_inputs(store, base_dt)
 
                                 # ---------------------------------------------------------
                                 # 13. Auditoria (30 linhas)
