@@ -8,30 +8,15 @@ from repo_errors import RepoError, RepoNotFound
 from ticket_service import InvalidOffset
 
 _MSG_LOG_FAILED = u"Não foi possível ler o log. Tente novamente em instantes."
-
-
-def _require_get():
-    if (request.env.request_method or "GET").upper() not in ("GET", "HEAD"):
-        raise HTTP(405, **response.headers)
-
-
-def _require_query():
-    ctx = _require_login()
-    if not ticket_service.can_query(ctx):
-        _log.warning("acesso negado (login=%s funcionalidade=VIEW_LOGS|EXEC_SCRIPT caminho=%s ip=%s)",
-                     ctx["login"], request.env.path_info, _client_ip(), extra={"action": "RBAC"})
-        raise HTTP(403, u"Acesso negado.", **response.headers)
-    return ctx
+_MSG_NOT_FOUND = u"Ticket não encontrado."
 
 
 def _ticket_id():
-    value = request.get_vars.get("ticket_id")
-    value = value[-1] if isinstance(value, list) and value else value
-    return value[:10] if isinstance(value, str) else None
+    return _text(request.get_vars.get("ticket_id"), 10)
 
 
 def chunk():
-    _require_get()
+    _require_method("GET", "HEAD")
     ctx = _require_query()
     response.headers["Cache-Control"] = "no-store"
     try:
@@ -39,7 +24,7 @@ def chunk():
     except InvalidOffset:
         raise HTTP(400, u"Offset inválido.", **response.headers)
     except RepoNotFound:
-        raise HTTP(404, u"Ticket não encontrado.", **response.headers)
+        _not_found(_MSG_NOT_FOUND)
     except RepoError:
         _log.exception("falha na leitura incremental do log (login=%s ticket=%r)", ctx["login"], _ticket_id(),
                        extra={"action": "LOG_LER"})
@@ -48,12 +33,12 @@ def chunk():
 
 
 def download():
-    _require_get()
+    _require_method("GET", "HEAD")
     ctx = _require_query()
     try:
         ticket_id, blocks = ticket_service.log_chunks(ctx, _ticket_id())
     except RepoNotFound:
-        raise HTTP(404, u"Ticket não encontrado.", **response.headers)
+        _not_found(_MSG_NOT_FOUND)
     except RepoError:
         _log.exception("falha ao iniciar o download do log (login=%s ticket=%r)", ctx["login"], _ticket_id(),
                        extra={"action": "LOG_BAIXAR"})

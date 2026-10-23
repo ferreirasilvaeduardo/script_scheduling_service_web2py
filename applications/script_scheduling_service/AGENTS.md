@@ -175,6 +175,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 * **CSRF** obrigatório em todo `POST`, validado com `hmac.compare_digest`. `GET` nunca altera estado.
 * **Autorização:**
   * Toda action pública começa por um guarda explícito (`_require_login()`, `_require_func('CODIGO')`) que reconsulta o estado do usuário (README §4.2).
+  * As guardas e leituras comuns ficam só em `models/10_security.py` (CR-018f): `_require_method(*métodos)`, `_denied()`, `_not_found(mensagem)`, `_text(valor, limite)` e `_require_query()` (lista, detalhe e log dos tickets). Nenhum controller as redefine; cada um guarda só a sua mensagem de 404 em `_MSG_NOT_FOUND`.
   * Decisões de execução sempre chamam `rbac.can_execute`. O agente também a chama na pré-validação do claim, para o solicitante do ticket (CR-007, D2). O motivo de pausa vem sempre de `rbac.pause_reason_for` (CR-008, R-33), na web e no daemon.
   * **Administrador só por administrador (CR-008, E1):** `MANAGE_USERS` e `MANAGE_PROFILES` não bastam para tocar em perfil administrativo, em `is_admin`, na senha ou no estado de um administrador, nem na matriz do próprio perfil (README §4.3.A). A checagem é do service, com os dados lidos do repositório.
   * **Sessão revogável (CR-008, E2):** a revalidação compara `session_epoch` e a vida máxima (`session_max_hours`); logout, troca e redefinição de senha, desativação e troca de perfil incrementam `session_epoch` (README §4.2).

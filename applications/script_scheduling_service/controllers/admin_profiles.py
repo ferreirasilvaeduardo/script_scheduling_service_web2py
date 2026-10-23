@@ -13,28 +13,11 @@ from repo_errors import RepoConflict, RepoError, RepoNotFound
 _FUNC = "MANAGE_PROFILES"
 _SIZES = (20, 50, 100)
 _MAX_IDS = 5000
+_MSG_NOT_FOUND = u"Perfil não encontrado."
 _MSG_LIST_FAILED = u"Não foi possível carregar os perfis. Tente novamente em instantes."
 _MSG_TOGGLE_FAILED = u"Não foi possível alterar a situação do perfil. Tente novamente em instantes."
 _MSG_MATRIX_FAILED = u"Não foi possível salvar a matriz. Tente novamente em instantes."
 _JS_MATRIX = "js/app/matrix.js"
-
-
-def _require_method(*permitidos):
-    if (request.env.request_method or "GET").upper() not in permitidos:
-        raise HTTP(405, **response.headers)
-
-
-def _denied():
-    raise HTTP(403, u"Acesso negado.", **response.headers)
-
-
-def _not_found():
-    raise HTTP(404, u"Perfil não encontrado.", **response.headers)
-
-
-def _text(value, limit):
-    value = value[-1] if isinstance(value, list) and value else value
-    return value[:limit] if isinstance(value, str) else None
 
 
 def _list(name):
@@ -81,7 +64,7 @@ def form():
     try:
         data = service.form(ctx, _text(request.args(0), 11))
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
         _denied()
     return _form_page(ctx, data)
@@ -95,7 +78,7 @@ def save():
     try:
         saved_id, errors = service.save(ctx, _client_ip(), profile_id, submitted)
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
         _denied()
     except RepoError:
@@ -133,7 +116,7 @@ def toggle_active():
         action = u"desativado" if changed["active"] == "N" else u"reativado"
         session.flash = {"kind": "success", "message": u"Perfil %s %s." % (changed["name"], action)}
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
         _denied()
     except OperationDenied as exc:
@@ -154,7 +137,7 @@ def who_can():
         data = service.who_can(ctx, _text(request.get_vars.get("script"), 11),
                                   _text(request.get_vars.get("environment"), 11))
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
         _denied()
     response.title = u"Quem pode o quê — SSS"
@@ -167,7 +150,7 @@ def matrix():
     try:
         data = service.matrix(ctx, _text(request.args(0), 11))
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
         _denied()
     response.title = u"Permissões de %s — SSS" % data["profile"]["name"]
@@ -183,7 +166,7 @@ def save_matrix():
         diff, errors = service.save_matrix(ctx, _client_ip(), profile_id, _list("funcs"), _list("ambs"),
                                             _list("scrs"), _text(request.post_vars.get("perm_version"), 11))
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
         _denied()
     except RepoError:

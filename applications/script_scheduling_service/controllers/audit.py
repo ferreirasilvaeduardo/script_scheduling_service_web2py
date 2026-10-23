@@ -26,20 +26,6 @@ _MSG_AGENTS_FAILED = u"Não foi possível carregar os agentes. Tente novamente e
 AGENTS_INTERVAL_S = 15
 
 
-def _require_method(*permitidos):
-    if (request.env.request_method or "GET").upper() not in permitidos:
-        raise HTTP(405, **response.headers)
-
-
-def _denied():
-    raise HTTP(403, u"Acesso negado.", **response.headers)
-
-
-def _text(value, limit):
-    value = value[-1] if isinstance(value, list) and value else value
-    return value[:limit] if isinstance(value, str) else None
-
-
 def _entry(source):
     return dict((c, _text(source.get(c), 50)) for c in audit_service.FILTER_FIELDS)
 

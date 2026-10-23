@@ -158,5 +158,40 @@ def _require_func(code):
             "acesso negado (login=%s funcionalidade=%s caminho=%s ip=%s)",
             ctx["login"], code, request.env.path_info, _client_ip(), extra={"action": "RBAC"},
         )
-        raise HTTP(403, u"Acesso negado.", **response.headers)
+        _denied()
+    return ctx
+
+
+# Guardas e leitura de parametros comuns aos controllers (antes repetidas em cada um; CR-018f).
+
+def _require_method(*allowed):
+    """405 quando o metodo HTTP nao e um dos aceitos pela action."""
+    if (request.env.request_method or "GET").upper() not in allowed:
+        raise HTTP(405, **response.headers)
+
+
+def _denied():
+    """403; a pagina de erro mostra a mensagem-padrao de sem permissao (README §2.4.2)."""
+    raise HTTP(403, u"Acesso negado.", **response.headers)
+
+
+def _not_found(message):
+    """404 com a mensagem do controller; fora do escopo tambem e 404 (nunca 403)."""
+    raise HTTP(404, message, **response.headers)
+
+
+def _text(value, limit):
+    """Ultimo valor de um parametro (repetido vira lista), cortado em `limit` so por memoria (AGENTS §3.4)."""
+    value = value[-1] if isinstance(value, list) and value else value
+    return value[:limit] if isinstance(value, str) else None
+
+
+def _require_query():
+    """Guarda da lista, do detalhe e do log dos tickets: VIEW_LOGS ou EXEC_SCRIPT (README §4.3.C)."""
+    import ticket_service
+    ctx = _require_login()
+    if not ticket_service.can_query(ctx):
+        _log.warning("acesso negado (login=%s funcionalidade=VIEW_LOGS|EXEC_SCRIPT caminho=%s ip=%s)",
+                     ctx["login"], request.env.path_info, _client_ip(), extra={"action": "RBAC"})
+        _denied()
     return ctx

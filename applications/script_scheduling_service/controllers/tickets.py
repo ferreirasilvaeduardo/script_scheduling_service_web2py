@@ -16,6 +16,7 @@ _JS_TICKETS = "js/app/tickets.js"
 _JS_LOG = "js/app/log_viewer.js"
 _SIZES = (20, 50, 100)
 _LIST_EXTENSIONS = ("html", "load")
+_MSG_NOT_FOUND = u"Ticket não encontrado."
 _MSG_LIST_FAILED = u"Não foi possível carregar os tickets. Tente novamente em instantes."
 _MSG_CANCEL_FAILED = u"Não foi possível cancelar o ticket. Tente novamente em instantes."
 _MSG_OUTPUT_FAILED = u"Não foi possível baixar a saída. Tente novamente em instantes."
@@ -23,37 +24,6 @@ _MSG_RERUN_REVIEW = (u"Não foi possível reexecutar automaticamente: o cadastro
                            u"desde a execução original. Revise os campos destacados e crie o ticket novamente.")
 _CANCEL_FLASH_KIND = {"TERMINAL": "warning", "CANCELADO": "success", "SINALIZADO": "success",
                             "JA_SINALIZADO": "warning"}
-
-
-def _method():
-    return (request.env.request_method or "GET").upper()
-
-
-def _require_method(*permitidos):
-    if _method() not in permitidos:
-        raise HTTP(405, **response.headers)
-
-
-def _denied():
-    raise HTTP(403, u"Acesso negado.", **response.headers)
-
-
-def _not_found():
-    raise HTTP(404, u"Ticket não encontrado.", **response.headers)
-
-
-def _require_query():
-    ctx = _require_login()
-    if not ticket_service.can_query(ctx):
-        _log.warning("acesso negado (login=%s funcionalidade=VIEW_LOGS|EXEC_SCRIPT caminho=%s ip=%s)",
-                     ctx["login"], request.env.path_info, _client_ip(), extra={"action": "RBAC"})
-        _denied()
-    return ctx
-
-
-def _text(value, limit):
-    value = value[-1] if isinstance(value, list) and value else value
-    return value[:limit] if isinstance(value, str) else None
 
 
 def _post_answers():
@@ -113,7 +83,7 @@ def new():
             return _new_page(ctx, script_id, environment, values, warnings=warnings)
         return _new_page(ctx, script_id, environment)
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
         _denied()
 
@@ -138,7 +108,7 @@ def history():
     try:
         data = ticket_service.script_history(ctx, _text(request.args(0), 10))
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     response.title = u"Histórico de %s — SSS" % data["script"]["name"]
     return dict(h=data)
 
@@ -164,7 +134,7 @@ def create():
         return _new_page(ctx, script_id, environment, answers, errors, priority, scheduled_at,
                             rerun_of or None)
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
         _denied()
 
@@ -225,7 +195,7 @@ def detail():
     try:
         ticket = ticket_service.detail(ctx, request.args(0))
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     response.title = u"Ticket #%s — SSS" % ticket["id"]
     response.sss_scripts = [_JS_TICKETS, _JS_LOG]
     log_viewer = {
@@ -244,7 +214,7 @@ def output():
     try:
         ticket_id, size, parts = ticket_service.output_chunks(ctx, request.args(0))
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except RepoError:
         _log.exception("falha ao iniciar o download da saida (login=%s ticket=%r)", ctx["login"], request.args(0),
                        extra={"action": "SAIDA_BAIXAR"})
@@ -266,7 +236,7 @@ def cancel():
         session.flash = {"kind": _CANCEL_FLASH_KIND[result],
                          "message": ticket_service.MSG_CANCEL[result]}
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
         _denied()
     except RepoError:
@@ -282,7 +252,7 @@ def rerun():
     try:
         new_id = ticket_service.rerun(ctx, _client_ip(), ticket_id)
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
         _denied()
     except RerunError as e:

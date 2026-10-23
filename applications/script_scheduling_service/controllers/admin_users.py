@@ -15,26 +15,9 @@ from repo_errors import RepoConflict, RepoError, RepoNotFound
 _FUNC = "MANAGE_USERS"
 _SIZES = (20, 50, 100)
 _PASSWORD_FIELDS = ("password", "confirmation")
+_MSG_NOT_FOUND = u"Usuário não encontrado."
 _MSG_LIST_FAILED = u"Não foi possível carregar os usuários. Tente novamente em instantes."
 _MSG_ACTION_FAILED = u"Não foi possível concluir a operação. Tente novamente em instantes."
-
-
-def _require_method(*permitidos):
-    if (request.env.request_method or "GET").upper() not in permitidos:
-        raise HTTP(405, **response.headers)
-
-
-def _denied():
-    raise HTTP(403, u"Acesso negado.", **response.headers)
-
-
-def _not_found():
-    raise HTTP(404, u"Usuário não encontrado.", **response.headers)
-
-
-def _text(value, limit):
-    value = value[-1] if isinstance(value, list) and value else value
-    return value[:limit] if isinstance(value, str) else None
 
 
 def _strip_passwords():
@@ -87,7 +70,7 @@ def form():
     try:
         data = service.form(ctx, _text(request.args(0), 11))
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
         _denied()
     return _form_page(ctx, data)
@@ -103,7 +86,7 @@ def save():
     try:
         _saved, errors = service.save(ctx, _client_ip(), user_id, submitted)
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
         _denied()
     except RepoError:
@@ -138,7 +121,7 @@ def toggle_active():
         action = u"desativado" if changed["active"] == "N" else u"reativado"
         session.flash = {"kind": "success", "message": u"Usuário %s %s." % (changed["login"], action)}
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
         _denied()
     except OperationDenied as exc:
@@ -159,7 +142,7 @@ def reset_password():
     try:
         errors = service.reset_password(ctx, _client_ip(), user_id, passwords["password"], passwords["confirmation"])
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
         _denied()
     except OperationDenied as exc:
@@ -184,7 +167,7 @@ def unlock():
         changed = service.unlock(ctx, _client_ip(), user_id)
         session.flash = {"kind": "success", "message": u"Usuário %s desbloqueado." % changed["login"]}
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
         _denied()
     except OperationDenied as exc:

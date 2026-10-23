@@ -20,26 +20,9 @@ _RULE_FIELDS = ("name", "recurrence_type", "cron_expression", "run_time", "month
 # Protecao de memoria acima dos limites do service, que recusa o excesso (README §7.6, AGENTS §3.4).
 _LIMITS = {"name": 300, "cron_expression": 300, "run_time": 40, "month_day": 40, "start_date": 40,
             "end_date": 40, "priority": 10, "version": 100, "recurrence_type": 40}
+_MSG_NOT_FOUND = u"Regra de agendamento não encontrada."
 _MSG_LIST_FAILED = u"Não foi possível carregar as regras. Tente novamente em instantes."
 _MSG_ACTION_FAILED = u"Não foi possível concluir a operação. Tente novamente em instantes."
-
-
-def _require_method(*permitidos):
-    if (request.env.request_method or "GET").upper() not in permitidos:
-        raise HTTP(405, **response.headers)
-
-
-def _denied():
-    raise HTTP(403, u"Acesso negado.", **response.headers)
-
-
-def _not_found():
-    raise HTTP(404, u"Regra de agendamento não encontrada.", **response.headers)
-
-
-def _text(value, limit):
-    value = value[-1] if isinstance(value, list) and value else value
-    return value[:limit] if isinstance(value, str) else None
 
 
 def _post_days(source):
@@ -134,7 +117,7 @@ def form():
                                    _text(request.get_vars.get("script_id"), 10),
                                    _text(request.get_vars.get("environment"), 30))
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except (AccessDenied, TriggerDenied):
         _denied()
     except OperationDenied as exc:
@@ -154,7 +137,7 @@ def save():
         saved_id, errors = service.save(ctx, _client_ip(), dict(submitted, id=schedule_id, script_id=script_id,
                                                                   environment=environment, answers=answers))
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
         _denied()
     except OperationDenied as exc:
@@ -172,7 +155,7 @@ def save():
                                    submitted=None if conflict else submitted,
                                    values=None if conflict else answers, errors=errors)
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except (AccessDenied, TriggerDenied):
         _denied()
     except OperationDenied as exc:
@@ -191,7 +174,7 @@ def _state_action(func, success):
         changed = func(ctx, _client_ip(), schedule_id)
         session.flash = {"kind": "success", "message": success % changed["name"]}
     except RepoNotFound:
-        _not_found()
+        _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
         _denied()
     except OperationDenied as exc:

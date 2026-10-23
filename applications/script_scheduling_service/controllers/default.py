@@ -50,9 +50,8 @@ def index():
 
 
 def login():
+    _require_method("GET", "HEAD", "POST")
     method = (request.env.request_method or "GET").upper()
-    if method not in ("GET", "HEAD", "POST"):
-        raise HTTP(405)
     response.title = u"Entrar — SSS"
     target = security.validate_next(request.vars.get("next"))
     if current.sss_ctx:
@@ -79,8 +78,7 @@ def login():
 
 
 def logout():
-    if (request.env.request_method or "GET").upper() != "POST":
-        raise HTTP(405)
+    _require_method("POST")
     if current.sss_ctx:
         auth_service.logout(current.sss_ctx, _client_ip())
     session.clear()
@@ -94,8 +92,7 @@ _MY_PASSWORD_FIELDS = ("current_password", "new_password", "confirmation")
 
 def permissions():
     """O que eu posso fazer (README §4.3.E): so leitura, para qualquer usuario logado."""
-    if (request.env.request_method or "GET").upper() not in ("GET", "HEAD"):
-        raise HTTP(405, **response.headers)
+    _require_method("GET", "HEAD")
     ctx = _require_login()
     response.title = u"O que eu posso fazer — SSS"
     try:
@@ -108,9 +105,8 @@ def permissions():
 
 
 def my_password():
+    _require_method("GET", "HEAD", "POST")
     method = (request.env.request_method or "GET").upper()
-    if method not in ("GET", "HEAD", "POST"):
-        raise HTTP(405, **response.headers)
     ctx = _require_login()
     response.title = u"Minha senha — SSS"
     errors = {}
