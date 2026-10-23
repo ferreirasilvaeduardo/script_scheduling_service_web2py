@@ -2,7 +2,8 @@
  * capture_evidence.js
  * Evidencias reais da homologacao: executa os casos de teste do manual de UI Freeze adaptados ao banco DEV
  * (Oracle) e ao agente real, captura as figuras e confere na propria pagina o resultado esperado.
- * Rodadas: 2026-10-22 (CR-016) e 2026-10-23 (CR-017: telas de operacao, agendamento e producao no cadastro).
+ * Rodadas: 2026-10-22 (CR-016), 2026-10-23 (CR-017: telas de operacao, agendamento e producao no cadastro)
+ * e 2026-10-23 rodada 2 (CR-018: regras de cancelamento e de filtro, avisos de cadastro, nomes e desempenho).
  *
  * Uso (servidor web do DEV no ar, agente real no ar):
  *   node capture_evidence.js            -> todos os CTs, na ordem
@@ -11,8 +12,11 @@
  * Senhas: nunca no codigo nem no log.
  *   - senha inicial dos usuarios do seed: lida do docs/DEPLOYMENT.md (secao 5.3, documentada);
  *   - senha nova do admin (troca valida do CT-01): arquivo SSS_ADMIN_NEW_PASSWORD_FILE (padrao ~/.sss_homolog_pw, 0600).
+ *   - SSS_ADMIN_START=new: o admin ja esta com a senha nova (rodada repetida no mesmo banco); o CT-01 troca
+ *     a senha nova por ela mesma.
  * Data da rodada: SSS_EVIDENCE_DATE (AAAAMMDD, padrao 20261023): carimbo HOMOLOG_<data> dos registros criados.
- * Saida: SSS_EVIDENCE_DIR (padrao dev/homologation/evidence_<data>): fig_NN.png, results.json, state.json.
+ * Rodada no mesmo dia: SSS_EVIDENCE_ROUND (ex.: 2): carimbo HOMOLOG_<data>R<n> e pasta evidence_<data>_r<n>.
+ * Saida: SSS_EVIDENCE_DIR (padrao dev/homologation/evidence_<data>[_r<n>]): <CT>_<n>.png, results.json, state.json.
  */
 const fs = require('fs');
 const os = require('os');
@@ -33,11 +37,14 @@ const APP = path.resolve(__dirname, '..', '..', '..');
 const BASE_URL = process.env.SSS_BASE_URL || 'http://127.0.0.1:18000/script_scheduling_service';
 const RUN_DATE = process.env.SSS_EVIDENCE_DATE || '20261023';
 const RUN_DATE_BR = `${RUN_DATE.slice(6, 8)}/${RUN_DATE.slice(4, 6)}/${RUN_DATE.slice(0, 4)}`;
-const OUT_DIR = process.env.SSS_EVIDENCE_DIR || path.join(APP, 'dev', 'homologation', `evidence_${RUN_DATE}`);
+const ROUND = process.env.SSS_EVIDENCE_ROUND || '';
+const OUT_DIR = process.env.SSS_EVIDENCE_DIR ||
+    path.join(APP, 'dev', 'homologation', `evidence_${RUN_DATE}${ROUND ? '_r' + ROUND : ''}`);
 const CHROME = process.env.SSS_CHROME ||
     path.join(os.homedir(), '.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome');
 const INPUT = path.join(APP, 'input');
-const STAMP = `HOMOLOG_${RUN_DATE}`;
+const STAMP = `HOMOLOG_${RUN_DATE}${ROUND ? 'R' + ROUND : ''}`;
+const ADMIN_STARTS_NEW = process.env.SSS_ADMIN_START === 'new';
 
 const deployDoc = fs.readFileSync(path.join(APP, 'docs', 'DEPLOYMENT.md'), 'utf8');
 const SEED_PASS = (deployDoc.match(/senha inicial `([^`]+)`/) || [])[1];
@@ -51,7 +58,7 @@ if (!SEED_PASS || !NEW_PASS) {
 fs.mkdirSync(OUT_DIR, { recursive: true });
 const STATE_FILE = path.join(OUT_DIR, 'state.json');
 const RESULTS_FILE = path.join(OUT_DIR, 'results.json');
-const state = fs.existsSync(STATE_FILE) ? JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) : { adminNew: false, tickets: {} };
+const state = fs.existsSync(STATE_FILE) ? JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) : { adminNew: ADMIN_STARTS_NEW, tickets: {} };
 const results = fs.existsSync(RESULTS_FILE) ? JSON.parse(fs.readFileSync(RESULTS_FILE, 'utf8')) : {};
 function saveState() { fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2)); }
 function saveResults() { fs.writeFileSync(RESULTS_FILE, JSON.stringify(results, null, 2)); }
@@ -327,7 +334,9 @@ CTS['CT-01'] = async () => {
     check('Troca válida: mensagem de sucesso e a sessão continua ativa',
         trocou && !page.url().includes('/default/login'), page.url().replace(BASE_URL, ''));
     if (trocou) { state.adminNew = true; saveState(); }
-    note('A senha do admin passou a ser a senha escolhida pelo responsável pela homologação (os demais usuários continuam com a senha inicial).');
+    note(ADMIN_STARTS_NEW
+        ? 'O admin já usava a senha escolhida pelo responsável pela homologação (rodada anterior no mesmo banco); a troca válida repetiu essa senha (os demais usuários continuam com a senha inicial).'
+        : 'A senha do admin passou a ser a senha escolhida pelo responsável pela homologação (os demais usuários continuam com a senha inicial).');
     const st405 = await page.evaluate(async (u) => (await fetch(u, { method: 'GET', credentials: 'same-origin' })).status,
         BASE_URL + '/default/logout');
     check('GET em /default/logout não faz logout (405)', st405 === 405, 'status ' + st405);
@@ -373,13 +382,18 @@ CTS['CT-03'] = async () => {
         'Precisa de mais acesso? Fale com o administrador do sistema.');
     await expectText('op.hml: ambientes do perfil (CLONE6, CLONE7 e GFPREPROD)', 'CLONE6', 'CLONE7', 'GFPREPROD');
     await expectNoText('op.hml: CLONE1 e CLONE2 (fora do perfil) não aparecem', 'CLONE1', 'CLONE2');
+    await expectText('Telas com os nomes do menu: Rodar Scripts e Consultar Tickets (CR-018b)', 'Rodar Scripts', 'Consultar Tickets');
+    await expectText('Scripts que posso rodar: só a contagem e o link para os cartões (CR-018b)',
+        'Você pode rodar', 'script(s)', 'Abrir Rodar um script');
+    await expectNoText('Sem os botões Rodar em… que repetiam os cartões (CR-018b)', 'Rodar em GFPREPROD', 'Rodar em CLONE6');
     await snap('O que eu posso fazer (op.hml)', { full: true });
-    const okRodar = await clickText('a', 'Rodar em GFPREPROD', { navigate: true });
-    check('O botão Rodar em… abre o disparo já na etapa 3', okRodar && page.url().includes('environment=GFPREPROD'),
+    const okAbrir = await clickText('a', 'Abrir Rodar um script', { navigate: true });
+    check('Abrir Rodar um script leva aos cartões', okAbrir && page.url().includes('/tickets/catalog'),
         page.url().replace(BASE_URL, ''));
     await login('consulta');
     await go('/default/permissions');
     await expectText('consulta: ainda não pode rodar scripts', 'Você ainda não pode rodar scripts.');
+    await expectNoText('consulta: sem o nome antigo Disparar Scripts', 'Disparar Scripts');
     await login('admin');
     await go('/default/permissions');
     await expectText('admin: frase de administrador', 'administrador');
@@ -534,6 +548,10 @@ CTS['CT-06'] = async () => {
     await login('admin');
     await go('/tickets/index');
     await expectText('admin vê tickets de vários ambientes', 'GFPREPROD', 'CLONE2', 'CLONE6');
+    await expectTextCI('Coluna Situação no lugar de Status (CR-018b)', 'Situação');
+    check('admin (vê logins): filtro Solicitante (login) presente (CR-018a)', await page.$('[name="requested_by"]') !== null);
+    await expectText('Ticket com erro: motivo em nome simples na lista (CR-018b)', 'O script avisou que algo deu errado');
+    await expectNoText('Sem o código técnico do motivo na lista', 'EXIT_ERROR');
     await snap('Lista de tickets (admin)', { full: true });
     await go('/tickets/index?status=RUNNING');
     const linhas = await page.$$eval('table tbody tr', (trs) => trs.map((t) => t.innerText));
@@ -548,6 +566,16 @@ CTS['CT-06'] = async () => {
     await go('/tickets/index');
     await expectNoText('op.hml não vê tickets de CLONE1 e CLONE2', 'CLONE2', 'CLONE1');
     await snap('Lista de tickets do op.hml: só os ambientes do perfil', { full: true });
+    // CR-018a: filtro por solicitante só para quem vê logins; o login alheio na URL é ignorado
+    await login('consulta');
+    await go('/tickets/index');
+    check('consulta (vê "outra pessoa"): sem o filtro Solicitante', await page.$('[name="requested_by"]') === null);
+    const semFiltro = await page.$$eval('table tbody tr', (trs) => trs.length);
+    await go('/tickets/index?requested_by=op.prod');
+    const comLogin = await page.$$eval('table tbody tr', (trs) => trs.length);
+    check('consulta: requested_by=op.prod na URL é ignorado (mesma lista)', semFiltro > 0 && comLogin === semFiltro,
+        `${semFiltro} linha(s) sem filtro, ${comLogin} com o login na URL`);
+    await snap('Lista do consulta com o login alheio na URL (ignorado)', { full: true });
 };
 
 CTS['CT-07'] = async () => {
@@ -581,6 +609,8 @@ CTS['CT-07'] = async () => {
     await login('admin');
     await go(`/tickets/detail/${state.tickets.erro_hml}`);
     await expectText('Ticket com erro: o que aconteceu, o que fazer e o detalhe técnico', 'Deu erro', 'O que aconteceu', 'O que fazer agora', 'EXIT_ERROR');
+    await sleep(4000);
+    await expectText('Ticket encerrado: o log termina com "Log completo." (CR-018b)', 'Log completo.');
     await snap('Detalhe de ticket que deu erro', { full: true });
 };
 
@@ -740,7 +770,7 @@ async function errorOf(field) {
 
 const RUN = (() => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0'); })();
 const ENV_NOVO = `${STAMP}_${RUN}`;  // ambiente criado no CT-11 (fica inativo no fim); um por rodada
-const PRF_NOVO = STAMP + '_P';   // perfil criado no CT-25 (somente leitura de usuarios)
+const PRF_NOVO = `${STAMP}_P${RUN}`;  // perfil criado no CT-12 (fica inativo no fim); um por rodada
 const PRM_SIGILOSO = 'documento_cliente_hml';
 
 CTS['CT-11'] = async () => {
@@ -784,6 +814,18 @@ CTS['CT-11'] = async () => {
     check('GFPREPROD marcado como ambiente de produção no cadastro (seed do CR-017a)',
         await page.$eval('#field-is_production', (e) => e.checked));
     await snap('Ambiente com a caixa Ambiente de produção', { full: true });
+    // CR-018g: o DSN do seed, sem porta (host/serviço), é aceito, e o ambiente do seed pode ser editado
+    const dsn = await page.$eval('#field-connection', (e) => e.value).catch(() => '');
+    check('DSN do seed sem porta (host/serviço)', /^[^:/]+\/\S+$/.test(dsn), dsn ? 'formato host/serviço' : 'campo não encontrado');
+    for (const marcar of [false, true]) {
+        await go(`/admin_environments/form/${gfId}`);
+        await page.$eval('#field-is_production', (e, v) => { e.checked = v; }, marcar);
+        await submit('/admin_environments/save');
+        await expectText(`GFPREPROD salvo com produção ${marcar ? 'remarcada' : 'desmarcada'} (DSN sem porta aceito, CR-018g)`,
+            'Ambiente salvo com sucesso.');
+    }
+    await go(`/admin_environments/form/${gfId}`);
+    check('GFPREPROD volta a ser produção', await page.$eval('#field-is_production', (e) => e.checked));
     await clickText('button', 'Desativar');
     await expectText('A desativação mostra o impacto antes de confirmar', 'Desativar ambiente');
     await snap('Confirmação de desativação de ambiente');
@@ -846,6 +888,22 @@ CTS['CT-12'] = async () => {
     await submit('/admin_profiles/save');
     await expectText('Remover o acesso administrativo do próprio perfil é negado',
         'Você não pode remover o acesso administrativo do seu próprio perfil.');
+    // CR-018b: perfil novo segue direto para a matriz (sem permissões ele não faz nada)
+    await go('/admin_profiles/form');
+    await fill('#field-name', PRF_NOVO);
+    await fill('#field-description', `Perfil criado na homologação de ${RUN_DATE_BR}`);
+    await submit('/admin_profiles/save');
+    check('Incluir perfil abre a matriz de permissões (CR-018b)', page.url().includes('/admin_profiles/matrix/'),
+        page.url().replace(BASE_URL, ''));
+    await expectText('Mensagem do perfil novo', 'Perfil incluído. Agora marque o que ele pode fazer.');
+    await snap('Perfil incluído: matriz aberta na hora', { full: true });
+    const novo = await idFromList(`/admin_profiles/index?name=${PRF_NOVO}`, PRF_NOVO, '/admin_profiles/form/');
+    state.profiles.novo = novo;
+    saveState();
+    await go(`/admin_profiles/form/${novo}`);
+    await clickText('button', 'Desativar');
+    await confirmModal();
+    await expectText(`Perfil ${PRF_NOVO} desativado ao final`, `Perfil ${PRF_NOVO} desativado.`);
 };
 
 CTS['CT-13'] = async () => {
@@ -853,6 +911,8 @@ CTS['CT-13'] = async () => {
     await login('admin');
     await go(`/admin_profiles/who_can?script=${state.scripts.contar_linhas_arquivo}`);
     await expectText('Por script: perfis ativos, por quê, onde e usuários ativos', 'ADMINISTRATOR', 'OPERATOR_PROD', 'OPERATOR_HML');
+    await expectText('Motivo com o nome do cadastro: "tem Rodar Scripts…" (CR-018b)', 'tem Rodar Scripts');
+    await expectNoText('Sem o nome antigo Disparar Scripts', 'Disparar Scripts');
     await snap('Quem pode o quê: perfis que podem rodar o contar_linhas_arquivo', { full: true });
     const gf = await page.$$eval('#field-environment option', (os) => (os.find((o) => o.innerText.trim() === 'GFPREPROD') || {}).value);
     await go(`/admin_profiles/who_can?environment=${gf}`);
@@ -952,6 +1012,16 @@ CTS['CT-15'] = async () => {
     check('Testar: valor válido aceito e inválido recusado com mensagem', okValido !== okInvalido);
     await snap('Parâmetro sigiloso', { full: true });
     note(`O parâmetro ${PRM_SIGILOSO} fica cadastrado (sem vínculo com scripts) como evidência.`);
+    // CR-018b: parâmetro usado por script ativo não oferece Desativar (seria negado); diz o que fazer antes
+    const cam = await idFromList('/admin_parameters/index?code=caminho_arquivo', 'caminho_arquivo', '/admin_parameters/form/');
+    state.prmCaminho = cam;
+    saveState();
+    await go(`/admin_parameters/form/${cam}`);
+    await expectText('caminho_arquivo (usado por script ativo): aviso do que fazer antes de desativar',
+        'Para desativar este parâmetro, tire-o antes dos scripts ativos que o usam:', 'contar_linhas_arquivo');
+    check('caminho_arquivo: sem o botão Desativar', !(await page.$$eval('button', (bs) => bs.some((b) =>
+        b.innerText.trim() === 'Desativar' && b.getBoundingClientRect().width > 0))));
+    await snap('Parâmetro usado por script ativo: sem Desativar, com o aviso', { full: true });
 };
 
 CTS['CT-16'] = async () => {
@@ -1080,6 +1150,9 @@ CTS['CT-17'] = async () => {
     saveState();
     check(`Regra ${RULE} gravada (diária às ${hora})`, !!ruleId, '#' + ruleId);
     await go('/schedules/index');
+    const envOpts = await page.$$eval('select[name="environment"] option', (os) => os.map((o) => o.innerText.trim()));
+    check('Filtro de ambiente das regras em lista, não em texto livre (CR-018b)',
+        envOpts.includes('Todos') && envOpts.includes('GFPREPROD'), envOpts.join(', '));
     await snap('Lista de regras de agendamento', { full: true });
     await go(`/schedules/index?name=${RULE}`);
     await clickText('button', 'Pausar');
@@ -1128,6 +1201,10 @@ CTS['CT-19'] = async () => {
     await snap('Trilha de auditoria', { full: true });
     await go('/audit/index?action=TICKET_CANCEL');
     await expectText('Cancelamentos do CT-08 como TICKET_CANCEL, um por pedido', 'TICKET_CANCEL', 'sinalizado');
+    await expectText('Ação e entidade com nomes simples, o código ao lado (CR-018b)', 'Cancelamento de ticket', 'Tickets');
+    const opAcoes = await page.$$eval('select[name="action"] option', (os) => os.map((o) => o.innerText.trim()));
+    check('Filtro de ação com os nomes simples', opAcoes.includes('Cancelamento de ticket') && !opAcoes.includes('TICKET_CANCEL'),
+        opAcoes.slice(0, 6).join(', ') + '…');
     await snap('Filtro por ação TICKET_CANCEL', { full: true });
     const d = new Date(Date.now() - 120 * 86400000);
     const de = d.toISOString().slice(0, 10);
@@ -1146,6 +1223,9 @@ CTS['CT-19'] = async () => {
     });
     check('CSV: nome auditoria_AAAAMMDD_HHMMSS.csv', /auditoria_\d{8}_\d{6}\.csv/.test(csv.cd || ''), csv.cd);
     check('CSV: separador ; e cabeçalho em português', (csv.head || '').includes(';') && /Data|Ator|Ação/.test(csv.head), (csv.head || '').split('\n')[0]);
+    const codigoCsv = ((csv.head || '').match(
+        /;"?(LOGIN_OK|LOGIN_FAILED|LOGIN_LOCKED|LOGOUT|TICKET_CREATE|TICKET_CANCEL|TICKET_RERUN|CREATE|UPDATE|DEACTIVATE|PERM_UPDATE|SCHEDULE_PAUSE|AGENT_START|AGENT_STOP|PURGE|AUDIT_EXPORT|SCHEMA_MIGRATE)"?;/) || [])[1];
+    check('CSV continua com os códigos das ações (CR-018b muda só a tela)', !!codigoCsv, codigoCsv || 'nenhum código na primeira linha');
     await go('/audit/index?action=AUDIT_EXPORT');
     await expectText('A exportação aparece na trilha como AUDIT_EXPORT, com filtros e linhas', 'AUDIT_EXPORT', 'linhas');
     await snap('Exportação registrada na trilha');
@@ -1401,7 +1481,7 @@ CTS['CT-26'] = async () => {
     await expectText('OPERATOR_HML sem VIEW_LOGS (temporário)', 'Permissões salvas: -VIEW_LOGS');
     await login('op.hml');
     await go('/default/index');
-    await expectText('Só com Disparar Scripts: o item Tickets continua no menu (CR-017a)', 'Tickets', 'Rodar um script');
+    await expectText('Só com Rodar Scripts: o item Tickets continua no menu (CR-017a)', 'Tickets', 'Rodar um script');
     await snap('Menu de quem só dispara scripts');
     await clickText('.sss-nav-link', 'Tickets', { navigate: true });
     const linhas = await page.$$eval('table tbody tr', (trs) => trs.map((t) => t.innerText));
@@ -1430,6 +1510,105 @@ CTS['CT-26'] = async () => {
     note('As mudanças temporárias (VIEW_LOGS do OPERATOR_HML e a homologação do limpar_linhas_vazias) foram desfeitas no próprio CT e ficam na auditoria.');
 };
 
+// Cancela pelo detail o ticket esperando (botao Cancelar este pedido e confirmacao).
+async function cancelWaiting(id) {
+    await go(`/tickets/detail/${id}`);
+    const ok = await clickText('button', 'Cancelar este pedido');
+    if (ok) await confirmModal();
+    return ok && (await has('Cancelado'));
+}
+
+// Tempo de abertura de uma tela (mediana de 3 aberturas, em ms).
+async function openTime(p) {
+    const times = [];
+    for (let i = 0; i < 3; i++) {
+        const t0 = Date.now();
+        await go(p);
+        times.push(Date.now() - t0);
+    }
+    return times.sort((a, b) => a - b)[1];
+}
+
+CTS['CT-27'] = async () => {
+    begin('CT-27', 'CR-018: cancelar só quem enxerga, avisos ao mudar o cadastro e desempenho');
+    const sid = state.scripts.contar_linhas_arquivo;
+    // (1) cancelar ticket de outra pessoa exige Consultar Tickets (VIEW_LOGS) no ambiente (CR-018a, D1)
+    await login('admin');
+    const doAdmin = await createTicket('contar_linhas_arquivo', 'GFPREPROD', { caminho_arquivo: FILE_CLIENTES },
+        { scheduledAt: localIso(120) });
+    await login('op.hml');
+    const doHml = await createTicket('contar_linhas_arquivo', 'GFPREPROD', { caminho_arquivo: FILE_CLIENTES },
+        { scheduledAt: localIso(120) });
+    state.tickets.ct27_admin = doAdmin;
+    state.tickets.ct27_hml = doHml;
+    saveState();
+    check('Tickets esperando criados: um do admin e um do op.hml (GFPREPROD, daqui a 2 horas)', !!doAdmin && !!doHml,
+        `#${doAdmin} e #${doHml}`);
+    await login('admin');
+    const hml = await idFromList('/admin_profiles/index', 'OPERATOR_HML', '/admin_profiles/form/');
+    await toggleProfileFeature(hml, 'VIEW_LOGS');
+    await expectText('OPERATOR_HML sem Consultar Tickets (temporário)', 'Permissões salvas: -VIEW_LOGS');
+    await login('op.hml');
+    const stOutro = await go(`/tickets/detail/${doAdmin}`);
+    check(`Sem Consultar Tickets, o ticket #${doAdmin} do admin não é achado (404), então não há como cancelá-lo`,
+        stOutro === 404, 'status ' + stOutro);
+    await snap('Ticket de outra pessoa sem Consultar Tickets: 404');
+    check(`O próprio ticket #${doHml} continua cancelável com Rodar Scripts`, await cancelWaiting(doHml));
+    await snap('Próprio ticket cancelado sem Consultar Tickets', { full: true });
+    await login('admin');
+    await toggleProfileFeature(hml, 'VIEW_LOGS');
+    await expectText('Consultar Tickets devolvido ao OPERATOR_HML', 'Permissões salvas: +VIEW_LOGS');
+    await login('op.hml');
+    const stVolta = await go(`/tickets/detail/${doAdmin}`);
+    check('Com Consultar Tickets de volta, o op.hml vê o ticket do admin e o botão Cancelar este pedido',
+        stVolta === 200 && (await has('Cancelar este pedido')), 'status ' + stVolta);
+    check(`Cancelar Tickets com Consultar Tickets cancela o ticket #${doAdmin} de outra pessoa`, await cancelWaiting(doAdmin));
+    // (2) aviso ao mudar parâmetro usado por regra ativa (CR-018a, D3)
+    await login('admin');
+    const pid = state.prmCaminho ||
+        await idFromList('/admin_parameters/index?code=caminho_arquivo', 'caminho_arquivo', '/admin_parameters/form/');
+    await go(`/admin_parameters/form/${pid}`);
+    await expectText('Formulário do caminho_arquivo diz quantas regras ativas o usam',
+        'Este parâmetro é usado por', 'regra(s) de agendamento ativa(s)');
+    await snap('Parâmetro usado por regra ativa: aviso no formulário', { full: true });
+    const regexAntes = await page.$eval('#field-validation_regex', (e) => e.value);
+    await fill('#field-validation_regex', '^/caminho_que_nao_existe/.*$');
+    await submit('/admin_parameters/save');
+    await expectText('Regex que invalida a resposta da regra: salva, com o aviso da regra que vai ser pausada',
+        'Parâmetro salvo com sucesso.', 'vão ser pausadas no próximo horário', state.rule.name);
+    await snap('Aviso ao salvar: regra que vai ser pausada', { full: true });
+    await go(`/admin_parameters/form/${pid}`);
+    await fill('#field-validation_regex', regexAntes);
+    await submit('/admin_parameters/save');
+    await expectText('Regex desfeita: salva sem aviso', 'Parâmetro salvo com sucesso.');
+    await expectNoText('Sem regra a pausar depois de desfazer', 'vão ser pausadas');
+    // (3) aviso ao trocar o arquivo do script com ticket na fila (CR-018a, D3)
+    const fila = await createTicket('contar_linhas_arquivo', 'GFPREPROD', { caminho_arquivo: FILE_CLIENTES },
+        { scheduledAt: localIso(120) });
+    state.tickets.ct27_fila = fila;
+    saveState();
+    const original = '/opt/automacoes/scripts/utilitarios/contar_linhas_arquivo.sh';
+    await go(`/admin_scripts/form/${sid}`);
+    await fill('#field-path_file', '/opt/automacoes/scripts/utilitarios/contar_linhas_arquivo_nova.sh');
+    await submit('/admin_scripts/save');
+    await expectText(`Troca do arquivo salva, com o aviso do ticket #${fila} na fila que vai ser recusado`,
+        'Script salvo com sucesso.', `#${fila}`, 'vão ser recusados na hora de rodar');
+    await snap('Aviso ao trocar o arquivo do script: tickets na fila', { full: true });
+    await go(`/admin_scripts/form/${sid}`);
+    await fill('#field-path_file', original);
+    await submit('/admin_scripts/save');
+    await go(`/admin_scripts/form/${sid}`);
+    check('Arquivo original restaurado', (await page.$eval('#field-path_file', (e) => e.value)) === original);
+    check(`Ticket #${fila} da fila cancelado ao final`, await cancelWaiting(fila));
+    // (4) desempenho das telas de execução (CR-018c): só registro
+    const tCatalog = await openTime('/tickets/catalog');
+    const tPerm = await openTime('/default/permissions');
+    check('Rodar um script e O que eu posso fazer abrem (tempo registrado abaixo)', tCatalog > 0 && tPerm > 0);
+    note(`Tempo de abertura (mediana de 3, admin, navegador incluído): Rodar um script ${(tCatalog / 1000).toFixed(1)} s; ` +
+        `O que eu posso fazer ${(tPerm / 1000).toFixed(1)} s. É só registro do CR-018c, sem limite de aprovação.`);
+    note('As mudanças temporárias (Consultar Tickets do OPERATOR_HML, regex do caminho_arquivo e arquivo do contar_linhas_arquivo) foram desfeitas no próprio CT e ficam na auditoria.');
+};
+
 CTS['ENCERRAMENTO'] = async () => {
     begin('ENCERRAMENTO', 'Encerramento: regras da homologação pausadas (ficam como evidência, sem rodar)');
     await login('admin');
@@ -1447,7 +1626,7 @@ CTS['ENCERRAMENTO'] = async () => {
 
 const ORDER = ['CT-01', 'CT-02', 'CT-03', 'MASSA', 'CT-04', 'CT-05', 'CT-06', 'CT-07', 'CT-08', 'CT-09', 'CT-10',
     'CT-11', 'CT-12', 'CT-13', 'CT-14', 'CT-15', 'CT-16', 'CT-17', 'CT-18', 'CT-19', 'CT-20', 'CT-21', 'CT-22',
-    'CT-23', 'CT-24', 'CT-25', 'CT-26', 'ENCERRAMENTO'];
+    'CT-23', 'CT-24', 'CT-25', 'CT-26', 'CT-27', 'ENCERRAMENTO'];
 
 module.exports = { CTS };
 

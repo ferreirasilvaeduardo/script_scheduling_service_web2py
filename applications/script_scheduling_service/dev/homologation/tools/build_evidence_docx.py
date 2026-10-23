@@ -2,9 +2,9 @@
 """Gera o documento de evidencias da homologacao (DEV real) a partir do results.json do capture_evidence.js.
 
 Uso (da pasta tools/, Python 3 com python-docx):
-    SSS_EVIDENCE_DATE=AAAAMMDD python3 build_evidence_docx.py [pasta_evidencias] [saida.docx]
-Rodadas conhecidas em RODADAS (20261022: CR-016; 20261023: CR-017). Padrao: a rodada de 20261023,
-../evidence_<data> -> ../../../docs/homologation/SSS_Homologation_Evidence_<AAAA-MM-DD>.docx
+    SSS_EVIDENCE_DATE=AAAAMMDD [SSS_EVIDENCE_ROUND=n] python3 build_evidence_docx.py [pasta_evidencias] [saida.docx]
+Rodadas conhecidas em RODADAS (20261022: CR-016; 20261023: CR-017; 20261023_r2: CR-018). Padrao: a rodada de
+20261023, ../evidence_<data>[_r<n>] -> ../../../docs/homologation/SSS_Homologation_Evidence_<AAAA-MM-DD>[_r<n>].docx
 """
 import io
 import json
@@ -27,10 +27,13 @@ APP = os.path.dirname(os.path.dirname(HOMOLOG))
 RUN_DATE = os.environ.get("SSS_EVIDENCE_DATE", "20261023")
 DATE_ISO = "%s-%s-%s" % (RUN_DATE[:4], RUN_DATE[4:6], RUN_DATE[6:])
 DATE_BR = "%s/%s/%s" % (RUN_DATE[6:], RUN_DATE[4:6], RUN_DATE[:4])
-STAMP = "HOMOLOG_" + RUN_DATE
-EVID = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HOMOLOG, "evidence_" + RUN_DATE)
+ROUND = os.environ.get("SSS_EVIDENCE_ROUND", "")
+RUN_TAG = RUN_DATE + ("_r" + ROUND if ROUND else "")
+SUFFIX = "_r" + ROUND if ROUND else ""
+STAMP = "HOMOLOG_" + RUN_DATE + ("R" + ROUND if ROUND else "")
+EVID = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HOMOLOG, "evidence_" + RUN_TAG)
 SAIDA = sys.argv[2] if len(sys.argv) > 2 else os.path.join(APP, "docs", "homologation",
-                                                          "SSS_Homologation_Evidence_%s.docx" % DATE_ISO)
+                                                          "SSS_Homologation_Evidence_%s%s.docx" % (DATE_ISO, SUFFIX))
 ROXO = RGBColor(0x4A, 0x0A, 0x64)
 VERDE = RGBColor(0x1B, 0x6E, 0x3A)
 VERMELHO = RGBColor(0xB0, 0x1C, 0x1C)
@@ -38,7 +41,7 @@ AMBAR = RGBColor(0x8A, 0x5A, 0x00)
 
 ORDEM = ["CT-01", "CT-02", "CT-03", "MASSA", "CT-04", "CT-05", "CT-06", "CT-07", "CT-08", "CT-09", "CT-10",
          "CT-11", "CT-12", "CT-13", "CT-14", "CT-15", "CT-16", "CT-17", "CT-18", "CT-19", "CT-20", "CT-21",
-         "CT-22", "CT-23", "CT-24", "CT-25", "CT-26", "ENCERRAMENTO"]
+         "CT-22", "CT-23", "CT-24", "CT-25", "CT-26", "CT-27", "ENCERRAMENTO"]
 
 # Adaptacao de cada caso ao DEV real (o manual de 18/10 foi escrito sobre a massa simulada do FAKE).
 ADAPTACAO = {
@@ -150,6 +153,60 @@ _OBSERVACOES_1023 = [
     u"ambiente %s_<hhmm> (também inativo) e um segundo ticket do CT-05." % STAMP,
 ]
 
+# Rodada 2 de 23/10/2026 (CR-018), no mesmo banco da rodada da manha (sem recriar).
+_ADAPTACAO_1023R2 = dict(_ADAPTACAO_1023, **{
+    "CT-01": u"O admin já usava a senha escolhida pelo responsável pela homologação (rodada da manhã no mesmo "
+             u"banco); a troca válida repetiu essa senha. Os demais usuários seguem com a senha inicial "
+             u"documentada (DEPLOYMENT.md §5.3).",
+    "CT-03": u"HOMOLOGACAO → GFPREPROD. Os botões Rodar em… saíram (CR-018b): a tela mostra quantos scripts o "
+             u"usuário pode rodar e leva aos cartões de Rodar um script. Funcionalidades com os nomes do menu.",
+    "CT-06": u"Coluna Situação e motivo de erro em nome simples (CR-018b). Filtro por solicitante só para quem vê "
+             u"logins; para o consulta, um login alheio na URL é ignorado (CR-018a).",
+    "CT-07": u"Os tickets #11 e #30 do FAKE → ticket longo rodando e um ticket que deu erro de verdade. No ticket "
+             u"encerrado o log termina com \"Log completo.\" (CR-018b).",
+    "CT-11": u"HOMOLOG2 → ambiente %s_<hhmm>, desativado ao final. O GFPREPROD do seed foi editado (produção "
+             u"desmarcada e remarcada), o que só funciona com o DSN sem porta aceito (CR-018g)." % STAMP,
+    "CT-12": u"CONSULTA → READ_ONLY; OPERADOR_HML → OPERATOR_HML; DESENV (inativo) → CLONE7; VER_AUDITORIA → "
+             u"VIEW_AUDIT. A revisão foi cancelada (matriz inalterada). Perfil novo %s_P<hhmm>: a inclusão abre a "
+             u"matriz (CR-018b); desativado ao final." % STAMP,
+    "CT-13": u"carga_diaria → contar_linhas_arquivo; HOMOLOGACAO → GFPREPROD. Motivos com o nome do cadastro "
+             u"(\"tem Rodar Scripts\", CR-018b).",
+    "CT-15": u"Parâmetro sigiloso documento_cliente_hml (já criado na rodada da manhã). O caminho_arquivo, usado "
+             u"por script ativo, mostra o aviso no lugar do botão Desativar (CR-018b).",
+    "CT-17": u"Regra nova %s_DIARIA_<hhmm>, diária com a primeira execução em poucos minutos; o agente real "
+             u"criou o ticket no horário (CT-18). Filtro de ambiente em lista (CR-018b)." % STAMP,
+    "CT-19": u"Ações e entidades com nomes simples na tela, com o código ao lado (CR-018b); o CSV continua com os "
+             u"códigos.",
+    "CT-27": u"Caso novo do CR-018: o OPERATOR_HML ficou sem Consultar Tickets por alguns segundos (cancelar só "
+             u"quem enxerga); a regex do caminho_arquivo e o arquivo do contar_linhas_arquivo foram trocados para "
+             u"mostrar os avisos e desfeitos no próprio caso; tempos de abertura registrados (CR-018c).",
+})
+
+_OBSERVACOES_1023R2 = [
+    u"Segunda rodada do dia, no mesmo banco da rodada da manhã (sem recriar): os registros HOMOLOG_20261023_* "
+    u"continuam lá, e os desta rodada têm a marca %s." % STAMP,
+    u"Antes desta rodada o repositório foi movido para /portaloptrib/TESHUVA/SSS/DEV/web2py; os caminhos dos "
+    u"arquivos de entrada nas telas já são os novos.",
+    u"Uma primeira passada desta rodada foi descartada: o link /opt/automacoes/scripts/utilitarios ainda apontava "
+    u"para o caminho antigo do repositório, e os tickets terminaram com erro (as verificações do CR-018 passaram). "
+    u"Depois de refazer o link, a rodada foi executada do zero. Os registros daquela passada ficam no banco com a "
+    u"mesma marca (tickets com erro, ambiente e perfil inativos, regra pausada).",
+    u"Agente iniciado com o config padrão do DEV (CR-018d): os interpretadores estão no instance/config.ini local, "
+    u"sem cópia separada.",
+    u"Nomes das funcionalidades (Rodar Scripts, Consultar Tickets) aplicados ao banco do DEV pelo MERGE do "
+    u"init_db (CR-018b), sem recriar.",
+    u"Cancelamento no agente real: o log não ganha a linha \"processo encerrado por cancelamento (SIGTERM)\", "
+    u"que só existia na simulação do FAKE; o motivo aparece no Detalhe técnico (CANCELLED / CANCEL_USER).",
+    u"Scripts PYTHON3 rodam com -I e saída em buffer: o log de um script Python aparece quando o buffer descarrega "
+    u"(no fim, ou nunca, se o processo for cancelado). Scripts SH/BASH escrevem na hora.",
+]
+
+_AGENTE_PADRAO = (u"Agente iniciado com bin/sss-scheduler.sh e uma cópia do instance/config.ini do DEV com o mesmo "
+                  u"agent_id (srv-linux-local-01), os mesmos ambientes e as mesmas pastas, acrescentando apenas "
+                  u"interpreters = PYTHON3=/usr/bin/python3,BASH=/bin/bash,SH=/bin/sh (o padrão é vazio, e sem "
+                  u"interpretadores o agente não pega tickets).")
+_SENHAS_PADRAO = u"No CT-01 a senha do admin foi trocada pela tela para a senha escolhida pelo responsável pela homologação."
+
 RODADAS = {
     "20261022": {"commit": u"07e424f (encerramento do CR-016) mais as correções desta homologação, no mesmo commit "
                            u"deste documento",
@@ -160,8 +217,21 @@ RODADAS = {
                  "adaptacao": _ADAPTACAO_1023,
                  "ressalva": dict((k, v) for k, v in _RESSALVA_1022.items() if k != "CT-05"),
                  "defeitos": [], "observacoes": _OBSERVACOES_1023},
+    "20261023_r2": {"commit": u"d4cf9a9 (CR-018: 018a a 018d, 018f e 018g) e a mudança de pasta (b7ac268, "
+                              u"bc3f31b), mais o roteiro ajustado, no mesmo commit deste documento",
+                    "adaptacao": _ADAPTACAO_1023R2,
+                    "ressalva": dict((k, v) for k, v in _RESSALVA_1022.items() if k != "CT-05"),
+                    "defeitos": [], "observacoes": _OBSERVACOES_1023R2,
+                    "agente": u"Agente iniciado com bin/sss-scheduler.sh e o config padrão do DEV "
+                              u"(instance/config.ini, agent_id srv-linux-local-01), que já traz os interpretadores "
+                              u"PYTHON3, BASH e SH (CR-018d).",
+                    "senhas": u"O admin já estava com a senha escolhida pelo responsável pela homologação (rodada da "
+                              u"manhã); no CT-01 a troca válida repetiu essa senha.",
+                    "registros": u" Nesta rodada também: o perfil %s_P<hhmm> (inativo) e, no CT-27, a permissão Consultar "
+                                 u"Tickets do OPERATOR_HML, a regex do caminho_arquivo e o arquivo do "
+                                 u"contar_linhas_arquivo, todos desfeitos no próprio caso." % STAMP},
 }
-RODADA = RODADAS[RUN_DATE]
+RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]
 DEFEITOS = RODADA["defeitos"]
@@ -330,10 +400,7 @@ def main():
     doc.add_heading(u"2.1 Servidor web e agente", 2)
     for txt in (
             u"Servidor web do DEV iniciado com bin/start_local.sh 18000 (Python 3.6.15), ligado ao Oracle do DEV.",
-            u"Agente iniciado com bin/sss-scheduler.sh e uma cópia do instance/config.ini do DEV com o mesmo agent_id "
-            u"(srv-linux-local-01), os mesmos ambientes e as mesmas pastas, acrescentando apenas "
-            u"interpreters = PYTHON3=/usr/bin/python3,BASH=/bin/bash,SH=/bin/sh (o padrão é vazio, e sem "
-            u"interpretadores o agente não pega tickets).",
+            RODADA.get("agente", _AGENTE_PADRAO),
             u"Scripts do seed: o cadastro aponta para /opt/automacoes/scripts/utilitarios/, instalado nesta máquina "
             u"como link simbólico para dev/scripts/utilitarios/ do repositório (aceito pelo CR-011).",
             u"Arquivos de entrada reais nas pastas de entrada de cada ambiente e script (CR-014): clientes, notas e "
@@ -342,9 +409,9 @@ def main():
     doc.add_heading(u"2.2 Usuários e senhas", 2)
     doc.add_paragraph(
         u"Usuários do seed do DEV: admin (ADMINISTRATOR), op.prod (OPERATOR_PROD), op.hml (OPERATOR_HML) e "
-        u"consulta (READ_ONLY), com a senha inicial documentada no DEPLOYMENT.md §5.3. No CT-01 a senha do admin foi "
-        u"trocada pela tela para a senha escolhida pelo responsável pela homologação. Nenhuma senha aparece neste "
-        u"documento, nas telas capturadas ou no roteiro.")
+        u"consulta (READ_ONLY), com a senha inicial documentada no DEPLOYMENT.md §5.3. " +
+        RODADA.get("senhas", _SENHAS_PADRAO) +
+        u" Nenhuma senha aparece neste documento, nas telas capturadas ou no roteiro.")
     doc.add_heading(u"2.3 Massa criada pelas telas", 2)
     m = res.get("MASSA")
     if m:
@@ -360,8 +427,8 @@ def main():
         u"parâmetro ct24_valor_<hhmm> e as regras %s_DIARIA_<hhmm> (pausadas no encerramento). "
         % (STAMP, STAMP, STAMP) +
         u"Alterações de cadastro feitas para testar (caminho de script, vínculo de parâmetro, permissão "
-        u"MANAGE_USERS do OPERATOR_PROD) foram desfeitas pela tela no próprio caso. Tudo está na trilha de "
-        u"auditoria.")
+        u"MANAGE_USERS do OPERATOR_PROD) foram desfeitas pela tela no próprio caso." + RODADA.get("registros", u"") +
+        u" Tudo está na trilha de auditoria.")
 
     # 3. Defeitos e observacoes
     doc.add_heading(u"3. Defeitos encontrados e corrigidos", 1)
@@ -464,7 +531,7 @@ def resumo_md(res, ids, inicio, fim, total_ok, total_chk, total_fig):
         u"Documento completo, com as telas: `%s` (mesma pasta). "
         u"Gerado por `dev/homologation/tools/capture_evidence.js` e `build_evidence_docx.py`; o resultado bruto "
         u"de cada verificação está em `dev/homologation/evidence_%s/results.json`. Nenhuma senha foi "
-        u"registrada." % (os.path.basename(SAIDA), RUN_DATE), u"",
+        u"registrada." % (os.path.basename(SAIDA), RUN_TAG), u"",
         u"## Resultado por caso", u"",
         u"| Caso | Título | Verificações | Figuras | Resultado |", u"|---|---|---|---|---|",
     ]
@@ -484,7 +551,7 @@ def resumo_md(res, ids, inicio, fim, total_ok, total_chk, total_fig):
     linhas += [u"- **%s:** %s" % (c, t) for c, t in sorted(RESSALVA.items())]
     linhas += [u"", u"## Verificações que não passaram", u""]
     linhas += ([u"- %s: %s (%s)" % (c, k["desc"], k.get("detail", u"")) for c, k in nao_ok] or [u"Nenhuma."])
-    md = os.path.join(os.path.dirname(SAIDA), "SSS_HOMOLOGATION_EVIDENCE_%s.md" % DATE_ISO)
+    md = os.path.join(os.path.dirname(SAIDA), "SSS_HOMOLOGATION_EVIDENCE_%s%s.md" % (DATE_ISO, SUFFIX))
     io.open(md, "w", encoding="utf-8").write(u"\n".join(linhas) + u"\n")
     print("gerado:", md)
 
