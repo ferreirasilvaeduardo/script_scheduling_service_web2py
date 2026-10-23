@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Em andamento.** Aprovado pelo responsável pelo produto em 2026-10-23. 018a a 018c concluídos |
+| Status | **Em andamento.** Aprovado pelo responsável pelo produto em 2026-10-23. 018a a 018d concluídos |
 | Origem | Segunda e terceira revisões tela a tela e processo a processo (2026-10-23), depois do CR-017 |
 | Restrições | Sem dependência nova. Python 3.6. Sem mudança de esquema |
 | Afeta | README §4.3.C, §5.2.1, §6.5. `AGENTS.md` §3.4 e §7. Código: `rbac`, `ticket_service`, `ui_helpers`, `schedules_service`, `admin_parameters_service`, `admin_scripts_service`, controllers e telas de tickets, parâmetros e scripts |
@@ -39,6 +39,6 @@
 | 018a | D1, D2, D3 (A1 a A3) | Concluído |
 | 018b | Telas (A4) | Concluído |
 | 018c | Desempenho (A5) | Concluído |
-| 018d | `interpreters` no config do DEV | Pendente |
-| 018e | Nova rodada de evidências | Pendente |
+| 018d | `interpreters` no config do DEV (arquivo local, fora do git) e nota no `DEV_ENVIRONMENT.md` §6.3 | Concluído |
 | 018f | Limpeza de código | Aprovado |
+| 018e | Nova rodada de evidências (por último, para cobrir o 018f) | Pendente |
