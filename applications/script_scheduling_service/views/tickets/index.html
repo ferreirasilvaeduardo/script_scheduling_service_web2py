@@ -7,7 +7,7 @@ _opt_environments = [('', 'Todos')] + [(_a, _a) for _a in options['environments'
 _opt_scripts = [('', 'Todos')] + list(options['scripts'])
 _opt_sources = [('', 'Todas')] + list(options['sources'])
 _fields = []
-_fields.append({'name': 'status', 'label': 'Status', 'kind': 'multiple', 'value': active_filters.get('status', []), 'options': _opt_status})
+_fields.append({'name': 'status', 'label': u'Situação', 'kind': 'multiple', 'value': active_filters.get('status', []), 'options': _opt_status})
 _fields.append({'name': 'environment', 'label': 'Ambiente', 'kind': 'select', 'value': active_filters.get('environment'), 'options': _opt_environments})
 _fields.append({'name': 'script', 'label': 'Script', 'kind': 'select', 'value': active_filters.get('script'), 'options': _opt_scripts})
 if can_filter_requester:

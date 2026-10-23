@@ -14,9 +14,7 @@ _pairs = admin_parameters_service.options_as_pairs(_p['options_json'])
 if not _new:
     _deactivate = _p.get('active') == 'Y'
     _active = [_s['name'] for _s in _p['links'] if _s['active'] == 'Y']
-    if _deactivate and _active:
-        _modal_text = u'Este parâmetro está vinculado aos scripts ativos %s; a desativação será negada.' % ', '.join(_active)
-    elif _deactivate:
+    if _deactivate:
         _modal_text = u'O parâmetro deixará de poder ser vinculado a scripts.'
     else:
         _modal_text = u'O parâmetro voltará a poder ser vinculado a scripts.'
@@ -52,12 +50,19 @@ pass
   </div>
   <div class="sss-actions">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_parameters', f='index')}}">Voltar à lista</a>
-    {{if not _new:}}
+    {{if not _new and not (_deactivate and _active):}}
     {{modal = _modal_active}}
     {{include 'components/confirm_modal.html'}}
     {{pass}}
   </div>
 </div>
+
+{{if not _new and _deactivate and _active:}}
+<div class="alert alert-info sss-alert" role="note">
+  <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_icons}}#icon-alert"></use></svg>
+  <span>Para desativar este parâmetro, tire-o antes dos scripts ativos que o usam: {{=', '.join(_active)}}.</span>
+</div>
+{{pass}}
 
 {{if not _new and _p.get('rules_note'):}}
 <div class="alert alert-info sss-alert" role="note">

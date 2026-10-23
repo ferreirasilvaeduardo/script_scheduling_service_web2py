@@ -96,8 +96,10 @@ def index():
     page = ui_helpers.sanitize_page(_text(request.get_vars.get("page"), 9))
     size = ui_helpers.sanitize_size(_text(request.get_vars.get("size"), 3), _SIZES)
     error = None
+    environments = []
     try:
         result = service.list_page(ctx, filters, page, size)
+        environments = service.filter_environments(ctx)
     except AccessDenied:
         _denied()
     except RepoError:
@@ -107,7 +109,7 @@ def index():
     response.title = u"Regras de agendamento — SSS"
     response.sss_scripts = [_JS]
     return dict(result=result, error=error, active_filters=filters, size=size,
-                query_params=dict(filters, size=size))
+                query_params=dict(filters, size=size), environments=environments)
 
 
 def agenda():

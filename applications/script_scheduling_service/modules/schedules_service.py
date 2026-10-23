@@ -378,6 +378,13 @@ class SchedulesService(object):
 
         return None
 
+    def filter_environments(self, ctx):
+        """Ambientes do filtro da lista (CR-018b): os do escopo da lista (admin: todos os cadastrados)."""
+        admin_crud.require_feature(ctx, FEATURE)
+        if ctx.get("is_admin") is True:
+            return sorted(a["name"] for a in self._catalog.environments_list(page=1, size=1000)["items"])
+        return sorted(ctx.get("environments") or ())
+
     def active_rules(self, script_ids):
         """Regras ativas dos scripts (sem guarda de funcionalidade): [{id, name, script_id}] por nome.
 
@@ -977,6 +984,11 @@ def impact_warning(rules, total_active):
     more = u" e outras %d" % (len(rules) - _IMPACT_NAMES) if len(rules) > _IMPACT_NAMES else u""
     return (u"Atenção: %d de %d regra(s) de agendamento ativa(s) vão ser pausadas no próximo horário: %s%s. "
             u"Corrija as regras ou desfaça a mudança." % (len(rules), total_active, names, more))
+
+
+def filter_environments(ctx):
+    """Ambientes do filtro da lista de regras (servico padrao)."""
+    return _service().filter_environments(ctx)
 
 
 def active_rules(script_ids):

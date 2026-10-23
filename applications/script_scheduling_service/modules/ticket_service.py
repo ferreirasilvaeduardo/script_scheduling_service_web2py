@@ -843,6 +843,8 @@ class TicketService(object):
                 "status": t["status"],
                 "status_reason": t.get("status_reason"),
                 "reason_description": ui_helpers.reason_description(t.get("status_reason")),
+                # Nome simples do motivo de erro, sem o codigo tecnico (README §2.4.2, CR-018b).
+                "reason_name": ui_helpers.REASON_NAMES.get(t.get("status_reason")),
                 "cancel_requested": t.get("cancel_requested") == "Y",
                 "priority": t["priority"],
                 "requested_by": ui_helpers.visible_actor(t["requested_by"], ctx),

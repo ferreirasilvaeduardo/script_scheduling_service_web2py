@@ -16,9 +16,9 @@ DDLItem = collections.namedtuple("DDLItem", [
 # Catalogo canonico de funcionalidades (README §4.3.D)
 # Tuplas: (modulo, codigo, nome_exibicao, finalidade)
 FEATURE_CATALOG = (
-    ("OPERATION", "EXEC_SCRIPT", "Disparar Scripts", "Preencher questionários e abrir tickets"),
-    ("OPERATION", "VIEW_LOGS", "Consultar Logs", "Visualizar logs e histórico em tempo quase real"),
-    ("OPERATION", "CANCEL_TICKET", "Cancelar Tickets", "Cancelar tickets de terceiros em ambientes autorizados"),
+    ("OPERATION", "EXEC_SCRIPT", "Rodar Scripts", "Preencher questionários e abrir tickets"),
+    ("OPERATION", "VIEW_LOGS", "Consultar Tickets", "Acompanhar os tickets e ler o log em tempo quase real"),
+    ("OPERATION", "CANCEL_TICKET", "Cancelar Tickets", "Cancelar tickets de terceiros nos ambientes consultados (com Consultar Tickets)"),
     ("ADMIN", "MANAGE_USERS", "Gestão de Usuários", "Gerenciar operadores e credenciais"),
     ("ADMIN", "MANAGE_PROFILES", "Gestão de Perfis", "Gerenciar perfis e matrizes de permissão"),
     ("ADMIN", "MANAGE_ENVIRONMENTS", "Gestão de Ambientes", "Gerenciar ambientes e DSNs"),

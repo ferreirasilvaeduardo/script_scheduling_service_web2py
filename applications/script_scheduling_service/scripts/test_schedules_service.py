@@ -566,6 +566,15 @@ class TestNewRuleSteps(_Base):
         self.assertEqual(data["form"]["environment"]["name"], "HOMOLOGACAO")
 
 
+class TestListFilter(_Base):
+
+    def test_ambientes_do_filtro_no_escopo(self):
+        # CR-018b: o filtro de ambiente da lista vira uma lista, com os ambientes do escopo.
+        self.assertEqual(self.svc.filter_environments(self.ctx["op.hml"]), sorted(self.ctx["op.hml"]["environments"]))
+        admin = self.svc.filter_environments(self.ctx["admin"])
+        self.assertEqual(admin, sorted(a["name"] for a in self.catalog.environments_list(page=1, size=100)["items"]))
+
+
 class TestRulesAtRisk(_Base):
     """CR-018a: regras ativas que o proximo desdobro vai pausar, para o aviso dos cadastros."""
 

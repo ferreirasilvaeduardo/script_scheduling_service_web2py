@@ -28,6 +28,33 @@ ACTIONS = (
     "SCHEDULE_PAUSE", "AGENT_START", "AGENT_STOP", "PURGE",
     "AUDIT_EXPORT", "SCHEMA_MIGRATE",
 )
+# Nomes simples das acoes e entidades na tela (CR-018b); o CSV e o banco continuam com os codigos.
+ACTION_LABELS = {
+    "LOGIN_OK": u"Entrada no sistema", "LOGIN_FAILED": u"Senha errada", "LOGIN_LOCKED": u"Conta bloqueada",
+    "LOGOUT": u"Saída do sistema", "TICKET_CREATE": u"Ticket criado", "TICKET_CANCEL": u"Cancelamento de ticket",
+    "TICKET_RERUN": u"Ticket rodado de novo", "CREATE": u"Inclusão", "UPDATE": u"Alteração",
+    "DEACTIVATE": u"Desativação", "PERM_UPDATE": u"Permissões do perfil", "SCHEDULE_PAUSE": u"Regra pausada",
+    "AGENT_START": u"Agente iniciado", "AGENT_STOP": u"Agente parado", "PURGE": u"Limpeza por retenção",
+    "AUDIT_EXPORT": u"Exportação da auditoria", "SCHEMA_MIGRATE": u"Atualização do esquema",
+}
+ENTITY_LABELS = {
+    "tbsss_schedules": u"Regras de agendamento", "tbsss_agents": u"Agentes", "tbsss_environments": u"Ambientes",
+    "tbsss_audit": u"Auditoria", "tbsss_control": u"Controle do esquema", "tbsss_parameters": u"Parâmetros",
+    "tbsss_profiles": u"Perfis", "tbsss_scripts": u"Scripts", "tbsss_tickets": u"Tickets",
+    "tbsss_users": u"Usuários",
+}
+
+
+def action_label(code):
+    """Nome simples da acao para a tela; codigo desconhecido volta como veio."""
+    return ACTION_LABELS.get(code, code)
+
+
+def entity_label(code):
+    """Nome simples da entidade para a tela; codigo desconhecido volta como veio."""
+    return ENTITY_LABELS.get(code, code)
+
+
 EXPORT_ACTION = "AUDIT_EXPORT"
 AUDIT_ENTITY = "tbsss_audit"
 

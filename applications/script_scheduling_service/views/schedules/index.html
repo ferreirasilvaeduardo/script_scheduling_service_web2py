@@ -7,7 +7,7 @@ icons = URL('static', 'img/icons.svg')
 _opt_active = [('', 'Todas'), ('Y', 'Ativas'), ('N', 'Pausadas')]
 filters = {'id': 'filter-schedules', 'url_base': ('schedules', 'index'), 'keep': {'size': size}, 'fields': [
     {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': active_filters.get('name')},
-    {'name': 'environment', 'label': 'Ambiente', 'kind': 'text', 'value': active_filters.get('environment')},
+    {'name': 'environment', 'label': 'Ambiente', 'kind': 'select', 'value': active_filters.get('environment'), 'options': [('', 'Todos')] + [(_a, _a) for _a in environments]},
     {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('active'), 'options': _opt_active},
 ]}
 _columns = ('Nome', 'Script', 'Ambiente', u'Recorrência', u'Próxima execução', u'Última execução', u'Responsável', u'Situação', u'Ações')

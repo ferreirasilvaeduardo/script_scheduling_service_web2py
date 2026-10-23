@@ -394,6 +394,14 @@ class TestTicketQuery(_BaseTicket):
         self.assertIn(dev, op_hml)
         self.assertEqual(op_hml, set(i for i, a in by_env.items() if a in ("HOMOLOGACAO", "DESENV")))
 
+    def test_lista_mostra_o_motivo_em_nome_simples(self):
+        # CR-018b (README §2.4.2): a lista nao mostra o codigo tecnico; so o nome simples do motivo de erro.
+        items = self.svc.list(self.ctx["admin"], {}, 1, 100)["items"]
+        failed = [t for t in items if t["status_reason"] in ui_helpers.REASON_NAMES]
+        self.assertTrue(failed)
+        for t in items:
+            self.assertEqual(t["reason_name"], ui_helpers.REASON_NAMES.get(t["status_reason"]))
+
     def test_filtro_por_solicitante_so_para_quem_ve_logins(self):
         # CR-018a: o consulta ve "outra pessoa" no lugar do login (CR-008 E5); filtrar por um login alheio
         # revelaria quem pediu, entao o filtro e ignorado. O proprio login continua aceito.

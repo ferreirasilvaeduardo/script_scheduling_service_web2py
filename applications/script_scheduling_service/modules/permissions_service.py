@@ -18,7 +18,7 @@ MORE_ACCESS_PHRASE = u"Precisa de mais acesso? Fale com o administrador do siste
 REASON_SCRIPT_INACTIVE = u"o script está desativado"
 REASON_NOT_HOMOLOGATED = u"o script não foi liberado em nenhum dos seus ambientes"
 REASON_ENVIRONMENT_INACTIVE = u"o ambiente está desativado"
-REASON_NO_FEATURE = u"seu perfil não tem Disparar Scripts"
+REASON_NO_FEATURE = u"seu perfil não tem %s"  # nome da funcionalidade EXEC_SCRIPT, lido do cadastro
 _CATALOG_MAX = 1000
 
 
@@ -46,6 +46,10 @@ class PermissionsService(object):
                           "route": routes.get(f["code"])})
         return screens
 
+    def _no_feature(self):
+        names = dict((f["code"], f["name"]) for f in self._rbac.features_list())
+        return REASON_NO_FEATURE % names.get("EXEC_SCRIPT", "EXEC_SCRIPT")
+
     def _environments(self, ctx):
         admin = ctx.get("is_admin") is True
         mine = ctx.get("environments") or ()
@@ -54,13 +58,9 @@ class PermissionsService(object):
                 if a["active"] == "Y" and (admin or a["name"] in mine)]
 
     def _scripts(self, ctx):
-        scripts = []
-        for group in self._trigger_service.available_scripts(ctx):
-            for s in group["scripts"]:
-                _script, environments = self._trigger_service.available_environments(ctx, s["id"])
-                scripts.append({"id": s["id"], "name": s["name"], "description": s["description"],
-                                "environments": [a["name"] for a in environments]})
-        return scripts
+        """Scripts que o usuario pode rodar ({id, name}); os ambientes de cada um ficam nos cartoes (CR-018b)."""
+        return [{"id": s["id"], "name": s["name"]}
+                for group in self._trigger_service.available_scripts(ctx) for s in group["scripts"]]
 
     def _reason(self, ctx, script_id):
         """Motivo simples de um script do perfil nao aparecer (README §4.3.E)."""
@@ -99,7 +99,7 @@ class PermissionsService(object):
                 if script is None:
                     continue
                 missing.append({"name": script["name"],
-                                 "reason": REASON_NO_FEATURE if not can_exec else (reason or REASON_NOT_HOMOLOGATED)})
+                                 "reason": self._no_feature() if not can_exec else (reason or REASON_NOT_HOMOLOGATED)})
         return {
             "profile": ctx.get("profile_name"),
             "admin_phrase": ADMIN_PHRASE if admin else None,

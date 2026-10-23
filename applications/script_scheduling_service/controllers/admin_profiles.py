@@ -102,6 +102,10 @@ def save():
         _log.exception("falha ao salvar perfil (login=%s id=%r)", ctx["login"], profile_id, extra={"action": _FUNC})
         saved_id, errors = None, {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
     if not errors:
+        if not profile_id and saved_id:
+            # Perfil novo nao faz nada sem permissoes: segue direto para a matriz (CR-018b).
+            session.flash = {"kind": "success", "message": u"Perfil incluído. Agora marque o que ele pode fazer."}
+            redirect(URL(c="admin_profiles", f="matrix", args=[saved_id]))
         session.flash = {"kind": "success", "message": u"Perfil salvo com sucesso."}
         redirect(URL(c="admin_profiles", f="index"))
     try:

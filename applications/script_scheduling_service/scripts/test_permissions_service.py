@@ -55,7 +55,7 @@ class TestPermissions(unittest.TestCase):
         routes = dict((t["code"], t["route"]) for t in d["screens"])
         self.assertEqual(routes["MANAGE_PROFILES"], ("admin_profiles", "index"))
         self.assertIsNone(routes["CANCEL_TICKET"])  # acao, nao tela
-        # CR-017b: Disparar Scripts leva aos cartoes de Rodar um script; Consultar Logs, a lista de tickets.
+        # CR-017b: Rodar Scripts leva aos cartoes de Rodar um script; Consultar Tickets, a lista de tickets.
         self.assertEqual(routes["EXEC_SCRIPT"], ("tickets", "catalog"))
         self.assertEqual(routes["VIEW_LOGS"], ("tickets", "index"))
 
@@ -64,17 +64,16 @@ class TestPermissions(unittest.TestCase):
         self.assertFalse(d["can_execute"])
         self.assertEqual(d["no_runs_phrase"], svc_mod.NO_EXEC_PHRASE)
         self.assertEqual(d["scripts"], [])
-        self.assertTrue(all(a["reason"] == svc_mod.REASON_NO_FEATURE for a in d["absent"]))
+        self.assertTrue(all(a["reason"] == u"seu perfil não tem Rodar Scripts" for a in d["absent"]))
         self.assertEqual([t["code"] for t in d["screens"]], ["VIEW_LOGS"])
 
-    def test_scripts_e_ambientes_iguais_aos_do_disparo(self):
+    def test_scripts_iguais_aos_do_disparo(self):
+        # CR-018b: a tela so conta os scripts; os ambientes de cada um ficam nos cartoes de Rodar um script.
         ctx = self.ctx["op.hml"]
         d = self.svc.build(ctx)
         expected = sorted(s["id"] for g in self.trigger.available_scripts(ctx) for s in g["scripts"])
         self.assertEqual(sorted(s["id"] for s in d["scripts"]), expected)
-        for s in d["scripts"]:
-            self.assertTrue(s["environments"])
-            self.assertTrue(set(s["environments"]) <= set(ctx["environments"]))
+        self.assertTrue(all(set(s) == {"id", "name"} for s in d["scripts"]))
 
     def test_motivos_e_catalogo_nao_vazado(self):
         ctx = dict(self.ctx["op.hml"])

@@ -1,7 +1,7 @@
 {{
 # Fragmento da tabela de tickets: resposta de tickets/index.load (atualização automática) e
 # incluído por tickets/index.html. O controller aplica os mesmos guardas nas duas extensões.
-# Variáveis: resultado, erro, pagina, tamanho, query_params.
+# Variáveis: result, error, page, size, query_params.
 import ui_helpers
 _lt_items = result['items']
 _lt_ncol = 10
@@ -18,7 +18,7 @@ url_base = ('tickets', 'index')
           <th scope="col" class="sss-col-num">#</th>
           <th scope="col">Script</th>
           <th scope="col">Ambiente</th>
-          <th scope="col">Status</th>
+          <th scope="col">Situação</th>
           <th scope="col" class="sss-col-num">Prioridade</th>
           <th scope="col">Solicitante</th>
           <th scope="col" class="sss-col-data">Criado em</th>
@@ -49,8 +49,8 @@ url_base = ('tickets', 'index')
           <td>{{=_lt['environment']}}</td>
           <td>
             {{status = _lt['status']
-            status_reason = None}}{{include 'components/badge_status.html'}}
-            {{if _lt['status_reason']:}}<span class="sss-reason" title="{{=_lt['reason_description']}}">{{=_lt['status_reason']}}</span>{{pass}}
+            status_reason = None}}<span{{if _lt['reason_description']:}} title="{{=_lt['reason_description']}}"{{pass}}>{{include 'components/badge_status.html'}}</span>
+            {{if _lt['reason_name']:}}<span class="sss-reason">{{=_lt['reason_name']}}</span>{{pass}}
             {{if _lt['cancel_requested'] and _lt['status'] == 'RUNNING':}}<span class="sss-reason">Cancelamento solicitado</span>{{pass}}
           </td>
           <td class="sss-col-num">{{=_lt['priority']}}</td>

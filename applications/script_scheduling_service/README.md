@@ -558,6 +558,7 @@ As operações cobertas são: desativar usuário, trocar o perfil de usuário, d
   * **limite operacional:** a matriz trabalha com até 1.000 ambientes e 1.000 scripts cadastrados. Acima disso, IDs válidos ficariam de fora da validação, então o limite deve ser revisto antes de ser atingido.
 * **Auditoria `PERM_UPDATE`:** o `detail` é o diff `+EXEC_SCRIPT, -VIEW_LOGS, +amb:PRODUCAO, -scr:carga_diaria` (por dimensão, rótulo e sinal). Salvar sem mudança não incrementa `perm_version` nem audita. O resumo do modal de confirmação usa o mesmo formato.
 * **Perfil administrativo:** a matriz continua editável e registrada, com um aviso de que o perfil dispensa as dimensões 1 a 3 (mas não a homologação). Ela passa a valer se `is_admin` for removido.
+* **Incluir perfil (CR-018b):** depois da inclusão, a tela abre a matriz do perfil novo, com a mensagem "Perfil incluído. Agora marque o que ele pode fazer."; um perfil sem permissões não serve para nada.
 * **Desativar perfil:** o modal mostra a quantidade **e os logins** dos usuários ativos afetados (no máximo 20, seguidos de "e outros N"), que têm a sessão encerrada no próximo request pela revalidação (§4.2).
 
 #### B.2 Consulta "Quem pode o quê" (`admin_profiles/who_can`, CR-004)
@@ -567,7 +568,7 @@ Responde às duas perguntas mais comuns do administrador, sem abrir perfil por p
 * **Por script:** escolhe-se um script e a tela lista os **perfis ativos** que podem executá-lo. Para cada perfil, mostra:
   * os **ambientes onde ele pode rodar** esse script: a interseção `profile_env ∩ homologação`, só com ambientes ativos. Para perfil admin, todos os ambientes ativos homologados;
   * quantos **usuários ativos** o perfil tem;
-  * o motivo de cada perfil estar na lista: "administrador" ou "tem Disparar Scripts, o ambiente e o script".
+  * o motivo de cada perfil estar na lista: "administrador" ou "tem Rodar Scripts, o ambiente e o script" (o nome da funcionalidade vem do cadastro, CR-018b).
 * **Por ambiente:** escolhe-se um ambiente e a tela lista os perfis ativos que o acessam e, para cada um, os scripts homologados ali que eles podem rodar.
 * Perfis **inativos** aparecem num bloco separado, "Não valem agora (perfil inativo)". Script ou ambiente **inativo** gera um aviso no topo: "Este script está inativo: ninguém consegue rodá-lo agora."
 * A regra usada é a mesma de `rbac.can_execute` (§4.3.A), aplicada perfil a perfil. O cálculo é feito no service com as leituras que já existem no contrato (`profiles_list`, `matrix_get`, catálogo e homologações), sem método novo.
@@ -591,9 +592,9 @@ Responde às duas perguntas mais comuns do administrador, sem abrir perfil por p
 
 | Módulo | Código | Nome de exibição | Finalidade |
 | :--- | :--- | :--- | :--- |
-| `OPERATION` | `EXEC_SCRIPT` | Disparar Scripts | Preencher questionários e abrir tickets |
-| `OPERATION` | `VIEW_LOGS` | Consultar Logs | Visualizar logs e histórico em tempo quase real |
-| `OPERATION` | `CANCEL_TICKET` | Cancelar Tickets | Cancelar tickets de terceiros em ambientes autorizados |
+| `OPERATION` | `EXEC_SCRIPT` | Rodar Scripts | Preencher questionários e abrir tickets |
+| `OPERATION` | `VIEW_LOGS` | Consultar Tickets | Acompanhar os tickets e ler o log em tempo quase real |
+| `OPERATION` | `CANCEL_TICKET` | Cancelar Tickets | Cancelar tickets de terceiros nos ambientes consultados (com Consultar Tickets) |
 | `ADMIN` | `MANAGE_USERS` | Gestão de Usuários | Gerenciar operadores e credenciais |
 | `ADMIN` | `MANAGE_PROFILES` | Gestão de Perfis | Gerenciar perfis e matrizes de permissão |
 | `ADMIN` | `MANAGE_ENVIRONMENTS` | Gestão de Ambientes | Gerenciar ambientes e DSNs |
@@ -631,12 +632,12 @@ Qualquer usuário logado pode abrir. Ela responde, em linguagem simples (§2.4.2
 * **Meu perfil:** nome do perfil e, se for administrador, a frase "Seu perfil é de administrador: você pode usar todas as telas e rodar qualquer script ativo, nos ambientes ativos onde ele foi liberado."
 * **Telas que posso usar:** as funcionalidades do perfil, com o nome e a finalidade do §4.3.D e um link para cada tela.
 * **Onde posso rodar scripts:** os ambientes ativos do perfil, com a descrição de cada um.
-* **Scripts que posso rodar:** para cada script, os ambientes onde `rbac.can_execute` é verdadeiro, com o botão "Rodar aqui" (abre o disparo já preenchido).
+* **Scripts que posso rodar (CR-018b):** quantos scripts o usuário pode rodar, com o botão "Abrir Rodar um script". Os ambientes de cada script, as perguntas e a última execução ficam só nos cartões (§5.8); antes, esta seção repetia os cartões com um botão "Rodar aqui" por ambiente.
 * **Por que um script não aparece:** só para os scripts **associados ao perfil** (`profile_script`) que não podem rodar em nenhum ambiente. O motivo vem de `can_execute` em frase simples:
   * "o script está desativado";
   * "o script não foi liberado em nenhum dos seus ambientes";
   * "o ambiente está desativado";
-  * "seu perfil não tem Disparar Scripts".
+  * "seu perfil não tem Rodar Scripts" (o nome vem do cadastro da funcionalidade, CR-018b).
 
   Scripts fora do perfil **nunca** são listados, para não revelar o catálogo.
 * Sem `EXEC_SCRIPT`: a seção de scripts mostra "Você ainda não pode rodar scripts. Peça ao administrador, se precisar."
@@ -694,6 +695,7 @@ Todo `detail` passa pelo `masking.py`, inclusive os de vínculos de parâmetros,
 * Filtros: período (`de`/`até`, por dia, inclusivos), ator (trecho), ação (catálogo da tabela 16), entidade, `entity_id` e IP (trecho). Ordenação `created_at DESC, id DESC` e página de no máximo 100 linhas.
 * Período padrão: últimos 7 dias. Período máximo: 90 dias. Acima disso, até 366 dias, só com filtro seletivo: ator, ou entidade + ID.
 * O `detail` é sempre exibido escapado (truncado com "ver mais"), e passa de novo pelo `masking.py` na leitura.
+* **Nomes simples (CR-018b):** nos filtros e na tabela, a ação e a entidade aparecem com o nome simples (`audit_service.ACTION_LABELS` e `ENTITY_LABELS`: "Cancelamento de ticket", "Tickets"), e a ação também com o código ao lado. A URL dos filtros, o CSV e o banco continuam com os códigos.
 * O ID vira link só quando a entidade tem tela (tickets, agendamentos, usuários, perfis, ambientes, scripts e parâmetros) **e** o usuário tem a funcionalidade dessa tela. Nos outros casos, o ID aparece como texto.
 * **Exportação CSV** (`audit/export`):
   * por `POST` com CSRF, porque grava auditoria e `GET` nunca altera estado;
@@ -766,6 +768,8 @@ Na interface, a situação do ticket usa **nomes simples** (§2.4.2), sempre com
 | `CANCELLED` | Cancelado | Cancelado |
 
 Os filtros da lista de tickets usam os mesmos nomes. A auditoria, o CSV e o banco continuam com os códigos.
+
+**Lista de tickets (CR-018b):** a coluna e o filtro se chamam "Situação". A coluna mostra o nome simples da situação e, nos erros, o nome simples do motivo (`ui_helpers.REASON_NAMES`, por exemplo "Passou do tempo máximo"); o código técnico (`status_reason`) não aparece na lista, só na descrição exibida ao passar o mouse e no detalhe.
 
 **Filtro por solicitante (CR-018a):** só aparece e só vale para quem vê o login das pessoas (`VIEW_AUDIT` ou administrador, a mesma regra de `ui_helpers.visible_actor`, CR-008 E5). Para os demais, o solicitante aparece como "você" ou "outra pessoa", e um `requested_by` com login alheio é ignorado pelo serviço (`ticket_service.allowed_filters`), não só pela tela; o próprio login continua aceito.
 
@@ -941,7 +945,7 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
 3. Depois disso vêm: resumo, comando executado, respostas, reexecuções e log. A situação aparece só no quadro do item 1 e no cabeçalho do log, que se atualiza sozinho; não há selo ao lado do número do ticket nem linha "Situação" no resumo, e a barra de etapas substitui a antiga linha do tempo (CR-017b). Enquanto o ticket roda, o resumo mostra "Último sinal do servidor" (`heartbeat_at`). A linha "Detalhe técnico" do resumo traz o status, o `status_reason`, o `return_code` e a descrição técnica (`reason_description`). O bloco do snapshot mostra o **arquivo do script** (`path_file`, snapshot v5), com o caminho completo para todos (CR-005, D8). Logo depois do resumo vem o quadro **Registro** (§10, CR-006): quem criou o pedido e quando, e a última alteração, que normalmente é a última mudança de situação feita pelo agente.
 4. **Quadro Saída (CR-012):** depois do log, quando o ticket tem linha em `tbsss_ticket_output`, com a situação e o botão **Baixar** (§8.13).
 5. **Botões com o efeito escrito:** "Cancelar este pedido" (com a consequência no modal) e "Rodar de novo com as mesmas respostas" (reexecução, §5.5).
-6. A página continua se atualizando sozinha enquanto o ticket não termina, e a frase e a barra acompanham. Quando o polling do log (§8.10) recebe uma situação diferente da que a página mostrou ao abrir, o visualizador para, mostra "A situação mudou; atualizando a página…" e recarrega a página após 1,5 s.
+6. A página continua se atualizando sozinha enquanto o ticket não termina, e a frase e a barra acompanham. Quando o polling do log (§8.10) recebe uma situação diferente da que a página mostrou ao abrir, o visualizador para, mostra "A situação mudou; atualizando a página…" e recarrega a página após 1,5 s. Num ticket que já estava encerrado ao abrir, o visualizador lê o log até o fim e mostra "Log completo." (CR-018b).
 
 ### 5.8 Rodar um script e histórico do script (CR-004)
 
@@ -956,7 +960,7 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
 * Uma busca no topo filtra os cartões por nome, descrição, grupo e categoria, no navegador (Alpine, `static/js/app/`). A lista completa já vem do servidor. Os cartões ficam agrupados por grupo, como no disparo.
 * O **escopo da última execução** é o mesmo da lista de tickets (§4.3.C): com `VIEW_LOGS`, os tickets dos ambientes autorizados (admin: todos); sem `VIEW_LOGS`, só os próprios.
 * **Contrato (leitura nova):** `RepoTickets.last_runs(script_ids, environment_scope=None, requested_by=None)` devolve `{script_id: {id, status, status_reason, created_at, finished_at}}` com o ticket mais recente (`created_at DESC, id DESC`) de cada script no escopo. No Oracle, a consulta usa `ix_tbsss_tck_scr` e um `ROW_NUMBER()` por script, que é sintaxe 11gR2 e não carrega `log_output`.
-* O menu Operação tem um único item para rodar, "Rodar um script" (`EXEC_SCRIPT`), que abre esta tela (CR-017b). "Disparar Scripts" saiu do menu: o disparo abre pelos cartões.
+* O menu Operação tem um único item para rodar, "Rodar um script" (`EXEC_SCRIPT`), que abre esta tela (CR-017b). A funcionalidade correspondente se chama "Rodar Scripts" (CR-018b; antes, "Disparar Scripts"), e o disparo abre pelos cartões.
 * **Agendar (CR-017c):** para quem tem `MANAGE_SCHEDULES`, cada cartão traz o botão "Agendar", que abre a nova regra já com o script (§7.6). O cartão só existe com `can_execute`, a mesma regra que o agendamento exige.
 
 **Histórico do script** (`tickets/history/<script_id>`, exige `EXEC_SCRIPT`): responde "esse script costuma dar certo?".
@@ -1418,6 +1422,7 @@ Implementação: `controllers/schedules.py`, `modules/schedules_service.py` e `v
 * **Colunas de registro (CR-006):** a inclusão grava `created_*`; edição, pausa manual e retomada gravam `updated_*` com o login de quem agiu. O formulário de edição mostra o quadro Registro (§10).
 * **Lista:**
   * Mostra as regras dos ambientes autorizados ao perfil (admin: todas). Uma regra fora do escopo é tratada como inexistente (404).
+  * O filtro "Ambiente" é uma lista dos ambientes do escopo (admin: todos os cadastrados), como o da lista de tickets (CR-018b).
   * A situação aparece como "Ativo" ou "Pausado" mais o motivo (D4): Pausado manualmente, Concluída, Responsável inativo, Responsável sem permissão, Script inativo, Ambiente inativo, Parâmetros inválidos, Expressão CRON inválida ou Erro interno (`INTERNAL_ERROR`, CR-007).
   * **Aviso nas regras ativas (CR-007, R-26):** a lista avisa a regra cuja execução anterior ainda está na fila ou rodando ("A próxima vez pode ser pulada: a execução #{id} ainda está {situação}") e a regra que o desdobro vai pausar ("Será pausada: {motivo}"), com as mesmas checagens da retomada.
 * **Última pausa no formulário (CR-007, R-26):** uma regra pausada mostra "Pausada em {data} por {ator}: {motivo}", a partir de `pause_reason` e do quadro Registro (`updated_at`/`updated_by`, §10), com a orientação de corrigir e retomar.
@@ -2096,7 +2101,7 @@ END;
   * **Associações podem ser removidas fisicamente:** `profile_feature`, `profile_env`, `profile_script`, `script_env` e `script_param`.
   * Tickets só são removidos pelo `purge.py`.
 * **Desativação com dependência:**
-  * Desativar um **parâmetro** vinculado a script ativo é bloqueado, e a UI lista os scripts afetados.
+  * Desativar um **parâmetro** vinculado a script ativo é bloqueado, e a UI lista os scripts afetados. Nesse caso a tela não oferece o botão Desativar: mostra só o aviso com os scripts dos quais o parâmetro precisa sair antes (CR-018b).
   * Desativar **script** ou **ambiente** pausa os agendamentos dependentes no próximo desdobro (§7.5).
   * Na UI, desativar e reativar ficam no **formulário de edição**, não na lista. A ação abre um modal de confirmação que mostra o impacto (ex.: quantidade de agendamentos ativos afetados).
   * O impacto da desativação de um **ambiente** mostra os agendamentos ativos afetados **e** a quantidade de scripts homologados nele, que deixam de poder ser disparados ali. O mesmo texto vai para o `detail` de `DEACTIVATE`.

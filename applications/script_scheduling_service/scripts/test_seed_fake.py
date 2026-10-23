@@ -13,7 +13,7 @@ import repo_factory
 
 # README §4.3.D, texto exato.
 CATALOG = {
-    "EXEC_SCRIPT": u"Disparar Scripts", "VIEW_LOGS": u"Consultar Logs", "CANCEL_TICKET": u"Cancelar Tickets",
+    "EXEC_SCRIPT": u"Rodar Scripts", "VIEW_LOGS": u"Consultar Tickets", "CANCEL_TICKET": u"Cancelar Tickets",
     "MANAGE_USERS": u"Gestão de Usuários", "MANAGE_PROFILES": u"Gestão de Perfis", "MANAGE_ENVIRONMENTS": u"Gestão de Ambientes",
     "MANAGE_SCRIPTS": u"Gestão de Scripts", "MANAGE_PARAMETERS": u"Dicionário de Parâmetros",
     "MANAGE_SCHEDULES": u"Regras de Agendamento", "VIEW_AUDIT": u"Auditoria",

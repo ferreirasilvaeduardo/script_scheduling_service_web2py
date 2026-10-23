@@ -56,18 +56,10 @@ _d = data
     {{elif not _d['scripts']:}}
     <p class="sss-text-muted mb-0">Nenhum script pode ser rodado agora com o seu perfil.</p>
     {{else:}}
-    <ul class="sss-list-permissions">
-      {{for _s in _d['scripts']:}}
-      <li>
-        <strong class="sss-mono">{{=_s['name']}}</strong>{{if _s['description']:}}<span class="sss-text-muted"> — {{=_s['description']}}</span>{{pass}}
-        <div class="sss-actions-inline">
-          {{for _env in _s['environments']:}}
-          <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='tickets', f='new', vars=dict(script_id=_s['id'], environment=_env))}}">Rodar em {{=_env}}</a>
-          {{pass}}
-        </div>
-      </li>
-      {{pass}}
-    </ul>
+    <div class="sss-chosen">
+      <span>Você pode rodar <strong>{{=len(_d['scripts'])}}</strong> script(s). Os ambientes de cada um, as perguntas que fazem e a última execução ficam em Rodar um script.</span>
+      <a class="btn btn-sm btn-primary" href="{{=URL(c='tickets', f='catalog')}}">Abrir Rodar um script</a>
+    </div>
     {{pass}}
   </div>
 </section>

@@ -208,9 +208,9 @@ def load_seed(store, force=False, dev_password=None):
                                 # 2. Funcionalidades canonicas (10) - README §4.3.D
                                 # ---------------------------------------------------------
                                 features = [
-                                    {"id": 1, "code": "EXEC_SCRIPT", "name": "Disparar Scripts", "module": "OPERATION", "description": "Preencher questionários e abrir tickets", "active": "Y"},
-                                    {"id": 2, "code": "VIEW_LOGS", "name": "Consultar Logs", "module": "OPERATION", "description": "Visualizar logs e histórico em tempo quase real", "active": "Y"},
-                                    {"id": 3, "code": "CANCEL_TICKET", "name": "Cancelar Tickets", "module": "OPERATION", "description": "Cancelar tickets de terceiros em ambientes autorizados", "active": "Y"},
+                                    {"id": 1, "code": "EXEC_SCRIPT", "name": "Rodar Scripts", "module": "OPERATION", "description": "Preencher questionários e abrir tickets", "active": "Y"},
+                                    {"id": 2, "code": "VIEW_LOGS", "name": "Consultar Tickets", "module": "OPERATION", "description": "Acompanhar os tickets e ler o log em tempo quase real", "active": "Y"},
+                                    {"id": 3, "code": "CANCEL_TICKET", "name": "Cancelar Tickets", "module": "OPERATION", "description": "Cancelar tickets de terceiros nos ambientes consultados (com Consultar Tickets)", "active": "Y"},
                                     {"id": 4, "code": "MANAGE_USERS", "name": "Gestão de Usuários", "module": "ADMIN", "description": "Gerenciar operadores e credenciais", "active": "Y"},
                                     {"id": 5, "code": "MANAGE_PROFILES", "name": "Gestão de Perfis", "module": "ADMIN", "description": "Gerenciar perfis e matrizes de permissão", "active": "Y"},
                                     {"id": 6, "code": "MANAGE_ENVIRONMENTS", "name": "Gestão de Ambientes", "module": "ADMIN", "description": "Gerenciar ambientes e DSNs", "active": "Y"},

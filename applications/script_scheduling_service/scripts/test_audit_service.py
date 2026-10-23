@@ -493,5 +493,15 @@ class TestHomeSummary(_Base):
         self.assertIsNone(self.svc_tickets.home_summary(without_feature))
 
 
+class TestLabels(unittest.TestCase):
+
+    def test_toda_acao_e_entidade_tem_nome_simples(self):
+        # CR-018b: a tela mostra o nome simples; o CSV continua com o codigo (csv_row nao muda).
+        self.assertEqual(set(audit_service.ACTION_LABELS), set(audit_service.ACTIONS))
+        self.assertEqual(set(audit_service.ENTITY_LABELS), set(audit_service.ENTITIES))
+        self.assertEqual(audit_service.action_label("TICKET_CANCEL"), u"Cancelamento de ticket")
+        self.assertEqual(audit_service.action_label("NOVA_ACAO"), "NOVA_ACAO")
+
+
 if __name__ == "__main__":
     unittest.main()

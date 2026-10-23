@@ -181,7 +181,8 @@
             self.truncated = data.truncated === true;
             full = data.text.length >= self.maxChars;
             if ((data.terminal === true || TERMINAL_STATUSES[data.status]) && !full) {
-              self.finish('Execução finalizada; log lido até o fim. Recarregue a página para atualizar o resumo.');
+              // Situacao terminal desde a abertura (se mudasse, a pagina ja teria recarregado acima).
+              self.finish('Log completo.');
               return;
             }
             self.statusText = full ? 'Carregando o log…' : 'Acompanhando a execução.';

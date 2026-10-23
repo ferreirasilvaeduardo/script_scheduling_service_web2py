@@ -1236,37 +1236,37 @@ MERGE INTO openrisow.tbsss_features dst
 USING (SELECT 'EXEC_SCRIPT' AS code FROM DUAL) src
 ON (dst.code = src.code)
 WHEN MATCHED THEN
-  UPDATE SET dst.name = 'Disparar Scripts',
+  UPDATE SET dst.name = 'Rodar Scripts',
              dst.module = 'OPERATION',
              dst.description = 'Preencher questionários e abrir tickets',
              dst.active = 'Y',
              dst.updated_at = SYSDATE,
              dst.updated_by = 'SYSTEM:init_db'
   WHERE dst.active <> 'Y'
-     OR dst.name <> 'Disparar Scripts'
+     OR dst.name <> 'Rodar Scripts'
      OR dst.module <> 'OPERATION'
      OR dst.description <> 'Preencher questionários e abrir tickets'
 WHEN NOT MATCHED THEN
   INSERT (id, code, module, name, description, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'EXEC_SCRIPT', 'OPERATION', 'Disparar Scripts', 'Preencher questionários e abrir tickets', 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'EXEC_SCRIPT', 'OPERATION', 'Rodar Scripts', 'Preencher questionários e abrir tickets', 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_features dst
 USING (SELECT 'VIEW_LOGS' AS code FROM DUAL) src
 ON (dst.code = src.code)
 WHEN MATCHED THEN
-  UPDATE SET dst.name = 'Consultar Logs',
+  UPDATE SET dst.name = 'Consultar Tickets',
              dst.module = 'OPERATION',
-             dst.description = 'Visualizar logs e histórico em tempo quase real',
+             dst.description = 'Acompanhar os tickets e ler o log em tempo quase real',
              dst.active = 'Y',
              dst.updated_at = SYSDATE,
              dst.updated_by = 'SYSTEM:init_db'
   WHERE dst.active <> 'Y'
-     OR dst.name <> 'Consultar Logs'
+     OR dst.name <> 'Consultar Tickets'
      OR dst.module <> 'OPERATION'
-     OR dst.description <> 'Visualizar logs e histórico em tempo quase real'
+     OR dst.description <> 'Acompanhar os tickets e ler o log em tempo quase real'
 WHEN NOT MATCHED THEN
   INSERT (id, code, module, name, description, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'VIEW_LOGS', 'OPERATION', 'Consultar Logs', 'Visualizar logs e histórico em tempo quase real', 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'VIEW_LOGS', 'OPERATION', 'Consultar Tickets', 'Acompanhar os tickets e ler o log em tempo quase real', 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_features dst
 USING (SELECT 'CANCEL_TICKET' AS code FROM DUAL) src
@@ -1274,17 +1274,17 @@ ON (dst.code = src.code)
 WHEN MATCHED THEN
   UPDATE SET dst.name = 'Cancelar Tickets',
              dst.module = 'OPERATION',
-             dst.description = 'Cancelar tickets de terceiros em ambientes autorizados',
+             dst.description = 'Cancelar tickets de terceiros nos ambientes consultados (com Consultar Tickets)',
              dst.active = 'Y',
              dst.updated_at = SYSDATE,
              dst.updated_by = 'SYSTEM:init_db'
   WHERE dst.active <> 'Y'
      OR dst.name <> 'Cancelar Tickets'
      OR dst.module <> 'OPERATION'
-     OR dst.description <> 'Cancelar tickets de terceiros em ambientes autorizados'
+     OR dst.description <> 'Cancelar tickets de terceiros nos ambientes consultados (com Consultar Tickets)'
 WHEN NOT MATCHED THEN
   INSERT (id, code, module, name, description, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'CANCEL_TICKET', 'OPERATION', 'Cancelar Tickets', 'Cancelar tickets de terceiros em ambientes autorizados', 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'CANCEL_TICKET', 'OPERATION', 'Cancelar Tickets', 'Cancelar tickets de terceiros nos ambientes consultados (com Consultar Tickets)', 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_features dst
 USING (SELECT 'MANAGE_USERS' AS code FROM DUAL) src
