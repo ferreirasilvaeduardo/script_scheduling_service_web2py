@@ -14,7 +14,7 @@ Ran command: `bin/stop_local.sh`
 Ran command: `cat applications/script_scheduling_service/logs/server.out`
 Ran command: `git status`
 
-Atualizado! O script [`bin/start_local.sh`](file:///portaloptrib/TESHUVA/web2py/bin/start_local.sh) agora gera automaticamente o **log com data e hora** tanto no **nome do arquivo** quanto no **cabeçalho interno**, além de manter um link simbólico `servidor.out` apontando para o log mais recente.
+Atualizado! O script [`bin/start_local.sh`](file:///portaloptrib/TESHUVA/SSS/DEV/web2py/bin/start_local.sh) agora gera automaticamente o **log com data e hora** tanto no **nome do arquivo** quanto no **cabeçalho interno**, além de manter um link simbólico `servidor.out` apontando para o log mais recente.
 
 ---
 
@@ -22,7 +22,7 @@ Atualizado! O script [`bin/start_local.sh`](file:///portaloptrib/TESHUVA/web2py/
 
 Você pode rodar diretamente:
 ```bash
-cd /portaloptrib/TESHUVA/web2py
+cd /portaloptrib/TESHUVA/SSS/DEV/web2py
 bin/start_local.sh
 ```
 
@@ -38,7 +38,7 @@ O script executa o servidor com `nohup` em segundo plano e cria:
 Caso queira disparar todo o processo com `nohup` e desanexar do terminal:
 
 ```bash
-cd /portaloptrib/TESHUVA/web2py
+cd /portaloptrib/TESHUVA/SSS/DEV/web2py
 nohup bin/start_local.sh > applications/script_scheduling_service/logs/subida-$(date +%F_%H-%M-%S).log 2>&1 &
 ```
 
@@ -59,9 +59,9 @@ ls -lt applications/script_scheduling_service/logs/servidor-*.log
 
 ### 4. Parar o serviço
 
-Ao parar com o script [`bin/stop_local.sh`](file:///portaloptrib/TESHUVA/web2py/bin/stop_local.sh), a data e hora do encerramento também são carimbadas no log:
+Ao parar com o script [`bin/stop_local.sh`](file:///portaloptrib/TESHUVA/SSS/DEV/web2py/bin/stop_local.sh), a data e hora do encerramento também são carimbadas no log:
 ```bash
-cd /portaloptrib/TESHUVA/web2py
+cd /portaloptrib/TESHUVA/SSS/DEV/web2py
 bin/stop_local.sh
 ```
 
@@ -99,13 +99,13 @@ Para deixar a raiz do **web2py** mais limpa sem afetar em nada a subida do servi
 
 | Pasta na raiz | O que contém | Pode apagar? |
 |---|---|---|
-| [`extras/`](file:///portaloptrib/TESHUVA/web2py/extras) | Scripts legados de compilação do web2py para Windows/macOS e ícones `.ico`. | **Sim** (totalmente dispensável). |
-| [`examples/`](file:///portaloptrib/TESHUVA/web2py/examples) | Modelos antigos de configuração de servidores (IIS `web.config`, etc.). | **Sim** (não é usado pelo SSS). |
-| [`scripts/`](file:///portaloptrib/TESHUVA/web2py/scripts) *(da raiz)* | Scripts genéricos do web2py (setups antigos de CentOS 6/7, Heroku, etc.). | **Sim** *(atenção: **não** apague `applications/script_scheduling_service/scripts`, onde estão os testes).* |
-| [`handlers/`](file:///portaloptrib/TESHUVA/web2py/handlers) | Conectores legados para CGI, FastCGI, Google App Engine e mod_python. | **Sim** (o SSS sobe com servidor embutido via `web2py.py` ou `anyserver.py`). |
-| [`deposit/`](file:///portaloptrib/TESHUVA/web2py/deposit) | Pasta vazia reservada para plugins web2py. | **Sim**. |
-| [`site-packages/`](file:///portaloptrib/TESHUVA/web2py/site-packages) | Pasta vazia legada na raiz. | **Sim**. |
-| [`logs/`](file:///portaloptrib/TESHUVA/web2py/logs) *(da raiz)* | Pasta de logs legada do web2py. | **Sim** (os logs do SSS ficam em `applications/script_scheduling_service/logs/`). |
+| [`extras/`](file:///portaloptrib/TESHUVA/SSS/DEV/web2py/extras) | Scripts legados de compilação do web2py para Windows/macOS e ícones `.ico`. | **Sim** (totalmente dispensável). |
+| [`examples/`](file:///portaloptrib/TESHUVA/SSS/DEV/web2py/examples) | Modelos antigos de configuração de servidores (IIS `web.config`, etc.). | **Sim** (não é usado pelo SSS). |
+| [`scripts/`](file:///portaloptrib/TESHUVA/SSS/DEV/web2py/scripts) *(da raiz)* | Scripts genéricos do web2py (setups antigos de CentOS 6/7, Heroku, etc.). | **Sim** *(atenção: **não** apague `applications/script_scheduling_service/scripts`, onde estão os testes).* |
+| [`handlers/`](file:///portaloptrib/TESHUVA/SSS/DEV/web2py/handlers) | Conectores legados para CGI, FastCGI, Google App Engine e mod_python. | **Sim** (o SSS sobe com servidor embutido via `web2py.py` ou `anyserver.py`). |
+| [`deposit/`](file:///portaloptrib/TESHUVA/SSS/DEV/web2py/deposit) | Pasta vazia reservada para plugins web2py. | **Sim**. |
+| [`site-packages/`](file:///portaloptrib/TESHUVA/SSS/DEV/web2py/site-packages) | Pasta vazia legada na raiz. | **Sim**. |
+| [`logs/`](file:///portaloptrib/TESHUVA/SSS/DEV/web2py/logs) *(da raiz)* | Pasta de logs legada do web2py. | **Sim** (os logs do SSS ficam em `applications/script_scheduling_service/logs/`). |
 
 ---
 
@@ -122,9 +122,9 @@ Para deixar a raiz do **web2py** mais limpa sem afetar em nada a subida do servi
 
 ### 3. Pastas e arquivos ESTRITAMENTE OBRIGATÓRIOS (NÃO apague)
 
-* **[`gluon/`](file:///portaloptrib/TESHUVA/web2py/gluon)**: É o **core/framework** do web2py. Sem ele nada funciona.
-* **[`applications/script_scheduling_service/`](file:///portaloptrib/TESHUVA/web2py/applications/script_scheduling_service)**: É o código do seu sistema (telas, controllers, models, módulos, configurações e logs).
-* **[`bin/`](file:///portaloptrib/TESHUVA/web2py/bin)**: Contém o launcher seguro [`sss-web.sh`](file:///portaloptrib/TESHUVA/web2py/bin/sss-web.sh) e os scripts que criamos (`start_local.sh`, `stop_local.sh`).
+* **[`gluon/`](file:///portaloptrib/TESHUVA/SSS/DEV/web2py/gluon)**: É o **core/framework** do web2py. Sem ele nada funciona.
+* **[`applications/script_scheduling_service/`](file:///portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service)**: É o código do seu sistema (telas, controllers, models, módulos, configurações e logs).
+* **[`bin/`](file:///portaloptrib/TESHUVA/SSS/DEV/web2py/bin)**: Contém o launcher seguro [`sss-web.sh`](file:///portaloptrib/TESHUVA/SSS/DEV/web2py/bin/sss-web.sh) e os scripts que criamos (`start_local.sh`, `stop_local.sh`).
 * **Arquivos na raiz:**
   * `web2py.py` e `anyserver.py` (executáveis de subida).
   * `routes.py` (roteamento).

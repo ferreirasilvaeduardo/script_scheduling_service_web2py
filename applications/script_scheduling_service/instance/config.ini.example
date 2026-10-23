@@ -13,15 +13,15 @@ pool_min = 1
 pool_max = 4
 
 [secrets]
-secrets_file = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance
+secrets_file = /portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/instance
 
 [agent]
 agent_id = srv-linux-prod-01
 environments = PRODUCAO,HOMOLOGACAO
-work_dir = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work
+work_dir = /portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/work
 interpreters = PYTHON3=/usr/bin/python3,BASH=/bin/bash,SH=/bin/sh ; executavel local de cada interpretador logico (README §8.5); o agente exige na subida (F8.3)
 exec_users =               ; AMBIENTE=usuario do SO por ambiente (README §8.0); obrigatório fora de DEV, ex.: PRODUCAO=sssprd,HOMOLOGACAO=ssshml
-exec_work_dir =                   ; pasta base dos diretórios de trabalho dos scripts (obrigatória fora de DEV), ex.: /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec
+exec_work_dir =                   ; pasta base dos diretórios de trabalho dos scripts (obrigatória fora de DEV), ex.: /portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/exec
 max_parallel_jobs = 4
 max_parallel_hard_limit = 32
 claim_batch_size = 20
@@ -48,7 +48,7 @@ child_locale = C.UTF-8
 env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
 
 [logging]
-log_dir = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs
+log_dir = /portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs
 level = INFO                      ; DEBUG | INFO | WARN | ERROR
 app_log_max_bytes = 10485760
 app_log_retention_days = 30

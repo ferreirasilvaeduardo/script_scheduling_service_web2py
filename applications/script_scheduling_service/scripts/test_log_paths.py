@@ -53,8 +53,8 @@ class TestLogDirs(unittest.TestCase):
 
     def test_diretorio_log_execucao(self):
         dt = datetime.datetime(2026, 4, 5, 8, 9, 30)
-        d = log_paths.run_log_dir("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "PRODUCAO", u"Carga Diária", dt)
-        self.assertEqual(d, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/producao/carga_diaria/2026/04/05/08/09")
+        d = log_paths.run_log_dir("/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs", "PRODUCAO", u"Carga Diária", dt)
+        self.assertEqual(d, "/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs/producao/carga_diaria/2026/04/05/08/09")
 
     def test_pasta_saida_com_as_partes_do_log(self):
         # CR-012 (README §8.13): base por ambiente e relativo no formato que o helper confere.
@@ -103,14 +103,14 @@ class TestLogDirs(unittest.TestCase):
 
     def test_caminhos_completos_log_execucao(self):
         dt = datetime.datetime(2026, 10, 16, 14, 5, 0)
-        c_partial = log_paths.partial_log_path("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "DEV", "carga", dt, 77)
-        self.assertEqual(c_partial, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/dev/carga/2026/10/16/14/05/ticket_77.log.parcial")
+        c_partial = log_paths.partial_log_path("/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs", "DEV", "carga", dt, 77)
+        self.assertEqual(c_partial, "/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs/dev/carga/2026/10/16/14/05/ticket_77.log.parcial")
 
-        c_final = log_paths.run_log_path("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "DEV", "carga", dt, 77, pid=1234)
-        self.assertEqual(c_final, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/dev/carga/2026/10/16/14/05/ticket_77_1234.log")
+        c_final = log_paths.run_log_path("/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs", "DEV", "carga", dt, 77, pid=1234)
+        self.assertEqual(c_final, "/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs/dev/carga/2026/10/16/14/05/ticket_77_1234.log")
 
-        c_error = log_paths.run_log_path("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "DEV", "carga", dt, 77, pid=0)
-        self.assertEqual(c_error, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/dev/carga/2026/10/16/14/05/ticket_77_0.log")
+        c_error = log_paths.run_log_path("/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs", "DEV", "carga", dt, 77, pid=0)
+        self.assertEqual(c_error, "/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs/dev/carga/2026/10/16/14/05/ticket_77_0.log")
 
     # -----------------------------------------------------------------------
     # 3. Logs da aplicacao (CR-005 D6, R-c, R-d, R-e, README §13)
@@ -118,8 +118,8 @@ class TestLogDirs(unittest.TestCase):
 
     def test_diretorio_e_nome_log_app(self):
         dt = datetime.datetime(2026, 10, 16, 8, 54, 0)
-        d = log_paths.app_log_dir("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", dt)
-        self.assertEqual(d, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/internal/app/2026/10/16/08/54")
+        d = log_paths.app_log_dir("/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs", dt)
+        self.assertEqual(d, "/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs/internal/app/2026/10/16/08/54")
 
         self.assertEqual(log_paths.app_log_name("sss_web", 4321), "sss_web_4321.log")
         self.assertEqual(log_paths.app_log_name("sss_web.log", 4321), "sss_web_4321.log")
@@ -129,8 +129,8 @@ class TestLogDirs(unittest.TestCase):
 
     def test_caminho_log_app(self):
         dt = datetime.datetime(2026, 10, 16, 8, 54, 12)
-        c = log_paths.app_log_path("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "sss_web", 4321, dt)
-        self.assertEqual(c, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/internal/app/2026/10/16/08/54/sss_web_4321.log")
+        c = log_paths.app_log_path("/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs", "sss_web", 4321, dt)
+        self.assertEqual(c, "/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs/internal/app/2026/10/16/08/54/sss_web_4321.log")
 
     def test_proximo_caminho_log_app_com_sufixo_rotacao(self):
         # R-c: colisoes dentro do mesmo minuto e PID geram _2, _3, ...

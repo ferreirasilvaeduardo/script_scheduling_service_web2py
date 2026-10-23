@@ -354,7 +354,7 @@ applications/script_scheduling_service/
 docs/
   prompts/                    # prompts de execução faseada (UI-first)
   homologation/               # manual de homologação (UI Freeze, histórico) e evidências reais no DEV (2026-10-22)
-/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance          # segredos fora do repositório, modo 0600, um arquivo por papel (§4.1)
+/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/instance          # segredos fora do repositório, modo 0600, um arquivo por papel (§4.1)
 /opt/sss/bin/sss-helper       # cópia do bin/sss-helper, dono root, 0755 (§8.0)
 ```
 
@@ -365,7 +365,7 @@ docs/
 ### 4.1 Gestão de segredos
 
 * **Nenhum segredo** reside no `config.ini`, no repositório ou no banco.
-* Os segredos ficam em `secrets_file` (padrão `/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance`). Cada servidor tem o **seu** arquivo, só com os segredos do papel do processo que roda nele (CR-007, D1b). Na inicialização, web e daemon validam o arquivo pela camada de plataforma e **recusam a subida** caso ele:
+* Os segredos ficam em `secrets_file` (padrão `/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/instance`). Cada servidor tem o **seu** arquivo, só com os segredos do papel do processo que roda nele (CR-007, D1b). Na inicialização, web e daemon validam o arquivo pela camada de plataforma e **recusam a subida** caso ele:
   * não seja um arquivo regular;
   * tenha dono diferente de `os.geteuid()` ou `mode & 0o077 != 0`.
 
@@ -2625,14 +2625,14 @@ pool_min = 1
 pool_max = 4
 
 [secrets]
-secrets_file = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance
+secrets_file = /portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/instance
 
 [agent]
 agent_id = srv-linux-prod-01
 environments = PRODUCAO,HOMOLOGACAO
-work_dir = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work
+work_dir = /portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/work
 exec_users = PRODUCAO=sssprd,HOMOLOGACAO=ssshml   ; usuário do SO de cada ambiente (§8.0, D1); vazio só em DEV
-exec_work_dir = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec ; pasta base dos diretórios de trabalho dos scripts, uma subpasta por usuário de execução
+exec_work_dir = /portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/exec ; pasta base dos diretórios de trabalho dos scripts, uma subpasta por usuário de execução
 interpreters = PYTHON3=/usr/bin/python3,BASH=/bin/bash,SH=/bin/sh
 max_parallel_jobs = 4
 max_parallel_hard_limit = 32
@@ -2660,7 +2660,7 @@ child_locale = C.UTF-8
 env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
 
 [logging]
-log_dir = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs
+log_dir = /portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs
 level = INFO                      ; DEBUG | INFO | WARN | ERROR
 app_log_max_bytes = 10485760       ; troca de arquivo do log da aplicação (§13)
 app_log_retention_days = 30       ; pastas log_dir/internal/app/AAAA/MM/DD mais antigas são apagadas (§13)

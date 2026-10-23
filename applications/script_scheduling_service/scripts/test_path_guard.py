@@ -197,7 +197,7 @@ class TestTextValidations(unittest.TestCase):
                 self.assertEqual(ctx.exception.code, Code.SYSTEM_DIR)
         path_guard.check_forbidden_dirs("/opt/automacoes/nao_existe.py")
         with self.assertRaises(PathGuardError) as ctx:
-            path_guard.check_forbidden_dirs("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/x.py", ("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work"))
+            path_guard.check_forbidden_dirs("/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs/x.py", ("/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs", "/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/work"))
         self.assertEqual(ctx.exception.code, Code.SSS_DIR)
 
     def test_interpretador_na_allowlist(self):

@@ -111,10 +111,10 @@ O script é somente leitura e exibirá uma tabela detalhada com o status `OK` ou
 
 ## 4. Execução do Servidor de Desenvolvimento web2py
 
-O servidor de desenvolvimento do web2py deve ser iniciado a partir da raiz do web2py (`/portaloptrib/TESHUVA/web2py`):
+O servidor de desenvolvimento do web2py deve ser iniciado a partir da raiz do web2py (`/portaloptrib/TESHUVA/SSS/DEV/web2py`):
 
 ```bash
-cd /portaloptrib/TESHUVA/web2py
+cd /portaloptrib/TESHUVA/SSS/DEV/web2py
 ~/.pyenv/versions/3.6.15/bin/python web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui
 ```
 
@@ -127,7 +127,7 @@ A aplicação fica no endereço local `127.0.0.1:8000/script_scheduling_service`
 Para subir de forma prática em segundo plano (com nohup, carimbo de data/hora no log e validação de subida):
 
 ```bash
-cd /portaloptrib/TESHUVA/web2py
+cd /portaloptrib/TESHUVA/SSS/DEV/web2py
 bin/start_local.sh               # sobe em background na porta 8000
 # ou: bin/start_local.sh 18000   # porta customizada
 # ou: bin/start_local.sh -f      # em primeiro plano no terminal
@@ -221,7 +221,7 @@ Sem `sudo`, cadastre os scripts com o caminho real de `dev/scripts`.
 * **Log da aplicação:** `log_dir/internal/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (CR-009; até o F8.2 era `log_dir/app/...`, que pode ser apagada à mão). O arquivo nasce na pasta do minuto em que o processo sobe e troca para um novo, na pasta do minuto atual, ao atingir `app_log_max_bytes`. As pastas de dia mais antigas que `app_log_retention_days` são apagadas pelo próprio processo. Para seguir o arquivo mais recente:
 
   ```bash
-  LOG_DIR=/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs     # o [logging] log_dir do seu config.ini
+  LOG_DIR=/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs     # o [logging] log_dir do seu config.ini
   tail -f "$(find "$LOG_DIR/app" -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)"
   ```
 
