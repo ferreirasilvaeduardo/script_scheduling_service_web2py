@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Em andamento.** Aprovado pelo responsável pelo produto em 2026-10-23, com o escopo 017a a 017d. 017a a 017d concluídos; a nova rodada de evidências de homologação vem a seguir |
+| Status | **Concluído** em 2026-10-23. Aprovado pelo responsável pelo produto, com o escopo 017a a 017d. Evidências reais no DEV: `docs/homologation/SSS_Homologation_Evidence_2026-10-23.docx` (211 de 211 verificações, CT-26 cobre o CR-017) |
 | Origem | Revisão tela a tela e processo a processo (2026-10-23): a lógica de negócio está correta, mas há um aviso de segurança que não funciona com os ambientes reais, uma lacuna de navegação e telas que repetem a mesma informação ou a mesma escolha |
 | Restrições | Sem dependência nova. Python 3.6. Mudança de esquema só no 017a, dentro da `SCHEMA_VERSION` 1, que continua aberta até a primeira produção (AGENTS §4.16) |
 | Afeta | README §2.4.3, §5.4, §10 (tabela 1) e §11.1. `AGENTS.md` §3.4 e §7. Código: `sql_ident`, `ddl_builder`, `init_db`, `repo_oracle/catalog`, `repo_fake`, `admin_environments_service`, `ticket_service`, `ui_menu` e as telas de ambientes e de disparo |
