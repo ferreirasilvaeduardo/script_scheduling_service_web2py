@@ -2,8 +2,9 @@
 """Gera o documento de evidencias da homologacao (DEV real) a partir do results.json do capture_evidence.js.
 
 Uso (da pasta tools/, Python 3 com python-docx):
-    python3 build_evidence_docx.py [pasta_evidencias] [saida.docx]
-Padrao: ../evidence_20261022 -> ../../../docs/homologation/SSS_Homologation_Evidence_2026-10-22.docx
+    SSS_EVIDENCE_DATE=AAAAMMDD python3 build_evidence_docx.py [pasta_evidencias] [saida.docx]
+Rodadas conhecidas em RODADAS (20261022: CR-016; 20261023: CR-017). Padrao: a rodada de 20261023,
+../evidence_<data> -> ../../../docs/homologation/SSS_Homologation_Evidence_<AAAA-MM-DD>.docx
 """
 import io
 import json
@@ -23,9 +24,13 @@ from docx.shared import Cm, Pt, RGBColor
 AQUI = os.path.dirname(os.path.abspath(__file__))
 HOMOLOG = os.path.dirname(AQUI)
 APP = os.path.dirname(os.path.dirname(HOMOLOG))
-EVID = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HOMOLOG, "evidence_20261022")
+RUN_DATE = os.environ.get("SSS_EVIDENCE_DATE", "20261023")
+DATE_ISO = "%s-%s-%s" % (RUN_DATE[:4], RUN_DATE[4:6], RUN_DATE[6:])
+DATE_BR = "%s/%s/%s" % (RUN_DATE[6:], RUN_DATE[4:6], RUN_DATE[:4])
+STAMP = "HOMOLOG_" + RUN_DATE
+EVID = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HOMOLOG, "evidence_" + RUN_DATE)
 SAIDA = sys.argv[2] if len(sys.argv) > 2 else os.path.join(APP, "docs", "homologation",
-                                                          "SSS_Homologation_Evidence_2026-10-22.docx")
+                                                          "SSS_Homologation_Evidence_%s.docx" % DATE_ISO)
 ROXO = RGBColor(0x4A, 0x0A, 0x64)
 VERDE = RGBColor(0x1B, 0x6E, 0x3A)
 VERMELHO = RGBColor(0xB0, 0x1C, 0x1C)
@@ -33,7 +38,7 @@ AMBAR = RGBColor(0x8A, 0x5A, 0x00)
 
 ORDEM = ["CT-01", "CT-02", "CT-03", "MASSA", "CT-04", "CT-05", "CT-06", "CT-07", "CT-08", "CT-09", "CT-10",
          "CT-11", "CT-12", "CT-13", "CT-14", "CT-15", "CT-16", "CT-17", "CT-18", "CT-19", "CT-20", "CT-21",
-         "CT-22", "CT-23", "CT-24", "CT-25", "ENCERRAMENTO"]
+         "CT-22", "CT-23", "CT-24", "CT-25", "CT-26", "ENCERRAMENTO"]
 
 # Adaptacao de cada caso ao DEV real (o manual de 18/10 foi escrito sobre a massa simulada do FAKE).
 ADAPTACAO = {
@@ -51,8 +56,8 @@ ADAPTACAO = {
              u"segundos).",
     "CT-09": u"Ticket #19 do FAKE → ticket real do op.prod (gerar_hash_arquivo em CLONE2); o vínculo obrigatório "
              u"temporário foi o termo_busca, desfeito ao final.",
-    "CT-11": u"HOMOLOG2 → ambiente HOMOLOG_20261022_<hhmm>, desativado ao final; a confirmação de desativação "
-             u"foi aberta no GFPREPROD e cancelada.",
+    "CT-11": u"HOMOLOG2 → ambiente %s_<hhmm>, desativado ao final; a confirmação de desativação "
+             u"foi aberta no GFPREPROD e cancelada." % STAMP,
     "CT-12": u"CONSULTA → READ_ONLY; OPERADOR_HML → OPERATOR_HML; DESENV (inativo) → CLONE7; VER_AUDITORIA → "
              u"VIEW_AUDIT. A revisão foi cancelada (matriz inalterada).",
     "CT-13": u"carga_diaria → contar_linhas_arquivo; HOMOLOGACAO → GFPREPROD.",
@@ -62,8 +67,8 @@ ADAPTACAO = {
              u"(regex ^[0-9]{11}$), sem vínculo com scripts.",
     "CT-16": u"carga_diaria → contar_linhas_arquivo; o caminho original foi restaurado no fim. Pela regra "
              u"atual (CR-011), o arquivo é conferido pelo agente na execução, não pelo nó web.",
-    "CT-17": u"Regra nova HOMOLOG_20261022_DIARIA_<hhmm>, diária com a primeira execução em poucos minutos; o "
-             u"agente real criou o ticket no horário (CT-18).",
+    "CT-17": u"Regra nova %s_DIARIA_<hhmm>, diária com a primeira execução em poucos minutos; o "
+             u"agente real criou o ticket no horário (CT-18)." % STAMP,
     "CT-18": u"A regra pausada do FAKE não existe no DEV; a agenda mostra a regra do CT-17.",
     "CT-19": u"Códigos atuais da auditoria: TICKET_CANCEL e AUDIT_EXPORT (antes TICKET_CANCELAR e AUD_EXPORTAR).",
     "CT-20": u"Um único agente real (srv-linux-local-01); os agentes agt-host01/02 eram simulados pelo FAKE.",
@@ -74,7 +79,7 @@ ADAPTACAO = {
 }
 
 # Ressalvas (o caso passou, com observacao relevante para o responsavel).
-RESSALVA = {
+_RESSALVA_1022 = {
     "CT-05": u"Destaque de produção fixo no nome PRODUCAO (ticket_service.PRODUCTION_ENVIRONMENT): não aparece "
              u"para nenhum ambiente do DEV.",
     "CT-20": u"Estados Atrasado/Em risco/Offline e quadros de atenção não reproduzíveis com um único agente "
@@ -83,7 +88,7 @@ RESSALVA = {
              u"automatizados).",
 }
 
-DEFEITOS = [
+_DEFEITOS_1022 = [
     (u"Linha de situação ao vivo vazia em 4 telas",
      u"views/tickets/index.html, views/tickets/detail.html, views/audit/agents.html, views/admin_profiles/matrix.html",
      u"O template mostrava x-text=\"state\", mas os componentes Alpine expõem statusText. Desde o CR-016a não "
@@ -101,7 +106,7 @@ DEFEITOS = [
      u"Corrigido (quebra em qualquer ponto); conferido na figura de confirmação do CT-05."),
 ]
 
-OBSERVACOES = [
+_OBSERVACOES_1022 = [
     u"Destaque de ambiente de produção: só o ambiente chamado PRODUCAO recebe o selo vermelho e a confirmação "
     u"\"AMBIENTE DE PRODUÇÃO\" (ticket_service.PRODUCTION_ENVIRONMENT). No DEV nenhum ambiente tem esse nome; "
     u"recomenda-se torná-lo configurável antes da implantação em produção.",
@@ -113,6 +118,54 @@ OBSERVACOES = [
     u"(disparo, regra) usam \"-error\". Sem efeito para o usuário; resquício do CR-016, cuja tradução foi encerrada.",
 ]
 
+
+# Rodada de 23/10/2026 (CR-017): o que mudou nas telas e a massa de um banco DEV recriado.
+_ADAPTACAO_1023 = {
+    "CT-02": u"Painel sem o cartão de disparo e sem o menu repetido (CR-017b): o disparo fica no item de menu "
+             u"Rodar um script.",
+    "CT-04": u"Rotinas disponíveis passou a se chamar Rodar um script (CR-017b), com o botão Agendar para quem tem "
+             u"Regras de Agendamento (CR-017c).",
+    "CT-05": u"carga_diaria em PRODUCAO → gerar_hash_arquivo em CLONE2. A escolha do script é feita nos cartões de "
+             u"Rodar um script; o comando aparece só na confirmação (sem a pré-visualização separada, CR-017b). "
+             u"Todos os ambientes do DEV estão marcados como produção no cadastro (CR-017a), então o alerta e o botão "
+             u"vermelho aparecem.",
+    "CT-26": u"Caso novo do CR-017: o perfil OPERATOR_HML perdeu VIEW_LOGS por alguns segundos (para mostrar o item "
+             u"Tickets de quem só dispara) e o limpar_linhas_vazias ficou homologado em um ambiente e depois em "
+             u"nenhum (disparo e regra direto ao formulário; quadro Quem pode rodar). Tudo foi desfeito no próprio "
+             u"caso.",
+}
+
+_OBSERVACOES_1023 = [
+    u"Banco do DEV recriado no CR-017a (rollback, implantação e validação dos scripts de docs/sql/): os "
+    u"registros da rodada de 22/10 não existem mais, e a massa desta rodada foi criada do zero pelas telas.",
+    u"Ambiente de produção agora é uma marcação do cadastro (tbsss_environments.is_production, CR-017a). O seed "
+    u"marca os 5 ambientes do DEV como produção; por isso o alerta aparece em todo disparo.",
+    u"Cancelamento no agente real: o log não ganha a linha \"processo encerrado por cancelamento (SIGTERM)\", "
+    u"que só existia na simulação do FAKE; o motivo aparece no Detalhe técnico (CANCELLED / CANCEL_USER).",
+    u"Scripts PYTHON3 rodam com -I e saída em buffer: o log de um script Python aparece quando o buffer descarrega "
+    u"(no fim, ou nunca, se o processo for cancelado). Scripts SH/BASH escrevem na hora.",
+    u"Três verificações da primeira passada (menu com Administração, alerta de produção e coluna Produção) "
+    u"procuravam o texto como escrito, mas a tela o exibe em maiúsculas por CSS. O roteiro passou a comparar sem "
+    u"diferenciar maiúsculas, e o CT-02, o CT-05 e o CT-11 foram executados de novo; por isso há um segundo "
+    u"ambiente %s_<hhmm> (também inativo) e um segundo ticket do CT-05." % STAMP,
+]
+
+RODADAS = {
+    "20261022": {"commit": u"07e424f (encerramento do CR-016) mais as correções desta homologação, no mesmo commit "
+                           u"deste documento",
+                 "adaptacao": {}, "ressalva": _RESSALVA_1022, "defeitos": _DEFEITOS_1022,
+                 "observacoes": _OBSERVACOES_1022},
+    "20261023": {"commit": u"dedf93a (CR-017 concluído: 017a a 017d) mais o roteiro ajustado, no mesmo commit "
+                           u"deste documento",
+                 "adaptacao": _ADAPTACAO_1023,
+                 "ressalva": dict((k, v) for k, v in _RESSALVA_1022.items() if k != "CT-05"),
+                 "defeitos": [], "observacoes": _OBSERVACOES_1023},
+}
+RODADA = RODADAS[RUN_DATE]
+ADAPTACAO.update(RODADA["adaptacao"])
+RESSALVA = RODADA["ressalva"]
+DEFEITOS = RODADA["defeitos"]
+OBSERVACOES = RODADA["observacoes"]
 
 def local(iso):
     """ISO em UTC (registro do roteiro) -> 'dd/mm/aaaa hh:mm:ss' no horario desta maquina (o mesmo das telas)."""
@@ -240,8 +293,7 @@ def main():
         (u"Agente", u"srv-linux-local-01 (Linux), ambientes CLONE2, CLONE1, CLONE6, CLONE7 e GFPREPROD; "
                     u"interpretadores PYTHON3, BASH e SH"),
         (u"Base", u"Manual de Homologação — UI Freeze 2.5 (17/10/2026), adaptado aos dados do DEV"),
-        (u"Commit de referência", u"07e424f (encerramento do CR-016) mais as correções desta homologação, "
-                                  u"no mesmo commit deste documento"),
+        (u"Commit de referência", RODADA["commit"]),
         (u"Execução", u"Roteiro dev/homologation/tools/capture_evidence.js (Chrome headless), %d verificações, "
                       u"%d figuras" % (total_chk, total_fig)),
         (u"Resultado geral", u"%d de %d verificações OK" % (total_ok, total_chk)),
@@ -303,9 +355,10 @@ def main():
                 doc.add_paragraph(k["desc"] + (u" — " + k["detail"] if k.get("detail") else u""), style="List Bullet")
     doc.add_heading(u"2.4 Registros mantidos como evidência", 2)
     doc.add_paragraph(
-        u"Os registros criados ficam no banco do DEV, identificados pela marca HOMOLOG_20261022: tickets e "
-        u"execuções, o ambiente HOMOLOG_20261022_<hhmm> (inativo), o parâmetro sigiloso documento_cliente_hml, o "
-        u"parâmetro ct24_valor_<hhmm> e as regras HOMOLOG_20261022_DIARIA_<hhmm> (pausadas no encerramento). "
+        u"Os registros criados ficam no banco do DEV, identificados pela marca %s: tickets e "
+        u"execuções, o ambiente %s_<hhmm> (inativo), o parâmetro sigiloso documento_cliente_hml, o "
+        u"parâmetro ct24_valor_<hhmm> e as regras %s_DIARIA_<hhmm> (pausadas no encerramento). "
+        % (STAMP, STAMP, STAMP) +
         u"Alterações de cadastro feitas para testar (caminho de script, vínculo de parâmetro, permissão "
         u"MANAGE_USERS do OPERATOR_PROD) foram desfeitas pela tela no próprio caso. Tudo está na trilha de "
         u"auditoria.")
@@ -388,7 +441,7 @@ def main():
         reg = [(u"Resultado", txt)]
         if c in RESSALVA:
             reg.append((u"Ressalva", RESSALVA[c]))
-        reg.append((u"Executado por", u"Roteiro automatizado capture_evidence.js, em 22/10/2026"))
+        reg.append((u"Executado por", u"Roteiro automatizado capture_evidence.js, em %s" % DATE_BR))
         reg.append((u"Conferido por / data", u""))
         tr = kv_table(doc, reg)
         tr.rows[0].cells[1].paragraphs[0].runs[0].bold = True
@@ -408,10 +461,10 @@ def resumo_md(res, ids, inicio, fim, total_ok, total_chk, total_fig):
         u"**Data:** %s a %s (horário de Brasília)" % (local(inicio), local(fim)[11:]), u"",
         u"**Ambiente:** DEV, banco Oracle, web2py em `127.0.0.1:18000`, agente `srv-linux-local-01`",
         u"**Resultado geral:** %d de %d verificações OK; %d figuras." % (total_ok, total_chk, total_fig), u"",
-        u"Documento completo, com as telas: `SSS_Homologation_Evidence_2026-10-22.docx` (mesma pasta). "
+        u"Documento completo, com as telas: `%s` (mesma pasta). "
         u"Gerado por `dev/homologation/tools/capture_evidence.js` e `build_evidence_docx.py`; o resultado bruto "
-        u"de cada verificação está em `dev/homologation/evidence_20261022/results.json`. Nenhuma senha foi "
-        u"registrada.", u"",
+        u"de cada verificação está em `dev/homologation/evidence_%s/results.json`. Nenhuma senha foi "
+        u"registrada." % (os.path.basename(SAIDA), RUN_DATE), u"",
         u"## Resultado por caso", u"",
         u"| Caso | Título | Verificações | Figuras | Resultado |", u"|---|---|---|---|---|",
     ]
@@ -423,13 +476,15 @@ def resumo_md(res, ids, inicio, fim, total_ok, total_chk, total_fig):
     linhas += [u"", u"## Defeitos encontrados e corrigidos", u""]
     for d in DEFEITOS:
         linhas.append(u"- **%s** (`%s`): %s %s" % d)
+    if not DEFEITOS:
+        linhas.append(u"Nenhum.")
     linhas += [u"", u"## Observações e diferenças em relação ao manual", u""]
     linhas += [u"- " + o for o in OBSERVACOES]
     linhas += [u"", u"## Ressalvas", u""]
     linhas += [u"- **%s:** %s" % (c, t) for c, t in sorted(RESSALVA.items())]
     linhas += [u"", u"## Verificações que não passaram", u""]
     linhas += ([u"- %s: %s (%s)" % (c, k["desc"], k.get("detail", u"")) for c, k in nao_ok] or [u"Nenhuma."])
-    md = os.path.join(os.path.dirname(SAIDA), "SSS_HOMOLOGATION_EVIDENCE_2026-10-22.md")
+    md = os.path.join(os.path.dirname(SAIDA), "SSS_HOMOLOGATION_EVIDENCE_%s.md" % DATE_ISO)
     io.open(md, "w", encoding="utf-8").write(u"\n".join(linhas) + u"\n")
     print("gerado:", md)
 

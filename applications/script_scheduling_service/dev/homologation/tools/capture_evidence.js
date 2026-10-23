@@ -1,7 +1,8 @@
 /**
  * capture_evidence.js
- * Evidencias reais da homologacao (2026-10-22): executa os casos de teste do manual de UI Freeze adaptados ao
- * banco DEV (Oracle) e ao agente real, captura as figuras e confere na propria pagina o resultado esperado.
+ * Evidencias reais da homologacao: executa os casos de teste do manual de UI Freeze adaptados ao banco DEV
+ * (Oracle) e ao agente real, captura as figuras e confere na propria pagina o resultado esperado.
+ * Rodadas: 2026-10-22 (CR-016) e 2026-10-23 (CR-017: telas de operacao, agendamento e producao no cadastro).
  *
  * Uso (servidor web do DEV no ar, agente real no ar):
  *   node capture_evidence.js            -> todos os CTs, na ordem
@@ -10,7 +11,8 @@
  * Senhas: nunca no codigo nem no log.
  *   - senha inicial dos usuarios do seed: lida do docs/DEPLOYMENT.md (secao 5.3, documentada);
  *   - senha nova do admin (troca valida do CT-01): arquivo SSS_ADMIN_NEW_PASSWORD_FILE (padrao ~/.sss_homolog_pw, 0600).
- * Saida: SSS_EVIDENCE_DIR (padrao dev/homologation/evidence_20261022): fig_NN.png, results.json, state.json.
+ * Data da rodada: SSS_EVIDENCE_DATE (AAAAMMDD, padrao 20261023): carimbo HOMOLOG_<data> dos registros criados.
+ * Saida: SSS_EVIDENCE_DIR (padrao dev/homologation/evidence_<data>): fig_NN.png, results.json, state.json.
  */
 const fs = require('fs');
 const os = require('os');
@@ -29,11 +31,13 @@ const puppeteer = loadPuppeteer();
 
 const APP = path.resolve(__dirname, '..', '..', '..');
 const BASE_URL = process.env.SSS_BASE_URL || 'http://127.0.0.1:18000/script_scheduling_service';
-const OUT_DIR = process.env.SSS_EVIDENCE_DIR || path.join(APP, 'dev', 'homologation', 'evidence_20261022');
+const RUN_DATE = process.env.SSS_EVIDENCE_DATE || '20261023';
+const RUN_DATE_BR = `${RUN_DATE.slice(6, 8)}/${RUN_DATE.slice(4, 6)}/${RUN_DATE.slice(0, 4)}`;
+const OUT_DIR = process.env.SSS_EVIDENCE_DIR || path.join(APP, 'dev', 'homologation', `evidence_${RUN_DATE}`);
 const CHROME = process.env.SSS_CHROME ||
     path.join(os.homedir(), '.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome');
 const INPUT = path.join(APP, 'input');
-const STAMP = 'HOMOLOG_20261022';
+const STAMP = `HOMOLOG_${RUN_DATE}`;
 
 const deployDoc = fs.readFileSync(path.join(APP, 'docs', 'DEPLOYMENT.md'), 'utf8');
 const SEED_PASS = (deployDoc.match(/senha inicial `([^`]+)`/) || [])[1];
@@ -98,6 +102,20 @@ async function expectText(desc, ...needles) {
 async function expectNoText(desc, ...needles) {
     const t = await text();
     const found = needles.filter((n) => t.includes(n));
+    return check(desc, found.length === 0, found.length ? 'apareceu: ' + found.join(' | ') : '');
+}
+
+// Sem diferenciar maiusculas: menu, cabecalhos de tabela e o alerta de producao sao exibidos em
+// maiusculas por CSS (text-transform), e o innerText devolve o texto como exibido.
+async function expectTextCI(desc, ...needles) {
+    const t = (await text()).toLocaleLowerCase('pt-BR');
+    const missing = needles.filter((n) => !t.includes(n.toLocaleLowerCase('pt-BR')));
+    return check(desc, missing.length === 0, missing.length ? 'faltou: ' + missing.join(' | ') : '');
+}
+
+async function expectNoTextCI(desc, ...needles) {
+    const t = (await text()).toLocaleLowerCase('pt-BR');
+    const found = needles.filter((n) => t.includes(n.toLocaleLowerCase('pt-BR')));
     return check(desc, found.length === 0, found.length ? 'apareceu: ' + found.join(' | ') : '');
 }
 
@@ -218,13 +236,25 @@ function ticketFromUrl() {
     return m ? parseInt(m[1], 10) : null;
 }
 
-// Disparo pelo assistente (etapas 1 a 3) e confirmacao no modal; devolve o id do ticket criado.
+// Clica no botao "Rodar em <env>" do cartao do script em Rodar um script (CR-017b).
+async function clickRunOnCard(scriptName, env) {
+    const handle = await page.evaluateHandle((n, e) => {
+        const card = Array.from(document.querySelectorAll('li.sss-card-routine'))
+            .find((li) => (li.querySelector('h3') || {}).innerText === n);
+        return card ? Array.from(card.querySelectorAll('a')).find((a) => a.innerText.trim() === 'Rodar em ' + e) || null : null;
+    }, scriptName, env);
+    const el = handle.asElement();
+    if (!el) return false;
+    await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), el.click()]);
+    return true;
+}
+
+// Disparo pelos cartoes de Rodar um script (escolha do script e do ambiente) e confirmacao no modal;
+// devolve o id do ticket criado.
 async function createTicket(scriptName, env, answers, opts = {}) {
-    await go('/tickets/new');
-    const okScript = await clickText('a.sss-choice', scriptName, { navigate: true });
-    if (!okScript) return null;
-    const okEnv = await clickText('a.sss-choice', env, { navigate: true });
-    if (!okEnv) return null;
+    await go('/tickets/catalog');
+    const okCard = await clickRunOnCard(scriptName, env);
+    if (!okCard) return null;
     for (const [code, value] of Object.entries(answers)) {
         await fill(`[name="p_${code}"]`, value);
     }
@@ -312,24 +342,26 @@ CTS['CT-02'] = async () => {
     begin('CT-02', 'Painel inicial por perfil');
     await login('admin');
     await go('/default/index');
-    await expectText('admin: cartões de disparo, tickets 24 h, meus tickets, agendamentos e saúde dos agentes',
-        'Disparar script', 'Tickets nas últimas 24 horas', 'Meus últimos tickets', 'Próximos agendamentos', 'Saúde dos agentes');
-    await expectText('admin: menu com Administração', 'Administração');
+    await expectText('admin: cartões de tickets 24 h, meus tickets, agendamentos e saúde dos agentes',
+        'Tickets nas últimas 24 horas', 'Meus últimos tickets', 'Próximos agendamentos', 'Saúde dos agentes');
+    await expectTextCI('admin: menu com Rodar um script, Tickets, Agenda, Agentes e Administração',
+        'Rodar um script', 'Tickets', 'Agenda', 'Agentes', 'Administração');
+    await expectNoText('Painel sem atalho de disparo e sem o menu repetido (CR-017b)', 'Disparar script', 'Escolha uma das funcionalidades');
     await snap('Painel inicial do admin', { full: true });
     await login('op.prod');
     await go('/default/index');
-    await expectText('op.prod: disparo, tickets 24 h e meus tickets', 'Disparar script', 'Tickets nas últimas 24 horas', 'Meus últimos tickets');
-    await expectNoText('op.prod: sem agendamentos, agentes e Administração', 'Próximos agendamentos', 'Saúde dos agentes', 'Administração');
+    await expectText('op.prod: Rodar um script no menu, tickets 24 h e meus tickets', 'Rodar um script', 'Tickets nas últimas 24 horas', 'Meus últimos tickets');
+    await expectNoTextCI('op.prod: sem agendamentos, agentes e Administração', 'Próximos agendamentos', 'Saúde dos agentes', 'Administração');
     await snap('Painel inicial do op.prod');
     await login('op.hml');
     await go('/default/index');
-    await expectText('op.hml: disparo, tickets 24 h e meus tickets', 'Disparar script', 'Tickets nas últimas 24 horas', 'Meus últimos tickets');
-    await expectNoText('op.hml: sem Administração', 'Administração');
+    await expectText('op.hml: Rodar um script no menu, tickets 24 h e meus tickets', 'Rodar um script', 'Tickets nas últimas 24 horas', 'Meus últimos tickets');
+    await expectNoTextCI('op.hml: sem Administração', 'Administração');
     await snap('Painel inicial do op.hml');
     await login('consulta');
     await go('/default/index');
     await expectText('consulta: tickets 24 h e meus tickets', 'Tickets nas últimas 24 horas', 'Meus últimos tickets');
-    await expectNoText('consulta: sem Disparar script e sem Rotinas disponíveis', 'Disparar script', 'Rotinas disponíveis');
+    await expectNoText('consulta: sem Rodar um script', 'Rodar um script', 'Disparar script');
     await snap('Painel inicial do consulta');
 };
 
@@ -354,10 +386,11 @@ CTS['CT-03'] = async () => {
 };
 
 CTS['CT-04'] = async () => {
-    begin('CT-04', 'Rotinas disponíveis e histórico do script');
+    begin('CT-04', 'Rodar um script (cartões) e histórico do script');
     await login('op.hml');
     await go('/tickets/catalog');
-    await expectText('Cartões com perguntas, última execução e botões', 'Perguntas que faz', 'Última execução', 'Ver histórico');
+    await expectText('Cartões com perguntas, última execução e botões', 'Rodar um script', 'Perguntas que faz', 'Última execução', 'Ver histórico');
+    await expectNoText('op.hml (sem Regras de Agendamento): sem o botão Agendar', 'Agendar');
     await page.type('#search-routine', 'hash');
     await sleep(500);
     const visiveis = await page.$$eval('li.sss-card-routine', (as) => as.filter((a) => a.offsetParent !== null).map((a) => a.innerText.split('\n')[0]));
@@ -367,8 +400,11 @@ CTS['CT-04'] = async () => {
     await expectText('Sem resultado: "Nenhuma rotina corresponde à busca."', 'Nenhuma rotina corresponde à busca.');
     await page.$eval('input[type="search"]', (e) => { e.value = ''; e.dispatchEvent(new Event('input', { bubbles: true })); });
     await sleep(400);
-    await snap('Rotinas disponíveis (op.hml)', { full: true });
+    await snap('Rodar um script (op.hml)', { full: true });
     await login('admin');
+    await go('/tickets/catalog');
+    const agendar = await page.$$eval('li.sss-card-routine a', (as) => as.filter((a) => a.innerText.trim() === 'Agendar').length);
+    check('admin: botão Agendar em cada cartão (CR-017c)', agendar === 14, agendar + ' botão(ões)');
     const sid = state.scripts && state.scripts.contar_linhas_arquivo;
     if (sid) {
         await go(`/tickets/history/${sid}`);
@@ -386,18 +422,19 @@ CTS['CT-04'] = async () => {
 CTS['MASSA'] = async () => {
     begin('MASSA', 'Preparação da massa: tickets reais criados pelas telas e executados pelo agente');
     await login('admin');
-    await go('/tickets/new');
-    state.scripts = await page.$$eval('a.sss-choice', (as) => {
+    await go('/tickets/catalog');
+    state.scripts = await page.$$eval('li.sss-card-routine', (cards) => {
         const m = {};
-        for (const a of as) {
-            const id = (a.getAttribute('href').match(/script_id=(\d+)/) || [])[1];
-            const name = a.innerText.trim().split('\n')[0].trim();
-            if (id) m[name] = parseInt(id, 10);
+        for (const c of cards) {
+            const a = c.querySelector('a[href*="/tickets/history/"]');
+            const id = a && (a.getAttribute('href').match(/history\/(\d+)/) || [])[1];
+            const name = (c.querySelector('h3') || {}).innerText;
+            if (id && name) m[name.trim()] = parseInt(id, 10);
         }
         return m;
     });
     saveState();
-    check('Scripts do seed disponíveis no disparo do admin', Object.keys(state.scripts).length === 14,
+    check('Scripts do seed nos cartões de Rodar um script do admin', Object.keys(state.scripts).length === 14,
         Object.keys(state.scripts).join(', '));
     const plano = [
         ['ok_hml', 'op.hml', 'contar_linhas_arquivo', 'GFPREPROD', { caminho_arquivo: FILE_CLIENTES }],
@@ -434,7 +471,7 @@ function localIso(offsetMin) {
 // Ticket longo (compactacao de 3 GB de texto, nivel 9: cerca de 4 minutos) para as telas de "Rodando" e o cancelamento em execucao.
 async function startLongTicket(key) {
     await login('admin');
-    const destino = path.join(INPUT, 'gfpreprod', 'zipar_arquivos', 'saida', `lote_20261022_${key}.zip`);
+    const destino = path.join(INPUT, 'gfpreprod', 'zipar_arquivos', 'saida', `lote_${RUN_DATE}_${key}.zip`);
     const id = await createTicket('zipar_arquivos', 'GFPREPROD',
         { arq_origem: DIR_LOTE, arq_destino: destino, nivel_compressao: '9' });
     state.tickets[key] = id;
@@ -448,26 +485,30 @@ CTS['CT-05'] = async () => {
     begin('CT-05', 'Disparo de script (criação de ticket)');
     await login('op.prod');
     await go('/tickets/new');
-    const nomes = await page.$$eval('a.sss-choice', (as) => as.map((a) => a.innerText.trim().split('\n')[0].trim()));
+    check('Disparo sem script abre Rodar um script, onde o script é escolhido (CR-017b)', page.url().includes('/tickets/catalog'),
+        page.url().replace(BASE_URL, ''));
+    const nomes = await page.$$eval('li.sss-card-routine h3', (hs) => hs.map((h) => h.innerText.trim()));
     check('Etapa 1: só scripts ativos autorizados ao perfil e homologados (os 14 utilitários)', nomes.length === 14, nomes.join(', '));
-    await snap('Etapa 1: escolha do script', { full: true });
-    await clickText('a.sss-choice', 'gerar_hash_arquivo', { navigate: true });
+    await snap('Etapa 1: escolha do script nos cartões', { full: true });
+    await go(`/tickets/new?script_id=${state.scripts.gerar_hash_arquivo}`);
     const envs = await page.$$eval('a.sss-choice', (as) => as.map((a) => a.innerText.trim().split('\n')[0].trim()));
-    check('Etapa 2: ambientes ativos do perfil em que o script está homologado', envs.length === 5, envs.join(', '));
+    check('Etapa 2: ambientes ativos do perfil em que o script está homologado, com o selo Produção', envs.length === 5 &&
+        envs.every((e) => e.includes('Produção')), envs.join(', '));
     await snap('Etapa 2: escolha do ambiente');
     await clickText('a.sss-choice', 'CLONE2', { navigate: true });
     await fill('[name="p_arq_origem"]', FILE_EXTRATO);
     const prios = await page.$$eval('#field-priority option', (os) => os.map((o) => o.value));
     check('A lista de prioridades do op.prod começa em 2 (a 1 é só de administradores)', prios[0] === '2' && !prios.includes('1'), prios.join(','));
-    await clickText('.sss-preview button', 'Pré-visualizar', { wait: 1500 });
-    await expectText('Prévia do comando com o interpretador e o caminho completo do script',
-        '/opt/automacoes/scripts/utilitarios/gerar_hash_arquivo.py');
-    await snap('Etapa 3: questionário e prévia do comando', { full: true });
+    await expectText('Ajuda da prioridade com o envelhecimento da fila', 'quem espera mais sobe de prioridade');
+    await expectNoText('Sem o botão Pré-visualizar comando: o comando fica no modal (CR-017b)', 'Pré-visualizar comando');
+    await snap('Etapa 3: questionário', { full: true });
     await clickText('button[data-summary-trigger]', 'Criar ticket', { wait: 1500 });
-    await expectText('Confirmação com a frase-resumo e o comando que será executado',
-        'Vamos rodar', 'gerar_hash_arquivo', 'CLONE2', 'Comando que será executado');
-    await snap('Confirmação do disparo, com o resumo');
-    note('O destaque "AMBIENTE DE PRODUÇÃO" (botão vermelho e selo) só aparece para o ambiente chamado PRODUCAO (ticket_service.PRODUCTION_ENVIRONMENT); nenhum ambiente do DEV tem esse nome, então ele não aparece nos dados reais.');
+    await expectText('Confirmação com a frase-resumo e o comando que será executado, com o caminho completo do script',
+        'Vamos rodar', 'gerar_hash_arquivo', 'CLONE2', 'Comando que será executado',
+        '/opt/automacoes/scripts/utilitarios/gerar_hash_arquivo.py');
+    await expectTextCI('Ambiente de produção: alerta na confirmação (CR-017a)', 'Ambiente de produção');
+    check('Ambiente de produção: botão Criar ticket em vermelho', await page.$('.modal .btn-danger[type="submit"]') !== null);
+    await snap('Confirmação do disparo, com o resumo e o alerta de produção');
     await confirmModal();
     const id = ticketFromUrl();
     state.tickets.ct05 = id;
@@ -518,6 +559,8 @@ CTS['CT-07'] = async () => {
     await login('admin');
     await go(`/tickets/detail/${longo}`);
     await expectText('Ticket rodando: frase "Está rodando agora. Começou há …" e as etapas', 'Está rodando agora. Começou há', 'Rodando');
+    await expectText('Rodando: "Último sinal do servidor" no resumo (CR-017b)', 'Último sinal do servidor');
+    await expectNoText('Sem a linha do tempo repetida (CR-017b)', 'Linha do tempo');
     await sleep(4000);
     await snap('Detalhe do ticket rodando, com log', { full: true });
     const dl = await page.$eval('a[download^="ticket_"]', (a) => a.getAttribute('download'));
@@ -704,7 +747,7 @@ CTS['CT-11'] = async () => {
     begin('CT-11', 'Gestão de Ambientes');
     await login('admin');
     await go('/admin_environments/index');
-    await expectText('Lista com os ambientes do DEV', 'CLONE1', 'CLONE2', 'CLONE6', 'CLONE7', 'GFPREPROD');
+    await expectTextCI('Lista com os ambientes do DEV e a coluna Produção', 'CLONE1', 'CLONE2', 'CLONE6', 'CLONE7', 'GFPREPROD', 'Produção');
     await snap('Lista de ambientes');
     await go('/admin_environments/form');
     await fill('#field-name', '  QA_01  ');
@@ -715,7 +758,7 @@ CTS['CT-11'] = async () => {
     await snap('Identificador com espaços recusado');
     await go('/admin_environments/form');
     await fill('#field-name', ENV_NOVO);
-    await fill('#field-description', 'Ambiente criado na homologação de 22/10/2026');
+    await fill('#field-description', `Ambiente criado na homologação de ${RUN_DATE_BR}`);
     await submit('/admin_environments/save');
     await expectText('Inclusão válida: mensagem de sucesso', 'Ambiente salvo com sucesso.');
     const envId = await idFromList(`/admin_environments/index?name=${ENV_NOVO}`, ENV_NOVO, '/admin_environments/form/');
@@ -723,7 +766,10 @@ CTS['CT-11'] = async () => {
     saveState();
     check(`Ambiente ${ENV_NOVO} gravado`, !!envId, '#' + envId);
     await go(`/admin_environments/form/${envId}`);
-    await fill('#field-description', 'Ambiente criado na homologação de 22/10/2026 (descrição alterada)');
+    check('Ambiente novo nasce fora de produção (caixa desmarcada, CR-017a)',
+        await page.$eval('#field-is_production', (e) => !e.checked));
+    await go(`/admin_environments/form/${envId}`);
+    await fill('#field-description', `Ambiente criado na homologação de ${RUN_DATE_BR} (descrição alterada)`);
     await submit('/admin_environments/save');
     await expectText('Alteração: mensagem de sucesso', 'Ambiente salvo com sucesso.');
     await go(`/admin_environments/form/${envId}`);
@@ -735,6 +781,9 @@ CTS['CT-11'] = async () => {
     check('Salvar sem mudança não grava nada (o quadro Registro não muda)', registroAntes && registroAntes === registroDepois, registroDepois);
     const gfId = await idFromList('/admin_environments/index', 'GFPREPROD', '/admin_environments/form/');
     await go(`/admin_environments/form/${gfId}`);
+    check('GFPREPROD marcado como ambiente de produção no cadastro (seed do CR-017a)',
+        await page.$eval('#field-is_production', (e) => e.checked));
+    await snap('Ambiente com a caixa Ambiente de produção', { full: true });
     await clickText('button', 'Desativar');
     await expectText('A desativação mostra o impacto antes de confirmar', 'Desativar ambiente');
     await snap('Confirmação de desativação de ambiente');
@@ -917,7 +966,9 @@ CTS['CT-16'] = async () => {
     const campo = await page.$eval('#field-path_file', (e) => e.value);
     check('Arquivo do script com o caminho completo', campo === original, campo);
     await expectText('Ajuda do campo com o exemplo de caminho', '/opt/automacoes/scripts/');
-    await snap('Edição de script com o caminho completo', { full: true });
+    await expectText('Quadro Quem pode rodar: pronto, com os perfis (CR-017d)', 'Quem pode rodar', 'Pronto para rodar.',
+        'OPERATOR_HML', 'OPERATOR_PROD');
+    await snap('Edição de script com o caminho completo e o quadro Quem pode rodar', { full: true });
     const casos = [
         ['contar_linhas_arquivo.sh', 'Informe o caminho completo do arquivo, começando por /'],
         ['/opt/automacoes/../scripts/contar.sh', "O caminho não pode conter '..'."],
@@ -986,6 +1037,13 @@ CTS['CT-17'] = async () => {
     begin('CT-17', 'Regras de Agendamento');
     await login('admin');
     const sid = state.scripts.contar_linhas_arquivo;
+    await go('/schedules/form');
+    await expectText('Nova regra: escolha do script em lista com busca, como no disparo (CR-017c)', 'Buscar script', 'contar_linhas_arquivo');
+    await snap('Nova regra: escolha do script', { full: true });
+    await clickText('a.sss-choice', 'contar_linhas_arquivo', { navigate: true });
+    const envsRegra = await page.$$eval('a.sss-choice', (as) => as.length);
+    check('Nova regra: ambientes em lista clicável', envsRegra === 5, envsRegra + ' ambiente(s)');
+    await snap('Nova regra: escolha do ambiente');
     await go(`/schedules/form?script_id=${sid}&environment=GFPREPROD`);
     await fill('#field-recurrence_type', 'CRON');
     await fill('#field-cron_expression', '61 * * * *');
@@ -1065,7 +1123,8 @@ CTS['CT-19'] = async () => {
     begin('CT-19', 'Auditoria: trilha, filtros e exportação CSV');
     await login('admin');
     await go('/audit/index');
-    await expectText('Trilha com o período padrão', 'Trilha de auditoria');
+    await expectText('Trilha com o período padrão', 'Auditoria');
+    check('Auditoria sem as abas: Agentes tem item próprio no menu (CR-017c)', await page.$('.nav-tabs') === null);
     await snap('Trilha de auditoria', { full: true });
     await go('/audit/index?action=TICKET_CANCEL');
     await expectText('Cancelamentos do CT-08 como TICKET_CANCEL, um por pedido', 'TICKET_CANCEL', 'sinalizado');
@@ -1099,6 +1158,9 @@ CTS['CT-20'] = async () => {
     await expectText('Agente real srv-linux-local-01 com saúde, heartbeat, ambientes e interpretadores',
         'srv-linux-local-01', 'GFPREPROD', 'PYTHON3');
     await expectText('Legenda de saúde e limiares', 'Legenda');
+    check('Título Agentes e item Agentes ativo no menu (CR-017c)', await page.evaluate(() =>
+        document.querySelector('h1').innerText.trim() === 'Agentes' &&
+        Array.from(document.querySelectorAll('.sss-nav-link[aria-current="page"]')).some((a) => a.innerText.includes('Agentes'))));
     await sleep(17000);
     await expectText('A tela se atualiza sozinha ("Atualizado às …")', 'Atualizado às');
     await snap('Painel de agentes', { full: true });
@@ -1146,8 +1208,8 @@ CTS['CT-22'] = async () => {
     await login('op.hml');
     await go('/tickets/catalog');
     largura = await page.evaluate(() => document.documentElement.scrollWidth);
-    check('360 px: rotinas disponíveis sem rolagem horizontal', largura <= 360, largura + ' px');
-    await snap('Rotinas disponíveis em 360 px', { full: true });
+    check('360 px: Rodar um script sem rolagem horizontal', largura <= 360, largura + ' px');
+    await snap('Rodar um script em 360 px', { full: true });
     await setViewport('desktop');
 };
 
@@ -1304,6 +1366,70 @@ CTS['CT-25'] = async () => {
     await ctx2.close();
 };
 
+// Homologacao do script pela tela: marca so os ambientes pedidos e salva (como o usuario, sem o modal).
+async function setHomologation(scriptId, names) {
+    await go(`/admin_scripts/homologation/${scriptId}`);
+    await page.evaluate((wanted) => {
+        for (const box of document.querySelectorAll('input[name="environments"]')) {
+            box.checked = wanted.includes(box.getAttribute('data-name'));
+        }
+    }, names);
+    await page.$eval('form[action*="save_homologation"]', (f) => f.submit());
+    await page.waitForNavigation({ waitUntil: 'networkidle0' });
+}
+
+// Marca ou desmarca uma funcionalidade na matriz do perfil e salva.
+async function toggleProfileFeature(profileId, code) {
+    await go(`/admin_profiles/matrix/${profileId}`);
+    await page.evaluate((c) => {
+        const box = Array.from(document.querySelectorAll('input[name="funcs"]'))
+            .find((i) => (i.closest('label, li, tr, div') || i.parentElement).innerText.includes(c));
+        if (box) box.click();
+    }, code);
+    await page.$eval('form[action*="save_matrix"]', (f) => f.submit());
+    await page.waitForNavigation({ waitUntil: 'networkidle0' });
+}
+
+CTS['CT-26'] = async () => {
+    begin('CT-26', 'CR-017: menu de tickets, um ambiente só e Quem pode rodar');
+    const todos = ['CLONE1', 'CLONE2', 'CLONE6', 'CLONE7', 'GFPREPROD'];
+    const sid = state.scripts.limpar_linhas_vazias;
+    // (1) quem só dispara (sem Consultar Logs) continua com o item Tickets no menu
+    await login('admin');
+    const hml = await idFromList('/admin_profiles/index', 'OPERATOR_HML', '/admin_profiles/form/');
+    await toggleProfileFeature(hml, 'VIEW_LOGS');
+    await expectText('OPERATOR_HML sem VIEW_LOGS (temporário)', 'Permissões salvas: -VIEW_LOGS');
+    await login('op.hml');
+    await go('/default/index');
+    await expectText('Só com Disparar Scripts: o item Tickets continua no menu (CR-017a)', 'Tickets', 'Rodar um script');
+    await snap('Menu de quem só dispara scripts');
+    await clickText('.sss-nav-link', 'Tickets', { navigate: true });
+    const linhas = await page.$$eval('table tbody tr', (trs) => trs.map((t) => t.innerText));
+    check('A lista mostra só os tickets do próprio usuário', page.url().includes('/tickets/index') &&
+        linhas.length > 0 && !linhas.some((l) => l.includes('op.prod')), linhas.length + ' linha(s)');
+    await login('admin');
+    await toggleProfileFeature(hml, 'VIEW_LOGS');
+    await expectText('VIEW_LOGS devolvido ao OPERATOR_HML', 'Permissões salvas: +VIEW_LOGS');
+    // (2) script liberado num ambiente só: disparo e nova regra vão direto ao formulário
+    await setHomologation(sid, ['GFPREPROD']);
+    await go(`/tickets/new?script_id=${sid}`);
+    check('Disparo com um ambiente só abre direto nas perguntas (CR-017b)',
+        await page.$('#form-ticket') !== null && !(await has('Trocar ambiente')), page.url().replace(BASE_URL, ''));
+    await snap('Disparo direto nas perguntas (um ambiente só)', { full: true });
+    await go(`/schedules/form?script_id=${sid}`);
+    check('Nova regra com um ambiente só abre direto na recorrência (CR-017c)', await page.$('#form-schedule') !== null);
+    // (3) Quem pode rodar sem homologação
+    await setHomologation(sid, []);
+    await go(`/admin_scripts/form/${sid}`);
+    await expectText('Sem homologação: "Ainda não pode rodar." e o que falta, com o link (CR-017d)',
+        'Ainda não pode rodar.', 'Ainda não foi liberado em nenhum ambiente ativo.', 'Abrir a homologação');
+    await snap('Quem pode rodar: script sem homologação', { selector: 'section[aria-labelledby="title-readiness"]' });
+    await setHomologation(sid, todos);
+    await go(`/admin_scripts/form/${sid}`);
+    await expectText('Homologação restaurada nos 5 ambientes: pronto para rodar', 'Pronto para rodar.');
+    note('As mudanças temporárias (VIEW_LOGS do OPERATOR_HML e a homologação do limpar_linhas_vazias) foram desfeitas no próprio CT e ficam na auditoria.');
+};
+
 CTS['ENCERRAMENTO'] = async () => {
     begin('ENCERRAMENTO', 'Encerramento: regras da homologação pausadas (ficam como evidência, sem rodar)');
     await login('admin');
@@ -1321,7 +1447,7 @@ CTS['ENCERRAMENTO'] = async () => {
 
 const ORDER = ['CT-01', 'CT-02', 'CT-03', 'MASSA', 'CT-04', 'CT-05', 'CT-06', 'CT-07', 'CT-08', 'CT-09', 'CT-10',
     'CT-11', 'CT-12', 'CT-13', 'CT-14', 'CT-15', 'CT-16', 'CT-17', 'CT-18', 'CT-19', 'CT-20', 'CT-21', 'CT-22',
-    'CT-23', 'CT-24', 'CT-25', 'ENCERRAMENTO'];
+    'CT-23', 'CT-24', 'CT-25', 'CT-26', 'ENCERRAMENTO'];
 
 module.exports = { CTS };
 
