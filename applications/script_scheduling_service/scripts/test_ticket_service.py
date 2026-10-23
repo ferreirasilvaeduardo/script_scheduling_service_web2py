@@ -394,13 +394,28 @@ class TestTicketQuery(_BaseTicket):
         self.assertIn(dev, op_hml)
         self.assertEqual(op_hml, set(i for i, a in by_env.items() if a in ("HOMOLOGACAO", "DESENV")))
 
+    def test_filtro_por_solicitante_so_para_quem_ve_logins(self):
+        # CR-018a: o consulta ve "outra pessoa" no lugar do login (CR-008 E5); filtrar por um login alheio
+        # revelaria quem pediu, entao o filtro e ignorado. O proprio login continua aceito.
+        theirs = self._insert_row(requested_by="op.prod", environment="HOMOLOGACAO")
+        consulta = self.ctx["consulta"]
+        self.assertEqual(self._ids(consulta, {"requested_by": "op.prod"}), self._ids(consulta))
+        self.assertEqual(self.svc.allowed_filters(consulta, {"requested_by": "op.prod"}), {})
+        self.assertEqual(self.svc.allowed_filters(consulta, {"requested_by": "consulta"}),
+                         {"requested_by": "consulta"})
+        admin = self._ids(self.ctx["admin"], {"requested_by": "op.prod"})
+        self.assertIn(theirs, admin)
+        self.assertTrue(all(self.tickets.get(i)["requested_by"] == "op.prod" for i in admin))
+
     def test_sem_ver_logs_lista_apenas_proprios(self):
         ctx = self._without("op.hml", "VIEW_LOGS")
         items = self.svc.list(ctx, {}, 1, 100)["items"]
         self.assertTrue(items)
         # Sem VIEW_AUDIT o proprio login aparece como "você" (CR-008, E5).
         self.assertEqual(set(t["requested_by"] for t in items), {u"você"})
-        self.assertEqual(self.svc.list(ctx, {"requested_by": "admin"}, 1, 100)["total"], 0)
+        # Filtro por login alheio e ignorado (CR-018a): continua so com os proprios, nunca os do admin.
+        others = self.svc.list(ctx, {"requested_by": "admin"}, 1, 100)["items"]
+        self.assertEqual(set(t["requested_by"] for t in others), {u"você"})
 
     def test_solicitante_mascarado_sem_auditoria(self):
         # CR-008, E5: consulta sem VIEW_AUDIT nao recebe login de terceiros; admin recebe.
@@ -495,12 +510,14 @@ class TestTicketQuery(_BaseTicket):
         self.assertEqual(set(ticket_service.MSG_CANCEL),
                          {"TERMINAL", "CANCELADO", "SINALIZADO", "JA_SINALIZADO"})
 
-    def test_canc_ticket_sem_ver_logs_cancela_ticket_de_terceiro(self):
-        # CR-003 P5 (README §4.3.C): CANCEL_TICKET nao exige VIEW_LOGS.
+    def test_canc_ticket_sem_ver_logs_nao_cancela_ticket_de_terceiro(self):
+        # CR-018a (README §4.3.C): ticket de terceiro so e cancelado por quem o enxerga (VIEW_LOGS).
         third = self._insert_row(requested_by="admin")
         ctx = self._without("op.hml", "VIEW_LOGS")
-        self.assertFalse(self.svc.is_visible(ctx, str(third)))
-        self.assertEqual(self.svc.cancel(ctx, IP, str(third)), "CANCELADO")
+        with self.assertRaises(RepoNotFound):
+            self.svc.cancel(ctx, IP, str(third))
+        self.assertEqual(self.tickets.get(third)["status"], "PENDING")
+        self.assertEqual(self.svc.cancel(self.ctx["op.hml"], IP, str(third)), "CANCELADO")
 
     def test_cancelar_terceiro_sem_canc_ticket_negado(self):
         third = self._insert_row(requested_by="admin")

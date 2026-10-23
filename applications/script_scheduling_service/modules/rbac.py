@@ -137,12 +137,15 @@ def can_view_ticket(ctx, ticket):
 
 
 def can_cancel(ctx, ticket):
-    """CANCEL_TICKET em ambiente autorizado, ou EXEC_SCRIPT sobre ticket proprio (README §4.3.C)."""
+    """CANCEL_TICKET com VIEW_LOGS em ambiente autorizado, ou EXEC_SCRIPT sobre ticket proprio (README §4.3.C).
+
+    CR-018a: o ticket de terceiro so e cancelado por quem o enxerga (lista e detalhe exigem VIEW_LOGS).
+    """
     if not isinstance(ticket, dict) or not _active(ctx):
         return False
     if ctx.get("is_admin") is True:
         return True
-    if has_feature(ctx, "CANCEL_TICKET") and can_view_environment(ctx, ticket.get("environment")):
+    if has_feature(ctx, "CANCEL_TICKET") and can_view_ticket(ctx, ticket):
         return True
     requester = ticket.get("requested_by")
     return has_feature(ctx, "EXEC_SCRIPT") and isinstance(requester, str) \

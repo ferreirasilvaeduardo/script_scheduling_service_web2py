@@ -86,6 +86,18 @@ def form():
     return _form_page(ctx, data)
 
 
+def _rules_warning(ctx, parameter_id):
+    """Regras que vao ser pausadas (CR-018a); so na alteracao, e uma falha nao desfaz o que foi salvo."""
+    if not parameter_id:
+        return None
+    try:
+        return service.rules_warning(ctx, parameter_id)
+    except RepoError:
+        _log.exception("falha ao conferir as regras afetadas (login=%s id=%r)", ctx["login"], parameter_id,
+                       extra={"action": _FUNC})
+        return None
+
+
 def save():
     _require_method("POST")
     ctx = _require_func(_FUNC)
@@ -101,7 +113,9 @@ def save():
         _log.exception("falha ao salvar parametro (login=%s id=%r)", ctx["login"], parameter_id, extra={"action": _FUNC})
         errors = {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
     if not errors:
-        session.flash = {"kind": "success", "message": u"Parâmetro salvo com sucesso."}
+        warning = _rules_warning(ctx, parameter_id)
+        session.flash = {"kind": "warning" if warning else "success",
+                         "message": u"Parâmetro salvo com sucesso." + (u" " + warning if warning else u"")}
         redirect(URL(c="admin_parameters", f="index"))
     try:
         data = service.form(ctx, parameter_id) if parameter_id else service.form(ctx)

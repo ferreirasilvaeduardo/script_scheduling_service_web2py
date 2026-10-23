@@ -636,14 +636,6 @@ class TicketService(object):
     def _can_view(self, ctx, ticket):
         return self._is_own(ctx, ticket) or rbac.can_view_ticket(ctx, ticket)
 
-    def is_visible(self, ctx, ticket_id):
-        """True se o ticket existe e pode ser visto (destino do redirecionamento apos cancelar)."""
-        tid = _id(ticket_id)
-        try:
-            return tid is not None and self._can_view(ctx, self._tickets.get(tid))
-        except RepoNotFound:
-            return False
-
     def _visible_ticket(self, ctx, ticket_id, action):
         """Ticket existente e visivel; fora do escopo e tratado como inexistente (404, nao 403)."""
         tid = _id(ticket_id)
@@ -670,6 +662,18 @@ class TicketService(object):
         scripts = sorted(self._script_names().items(), key=lambda pair: (pair[1], pair[0]))
         return {"environments": environments, "scripts": scripts, "status": list(STATUS_TICKET),
                 "sources": list(SOURCES)}
+
+    def allowed_filters(self, ctx, filters):
+        """Filtros validos que o contexto pode usar: o solicitante so por quem ve logins (CR-018a).
+
+        Sem VIEW_AUDIT nem admin, o solicitante aparece como "outra pessoa" (CR-008 E5); filtrar por um
+        login alheio revelaria quem pediu. O proprio login continua aceito (painel inicial).
+        """
+        if "requested_by" in filters and not ui_helpers.sees_actors(ctx) \
+                and filters["requested_by"] != ctx.get("login"):
+            filters = dict(filters)
+            del filters["requested_by"]
+        return filters
 
     def _query_scope(self, ctx, repo_filters):
         """(visivel, environment_scope) da consulta; sem VIEW_LOGS fixa o solicitante em repo_filters_dict.
@@ -816,7 +820,7 @@ class TicketService(object):
         """
         if not self.can_query(ctx):
             self._deny(ctx, rbac.Reason.NO_FEATURE, None, None)
-        repo_filters = _repo_filters(normalize_filters(filters))
+        repo_filters = _repo_filters(self.allowed_filters(ctx, normalize_filters(filters)))
         empty = {"items": [], "total": 0, "page": 1, "size": size}
         visible, scope = self._query_scope(ctx, repo_filters)
         if not visible:
@@ -1045,14 +1049,14 @@ class TicketService(object):
         """Cancelamento pelo no web (README §5.6) com auditoria TICKET_CANCEL no repositorio.
 
         Retorna 'TERMINAL' | 'CANCELADO' | 'SINALIZADO' | 'JA_SINALIZADO' (mensagens em MSG_CANCEL);
-        toda solicitacao e auditada (README §5.6). CANCEL_TICKET nao exige VIEW_LOGS (README §4.3.C).
-        Lanca RepoNotFound (fora do escopo) e AccessDenied (sem CANCEL_TICKET/proprio).
+        toda solicitacao e auditada (README §5.6). Ticket de terceiro exige CANCEL_TICKET e VIEW_LOGS
+        (README §4.3.C, CR-018a). Lanca RepoNotFound (fora do escopo) e AccessDenied (visivel, sem permissao).
         """
         tid = _id(ticket_id)
         if tid is None:
             raise RepoNotFound("ticket invalido")
         ticket = self._tickets.get(tid)
-        if not (self._can_view(ctx, ticket) or rbac.can_cancel(ctx, ticket)):
+        if not self._can_view(ctx, ticket):
             self._log.warning("ticket fora do escopo (login=%s ticket=%s environment=%s)",
                               ctx.get("login"), tid, ticket.get("environment"), extra={"action": "TICKET_CANCEL"})
             raise RepoNotFound("ticket fora do escopo")
@@ -1200,6 +1204,11 @@ def create_ticket(ctx, ip, script_id, environment, answers, priority, scheduled_
                                    rerun_of)
 
 
+def allowed_filters(ctx, filters):
+    """Filtros da lista que o contexto pode usar (servico padrao)."""
+    return _service().allowed_filters(ctx, filters)
+
+
 def can_query(ctx):
     """Acesso a lista de tickets (servico padrao)."""
     return _service().can_query(ctx)
@@ -1223,11 +1232,6 @@ def home_summary(ctx):
 def detail(ctx, ticket_id):
     """Detalhe do ticket visivel (servico padrao)."""
     return _service().detail(ctx, ticket_id)
-
-
-def is_visible(ctx, ticket_id):
-    """Ticket visivel ao usuario (servico padrao)."""
-    return _service().is_visible(ctx, ticket_id)
 
 
 def cancel(ctx, ip, ticket_id):

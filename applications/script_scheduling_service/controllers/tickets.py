@@ -192,7 +192,7 @@ def index():
     if request.extension not in _LIST_EXTENSIONS:
         raise HTTP(404, **response.headers)
     ctx = _require_query()
-    filters = ticket_service.normalize_filters(request.get_vars)
+    filters = ticket_service.allowed_filters(ctx, ticket_service.normalize_filters(request.get_vars))
     page = ui_helpers.sanitize_page(_text(request.get_vars.get("page"), 9))
     size = ui_helpers.sanitize_size(_text(request.get_vars.get("size"), 3), _SIZES)
     error = None
@@ -215,6 +215,7 @@ def index():
     response.sss_scripts = [_JS_TICKETS]
     data["active_filters"] = filters
     data["options"] = ticket_service.filter_options(ctx)
+    data["can_filter_requester"] = ui_helpers.sees_actors(ctx)
     return data
 
 
@@ -270,10 +271,8 @@ def cancel():
         _denied()
     except RepoError:
         session.flash = {"kind": "error", "message": _MSG_CANCEL_FAILED}
-    # CANCEL_TICKET sem VIEW_LOGS cancela sem poder ver o ticket (README §4.3.C): volta ao painel.
-    if ticket_service.is_visible(ctx, ticket_id):
-        redirect(URL(c="tickets", f="detail", args=[ticket_id]))
-    redirect(URL(c="default", f="index"))
+    # So cancela quem enxerga o ticket (CR-018a): volta sempre ao detalhe.
+    redirect(URL(c="tickets", f="detail", args=[ticket_id]))
 
 
 def rerun():

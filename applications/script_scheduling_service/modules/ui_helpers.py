@@ -322,13 +322,19 @@ _SYSTEM_ACTORS = {"init_db": u"Sistema (instalação)", "seed": u"Sistema (dados
                    "purge": u"Sistema (limpeza)"}
 
 
+def sees_actors(ctx):
+    """O contexto ve o login das pessoas (VIEW_AUDIT ou admin; CR-007 D6, CR-008 E5)."""
+    ctx = ctx or {}
+    return ctx.get("is_admin") is True or "VIEW_AUDIT" in (ctx.get("features") or ())
+
+
 def visible_actor(actor, ctx):
     """Login de pessoa como o contexto pode ver (CR-007 D6, CR-008 E5): sem VIEW_AUDIT nem admin,
     vira "você" ou "outra pessoa"; atores do sistema e vazio passam direto."""
     ctx = ctx or {}
     if not actor or actor == "SYSTEM" or actor.startswith(_SYSTEM_PREFIX):
         return actor
-    if ctx.get("is_admin") is True or "VIEW_AUDIT" in (ctx.get("features") or ()):
+    if sees_actors(ctx):
         return actor
     return u"você" if actor == ctx.get("login") else u"outra pessoa"
 

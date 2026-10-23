@@ -479,6 +479,45 @@ class TestReadiness(_Base):
         self.assertIsNone(self._service(self.ENV).form(self.ctx["admin"], "1")["readiness"])
 
 
+class TestQueuedWarning(_Base):
+    """CR-018a: trocar o arquivo ou o interpretador avisa sobre os tickets na fila criados antes."""
+
+    def setUp(self):
+        super(TestQueuedWarning, self).setUp()
+        self.tickets = repo_factory.get("tickets")
+        self.svc = AdminScriptsService(self.catalog, repo_factory.get("schedules"), self.ENV, self.log,
+                                       lambda: NOW, tickets=self.tickets)
+        self.pending = self.tickets.create({"script_id": 1, "environment": "HOMOLOGACAO", "requested_by": "admin",
+                                            "status": "PENDING", "priority": 2, "submitted_params": "{}"}, [])
+
+    def test_trocar_o_arquivo_avisa_os_tickets_na_fila(self):
+        _id, errors, warning = self._edit(1, path_file=self._p("sub/interno.sh"))
+        self.assertEqual(errors, {})
+        self.assertIn(u"#%d" % self.pending, warning)
+        self.assertIn(u"vão ser recusados na hora de rodar", warning)
+
+    def test_vinculos_salvos_avisam_as_regras_que_vao_pausar(self):
+        class _Rules(object):
+            asked = []
+
+            def active_rules(self, ids):
+                self.asked.append(sorted(ids))
+                return [{"id": 7, "name": "R7"}, {"id": 8, "name": "R8"}]
+
+            def rules_at_risk(self, ids):
+                return [{"id": 7, "name": "R7", "reason": u"Parâmetros inválidos"}]
+        svc = AdminScriptsService(self.catalog, repo_factory.get("schedules"), self.ENV, self.log, lambda: NOW,
+                                  rules=_Rules())
+        text = svc.rules_warning(self.ctx["admin"], "1")
+        self.assertIn(u"1 de 2 regra(s)", text)
+        self.assertEqual(_Rules.asked, [[1]])
+        self.assertIsNone(self.svc.rules_warning(self.ctx["admin"], "1"))
+
+    def test_outra_mudanca_nao_avisa(self):
+        _id, errors, warning = self._edit(1, description=u"Outra descrição")
+        self.assertEqual((errors, warning), ({}, None))
+
+
 class TestNoHashAndLink(_Base):
     """CR-011: o cadastro nao calcula nem registra hash do arquivo, e o caminho pode ter link simbolico."""
 

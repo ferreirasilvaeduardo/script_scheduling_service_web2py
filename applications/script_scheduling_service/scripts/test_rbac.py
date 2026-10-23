@@ -150,9 +150,11 @@ class TestTickets(unittest.TestCase):
         self.assertFalse(rbac.can_cancel(_ctx(features_ids=("VIEW_LOGS",)), self.TICKET_OWN))
 
     def test_cancelar_terceiro_com_canc_ticket(self):
-        ctx = _ctx(features_ids=("CANCEL_TICKET",))
+        # CR-018a: terceiro exige CANCEL_TICKET e VIEW_LOGS no ambiente (quem cancela enxerga o ticket).
+        ctx = _ctx(features_ids=("CANCEL_TICKET", "VIEW_LOGS"))
         self.assertTrue(rbac.can_cancel(ctx, self.TICKET_THIRD_PARTY))
         self.assertFalse(rbac.can_cancel(ctx, self.TICKET_OTHER_ENV))
+        self.assertFalse(rbac.can_cancel(_ctx(features_ids=("CANCEL_TICKET",)), self.TICKET_THIRD_PARTY))
 
     def test_cancelar_admin(self):
         self.assertTrue(rbac.can_cancel(_ctx(is_admin=True, features_ids=(), envs=()), self.TICKET_OTHER_ENV))

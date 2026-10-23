@@ -298,5 +298,47 @@ class TestSensitiveAndTest(_Base):
             self.svc.form(self.ctx["admin"], "999")
 
 
+class _RulesStub(object):
+    """Dublê das regras de agendamento: registra os scripts consultados."""
+
+    def __init__(self, active, risky):
+        self.active, self.risky, self.asked = active, risky, []
+
+    def active_rules(self, script_ids):
+        self.asked.append(sorted(script_ids))
+        return self.active
+
+    def rules_at_risk(self, script_ids):
+        self.asked.append(sorted(script_ids))
+        return self.risky
+
+
+class TestRulesWarning(_Base):
+    """CR-018a: aviso das regras ativas dos scripts que usam o parametro."""
+
+    def _svc(self, active, risky):
+        stub = _RulesStub(active, risky)
+        return AdminParametersService(self.catalog, self.log, rules=stub), stub
+
+    def test_formulario_avisa_quantas_regras_usam_o_parametro(self):
+        svc, stub = self._svc([{"id": 1, "name": "R1"}, {"id": 2, "name": "R2"}], [])
+        note = svc.form(self.ctx["admin"], "3")["rules_note"]
+        self.assertEqual(note, prm_mod.MSG_RULES_NOTE % 2)
+        active_scripts = sorted(s["id"] for s in svc.links(3) if s["active"] == "Y")
+        self.assertEqual(stub.asked, [active_scripts])
+
+    def test_sem_regras_nao_ha_aviso(self):
+        svc, _stub = self._svc([], [])
+        self.assertIsNone(svc.form(self.ctx["admin"], "3")["rules_note"])
+        self.assertIsNone(svc.rules_warning(self.ctx["admin"], "3"))
+        self.assertIsNone(AdminParametersService(self.catalog, self.log).rules_warning(self.ctx["admin"], "3"))
+
+    def test_depois_de_salvar_lista_as_regras_que_vao_pausar(self):
+        svc, _stub = self._svc([{"id": 1, "name": "R1"}], [{"id": 1, "name": "R1", "reason": u"Parâmetros inválidos"}])
+        text = svc.rules_warning(self.ctx["admin"], "3")
+        self.assertIn(u"1 de 1 regra(s)", text)
+        self.assertIn(u"R1 (parâmetros inválidos)", text)
+
+
 if __name__ == "__main__":
     unittest.main()

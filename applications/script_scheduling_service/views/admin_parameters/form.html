@@ -59,6 +59,13 @@ pass
   </div>
 </div>
 
+{{if not _new and _p.get('rules_note'):}}
+<div class="alert alert-info sss-alert" role="note">
+  <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#icon-alert"></use></svg>
+  <span>{{=_p['rules_note']}}</span>
+</div>
+{{pass}}
+
 <section class="sss-card" aria-labelledby="title-form">
   <h2 class="sss-card-title" id="title-form">Dados do parâmetro</h2>
   <form class="sss-card-body" method="post" action="{{=URL(c='admin_parameters', f='save')}}" autocomplete="off"

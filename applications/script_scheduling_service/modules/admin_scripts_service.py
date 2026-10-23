@@ -16,6 +16,7 @@ import params_compiler
 import log_paths
 import path_guard
 import rbac
+import schedules_service
 import ui_helpers
 from admin_crud import GENERAL_FIELD, OperationDenied
 from params_compiler import ParamError, PARAM_TYPES
@@ -63,6 +64,9 @@ PATH_MESSAGES = {
 }
 VALIDATION_NOTE = (u"O arquivo é conferido pelo agente, no servidor onde o script roda, no momento da execução "
                  u"(pode ser link simbólico).")
+MSG_QUEUED_CHANGED = (u"Atenção: %d ticket(s) na fila (%s%s) foram criados com o arquivo ou o interpretador "
+                      u"anterior e vão ser recusados na hora de rodar. Cancele e crie de novo, se ainda precisar.")
+_QUEUED_IDS = 10
 MSG_READY_OK = u"Pronto para rodar."
 MSG_READY_ADMIN_ONLY = u"Só administradores podem rodar."
 MSG_READY_NOT = u"Ainda não pode rodar."
@@ -155,7 +159,7 @@ def _links_version(links, mapping):
 class AdminScriptsService(object):
     """Regras do cadastro de scripts com repositorios, configuracao do agente, relogio e log injetados."""
 
-    def __init__(self, catalog, schedules, sss_env, log, clock, runners=None):
+    def __init__(self, catalog, schedules, sss_env, log, clock, runners=None, rules=None, tickets=None):
         self._catalog = catalog
         self._schedules = schedules
         self._env = sss_env
@@ -163,6 +167,9 @@ class AdminScriptsService(object):
         self._clock = clock
         # Quem pode rodar o script (admin_profiles_service.script_runners): a conta de "Quem pode o que".
         self._runners = runners
+        # Aviso depois de salvar (CR-018a): regras que o desdobro vai pausar e tickets na fila.
+        self._rules = rules
+        self._tickets = tickets
 
     def _get(self, script_id):
         sid = _id(script_id)
@@ -357,7 +364,33 @@ class AdminScriptsService(object):
             return current["id"], errors, None
         self._log.info("script alterado (login=%s script=%s)", ctx.get("login"), reg["name"],
                        extra={"action": "UPDATE"})
+        if changes["path_file"] != current["path_file"] or changes["interpreter"] != current["interpreter"]:
+            warning = self.queued_warning(current["id"])
         return current["id"], {}, warning
+
+    def queued_warning(self, script_id):
+        """Tickets na fila criados com o arquivo ou o interpretador anterior (CR-018a, README §8.4).
+
+        A pre-validacao do agente recusa esses tickets (REGISTRATION_CHANGED); o aviso diz quais sao.
+        """
+        if self._tickets is None:
+            return None
+        result = self._tickets.list(filters={"status": ["PENDING"], "script_id": int(script_id)}, page=1,
+                                    size=_QUEUED_IDS)
+        if not result["total"]:
+            return None
+        ids = u", ".join(u"#%s" % t["id"] for t in result["items"])
+        more = u" e outros" if result["total"] > len(result["items"]) else u""
+        return MSG_QUEUED_CHANGED % (result["total"], ids, more)
+
+    def rules_warning(self, ctx, script_id):
+        """Aviso depois de salvar os vinculos (CR-018a): regras ativas que vao ser pausadas, ou None."""
+        admin_crud.require_feature(ctx, FEATURE)
+        if self._rules is None:
+            return None
+        sid = self._get(script_id)["id"]
+        return schedules_service.impact_warning(self._rules.rules_at_risk([sid]),
+                                                len(self._rules.active_rules([sid])))
 
     def toggle_active(self, ctx, ip, script_id, version):
         """Desativa (DEACTIVATE, com agendamentos ativos afetados) ou reativa (UPDATE) o script."""
@@ -624,6 +657,8 @@ def _service():
                 log=sss_logging.get_logger("sss_web", cfg),
                 clock=tickets.now,
                 runners=admin_profiles_service._service().script_runners,
+                rules=schedules_service._service(),
+                tickets=tickets,
             )
         return _default
 
@@ -631,6 +666,11 @@ def _service():
 def list_page(ctx, filters, page, size):
     """Pagina de scripts (servico padrao)."""
     return _service().list(ctx, filters, page, size)
+
+
+def rules_warning(ctx, script_id):
+    """Regras que vao ser pausadas depois de salvar os vinculos (servico padrao)."""
+    return _service().rules_warning(ctx, script_id)
 
 
 def form(ctx, script_id=None):

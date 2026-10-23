@@ -14,6 +14,7 @@ import admin_crud
 import params_compiler
 import ui_helpers
 import rbac
+import schedules_service
 from admin_crud import GENERAL_FIELD, OperationDenied
 from params_compiler import ParamError, COMPONENT_TYPES
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
@@ -35,6 +36,8 @@ _RE_ID = re.compile(r"[0-9]{1,10}")
 _RE_CODE = re.compile(r"[a-z0-9_]{1,30}")
 _RE_FILTER = re.compile(r"[A-Za-z0-9_ .-]{1,60}")
 
+MSG_RULES_NOTE = (u"Este parâmetro é usado por %d regra(s) de agendamento ativa(s). Mudar as opções, a regex, o tipo "
+                  u"ou o padrão pode invalidar as respostas guardadas e pausar essas regras; o sistema avisa ao salvar.")
 MSG_CODE_REQUIRED = u"Informe o código."
 MSG_CODE_INVALID = u"Use de 1 a 30 caracteres: letras minúsculas, dígitos e _ (ex.: data_ref)."
 MSG_CODE_DUPLICATE = u"Já existe um parâmetro com este código."
@@ -139,9 +142,11 @@ def _version(parameter):
 class AdminParametersService(object):
     """Regras do dicionario de parametros com repositorio e log injetados."""
 
-    def __init__(self, catalog, log):
+    def __init__(self, catalog, log, rules=None):
         self._catalog = catalog
         self._log = log
+        # Regras de agendamento dos scripts vinculados (CR-018a): aviso antes e depois de salvar.
+        self._rules = rules
 
     def _get(self, parameter_id):
         pid = _id(parameter_id)
@@ -190,7 +195,28 @@ class AdminParametersService(object):
             "active": p["active"], "version": _version(p),
             "links": self.links(p["id"]), "can_regex": can_regex,
             "record": ui_helpers.record_info(p, ctx),
+            "rules_note": self.rules_note(p["id"]),
         }
+
+    def _linked_ids(self, parameter_id):
+        return [s["id"] for s in self.links(parameter_id) if s.get("active") == "Y"]
+
+    def rules_note(self, parameter_id):
+        """Aviso fixo do formulario (CR-018a): regras ativas dos scripts que usam o parametro, ou None."""
+        if self._rules is None:
+            return None
+        rules = self._rules.active_rules(self._linked_ids(parameter_id))
+        if not rules:
+            return None
+        return MSG_RULES_NOTE % len(rules)
+
+    def rules_warning(self, ctx, parameter_id):
+        """Aviso depois de salvar (CR-018a): regras ativas que o proximo desdobro vai pausar, ou None."""
+        admin_crud.require_feature(ctx, FEATURE)
+        if self._rules is None:
+            return None
+        ids = self._linked_ids(self._get(parameter_id)["id"])
+        return schedules_service.impact_warning(self._rules.rules_at_risk(ids), len(self._rules.active_rules(ids)))
 
     # ------------------------------------------------------------- validacao
 
@@ -455,6 +481,7 @@ def _service():
             _default = AdminParametersService(
                 catalog=current.repo_factory.get("catalog"),
                 log=sss_logging.get_logger("sss_web", current.sss_cfg),
+                rules=schedules_service._service(),
             )
         return _default
 
@@ -462,6 +489,11 @@ def _service():
 def list_page(ctx, filters, page, size):
     """Pagina de parametros (servico padrao)."""
     return _service().list(ctx, filters, page, size)
+
+
+def rules_warning(ctx, parameter_id):
+    """Regras que vao ser pausadas depois de salvar o parametro (servico padrao)."""
+    return _service().rules_warning(ctx, parameter_id)
 
 
 def form(ctx, parameter_id=None):

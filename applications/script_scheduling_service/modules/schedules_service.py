@@ -47,6 +47,8 @@ WEEKDAYS = ((1, u"seg", u"Segunda"), (2, u"ter", u"Terça"), (3, u"qua", u"Quart
 _DAY_ABBREV = dict((n, abrev) for n, abrev, _nome in WEEKDAYS)
 
 # Textos dos motivos de pausa (decisao D4 do F5.2; README §7.5).
+_IMPACT_NAMES = 5
+_RULES_PAGE = 500
 PAUSE_REASONS = {
     "MANUAL": u"Pausado manualmente",
     "COMPLETED": u"Concluída",
@@ -375,6 +377,38 @@ class SchedulesService(object):
                 return "INVALID_CRON", PAUSE_REASONS["INVALID_CRON"]
 
         return None
+
+    def active_rules(self, script_ids):
+        """Regras ativas dos scripts (sem guarda de funcionalidade): [{id, name, script_id}] por nome.
+
+        Usada pelos cadastros de parametros e de scripts para avisar quem edita (CR-018a).
+        """
+        ids = set(script_ids or ())
+        found = []
+        for sid in sorted(ids):
+            page = 1
+            while True:
+                result = self._schedules.list(filters={"script_id": sid, "active": "Y"}, page=page, size=_RULES_PAGE)
+                found.extend({"id": r["id"], "name": r["name"], "script_id": r["script_id"],
+                              "_rule": r} for r in result["items"])
+                if len(result["items"]) < _RULES_PAGE:
+                    break
+                page += 1
+        return sorted(found, key=lambda r: (r["name"], r["id"]))
+
+    def rules_at_risk(self, script_ids):
+        """Regras ativas que o proximo desdobro vai pausar, com o motivo (a mesma checagem do agente, R-26).
+
+        Retorna [{id, name, reason}]. Usada logo depois de salvar um parametro ou os vinculos de um
+        script (CR-018a): a mudanca pode invalidar as respostas guardadas em params_json.
+        """
+        now = self._now()
+        risky = []
+        for r in self.active_rules(script_ids):
+            problem = self._check_expansion_problem(r["_rule"], now)
+            if problem is not None:
+                risky.append({"id": r["id"], "name": r["name"], "reason": problem[1]})
+        return risky
 
     def _now(self):
         return recurrence.without_microseconds(self._clock())
@@ -933,6 +967,26 @@ def _service():
 def list_page(ctx, filters, page, size):
     """Pagina de regras (servico padrao)."""
     return _service().list(ctx, filters, page, size)
+
+
+def impact_warning(rules, total_active):
+    """Frase do aviso depois de salvar (CR-018a): regras que vao ser pausadas, ou None."""
+    if not rules:
+        return None
+    names = u"; ".join(u"%s (%s)" % (r["name"], r["reason"].lower()) for r in rules[:_IMPACT_NAMES])
+    more = u" e outras %d" % (len(rules) - _IMPACT_NAMES) if len(rules) > _IMPACT_NAMES else u""
+    return (u"Atenção: %d de %d regra(s) de agendamento ativa(s) vão ser pausadas no próximo horário: %s%s. "
+            u"Corrija as regras ou desfaça a mudança." % (len(rules), total_active, names, more))
+
+
+def active_rules(script_ids):
+    """Regras ativas dos scripts (servico padrao)."""
+    return _service().active_rules(script_ids)
+
+
+def rules_at_risk(script_ids):
+    """Regras ativas que o proximo desdobro vai pausar (servico padrao)."""
+    return _service().rules_at_risk(script_ids)
 
 
 def agenda(ctx):

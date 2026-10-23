@@ -10,7 +10,9 @@ _fields = []
 _fields.append({'name': 'status', 'label': 'Status', 'kind': 'multiple', 'value': active_filters.get('status', []), 'options': _opt_status})
 _fields.append({'name': 'environment', 'label': 'Ambiente', 'kind': 'select', 'value': active_filters.get('environment'), 'options': _opt_environments})
 _fields.append({'name': 'script', 'label': 'Script', 'kind': 'select', 'value': active_filters.get('script'), 'options': _opt_scripts})
-_fields.append({'name': 'requested_by', 'label': 'Solicitante (login)', 'kind': 'text', 'value': active_filters.get('requested_by')})
+if can_filter_requester:
+    _fields.append({'name': 'requested_by', 'label': 'Solicitante (login)', 'kind': 'text', 'value': active_filters.get('requested_by')})
+pass
 _fields.append({'name': 'created_from', 'label': 'Criado de', 'kind': 'date', 'value': active_filters.get('created_from')})
 _fields.append({'name': 'created_to', 'label': 'Criado até', 'kind': 'date', 'value': active_filters.get('created_to')})
 _fields.append({'name': 'source', 'label': 'Origem', 'kind': 'select', 'value': active_filters.get('source'), 'options': _opt_sources})

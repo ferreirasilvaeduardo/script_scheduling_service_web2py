@@ -566,6 +566,32 @@ class TestNewRuleSteps(_Base):
         self.assertEqual(data["form"]["environment"]["name"], "HOMOLOGACAO")
 
 
+class TestRulesAtRisk(_Base):
+    """CR-018a: regras ativas que o proximo desdobro vai pausar, para o aviso dos cadastros."""
+
+    def _rule(self):
+        rule_id, errors = self._save(name="Regra em risco")
+        self.assertEqual(errors, {})
+        return rule_id
+
+    def test_opcao_removida_pausa_a_regra_que_a_guardou(self):
+        rule_id = self._rule()
+        self.assertIn(rule_id, [r["id"] for r in self.svc.active_rules([1])])
+        self.assertNotIn(rule_id, [r["id"] for r in self.svc.rules_at_risk([1])])
+        # modo_exec (SELECT) perde a opcao SIMULACAO, que a regra guardou em params_json.
+        self.catalog.parameters_update(3, {"options_json": '{"REAL":"Execucao Real"}', "default_value": "REAL"},
+                                       actor="teste")
+        risky = dict((r["id"], r["reason"]) for r in self.svc.rules_at_risk([1]))
+        self.assertEqual(risky.get(rule_id), svc_mod.PAUSE_REASONS["INVALID_PARAM"])
+        text = svc_mod.impact_warning([{"id": rule_id, "name": "Regra em risco", "reason": risky[rule_id]}], 3)
+        self.assertTrue(text.startswith(u"Atenção: 1 de 3 regra(s) de agendamento ativa(s) vão ser pausadas"))
+        self.assertIn(u"Regra em risco (parâmetros inválidos)", text)
+
+    def test_sem_regra_em_risco_nao_ha_aviso(self):
+        self.assertIsNone(svc_mod.impact_warning([], 4))
+        self.assertEqual(self.svc.active_rules([999]), [])
+
+
 class TestPreviewList(_Base):
 
     def test_lista_no_escopo_com_colunas(self):

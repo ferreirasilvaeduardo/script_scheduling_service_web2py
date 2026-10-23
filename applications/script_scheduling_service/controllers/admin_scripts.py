@@ -223,7 +223,15 @@ def save_parameters():
         message = errors.get(admin_crud.GENERAL_FIELD) or u" ".join(sorted(errors.values()))
         session.flash = {"kind": "error", "message": message}
     elif description:
-        session.flash = {"kind": "success", "message": u"Parâmetros salvos: %s" % description}
+        try:
+            warning = service.rules_warning(ctx, script_id)
+        except RepoError:
+            # O que foi salvo continua valendo; so o aviso deixa de aparecer.
+            _log.exception("falha ao conferir as regras afetadas (login=%s id=%r)", ctx["login"], script_id,
+                           extra={"action": _FUNC})
+            warning = None
+        session.flash = {"kind": "warning" if warning else "success",
+                         "message": u"Parâmetros salvos: %s" % description + (u" " + warning if warning else u"")}
     else:
         session.flash = {"kind": "warning", "message": u"Nenhuma alteração para salvar."}
     redirect(URL(c="admin_scripts", f="parameters", args=[script_id]))

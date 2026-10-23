@@ -584,7 +584,7 @@ Responde às duas perguntas mais comuns do administrador, sem abrir perfil por p
 |---|---|
 | `EXEC_SCRIPT` | Criar tickets e reexecutar tickets próprios, sujeito a `can_execute`. **Perfil admin** reexecuta qualquer ticket que consegue ver. O novo ticket registra o admin como solicitante, então não há uso de privilégio alheio |
 | `VIEW_LOGS` | Tickets de ambientes autorizados ao perfil (admin: todos). Respostas de parâmetros `sensitive = 'Y'` aparecem mascaradas. **Sem** `VIEW_LOGS`, quem tem `EXEC_SCRIPT` vê, lista e lê o log apenas dos **próprios** tickets |
-| `CANCEL_TICKET` | Cancelar qualquer ticket de ambiente autorizado, **sem** exigir `VIEW_LOGS`: a decisão é só de `rbac.can_cancel`. **Sem** esta funcionalidade, o solicitante com `EXEC_SCRIPT` pode cancelar apenas os próprios tickets, mesmo que tenha perdido o acesso ao ambiente |
+| `CANCEL_TICKET` | Cancelar ticket de terceiro em ambiente autorizado, **junto com** `VIEW_LOGS` (CR-018a): só cancela quem enxerga o ticket na lista e no detalhe. Sem `VIEW_LOGS`, `CANCEL_TICKET` não vale para tickets de terceiros. A decisão é de `rbac.can_cancel`. **Sem** esta funcionalidade, o solicitante com `EXEC_SCRIPT` pode cancelar apenas os próprios tickets, mesmo que tenha perdido o acesso ao ambiente |
 | `MANAGE_SCHEDULES` | Criar e editar regras. O `user_id` da regra é o criador, e cada desdobro roda sob os privilégios vigentes desse usuário |
 
 #### D. Catálogo canônico de funcionalidades (seed)
@@ -766,6 +766,8 @@ Na interface, a situação do ticket usa **nomes simples** (§2.4.2), sempre com
 | `CANCELLED` | Cancelado | Cancelado |
 
 Os filtros da lista de tickets usam os mesmos nomes. A auditoria, o CSV e o banco continuam com os códigos.
+
+**Filtro por solicitante (CR-018a):** só aparece e só vale para quem vê o login das pessoas (`VIEW_AUDIT` ou administrador, a mesma regra de `ui_helpers.visible_actor`, CR-008 E5). Para os demais, o solicitante aparece como "você" ou "outra pessoa", e um `requested_by` com login alheio é ignorado pelo serviço (`ticket_service.allowed_filters`), não só pela tela; o próprio login continua aceito.
 
 **Frase do que aconteceu e o que fazer** (exibida no topo do detalhe, §5.7; `{…}` é preenchido pelo servidor):
 
@@ -1122,6 +1124,10 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
 * O snapshot é **compilado na criação do ticket** (manual ou desdobro). O agente **nunca** recompila nem lê `tbsss_script_param` e `tbsss_parameters` para executar.
 * **Defesa em profundidade no claim:** o agente revalida o snapshot (§8.4, passo 1).
 * **Snapshot × cadastro (CR-007, R-24):** se `path_file` ou `interpreter` do snapshot diferirem do cadastro atual do script, o agente recusa (`REGISTRATION_CHANGED`): o ticket foi criado antes de uma mudança de cadastro e deve ser reexecutado, para ser compilado de novo.
+* **Aviso a quem muda o cadastro (CR-018a):** a regra acima não muda; o que muda é avisar quem causou. A gravação nunca é bloqueada pelo aviso, e uma falha ao montá-lo não desfaz o que foi salvo.
+  * **Script:** ao salvar uma troca de `path_file` ou de `interpreter`, a mensagem diz quantos tickets `PENDING` do script foram criados antes (até 10 números) e que vão ser recusados na hora de rodar.
+  * **Parâmetro:** o formulário mostra, antes de salvar, quantas regras de agendamento ativas usam o parâmetro (pelos scripts ativos vinculados). Depois de salvar, a mensagem lista as regras ativas que o próximo desdobro vai pausar, com o motivo (`schedules_service.rules_at_risk`: a mesma checagem do aviso "Será pausada" da lista de regras, §7.6).
+  * **Vínculos de parâmetros do script:** depois de salvar, a mesma mensagem das regras que vão ser pausadas.
 * **Conteúdo do arquivo (CR-011):** o SSS não guarda nem confere hash do arquivo; o ambiente controla o conteúdo e a versão do script (§8.5).
 * **Vínculo de parâmetros pela UI** (`admin_scripts/parameters`, F4.5):
   * a lista inteira vai num único POST, e a ordem é renumerada pelo servidor (1..n, pela posição);
