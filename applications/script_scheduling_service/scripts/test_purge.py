@@ -35,11 +35,12 @@ TERMINAL_STATUSES = ("SUCCESS", "FAILED", "CANCELLED")
 
 def _cfg(root, **extra):
     agent = dict(agent_id="srv-a", work_dir=os.path.join(root, "work"), output_dir=None,
-                  environments=("PRODUCAO",), exec_users=())
+                  script_work_dir=None, environments=("PRODUCAO",), exec_users=())
     agent.update(extra.get("agent", {}))
     return NS(app=NS(sss_env="DEV"), oracle=NS(owner="openrisow", table_prefix="tbsss_"),
               secrets=NS(secrets_file=os.path.join(root, "secrets.cfg")), agent=NS(**agent),
-              logging=NS(log_dir=os.path.join(root, "logs"), local_log_retention_days=30, output_retention_days=7),
+              logging=NS(log_dir=os.path.join(root, "logs"), local_log_retention_days=30, output_retention_days=7,
+                         script_work_retention_days=7),
               retention=NS(ticket_retention_days=90, audit_retention_days=365, purge_batch_size=2,
                           purge_user=extra.get("purge_user", "sss_purge")))
 
@@ -332,7 +333,8 @@ class TestDryRun(_Base):
         self.assertEqual(p.summary, ["tickets: 1 linhas elegiveis (estimativa)",
                                     "audit: 1 linhas elegiveis (estimativa)",
                                     "local_logs: 1 pastas de minuto elegiveis (estimativa)",
-                                    "output: 4 pastas de minuto elegiveis (estimativa)"])
+                                    "output: 4 pastas de minuto elegiveis (estimativa)",
+                                    "script_work: desligada (script_work_dir vazio)"])
 
 
 class TestLocalLogs(_Base):
@@ -400,6 +402,36 @@ class TestOutput(_Base):
         cfg = _cfg(self.root, agent={"output_dir": base})
         self.assertEqual(self._purge(_Db(), plat=_Plat(fail=True), cfg=cfg).run(("output",)),
                          purge_cli.EXIT_LOCAL)
+
+
+class TestScriptWork(_Base):
+    """CR-019 (README §8.15 e §11.3): pastas de trabalho pelo mesmo purge-output, com a retencao propria."""
+
+    def test_por_ambiente_com_a_retencao_propria(self):
+        base = os.path.join(self.root, "trabalho")
+        os.makedirs(os.path.join(base, "producao"))
+        cfg = _cfg(self.root, agent={"script_work_dir": base, "exec_users": (("PRODUCAO", "sssprd"),)})
+        cfg.logging.script_work_retention_days = 15
+        plat = _Plat(count=3)
+        p = self._purge(_Db(), plat=plat, cfg=cfg)
+        self.assertEqual(p.run(("script_work",)), 0)
+        self.assertEqual(plat.calls, [(os.path.join(base, "producao"), 15, "sssprd", False)])
+        self.assertEqual(p.summary, ["script_work: 3 pastas de minuto removidas"])
+        plat = _Plat(count=3)
+        p = self._purge(_Db(), plat=plat, cfg=cfg)
+        self.assertEqual(p.run(("script_work",), dry_run=True), 0)
+        self.assertEqual(plat.calls, [(os.path.join(base, "producao"), 15, "sssprd", True)], "dry-run so conta")
+
+    def test_desligada_e_falha(self):
+        p = self._purge(_Db())
+        self.assertEqual(p.run(("script_work",)), 0)
+        self.assertEqual(p.summary, ["script_work: desligada (script_work_dir vazio)"])
+        base = os.path.join(self.root, "trabalho")
+        os.makedirs(os.path.join(base, "producao"))
+        cfg = _cfg(self.root, agent={"script_work_dir": base})
+        self.assertEqual(self._purge(_Db(), plat=_Plat(fail=True), cfg=cfg).run(("script_work",)),
+                         purge_cli.EXIT_LOCAL)
+        self.assertEqual("script_work" in purge_cli.CLI_TARGETS, True)
 
 
 class TestMain(_Base):

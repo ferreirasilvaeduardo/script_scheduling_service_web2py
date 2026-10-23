@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Retencao de dados (README §11.3; F9.1a; CR-005; CR-007 R-21, R-22, R-32; CR-008 R-16, R-27; CR-012).
+"""Retencao de dados (README §11.3; F9.1a; CR-005; CR-007 R-21, R-22, R-32; CR-008 R-16, R-27; CR-012; CR-019).
 
 Roda no servidor do agente, agendado pelo cron, com a conta Oracle de purge ([retention] purge_user e
 [purge] password). Uso:
 
-    python scripts/purge.py [--config <config.ini>] [--dry-run] [--target tickets|audit|local_logs|output|all]
+    python scripts/purge.py [--config <config.ini>] [--dry-run] [--target tickets|audit|local_logs|output|script_work|all]
                             [--export-audit <pasta>]
 
 * tickets e auditoria: so com a concessao em tbsss_control (um no por vez), DELETE em lotes com COMMIT por lote
@@ -13,10 +13,11 @@ Roda no servidor do agente, agendado pelo cron, com a conta Oracle de purge ([re
 * local_logs: pastas de minuto de log_dir/<environment>/<script>/AAAA/MM/DD/HH/MI vencidas, menos as de tickets
   RUNNING; nunca log_dir/internal/. Em todo agente, sem concessao.
 * output: pastas de minuto de output_dir/<environment>/... vencidas, pelo helper purge-output. Sem concessao.
+* script_work: idem para script_work_dir/<environment>/... (CR-019), com script_work_retention_days.
 * --dry-run: so SELECT e listagem; um unico agora_banco() para todos os limites; nada e travado nem gravado.
 
 Saida: 0 sucesso (inclusive "outro no esta purgando"), 1 falha de banco, 2 configuracao invalida, 3 falha na
-remocao de logs locais ou de pastas de saida.
+remocao de logs locais, de pastas de saida ou de pastas de trabalho.
 """
 import argparse
 import csv
@@ -43,9 +44,9 @@ EXIT_DATABASE = 1
 EXIT_CONFIG = 2
 EXIT_LOCAL = 3
 
-TARGETS = ("tickets", "audit", "local_logs", "output")
+TARGETS = ("tickets", "audit", "local_logs", "output", "script_work")
 # Valores do --target (CR-016b); "all" roda todos os TARGETS.
-CLI_TARGETS = ("tickets", "audit", "local_logs", "output", "all")
+CLI_TARGETS = ("tickets", "audit", "local_logs", "output", "script_work", "all")
 LOCK_NAME = "sss-purge.lock"
 _PURGE_LOGGERS = ("sss_db_conn", "sss_config")
 _EXTRA = {"agent": "-", "ticket": "-", "action": "PURGE"}
@@ -115,6 +116,8 @@ class Purge(object):
             if dry_run:
                 self._undo()
         if "output" in targets and not self._output(dry_run):
+            code = EXIT_LOCAL
+        if "script_work" in targets and not self._script_work(dry_run):
             code = EXIT_LOCAL
         return code
 
@@ -213,24 +216,36 @@ class Purge(object):
         return not failures
 
     def _output(self, dry_run):
-        agent = self.cfg.agent
-        if not agent.output_dir:
-            self.summary.append("output: desligada (output_dir vazio)")
+        return self._minute_dirs("output", "output_dir", self.cfg.agent.output_dir,
+                                 self.cfg.logging.output_retention_days, "saida", dry_run)
+
+    def _script_work(self, dry_run):
+        """CR-019 (README §8.15): pastas de trabalho, no mesmo formato de minuto da saida."""
+        return self._minute_dirs("script_work", "script_work_dir", getattr(self.cfg.agent, "script_work_dir", None),
+                                 getattr(self.cfg.logging, "script_work_retention_days", 7), "pasta de trabalho",
+                                 dry_run)
+
+    def _minute_dirs(self, target, key, folder, days, name, dry_run):
+        """Pastas de minuto vencidas de <folder>/<environment>/..., pelo helper purge-output (como o usuario de
+        execucao do ambiente fora de DEV)."""
+        if not folder:
+            self.summary.append("%s: desligada (%s vazio)" % (target, key))
             return True
-        users = dict(agent.exec_users or ())
+        users = dict(self.cfg.agent.exec_users or ())
         total, ok = 0, True
-        for env in agent.environments:
-            base = os.path.join(agent.output_dir, log_paths.environment_dir(env))
+        for env in self.cfg.agent.environments:
+            base = os.path.join(folder, log_paths.environment_dir(env))
             if not os.path.isdir(base):
                 continue
             try:
-                total += self.plat.purge_output(base, self.cfg.logging.output_retention_days,
-                                                users.get(env) or None, count_only=dry_run)
+                total += self.plat.purge_output(base, days, users.get(env) or None, count_only=dry_run)
             except (RuntimeError, OSError) as exc:
                 ok = False
-                self.log.error("retencao da saida de %s: %s", env, exc, extra=_EXTRA)
-        self.log.info("output: %d pastas de minuto %s", total, "elegiveis" if dry_run else "removidas", extra=_EXTRA)
-        self.summary.append("output: %d pastas de minuto %s" % (total, "elegiveis (estimativa)" if dry_run else "removidas"))
+                self.log.error("retencao da %s de %s: %s", name, env, exc, extra=_EXTRA)
+        self.log.info("%s: %d pastas de minuto %s", target, total, "elegiveis" if dry_run else "removidas",
+                      extra=_EXTRA)
+        self.summary.append("%s: %d pastas de minuto %s" % (target, total,
+                                                            "elegiveis (estimativa)" if dry_run else "removidas"))
         return ok
 
 
