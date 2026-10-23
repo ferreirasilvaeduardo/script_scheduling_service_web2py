@@ -3,23 +3,21 @@
 
 - SQL estatico com binds; identificadores qualificados por sql_ident (owner e prefixo da configuracao);
 - o conteudo do envio nunca entra em listagem: e gravado num bind BLOB e lido em partes de ate 1 MiB;
-- as entregas pendentes do agente sao lidas pela expressao textualmente identica a de ix_tbsss_idl_pend;
+- o lado do agente (entregas, conteudo, marcacao e retrato) fica em repo_oracle/scheduler_input, sem gluon;
 - agente vivo: status ACTIVE e heartbeat recente no SQL; o ambiente e conferido em Python na lista CSV (um
   LIKE trataria o '_' dos nomes como curinga);
-- os metodos do agente aceitam a conexao do daemon (conn=); cada gravacao e uma transacao com COMMIT.
+- aqui os metodos do agente so delegam a ele pelo pool da web (contrato comum com o FAKE).
 """
 import db_conn
 import repo_errors
 import repo_inputs
-import sql_ident
 from repo_inputs import NoLiveAgent, RepoInputs
 from repo_oracle.base import BaseRepoOracle, write_audit
+from repo_oracle.scheduler_input import RepoSchedulerInput
 
 _COLS_UPLOAD = ("id", "environment", "script_id", "relative_dir", "file_name", "size_bytes", "sha256",
                 "replace_existing", "source_ip", "created_at", "created_by", "updated_at", "updated_by")
 _COLS_LISTING = ("agent_id", "listing", "file_count", "truncated", "listed_at", "refresh_requested_at")
-_COLS_PENDING = ("id", "upload_id", "environment", "script_id", "relative_dir", "file_name", "size_bytes",
-                 "sha256", "replace_existing")
 
 
 def _cols(cols, alias=""):
@@ -57,34 +55,6 @@ _SQL_REQUEST_LISTING = (
     "created_at, created_by) VALUES ({seq_ils}.NEXTVAL, src.agent_id, src.environment, src.script_id, 'N', SYSDATE, "
     "SYSDATE, :actor)"
 )
-_SQL_PENDING = (
-    "SELECT " + _cols(_COLS_PENDING) + " FROM (SELECT d.id, u.id AS upload_id, u.environment, u.script_id, "
-    "u.relative_dir, u.file_name, u.size_bytes, u.sha256, u.replace_existing "
-    "FROM (SELECT id, upload_id FROM {idl} WHERE (" + sql_ident.FBI_IDL_PEND_CASE + ") = :agent_id) d "
-    "JOIN {iup} u ON u.id = d.upload_id ORDER BY d.id) WHERE ROWNUM <= :limit_n"
-)
-_SQL_CONTENT = "SELECT content FROM {iup} WHERE id = :id"
-_SQL_MARK = (
-    "UPDATE {idl} SET state = :state, reason = :reason, delivered_at = SYSDATE, updated_at = SYSDATE, "
-    "updated_by = :actor WHERE id = :id AND agent_id = :agent_id AND state = 'PENDING'"
-)
-_SQL_DELIVERY_UPLOAD = (
-    "SELECT u.id, u.file_name FROM {idl} d JOIN {iup} u ON u.id = d.upload_id WHERE d.id = :id"
-)
-_SQL_LISTINGS_DUE = (
-    "SELECT environment, script_id FROM {ils} WHERE agent_id = :agent_id AND refresh_requested_at IS NOT NULL "
-    "AND (listed_at IS NULL OR refresh_requested_at >= listed_at) ORDER BY id"
-)
-_SQL_SAVE_LISTING = (
-    "MERGE INTO {ils} dst USING (SELECT :agent_id AS agent_id, :environment AS environment, "
-    ":script_id AS script_id FROM DUAL) src "
-    "ON (dst.agent_id = src.agent_id AND dst.environment = src.environment AND dst.script_id = src.script_id) "
-    "WHEN MATCHED THEN UPDATE SET dst.listing = :listing, dst.file_count = :file_count, "
-    "dst.truncated = :truncated, dst.listed_at = SYSDATE "
-    "WHEN NOT MATCHED THEN INSERT (id, agent_id, environment, script_id, listing, file_count, truncated, listed_at, "
-    "created_at, created_by) VALUES ({seq_ils}.NEXTVAL, src.agent_id, src.environment, src.script_id, :listing, "
-    ":file_count, :truncated, SYSDATE, SYSDATE, :actor)"
-)
 
 
 def _read_lob(value):
@@ -92,9 +62,6 @@ def _read_lob(value):
         return None
     return value.read() if hasattr(value, "read") else value
 
-
-def _actor_agent(agent_id):
-    return "SYSTEM:%s" % agent_id
 
 
 class RepoInputsOracle(BaseRepoOracle, RepoInputs):
@@ -107,12 +74,14 @@ class RepoInputsOracle(BaseRepoOracle, RepoInputs):
             "idl": self.qualify_table("input_delivery"),
             "ils": self.qualify_table("input_listing"),
             "agt": self.qualify_table("agents"),
+            "scr": self.qualify_table("scripts"),
             "seq_idl": self.qualify_sequence("input_delivery"),
             "seq_ils": self.qualify_sequence("input_listing"),
         }
         self._sql = dict((name[5:], template.format(**self._idents))
                          for name, template in globals().items() if name.startswith("_SQL_"))
         self._seq_iup = self.qualify_sequence("input_upload")
+        self._agent = RepoSchedulerInput(self._owner, self._prefixo)
         self._tbl_aud = self.qualify_table("audit")
         self._seq_aud = self.qualify_sequence("audit")
 
@@ -232,77 +201,25 @@ class RepoInputsOracle(BaseRepoOracle, RepoInputs):
         return len(agents)
 
     # ------------------------------------------------------------------ agente
+    # O daemon usa repo_oracle/scheduler_input (sem gluon) com a propria conexao; aqui os mesmos metodos ficam
+    # disponiveis pelo pool da web, para o contrato comum com o FAKE (README §2.5).
 
     def pending_deliveries(self, agent_id, limit=10, conn=None):
         with self.read_context(conn=conn) as c:
-            cur = c.cursor()
-            try:
-                cur.execute(self._sql["PENDING"], {"agent_id": agent_id, "limit_n": int(limit)})
-                return [self.tuple_to_dict(_COLS_PENDING, r) for r in cur.fetchall()]
-            finally:
-                cur.close()
+            return self._agent.pending_deliveries(agent_id, limit, conn=c)
 
     def read_content(self, upload_id, offset, size, conn=None):
-        off, size_n = int(offset), int(size)
-        if off < 0 or size_n < 1 or size_n > repo_inputs.PART_MAX:
-            raise repo_errors.RepoViolation("Parte do envio invalida")
         with self.read_context(conn=conn) as c:
-            cur = c.cursor()
-            try:
-                cur.execute(self._sql["CONTENT"], {"id": int(upload_id)})
-                row = cur.fetchone()
-                if not row or row[0] is None:
-                    raise repo_errors.RepoNotFound("Conteudo do envio %s indisponivel" % upload_id)
-                lob = row[0]
-                if hasattr(lob, "read"):
-                    return (lob.read(off + 1, size_n) or b"") if off < lob.size() else b""
-                return bytes(lob[off:off + size_n])
-            finally:
-                cur.close()
+            return self._agent.read_content(upload_id, offset, size, conn=c)
 
     def mark_delivery(self, delivery_id, agent_id, state, reason=None, conn=None):
-        if state not in ("DELIVERED", "FAILED") or (state == "FAILED") != (reason is not None) \
-                or (reason is not None and reason not in repo_inputs.FAILURE_REASONS):
-            raise repo_errors.RepoViolation("Situacao ou motivo da entrega invalido",
-                                            constraint=self.constraint_name("ck", "input_delivery", "rsn"))
-        actor = _actor_agent(agent_id)
-        with self.write_transaction(conn=conn) as c:
-            cur = c.cursor()
-            try:
-                cur.execute(self._sql["MARK"], {"state": state, "reason": reason, "actor": actor,
-                                                "id": int(delivery_id), "agent_id": agent_id})
-                if cur.rowcount != 1:
-                    return False
-                cur.execute(self._sql["DELIVERY_UPLOAD"], {"id": int(delivery_id)})
-                upload_id, file_name = cur.fetchone()
-            finally:
-                cur.close()
-            detail = u"entrega de %s em %s: %s%s" % (file_name, agent_id, state, " (%s)" % reason if reason else "")
-            write_audit(c, self._tbl_aud, self._seq_aud,
-                        {"actor": actor, "ip": None, "action": repo_inputs.ACTION_DELIVERY, "detail": detail[:1000]},
-                        repo_inputs.AUDIT_ENTITY, upload_id)
-        return True
+        with self.read_context(conn=conn) as c:
+            return self._agent.mark_delivery(delivery_id, agent_id, state, reason, conn=c)
 
     def listings_due(self, agent_id, conn=None):
         with self.read_context(conn=conn) as c:
-            cur = c.cursor()
-            try:
-                cur.execute(self._sql["LISTINGS_DUE"], {"agent_id": agent_id})
-                return [{"environment": e, "script_id": s} for e, s in cur.fetchall()]
-            finally:
-                cur.close()
+            return self._agent.listings_due(agent_id, conn=c)
 
     def save_listing(self, agent_id, environment, script_id, listing, file_count, truncated, conn=None):
-        if truncated not in ("Y", "N"):
-            raise repo_errors.RepoViolation("truncated invalido",
-                                            constraint=self.constraint_name("ck", "input_listing", "trunc"))
-        with self.write_transaction(conn=conn) as c:
-            cur = c.cursor()
-            try:
-                db_conn.set_input_types(cur, listing=db_conn.TIPO_CLOB)
-                cur.execute(self._sql["SAVE_LISTING"], {
-                    "agent_id": agent_id, "environment": environment, "script_id": int(script_id),
-                    "listing": listing, "file_count": int(file_count), "truncated": truncated,
-                    "actor": _actor_agent(agent_id)})
-            finally:
-                cur.close()
+        with self.read_context(conn=conn) as c:
+            return self._agent.save_listing(agent_id, environment, script_id, listing, file_count, truncated, conn=c)

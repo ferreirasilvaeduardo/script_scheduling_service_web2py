@@ -29,6 +29,10 @@ SUDO = "/usr/bin/sudo"
 # (CR-012) rodam com o proprio usuario do agente, pela mesma implementacao do servidor.
 PACKAGE_HELPER = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                              "..", "..", "..", "..", "bin", "sss-helper"))
+# Codigos do helper put-input (CR-020c, README §8.0 e §8.14).
+INPUT_EXISTS = 9
+INPUT_SPACE = 10
+INPUT_HASH = 11
 # Codigos do helper empacotar (CR-012, README §8.0 e §8.13).
 OUTPUT_EMPTY = 6
 OUTPUT_TOO_MANY_FILES = 7
@@ -559,6 +563,26 @@ def start_pack(base, relative, max_bytes, max_files, destination_fd, exec_user=N
     p = subprocess.Popen(argv, shell=False, start_new_session=True, close_fds=True, stdin=subprocess.DEVNULL,
                          stdout=destination_fd, stderr=subprocess.DEVNULL, env=dict(_ENV_HELPER))
     return Process(p.pid, process_identity(p.pid), popen=p, exec_user=exec_user)
+
+
+def start_put_input(base, script, relative, name, replace, sha256, size, source_fd, exec_user=None):
+    """Inicia o helper put-input num grupo proprio, com o arquivo baixado em source_fd na entrada padrao; nao
+    espera (CR-020c, README §8.14). O agente acompanha por popen.poll() e encerra no prazo com signal_group."""
+    argv = _helper_argv("put-input", [base, script, relative or "-", name, replace, sha256, int(size)], exec_user)
+    p = subprocess.Popen(argv, shell=False, start_new_session=True, close_fds=True, stdin=source_fd,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=dict(_ENV_HELPER))
+    return Process(p.pid, process_identity(p.pid), popen=p, exec_user=exec_user)
+
+
+def list_input(base, script, max_items, exec_user=None):
+    """Retrato da pasta de entrada do script pelo helper list-input (CR-020c): {files, count, truncated}."""
+    code, output = _run_short(_helper_argv("list-input", [base, script, int(max_items)], exec_user))
+    if code != 0:
+        raise RuntimeError("helper list-input falhou (codigo %s)" % code)
+    try:
+        return json.loads(output.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        raise RuntimeError("helper list-input sem retrato")
 
 
 def clean_output(base, relative, exec_user=None):

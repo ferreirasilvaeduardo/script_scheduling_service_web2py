@@ -364,6 +364,92 @@ class TestSssHelper(unittest.TestCase):
         self.assertEqual(_helper("run", entrada=json.dumps(spec).encode("utf-8"))[0], 2, "link recusado")
         self.assertEqual(os.listdir(outside), [])
 
+    # ------------------------------------------------------------ CR-020c: put-input e list-input
+
+    def _input_base(self):
+        base = os.path.join(self.root, "input", "producao")
+        os.makedirs(base, 0o700, exist_ok=True)
+        return base
+
+    def _put(self, base, data, relative="lotes/2026", name="cliente.csv", replace="N", sha=None, size=None):
+        import hashlib
+        sha = sha or hashlib.sha256(data).hexdigest()
+        return _helper("put-input", base, "carga_diaria", relative, name, replace, sha,
+                       len(data) if size is None else size, entrada=data)
+
+    def test_cr020_put_input_grava_cria_subpastas_e_nao_substitui(self):
+        base = self._input_base()
+        code, error = self._put(base, b"a;b\n1;2\n")
+        self.assertEqual(code, 0, error)
+        final = os.path.join(base, "carga_diaria", "lotes", "2026", "cliente.csv")
+        with open(final, "rb") as f:
+            self.assertEqual(f.read(), b"a;b\n1;2\n")
+        self.assertEqual(os.stat(final).st_mode & 0o777, 0o600)
+        for folder in ("carga_diaria", "carga_diaria/lotes", "carga_diaria/lotes/2026"):
+            self.assertEqual(os.stat(os.path.join(base, folder)).st_mode & 0o777, 0o700, folder)
+        # sem substituir: o existente fica, codigo 9
+        self.assertEqual(self._put(base, b"novo")[0], 9)
+        with open(final, "rb") as f:
+            self.assertEqual(f.read(), b"a;b\n1;2\n")
+        # substituindo
+        self.assertEqual(self._put(base, b"novo", replace="Y")[0], 0)
+        with open(final, "rb") as f:
+            self.assertEqual(f.read(), b"novo")
+        # sem subpasta
+        self.assertEqual(self._put(base, b"x", relative="-", name="raiz.txt")[0], 0)
+        self.assertTrue(os.path.isfile(os.path.join(base, "carga_diaria", "raiz.txt")))
+        leftovers = [n for n in os.listdir(os.path.join(base, "carga_diaria", "lotes", "2026")) if n.startswith(".")]
+        self.assertEqual(leftovers, [], "nenhum temporario fica no destino")
+
+    def test_cr020_put_input_hash_tamanho_e_nomes_invalidos(self):
+        base = self._input_base()
+        self.assertEqual(self._put(base, b"conteudo", sha="0" * 64)[0], 11, "hash divergente")
+        self.assertEqual(self._put(base, b"conteudo", size=3)[0], 11, "tamanho divergente")
+        self.assertFalse(os.path.exists(os.path.join(base, "carga_diaria", "lotes", "2026", "cliente.csv")))
+        for relative, name in (("../fora", "a.txt"), ("lotes", "../a.txt"), ("lotes", ".oculto"),
+                               ("a/./b", "x.txt"), ("lotes", "a\tb"), ("/".join(["n"] * 11), "x.txt"),
+                               ("lotes", "x" * 256)):
+            self.assertEqual(self._put(base, b"x", relative=relative, name=name)[0], 2, (relative, name))
+        self.assertEqual(_helper("put-input", base, "Maiuscula", "-", "a.txt", "N", "0" * 64, 1, entrada=b"x")[0], 2)
+        self.assertEqual(_helper("put-input", base, "carga_diaria", "-", "a.txt", "S", "0" * 64, 1, entrada=b"x")[0], 2)
+
+    def test_cr020_put_input_recusa_link_e_destino_que_nao_e_arquivo(self):
+        base = self._input_base()
+        outside = os.path.join(self.root, "fora_entrada_tela")
+        os.mkdir(outside)
+        os.makedirs(os.path.join(base, "carga_diaria"), 0o700)
+        os.symlink(outside, os.path.join(base, "carga_diaria", "ligada"))
+        self.assertEqual(self._put(base, b"x", relative="ligada")[0], 2, "link na subpasta")
+        self.assertEqual(os.listdir(outside), [])
+        os.makedirs(os.path.join(base, "carga_diaria", "pasta.txt"))
+        self.assertEqual(self._put(base, b"x", relative="-", name="pasta.txt", replace="Y")[0], 2,
+                         "substituir uma pasta")
+        self.assertEqual(self._put(base, b"x", relative="-", name="pasta.txt")[0], 9, "sem substituir: ja existe")
+
+    def test_cr020_list_input_sem_links_sem_temporarios_e_com_teto(self):
+        import json
+        base = self._input_base()
+        self.assertEqual(json.loads(self._helper_output("list-input", base, "carga_diaria", 10)[1]),
+                         {"files": [], "count": 0, "truncated": False}, "pasta ainda inexistente")
+        folder = os.path.join(base, "carga_diaria")
+        os.makedirs(os.path.join(folder, "sub"), 0o700)
+        for name in ("a.txt", "sub/b.txt", ".sss_upload_99.tmp", "c.txt"):
+            with open(os.path.join(folder, name), "w") as f:
+                f.write("12345")
+        outside = os.path.join(self.root, "fora_lista")
+        os.makedirs(outside)
+        open(os.path.join(outside, "segredo.txt"), "w").close()
+        os.symlink(outside, os.path.join(folder, "ligada"))
+        os.symlink(os.path.join(outside, "segredo.txt"), os.path.join(folder, "link.txt"))
+        code, out, error = self._helper_output("list-input", base, "carga_diaria", 10)
+        self.assertEqual(code, 0, error)
+        data = json.loads(out)
+        self.assertEqual([f["path"] for f in data["files"]], ["a.txt", "c.txt", "sub/b.txt"])
+        self.assertEqual((data["count"], data["truncated"], data["files"][0]["size"]), (3, False, 5))
+        data = json.loads(self._helper_output("list-input", base, "carga_diaria", 2)[1])
+        self.assertEqual((len(data["files"]), data["count"], data["truncated"]), (2, 3, True))
+        self.assertEqual(self._helper_output("list-input", base, "carga_diaria", 0)[0], 2)
+
     def test_run_cria_a_pasta_de_entrada_e_preserva_o_conteudo(self):
         # CR-014 (README §8.14): permanente; o script le, grava e apaga; a existente fica como esta.
         base = os.path.join(self.root, "input", "producao")

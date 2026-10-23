@@ -88,8 +88,9 @@ class BaseInputsContract(object):
         p1 = [d for d in self.repo.pending_deliveries(self.a1) if d["upload_id"] == uid]
         p2 = [d for d in self.repo.pending_deliveries(self.a2) if d["upload_id"] == uid]
         self.assertEqual(len(p1), 1)
-        self.assertEqual((p1[0]["file_name"], p1[0]["sha256"], p1[0]["size_bytes"], p1[0]["environment"]),
-                         (u"relatório.csv", _sha(CONTENT), len(CONTENT), self.env))
+        self.assertEqual((p1[0]["file_name"], p1[0]["sha256"], p1[0]["size_bytes"], p1[0]["environment"],
+                          p1[0]["script_name"]),
+                         (u"relatório.csv", _sha(CONTENT), len(CONTENT), self.env, "tst_scr_%s_in" % self.m.suf))
         self.assertNotIn("content", p1[0])
         self.assertFalse(self.repo.mark_delivery(p1[0]["id"], self.a2, "DELIVERED"), "entrega de outro agente")
         self.assertTrue(self.repo.mark_delivery(p1[0]["id"], self.a1, "DELIVERED"))
@@ -113,7 +114,8 @@ class BaseInputsContract(object):
         self.assertEqual([(r["agent_id"], r["listed_at"], r["refresh_requested_at"] is not None) for r in rows],
                          [(self.a1, None, True), (self.a2, None, True)])
         due = self.repo.listings_due(self.a1)
-        self.assertIn({"environment": self.env, "script_id": self.script}, due)
+        self.assertIn({"environment": self.env, "script_id": self.script, "script_name": "tst_scr_%s_in" % self.m.suf},
+                      due)
         listing = json.dumps([{"path": u"lotes/2026/relatório.csv", "size": 10, "mtime": "2026-10-23 10:00:00"}])
         self.repo.save_listing(self.a1, self.env, self.script, listing, 1, "N")
         rows = dict((r["agent_id"], r) for r in self.repo.listings(self.env, self.script))
@@ -125,7 +127,7 @@ class BaseInputsContract(object):
         self.repo.save_listing(self.a2, self.env, self.script, "[]", 0, "Y")
         self.assertEqual(self.repo.listings(self.env, self.script)[1]["truncated"], "Y")
         self.repo.request_listing(self.env, self.script, self.m.actor, LIVE_S)
-        self.assertIn({"environment": self.env, "script_id": self.script}, self.repo.listings_due(self.a2),
+        self.assertIn(self.script, [d["script_id"] for d in self.repo.listings_due(self.a2)],
                       "pedido no mesmo segundo do retrato nao se perde")
         with self.assertRaises(RepoViolation):
             self.repo.save_listing(self.a1, self.env, self.script, "[]", 0, "X")

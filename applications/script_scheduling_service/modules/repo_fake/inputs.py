@@ -29,6 +29,9 @@ class RepoInputsFake(RepoInputs):
                     codes.append(a["code"])
         return sorted(codes)
 
+    def _script_name(self, script_id):
+        return (self._store.scripts.get(int(script_id)) or {}).get("name")
+
     def _check_refs(self, environment, script_id):
         self._store.check_fk(self._store.environment_exists(environment), "fk_tbsss_iup_env")
         self._store.check_fk(int(script_id) in self._store.scripts, "fk_tbsss_iup_scr")
@@ -127,7 +130,8 @@ class RepoInputsFake(RepoInputs):
             for d in pend[:int(limit)]:
                 u = self._store.input_upload[d["upload_id"]]
                 result.append({"id": d["id"], "upload_id": u["id"], "environment": u["environment"],
-                               "script_id": u["script_id"], "relative_dir": u["relative_dir"],
+                               "script_id": u["script_id"], "script_name": self._script_name(u["script_id"]),
+                               "relative_dir": u["relative_dir"],
                                "file_name": u["file_name"], "size_bytes": u["size_bytes"], "sha256": u["sha256"],
                                "replace_existing": u["replace_existing"]})
         return result
@@ -162,7 +166,8 @@ class RepoInputsFake(RepoInputs):
 
     def listings_due(self, agent_id):
         with self._store.lock_inputs:
-            return [{"environment": r["environment"], "script_id": r["script_id"]}
+            return [{"environment": r["environment"], "script_id": r["script_id"],
+                     "script_name": self._script_name(r["script_id"])}
                     for r in sorted(self._store.input_listing.values(), key=lambda r: r["id"])
                     if r["agent_id"] == agent_id and r["refresh_requested_at"] is not None
                     and (r["listed_at"] is None or r["refresh_requested_at"] >= r["listed_at"])]

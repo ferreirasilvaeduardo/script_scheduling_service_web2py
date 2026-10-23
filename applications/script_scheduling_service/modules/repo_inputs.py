@@ -55,7 +55,8 @@ class RepoInputs(object):
 
     def pending_deliveries(self, agent_id, limit=10):
         """Entregas PENDING deste agente, das mais antigas, sem o conteudo: [{id, upload_id, environment,
-        script_id, relative_dir, file_name, size_bytes, sha256, replace_existing}]."""
+        script_id, script_name, relative_dir, file_name, size_bytes, sha256, replace_existing}] (o nome atual do
+        script monta a pasta, como em log_paths.input_dir)."""
         raise NotImplementedError
 
     def read_content(self, upload_id, offset, size):
@@ -70,7 +71,8 @@ class RepoInputs(object):
 
     def listings_due(self, agent_id):
         """Retratos pedidos a este agente e ainda nao atendidos (refresh_requested_at >= listed_at: DATE tem
-        precisao de segundo, e um pedido no mesmo segundo do retrato nao se perde): [{environment, script_id}]."""
+        precisao de segundo, e um pedido no mesmo segundo do retrato nao se perde):
+        [{environment, script_id, script_name}]."""
         raise NotImplementedError
 
     def save_listing(self, agent_id, environment, script_id, listing, file_count, truncated):

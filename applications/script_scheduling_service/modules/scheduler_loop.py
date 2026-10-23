@@ -13,6 +13,7 @@ do preexec_fn (README §3.1, C10). Toda primitiva de SO vem de `os_platform`; o 
 repositorios internos do daemon. Cada passo que falha registra CRITICAL e sai com um codigo proprio.
 """
 import datetime
+import json
 import logging
 import os
 import socket
@@ -23,16 +24,19 @@ import db_conn
 import schedule_expansion
 import env_builder
 import executor
+import input_phase
 import output_phase
 import log_pump
 import params_compiler
 import log_paths
 import os_platform
 import rbac
+import repo_inputs
 import sss_config
 from repo_oracle.scheduler_schedules import RepoSchedulerSchedules
 from repo_oracle.scheduler_queue import DuplicateAgent, RegistrationLost, RepoSchedulerQueue
 from repo_oracle.scheduler_log import RepoSchedulerLog
+from repo_oracle.scheduler_input import RepoSchedulerInput
 from repo_oracle.scheduler_output import RepoSchedulerOutput
 
 _log = logging.getLogger("sss_scheduler")
@@ -112,7 +116,7 @@ class Agent(object):
 
     def __init__(self, cfg=None, secrets=None, plat=None, connection=None, repo=None, repo_log=None,
                  clock=None, wall_clock=None, hostname=None, pid=None, load_config=None,
-                 load_secrets=None, repo_output=None, repo_schedules=None):
+                 load_secrets=None, repo_output=None, repo_schedules=None, repo_input=None):
         self.cfg = cfg
         self.secrets = secrets
         self.plat = plat or os_platform
@@ -121,6 +125,8 @@ class Agent(object):
         self.repo_log = repo_log
         self.repo_output = repo_output
         self.repo_schedules = repo_schedules
+        # CR-020c: entregas da pasta de entrada pela tela e o retrato da pasta.
+        self.repo_input = repo_input
         self.expansion = None
         self.clock = clock or time.monotonic
         self.wall_clock = wall_clock or time.time
@@ -295,6 +301,8 @@ class Agent(object):
                 self.repo_output = RepoSchedulerOutput.from_config(self.cfg)
             if self.repo_schedules is None:
                 self.repo_schedules = RepoSchedulerSchedules.from_config(self.cfg)
+            if self.repo_input is None:
+                self.repo_input = RepoSchedulerInput.from_config(self.cfg)
             now_db = db_conn.db_now(conn)
             local = self.wall_clock()
             divergence = abs((datetime.datetime.fromtimestamp(local) - now_db).total_seconds())
@@ -419,6 +427,11 @@ class Agent(object):
         if failed:
             self.log.warning("%d saida(s) em gravacao marcada(s) FALHOU na subida", failed,
                              extra={"action": "STARTUP"})
+        # CR-020c (README §8.14): temporarios de entregas interrompidas; as entregas seguem PENDING.
+        removed = input_phase.clean_leftovers(agent.work_dir)
+        if removed:
+            self.log.warning("%d temporario(s) de entrega da pasta de entrada removido(s) na subida", removed,
+                             extra={"action": "STARTUP"})
 
     def _reopen(self, tid, folder, proc, user, log):
         process = self.plat.reopen_group(proc)
@@ -489,6 +502,10 @@ class Agent(object):
         self.pending_returns = set()
         # CR-012: saidas a gravar depois da finalizacao do ticket {tid: (Saida, Execucao, log)}.
         self.outputs = {}
+        # CR-020c: a entrega da pasta de entrada em andamento (input_phase.Delivery) e os retratos com falha.
+        self.delivery = None
+        self._listing_retry = {}
+        self._input_warned_until = 0.0
         # Parada (README §8.11; F8.4d): _parando suspende claim e desdobro; _terminando abandona a saida em
         # andamento. DRAIN liga so o primeiro ate shutdown_grace_s; TERMINATE liga os dois.
         self._stopping = False
@@ -659,6 +676,7 @@ class Agent(object):
             if item.phase == _Item.FINALIZAR and not flush_done:
                 flush_done = self._finalize_execution(item)
         self._advance_outputs(now)
+        self._advance_input(now)
 
     # ---------------------------------------------------- saida (CR-012)
 
@@ -831,6 +849,118 @@ class Agent(object):
         for tid in sorted(set(own) - set(self.executions) - set(self.stopping) - self.pending_returns):
             self._reconcile(tid)
         self._pending()
+        if self.repo_input is not None:
+            # A entrada pela tela nunca atrapalha os tickets: uma falha dela fica nela (rede segue o fluxo comum).
+            try:
+                self._input_cycle(conn)
+            except Exception as exc:  # noqa: BLE001 - registrada no maximo uma vez por minuto
+                if db_conn.is_network_error(exc):
+                    raise
+                now = self.clock()
+                if now >= self._input_warned_until:
+                    self._input_warned_until = now + 60
+                    self.log.warning("ciclo da pasta de entrada falhou: %s", exc.__class__.__name__,
+                                     extra={"action": "ENTRADA"})
+
+    # ---------------------------------------------------- entrada pela tela (CR-020c)
+
+    def _input_cycle(self, conn):
+        """Atende os pedidos de retrato da pasta de entrada e pega a proxima entrega deste agente."""
+        if self._stopping:
+            return
+        for due in self.repo_input.listings_due(self.agent_id, conn=conn):
+            self._publish_listing(conn, due["environment"], due["script_id"], due["script_name"])
+        if self.delivery is not None:
+            return
+        rows = self.repo_input.pending_deliveries(self.agent_id, limit=1, conn=conn)
+        if not rows:
+            return
+        delivery = input_phase.Delivery(rows[0], self.cfg.agent.work_dir)
+        if not self.cfg.agent.input_dir or delivery.environment not in self.cfg.agent.environments:
+            self.log.error("entrega %s em %s sem pasta de entrada neste agente ([agent] input_dir ou ambiente)",
+                           delivery.id, delivery.environment, extra={"action": "ENTRADA"})
+            delivery.fail("ERROR")
+        self.delivery = delivery
+
+    def _input_place(self, environment, script_name, script_id):
+        """(base, pasta do script, usuario de execucao); em DEV sem usuario, o agente cria a base e a pasta."""
+        base, script_dir = log_paths.input_dir(self.cfg.agent.input_dir, environment, script_name, script_id)
+        user = env_builder.exec_user(self.cfg, environment)
+        if not user:
+            self.plat.create_input_dir(base, script_dir)
+        return base, script_dir, user
+
+    def _publish_listing(self, conn, environment, script_id, script_name):
+        """Retrato da pasta pelo helper list-input; falha registrada e nova tentativa so depois de um minuto."""
+        key = (environment, script_id)
+        now = self.clock()
+        if self._listing_retry.get(key, 0) > now:
+            return
+        agent = self.cfg.agent
+        if not agent.input_dir or environment not in agent.environments:
+            result = {"files": [], "count": 0, "truncated": False}
+        else:
+            try:
+                base, script_dir, user = self._input_place(environment, script_name, script_id)
+                result = self.plat.list_input(base, script_dir, repo_inputs.LISTING_MAX_ITEMS, user)
+            except Exception as exc:  # noqa: BLE001 - o pedido continua valendo; nova tentativa depois
+                self._listing_retry[key] = now + 60
+                self.log.warning("retrato da pasta de entrada de %s/%s falhou (%s)", environment, script_name,
+                                 exc.__class__.__name__, extra={"action": "ENTRADA"})
+                return
+        self._listing_retry.pop(key, None)
+        self.repo_input.save_listing(self.agent_id, environment, script_id, json.dumps(result["files"]),
+                                     result["count"], "Y" if result["truncated"] else "N", conn=conn)
+
+    def _advance_input(self, now):
+        """Avanca a entrega em andamento sem esperar: baixar, gravar pelo helper e marcar (README §8.14)."""
+        delivery = self.delivery
+        if delivery is None or self._terminating or now < delivery.next_attempt:
+            return
+        try:
+            if delivery.step == input_phase.DOWNLOAD:
+                conn = self.connection.get_connection()
+                if conn is None:
+                    return
+                input_phase.download(delivery, conn, self.repo_input)
+            if delivery.step == input_phase.WRITE:
+                if delivery.process is None:
+                    try:
+                        base, script_dir, user = self._input_place(delivery.environment, delivery.script_name,
+                                                                   delivery.script_id)
+                    except Exception as exc:  # noqa: BLE001 - pasta de entrada inutilizavel: FAILED ERROR
+                        self.log.warning("entrega %s: pasta de entrada recusada (%s)", delivery.id,
+                                         exc.__class__.__name__, extra={"action": "ENTRADA"})
+                        delivery.fail("ERROR")
+                    else:
+                        input_phase.start_write(delivery, self.plat, base, script_dir, user, now)
+                        if delivery.step == input_phase.WRITE:
+                            return
+                elif not input_phase.advance_write(delivery, self.plat, now):
+                    return
+            if delivery.step == input_phase.MARK:
+                conn = self.connection.get_connection()
+                if conn is None:
+                    return
+                marked = input_phase.mark(delivery, conn, self.repo_input, self.agent_id)
+                input_phase.discard(delivery, self.plat)
+                self.delivery = None
+                if not marked:
+                    self.log.error("entrega %s ja nao e deste agente: nada gravado", delivery.id,
+                                   extra={"action": "ENTRADA"})
+                    return
+                self.log.info("entrega %s de %s em %s: %s%s", delivery.id, delivery.file_name, delivery.environment,
+                              delivery.state, " (%s)" % delivery.reason if delivery.reason else "",
+                              extra={"action": "ENTRADA"})
+                if delivery.state == "DELIVERED":
+                    self._publish_listing(conn, delivery.environment, delivery.script_id, delivery.script_name)
+        except Exception as exc:  # noqa: BLE001 - entrega refeita no proximo prazo
+            delivery.next_attempt = now + self.cfg.agent.cancel_poll_interval_s
+            if not delivery.pending_warned:
+                delivery.pending_warned = True
+                self.log.warning("entrega %s pendente (%s)", delivery.id, exc.__class__.__name__,
+                                 extra={"action": "ENTRADA"})
+            self.connection.notify_error(exc)
 
     def _check_limits(self):
         now = self.clock()
@@ -1237,6 +1367,10 @@ class Agent(object):
             self._clean(tid, ex.work_dir_ticket, ex)
         if hasattr(self, "outputs"):
             self.outputs.clear()
+        # CR-020c: a entrega em andamento e abandonada sem marcar nada (segue PENDING para a proxima subida).
+        if getattr(self, "delivery", None) is not None:
+            input_phase.discard(self.delivery, self.plat)
+            self.delivery = None
         for item in list(self.executions.values()):
             self._stop(item, "SHUTDOWN")
         limit = self.clock() + self.cfg.agent.kill_grace_s + 5
