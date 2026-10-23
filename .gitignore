@@ -58,3 +58,4 @@ applications/script_scheduling_service/dev/homologation/evidence_*/*.png
 applications/script_scheduling_service/dev/homologation/evidence_*/state.json
 applications/script_scheduling_service/output/
 applications/script_scheduling_service/input/
+applications/script_scheduling_service/script_work/

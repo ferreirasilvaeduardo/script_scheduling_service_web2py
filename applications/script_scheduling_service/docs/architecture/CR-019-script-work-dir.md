@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Em andamento.** Aprovado pelo responsável pelo produto em 2026-10-23. 019a e 019b concluídos |
+| Status | **Concluído** em 2026-10-23. Aprovado pelo responsável pelo produto em 2026-10-23 |
 | Origem | Pedido do responsável pelo produto (2026-10-23): repassar ao script uma pasta "work" com a mesma estrutura da pasta de saída |
 | Restrições | Sem dependência nova. Python 3.6. Sem mudança de esquema nem de tela |
 | Afeta | README §8.0, §8.4, §8.5, §8.6, §8.12, §8.15 (nova), §11.3, §12.1. `AGENTS.md` §3.4, §7 e §8. `DEPLOYMENT.md`. Código: `sss_config`, `log_paths`, `env_builder`, `executor`, `os_platform`, `scheduler_loop`, `bin/sss-helper`, `scripts/purge.py` |
@@ -30,4 +30,4 @@ O script não recebe nenhuma variável com uma pasta de trabalho organizada. O `
 |---|---|---|
 | 019a | D1, D2, D3, D5: config, caminho, variável, criação (helper e DEV), conferência na subida, `SSS_DIR`, README, AGENTS, DEPLOYMENT e testes | Concluído |
 | 019b | D4: alvo `script_work` do `purge.py` (mesmo `purge-output` do helper), README §8.0, §8.15, §11.3 e §14, AGENTS, DEPLOYMENT (alvo do purge e helper novo na atualização, §18) | Concluído |
-| 019c | Ensaio real no DEV: chave ligada, ticket real gravando em `SSS_WORK_DIR`, `purge.py --dry-run`, bateria completa | Pendente |
+| 019c | Ensaio real no DEV: chave ligada no `config.ini` local; script `dev/scripts/diagnostico/pasta_trabalho.sh` cadastrado pela tela (`diag_pasta_trabalho`, só GFPREPROD, desativado no fim); ticket #299 deu certo, com `script_work/gfpreprod/diag_pasta_trabalho/2026/10/23/15/01/ticket_299/` (`0700` em todos os níveis, arquivos do script) mantida e o `HOME` em `work/ticket_299/exec`, limpo; etapa `script_work` do purge: 1 pasta antiga contada no dry-run e removida, a do dia mantida (no DEV o `purge.py` não roda, `purge_user` vazio); bateria completa | Concluído |

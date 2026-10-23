@@ -190,6 +190,7 @@ A pasta `dev/scripts/` contém scripts de exemplo **sem lógica perigosa**, usad
 | `relatorios/exporta.sh` | Imprime os argumentos posicionais |
 | `carga_diaria.py`, `relatorio_mensal.py`, `validacao_fiscal.py`, `cleanup_tmp.sh`, `sync_tabelas.sh`, `backup_extra.sh` | Correspondem aos `path_file` do seed FAKE e imprimem os argumentos |
 | `utilitarios/*.py` e `utilitarios/*.sh` | 14 scripts utilitários de arquivos (zip, tar.gz, divisão, concatenação, encoding, substituição, deduplicação, hash, contagem, filtros, ordenação e limpeza). Detalhes em `docs/UTILITY_SCRIPTS.md` |
+| `diagnostico/pasta_trabalho.sh` | Diagnóstico do CR-019: confere `SSS_WORK_DIR`, grava `diagnostico.txt` e `sub/arquivo.txt` na pasta de trabalho e lista o que gravou. Sai com 1 sem a variável e com 2 se a pasta não existir |
 
 ### 6.1 O que o `path_guard` confere (CR-005, CR-011)
 
@@ -231,6 +232,7 @@ Sem `sudo`, cadastre os scripts com o caminho real de `dev/scripts`.
 ### 6.3 Agente em DEV (a partir do F8, CR-007)
 
 * **`[agent] interpreters` é obrigatório (CR-018d):** sem ele, o agente recusa subir ("[agent] interpreters vazio: o agente nao executaria nada"). O `instance/config.ini` do DEV leva `interpreters = PYTHON3=/usr/bin/python3,BASH=/bin/bash,SH=/bin/sh`, como o `config.ini.example`, e o agente sobe com o config padrão: `PYTHON=~/.pyenv/versions/3.6.15/bin/python3 bin/sss-scheduler.sh` (sem `--config`). Para parar, `SIGTERM` no PID do agente: ele encerra pela máquina de estados (README §8.11).
+* **Pasta de trabalho dos scripts (CR-019):** o `instance/config.ini` do DEV leva `script_work_dir = .../script_scheduling_service/script_work` (pasta ignorada pelo git, criada à mão com `0700` antes da primeira subida, porque o agente confere que ela existe). Cada ticket recebe `SSS_WORK_DIR` em `script_work/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, que fica depois do ticket. Com `[retention] purge_user` vazio, o `purge.py` não roda no DEV; a retenção dessa pasta foi conferida chamando a etapa `script_work` do purge diretamente.
 * Em DEV, `[agent] exec_users` pode ficar vazio: o agente executa os scripts com o próprio usuário e registra WARN `SEM_USUARIO_EXECUCAO`. Para testar o helper e o `sudo` como nos servidores, siga o `DEPLOYMENT.md` §8 numa VM.
 * `cron_horizon_days` vai de 1.461 a 36.500 (CR-008, R-32), `max_log_size_bytes` até 64 MiB e `audit_retention_days` de 365 a 3.650 (e não menor que `ticket_retention_days`); o `table_prefix` só aceita minúsculas. Um `config.ini` antigo fora dessas faixas aborta a subida com a chave no log.
 * **CR-008:** `[web] session_max_hours` (padrão 12) e `[agent] log_dir_min_free_mb` (padrão 1.024; 0 desliga, só em DEV) são opcionais. Em DEV, `[oracle] user` pode ser igual ao `owner`; fora de DEV, é recusado. O `scripts/health.py` lê só a seção `[monitor]` do `secrets.cfg`.
