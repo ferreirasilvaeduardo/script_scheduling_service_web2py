@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Em andamento.** Aprovado pelo responsável pelo produto em 2026-10-23, com o escopo 017a a 017d. 017a concluído |
+| Status | **Em andamento.** Aprovado pelo responsável pelo produto em 2026-10-23, com o escopo 017a a 017d. 017a e 017b concluídos |
 | Origem | Revisão tela a tela e processo a processo (2026-10-23): a lógica de negócio está correta, mas há um aviso de segurança que não funciona com os ambientes reais, uma lacuna de navegação e telas que repetem a mesma informação ou a mesma escolha |
 | Restrições | Sem dependência nova. Python 3.6. Mudança de esquema só no 017a, dentro da `SCHEMA_VERSION` 1, que continua aberta até a primeira produção (AGENTS §4.16) |
 | Afeta | README §2.4.3, §5.4, §10 (tabela 1) e §11.1. `AGENTS.md` §3.4 e §7. Código: `sql_ident`, `ddl_builder`, `init_db`, `repo_oracle/catalog`, `repo_fake`, `admin_environments_service`, `ticket_service`, `ui_menu` e as telas de ambientes e de disparo |
@@ -39,11 +39,19 @@
 | Passo | Conteúdo | Situação |
 |---|---|---|
 | 017a | D1, D2, D3 (A1 e A2) | Concluído |
-| 017b | Telas de operação: disparo unificado com Rotinas disponíveis, sem a pré-visualização repetida, etapa 2 pulada com um ambiente; detalhe do ticket sem repetição; painel sem o menu repetido; ajuda da prioridade com o envelhecimento (A3 a A6) | Pendente |
+| 017b | Telas de operação: disparo unificado com Rotinas disponíveis, sem a pré-visualização repetida, etapa 2 pulada com um ambiente; detalhe do ticket sem repetição; painel sem o menu repetido; ajuda da prioridade com o envelhecimento (A3 a A6) | Concluído |
 | 017c | Agendamento com a mesma escolha do disparo, atalho "Agendar", Agenda e Agentes no menu (A7) | Pendente |
 | 017d | Quadro "Quem pode rodar" no formulário do script (A8) | Pendente |
 
-## 4. Validação do 017a
+## 4. Decisões do 017b
+
+| # | Decisão | Resumo |
+|---|---|---|
+| D6 | Nome da tela | "Rotinas disponíveis" passa a "Rodar um script", único item de menu para rodar. `tickets/new` sem script redireciona para os cartões |
+| D7 | Detalhe do ticket | A situação fica no quadro principal e no cabeçalho do log; saem o selo do título, a linha "Situação" do resumo e a linha do tempo. "Último sinal do servidor" (heartbeat) entra no resumo enquanto roda |
+| D8 | Painel inicial | Só os cartões de dados; o menu já está ao lado |
+
+## 5. Validação do 017a
 
 * `test_admin_environments_service`, `test_ticket_service`, `test_ui_helpers`, `test_db_schema`, `test_ddl_builder` e as demais suítes afetadas (ver AGENTS §7).
 * Banco DEV recriado e bateria Oracle (`SSS_TEST_ORACLE=1`).

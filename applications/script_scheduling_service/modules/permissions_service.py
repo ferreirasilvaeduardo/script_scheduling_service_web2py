@@ -36,8 +36,8 @@ class PermissionsService(object):
         routes = {}
         for section in ui_menu.build_menu(ctx.get("features"), admin):
             for item in section["items"]:
-                # Ultimo item vence: EXEC_SCRIPT ("Disparar Scripts") leva ao disparo, nao ao catalogo.
-                routes[item["code"]] = item["route"]
+                # Um item por codigo; o primeiro vence (Tickets usa VIEW_LOGS como codigo do item).
+                routes.setdefault(item["code"], item["route"])
         screens = []
         for f in self._rbac.features_list():
             if f.get("active") != "Y" or not (admin or f["code"] in (ctx.get("features") or ())):

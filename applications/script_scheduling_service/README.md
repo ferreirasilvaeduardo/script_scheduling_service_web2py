@@ -147,9 +147,9 @@ Todas as telas, quem pode abrir cada uma e para que servem. Telas marcadas com *
 | Painel inicial | `default/index` | Logado | Resumo do que importa para o seu perfil (§13) |
 | Minha senha | `default/my_password` | Logado | Trocar a própria senha (§4.2) |
 | **O que eu posso fazer** (CR-004) | `default/permissions` | Logado | Ver o que o seu perfil libera e por que algo não aparece (§4.3.E) |
-| **Rotinas disponíveis** (CR-004) | `tickets/catalog` | `EXEC_SCRIPT` | Conhecer os scripts que você pode rodar, onde e como foram as últimas execuções (§5.8) |
+| **Rodar um script** (CR-004; nome do CR-017b) | `tickets/catalog` | `EXEC_SCRIPT` | Escolher o script que você quer rodar e onde, com as perguntas que ele faz e como foi a última vez (§5.8). É a entrada do disparo e o único item de menu para rodar |
 | **Histórico do script** (CR-004) | `tickets/history/<script_id>` | `EXEC_SCRIPT` | Ver como o script se saiu nos últimos 30 dias (§5.8) |
-| Disparar script | `tickets/new` | `EXEC_SCRIPT` | Pedir para rodar um script agora ou num horário (§5.4, **CR-004**: resumo em frase e exemplos) |
+| Disparar script | `tickets/new` | `EXEC_SCRIPT` | Escolher o ambiente, responder às perguntas e pedir para rodar agora ou num horário (§5.4, **CR-004**: resumo em frase e exemplos). Abre a partir de Rodar um script; sem script, redireciona para lá (CR-017b) |
 | Tickets | `tickets/index` | `EXEC_SCRIPT` ou `VIEW_LOGS` | Acompanhar os pedidos e o que está rodando (§4.3.C). No menu Operação, o item "Tickets" aparece com qualquer uma das duas (CR-017) |
 | Detalhe do ticket | `tickets/detail/<id>` | Quem pode ver o ticket | Saber o que aconteceu, ver o log, cancelar ou repetir (§5.7, **CR-004**: frase-resumo e etapas) |
 | **Saída do ticket** (CR-012) | `tickets/output/<id>` | Quem pode ler o log do ticket | Baixar o zip com os arquivos que o script deixou na pasta de saída (§8.13) |
@@ -817,6 +817,10 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
   * "1. Escolha o script, que é a rotina que você quer rodar."
   * "2. Escolha o ambiente, que é onde ela vai rodar."
   * "3. Responda às perguntas."
+* **Entrada única (CR-017b):** o script é escolhido nos cartões de Rodar um script (§5.8). `tickets/new` sem `script_id` (e sem `rerun`) redireciona para `tickets/catalog`; "Trocar script" volta aos cartões.
+* **Um ambiente só (CR-017b):** se o script pode rodar em um único ambiente para o usuário, `tickets/new?script_id=…` abre direto na etapa 3, com esse ambiente, e não mostra "Trocar ambiente".
+* **Sem pré-visualização separada (CR-017b):** o comando aparece só no modal de confirmação ("Comando que será executado"), montado pelo mesmo `tickets/preview` do resumo em frase.
+* **Ajuda da prioridade:** "1 é a mais alta." e, com `queue_aging_min > 0`, "Na fila, quem espera mais sobe de prioridade: a cada {queue_aging_min} minutos, um nível." (§5.3).
 * **Exemplo em cada pergunta**, gerado pelo tipo do parâmetro, sem coluna nova. Vem junto da `description` do parâmetro, se houver:
 
   | Tipo | Texto de ajuda |
@@ -928,14 +932,14 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
 
    * Um ticket cancelado ainda na fila mostra a etapa "Rodando" como "não chegou a rodar" e a etapa final como "Cancelado".
    * A etapa atual de um ticket `RUNNING` mostra "há {tempo}".
-3. Depois disso vêm, como hoje: resumo, linha do tempo, comando executado, respostas, reexecuções e log. A linha "Detalhe técnico" do resumo traz o status, o `status_reason`, o `return_code` e a descrição técnica (`reason_description`). O bloco do snapshot mostra o **arquivo do script** (`path_file`, snapshot v5), com o caminho completo para todos (CR-005, D8). Logo depois do resumo vem o quadro **Registro** (§10, CR-006): quem criou o pedido e quando, e a última alteração, que normalmente é a última mudança de situação feita pelo agente.
+3. Depois disso vêm: resumo, comando executado, respostas, reexecuções e log. A situação aparece só no quadro do item 1 e no cabeçalho do log, que se atualiza sozinho; não há selo ao lado do número do ticket nem linha "Situação" no resumo, e a barra de etapas substitui a antiga linha do tempo (CR-017b). Enquanto o ticket roda, o resumo mostra "Último sinal do servidor" (`heartbeat_at`). A linha "Detalhe técnico" do resumo traz o status, o `status_reason`, o `return_code` e a descrição técnica (`reason_description`). O bloco do snapshot mostra o **arquivo do script** (`path_file`, snapshot v5), com o caminho completo para todos (CR-005, D8). Logo depois do resumo vem o quadro **Registro** (§10, CR-006): quem criou o pedido e quando, e a última alteração, que normalmente é a última mudança de situação feita pelo agente.
 4. **Quadro Saída (CR-012):** depois do log, quando o ticket tem linha em `tbsss_ticket_output`, com a situação e o botão **Baixar** (§8.13).
 5. **Botões com o efeito escrito:** "Cancelar este pedido" (com a consequência no modal) e "Rodar de novo com as mesmas respostas" (reexecução, §5.5).
 6. A página continua se atualizando sozinha enquanto o ticket não termina, e a frase e a barra acompanham. Quando o polling do log (§8.10) recebe uma situação diferente da que a página mostrou ao abrir, o visualizador para, mostra "A situação mudou; atualizando a página…" e recarrega a página após 1,5 s.
 
-### 5.8 Rotinas disponíveis e histórico do script (CR-004)
+### 5.8 Rodar um script e histórico do script (CR-004)
 
-**Rotinas disponíveis** (`tickets/catalog`, exige `EXEC_SCRIPT`): responde "o que eu posso rodar?".
+**Rodar um script** (`tickets/catalog`, exige `EXEC_SCRIPT`; até o CR-017b, "Rotinas disponíveis"): responde "o que eu posso rodar?" e é a entrada do disparo (§5.4).
 
 * Um cartão por script em que o usuário tem `can_execute` em **pelo menos um** ambiente (admin: todo script ativo homologado em ambiente ativo). Cada cartão traz:
   * nome, descrição, grupo e categoria;
@@ -946,7 +950,7 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
 * Uma busca no topo filtra os cartões por nome, descrição, grupo e categoria, no navegador (Alpine, `static/js/app/`). A lista completa já vem do servidor. Os cartões ficam agrupados por grupo, como no disparo.
 * O **escopo da última execução** é o mesmo da lista de tickets (§4.3.C): com `VIEW_LOGS`, os tickets dos ambientes autorizados (admin: todos); sem `VIEW_LOGS`, só os próprios.
 * **Contrato (leitura nova):** `RepoTickets.last_runs(script_ids, environment_scope=None, requested_by=None)` devolve `{script_id: {id, status, status_reason, created_at, finished_at}}` com o ticket mais recente (`created_at DESC, id DESC`) de cada script no escopo. No Oracle, a consulta usa `ix_tbsss_tck_scr` e um `ROW_NUMBER()` por script, que é sintaxe 11gR2 e não carrega `log_output`.
-* O menu Operação ganha o item "Rotinas disponíveis" (`EXEC_SCRIPT`), antes de "Disparar Scripts".
+* O menu Operação tem um único item para rodar, "Rodar um script" (`EXEC_SCRIPT`), que abre esta tela (CR-017b). "Disparar Scripts" saiu do menu: o disparo abre pelos cartões.
 
 **Histórico do script** (`tickets/history/<script_id>`, exige `EXEC_SCRIPT`): responde "esse script costuma dar certo?".
 
@@ -2825,7 +2829,7 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
     | Nenhum `PURGE` auditado em `--purge-days` dias (`0 linhas` conta, CR-008 R-16) | WARNING |
 
   * **Saída:** a primeira linha é `SSS <OK|WARNING|CRITICAL|UNKNOWN> - <n> problema(s) | healthy_agents=<n> overdue_queue=<n>;<warn>;<crit> max_wait_min=<n>;<warn>;<crit>`, seguida de uma linha `<NÍVEL>: <problema>` por problema, os críticos primeiro. O código é o pior nível encontrado. Configuração ou segredos inválidos, falha de conexão e erro de banco dão UNKNOWN (3), com uma linha só. O `health.py` não grava log em arquivo: a saída do plugin fica registrada pelo monitoramento.
-* **Painel inicial** (`default/index`), com cartões por permissão:
+* **Painel inicial** (`default/index`), com cartões por permissão e sem repetir o menu nem um atalho de disparo (CR-017b):
   * contagem por status dos tickets criados nas últimas 24 h e meus últimos 5 tickets (quem consulta tickets, no escopo da lista);
   * próximos 5 agendamentos ativos (`MANAGE_SCHEDULES`);
   * saúde dos agentes (`VIEW_AUDIT`).

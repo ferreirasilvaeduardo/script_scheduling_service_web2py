@@ -7,7 +7,7 @@ _steps = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
 }}
 <div class="sss-page-header">
   <h1 class="sss-page-title">Disparar script</h1>
-  <p class="sss-page-sub">Escolha o script e o ambiente, preencha o questionário e confira o comando antes de criar o ticket.</p>
+  <p class="sss-page-sub">Escolha o ambiente, responda às perguntas e confira o resumo antes de criar o ticket.</p>
 </div>
 
 <ol class="sss-stages" aria-label="Etapas do disparo">
@@ -19,33 +19,11 @@ _steps = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
 </ol>
 
 {{if step == 1:}}
-<section class="sss-card" aria-labelledby="title-scripts" x-data="scriptSearch">
+<section class="sss-card" aria-labelledby="title-scripts">
   <h2 class="sss-card-title" id="title-scripts">1. Escolha o script, que é a rotina que você quer rodar.</h2>
-  <div class="sss-card-body">
-    {{if not groups:}}
-    <p class="mb-0">Nenhum script está liberado para o seu perfil em ambientes homologados. Procure um administrador.</p>
-    {{else:}}
-    <div class="sss-search mb-3">
-      <label class="form-label" for="search-script">Buscar script</label>
-      <input class="form-control form-control-sm" type="search" id="search-script" maxlength="60" autocomplete="off" placeholder="Nome, descrição, grupo ou categoria" x-ref="searchTerm" @input="filter">
-    </div>
-    <p class="sss-search-empty" x-show="noResult" x-cloak role="status">Nenhum script corresponde à busca.</p>
-    {{for _g in groups:}}
-    <section class="sss-group-scripts" data-group>
-      <h3 class="sss-group-title">{{=_g['script_group']}} <span class="sss-group-category">/ {{=_g['category']}}</span></h3>
-      <ul class="sss-list-choice">
-        {{for _s in _g['scripts']:}}
-        <li data-search="{{=(' '.join((_s['name'], _s['description'], _g['script_group'], _g['category'], _s['stage']))).lower()}}">
-          <a class="sss-choice" href="{{=URL(c='tickets', f='new', vars={'script_id': _s['id']})}}">
-            <span class="sss-choice-name sss-mono">{{=_s['name']}}</span>
-            <span class="sss-choice-desc">{{=_s['description']}}</span>
-          </a>
-        </li>
-        {{pass}}
-      </ul>
-    </section>
-    {{pass}}
-    {{pass}}
+  <div class="sss-card-body sss-chosen">
+    <span>Os scripts que você pode rodar ficam em <strong>Rodar um script</strong>, com os ambientes de cada um.</span>
+    <a class="btn btn-sm btn-primary" href="{{=URL(c='tickets', f='catalog')}}">Escolher o script</a>
   </div>
 </section>
 {{else:}}
@@ -53,7 +31,7 @@ _steps = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
   <h2 class="sss-card-title" id="title-script-chosen">1. Script</h2>
   <div class="sss-card-body sss-chosen">
     <span><span class="sss-mono">{{=script['name']}}</span> — {{=script.get('description') or ''}}</span>
-    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='new')}}">Trocar script</a>
+    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='catalog')}}">Trocar script</a>
   </div>
 </section>
 {{pass}}
@@ -79,7 +57,7 @@ _steps = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
   <h2 class="sss-card-title" id="title-environment-chosen">2. Ambiente</h2>
   <div class="sss-card-body sss-chosen">
     <span><strong>{{=form['environment']['name']}}</strong>{{if form['environment']['production']:}} <span class="badge text-bg-danger">Produção</span>{{pass}} — {{=form['environment']['description']}}</span>
-    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='new', vars={'script_id': form['script']['id']})}}">Trocar ambiente</a>
+    {{if not single_environment:}}<a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='new', vars={'script_id': form['script']['id']})}}">Trocar ambiente</a>{{pass}}
   </div>
 </section>
 
@@ -125,7 +103,7 @@ _steps = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
           <option value="{{=_pv}}"{{if str(_pv) == str(priority or 2):}} selected{{pass}}>{{=_pr}}</option>
           {{pass}}
         </select>
-        <div class="form-text" id="field-priority-help">1 é a mais alta; a fila ordena por prioridade e depois pelo horário agendado.</div>
+        <div class="form-text" id="field-priority-help">1 é a mais alta.{{if aging_min:}} Na fila, quem espera mais sobe de prioridade: a cada {{=aging_min}} minutos, um nível.{{pass}}</div>
         {{if errors.get('priority'):}}<div class="invalid-feedback" id="field-priority-error">{{=errors['priority']}}</div>{{pass}}
       </div>
       <div class="sss-form-field mb-3">
@@ -133,26 +111,6 @@ _steps = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
         <input class="form-control{{=' is-invalid' if errors.get('scheduled_at') else ''}}" type="datetime-local" id="field-scheduled_at" name="scheduled_at" value="{{=scheduled_at}}" aria-describedby="field-scheduled_at-help{{=' field-scheduled_at-error' if errors.get('scheduled_at') else ''}}"{{if errors.get('scheduled_at'):}} aria-invalid="true"{{pass}}{{if focus_field == 'scheduled_at':}} autofocus{{pass}}>
         <div class="form-text" id="field-scheduled_at-help">Horário do servidor do banco de dados. Deixe em branco para rodar assim que houver um servidor livre.</div>
         {{if errors.get('scheduled_at'):}}<div class="invalid-feedback" id="field-scheduled_at-error">{{=errors['scheduled_at']}}</div>{{pass}}
-      </div>
-    </div>
-
-    <div class="sss-preview" x-data="preview" data-url="{{=URL(c='tickets', f='preview')}}">
-      <button type="button" class="btn btn-sm btn-outline-secondary" @click="load" :disabled="loading">
-        <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#icon-eye"></use></svg>
-        <span>Pré-visualizar comando</span>
-      </button>
-      <div class="sss-preview-result" aria-live="polite">
-        <ul class="sss-preview-errors" x-show="hasErrors" x-cloak>
-          <template x-for="e in errors" :key="e.id">
-            <li x-text="e.text"></li>
-          </template>
-        </ul>
-        <div class="sss-preview-command" x-show="hasCommand" x-cloak>
-          <pre class="sss-argv" tabindex="0" aria-label="Comando que será executado (valores sigilosos mascarados)"><code x-text="command"></code></pre>
-          <div x-data="copy">
-            <button type="button" class="btn btn-sm btn-outline-secondary" :data-text="command" @click="copy" x-text="label">Copiar</button>
-          </div>
-        </div>
       </div>
     </div>
 

@@ -9,8 +9,8 @@ Funcao pura: nao importa gluon nem acessa repositorios.
 # EXEC_SCRIPT (proprios) e VIEW_LOGS (ambientes), como ticket_service.can_query (CR-017).
 _CATALOG = (
     ("OPERATION", u"Operação", (
-        ("EXEC_SCRIPT", u"Rotinas disponíveis", "tickets", "catalog", "icon-file-code"),
-        ("EXEC_SCRIPT", u"Disparar Scripts", "tickets", "new", "icon-play"),
+        # Um so caminho para rodar: os cartoes levam ao disparo ja com script e ambiente (CR-017b).
+        ("EXEC_SCRIPT", u"Rodar um script", "tickets", "catalog", "icon-play"),
         (("VIEW_LOGS", "EXEC_SCRIPT"), u"Tickets", "tickets", "index", "icon-list"),
     )),
     ("ADMIN", u"Administração", (

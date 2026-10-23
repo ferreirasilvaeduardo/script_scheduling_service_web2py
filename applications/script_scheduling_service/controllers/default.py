@@ -46,8 +46,7 @@ def index():
             ctx, "schedules", lambda: schedules_service.list_page(ctx, {"active": "Y"}, 1, 5)["items"])
     if rbac.has_feature(ctx, "VIEW_AUDIT"):
         cards["agents"] = _card(ctx, "agents", lambda: agents_service.dashboard(ctx))
-    return dict(ctx=ctx, menu=response.sss_menu, can_trigger=rbac.has_feature(ctx, "EXEC_SCRIPT"),
-                cards=cards)
+    return dict(ctx=ctx, menu=response.sss_menu, cards=cards)
 
 
 def login():

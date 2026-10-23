@@ -69,15 +69,19 @@ def _new_page(ctx, script_id, environment, values=None, errors=None, priority=No
     response.title = u"Disparar script — SSS"
     response.sss_scripts = [_JS_TRIGGER]
     errors = errors or {}
-    data = dict(step=1, groups=[], script=None, environments=[], form=None, errors=errors,
+    data = dict(step=1, script=None, environments=[], form=None, errors=errors,
                  general_error=errors.get(ticket_service.GENERAL_FIELD), priority=priority,
                  scheduled_at=scheduled_at or "", focus_field=None, rerun_of=rerun_of,
-                 has_last=False, used_last=warnings is not None)
+                 has_last=False, used_last=warnings is not None, single_environment=False,
+                 aging_min=current.sss_cfg.agent.queue_aging_min)
     if not script_id:
-        data["groups"] = ticket_service.available_scripts(ctx)
         return data
     script, environments = ticket_service.available_environments(ctx, script_id)
-    data.update(step=2, script=script, environments=environments)
+    data.update(step=2, script=script, environments=environments,
+                single_environment=len(environments) == 1)
+    if not environment and len(environments) == 1:
+        # Um ambiente so: a escolha nao tem o que decidir (CR-017b).
+        environment = environments[0]["name"]
     if not environment:
         return data
     form = ticket_service.prepare_form(ctx, script_id, environment, values, errors, warnings)
@@ -93,6 +97,9 @@ def new():
     _require_method("GET", "HEAD")
     ctx = _require_func("EXEC_SCRIPT")
     rerun = _text(request.get_vars.get("rerun"), 10)
+    if not rerun and not _text(request.get_vars.get("script_id"), 10):
+        # A escolha do script e feita nos cartoes de Rodar um script (CR-017b).
+        redirect(URL(c="tickets", f="catalog"))
     try:
         if rerun:
             data = ticket_service.prepare_rerun(ctx, rerun)
@@ -115,7 +122,7 @@ def catalog():
     """Rotinas disponiveis (README §5.8): so leitura, para quem tem EXEC_SCRIPT."""
     _require_method("GET", "HEAD")
     ctx = _require_func("EXEC_SCRIPT")
-    response.title = u"Rotinas disponíveis — SSS"
+    response.title = u"Rodar um script — SSS"
     response.sss_scripts = [_JS_TRIGGER]
     try:
         return dict(groups=ticket_service.routine_catalog(ctx), error=None)

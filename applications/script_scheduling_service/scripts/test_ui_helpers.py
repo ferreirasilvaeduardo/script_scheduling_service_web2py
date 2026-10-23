@@ -322,7 +322,7 @@ class TestBuildMenu(unittest.TestCase):
     def test_admin_ve_catalogo_completo_na_ordem(self):
         menu = ui_menu.build_menu([], True)
         self.assertEqual(self._codes(menu), [
-            ("OPERATION", ["EXEC_SCRIPT", "EXEC_SCRIPT", "VIEW_LOGS"]),
+            ("OPERATION", ["EXEC_SCRIPT", "VIEW_LOGS"]),
             ("ADMIN", ["MANAGE_USERS", "MANAGE_PROFILES", "MANAGE_ENVIRONMENTS", "MANAGE_SCRIPTS",
                        "MANAGE_PARAMETERS", "MANAGE_SCHEDULES", "VIEW_AUDIT"]),
         ])
@@ -340,7 +340,7 @@ class TestBuildMenu(unittest.TestCase):
             ("ADMIN", ["MANAGE_SCHEDULES"]),
         ])
         self.assertEqual(self._codes(ui_menu.build_menu(["EXEC_SCRIPT"], False)),
-                         [("OPERATION", ["EXEC_SCRIPT", "EXEC_SCRIPT", "VIEW_LOGS"])])
+                         [("OPERATION", ["EXEC_SCRIPT", "VIEW_LOGS"])])
 
     def test_tickets_aparece_com_exec_script_ou_view_logs(self):
         # CR-017: a lista de tickets aceita EXEC_SCRIPT (proprios), entao o menu tambem.
@@ -359,16 +359,16 @@ class TestBuildMenu(unittest.TestCase):
         menu = ui_menu.build_menu(["EXEC_SCRIPT", "VIEW_LOGS"], False, ("tickets", "index"))
         items = menu[0]["items"]
         self.assertEqual(menu[0]["title"], u"Operação")
-        # CR-004 U5 (README §5.8): "Rotinas disponíveis" vem antes de "Disparar Scripts".
-        self.assertEqual(items[0]["route"], ("tickets", "catalog"))
-        self.assertEqual(items[1], {
+        # CR-017b (README §5.8): um so item para rodar, que abre os cartoes; o disparo sai do menu.
+        self.assertEqual(items[0], {
             "code": "EXEC_SCRIPT",
-            "label": u"Disparar Scripts",
-            "route": ("tickets", "new"),
+            "label": u"Rodar um script",
+            "route": ("tickets", "catalog"),
             "icon": "icon-play",
             "active": False,
         })
-        self.assertTrue(items[2]["active"])
+        self.assertNotIn(("tickets", "new"), [i["route"] for i in items])
+        self.assertTrue(items[1]["active"])
         self.assertEqual(ui_menu.build_menu(["EXEC_SCRIPT"], False)[0]["items"][0]["active"], False)
 
     def test_rotulos_do_catalogo_canonico(self):
@@ -388,7 +388,7 @@ class TestBuildMenu(unittest.TestCase):
     def test_resultado_independente_entre_chamadas(self):
         menu = ui_menu.build_menu([], True)
         menu[0]["items"][0]["label"] = "alterado"
-        self.assertEqual(ui_menu.build_menu([], True)[0]["items"][0]["label"], u"Rotinas disponíveis")
+        self.assertEqual(ui_menu.build_menu([], True)[0]["items"][0]["label"], u"Rodar um script")
 
 
 class TestPureModulesWithoutGluon(unittest.TestCase):

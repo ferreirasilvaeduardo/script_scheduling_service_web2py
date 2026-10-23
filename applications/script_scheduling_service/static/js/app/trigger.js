@@ -1,4 +1,4 @@
-/* SSS - tela de disparo de script (tickets/new).
+/* SSS - disparo de script (tickets/new) e busca dos cartoes de Rodar um script (tickets/catalog).
  * Carregado com defer ANTES do alpine.min.js. Nenhuma regra decisoria fica aqui: o servidor
  * revalida tudo; o cliente apenas filtra a lista e exibe a previa devolvida pelo servidor.
  */
@@ -139,65 +139,6 @@
             }
           }).catch(function () {
             self.errors = [{ id: 0, text: 'Não foi possível montar o resumo. Tente novamente.' }];
-          }).then(function () {
-            self.loading = false;
-          });
-        }
-      };
-    });
-
-    window.Alpine.data('preview', function () {
-      return {
-        loading: false,
-        command: '',
-        errors: [],
-        get hasCommand() {
-          return this.command !== '';
-        },
-        get hasErrors() {
-          return this.errors.length > 0;
-        },
-        showErrors: function (map) {
-          var listItems = [];
-          var key;
-          for (key in map) {
-            if (Object.prototype.hasOwnProperty.call(map, key)) {
-              listItems.push({ id: listItems.length, text: String(map[key]) });
-            }
-          }
-          this.errors = listItems;
-        },
-        load: function () {
-          var self = this;
-          var form = this.$root.closest('form');
-          var body = {
-            script_id: form.elements.script_id.value,
-            environment: form.elements.environment.value,
-            answers: collectAnswers(form)
-          };
-          this.loading = true;
-          this.command = '';
-          this.errors = [];
-          window.sssFetch(this.$root.getAttribute('data-url'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify(body)
-          }).then(function (response) {
-            if (response.status === 403) {
-              return null;
-            }
-            return response.json();
-          }).then(function (data) {
-            if (!data) {
-              return;
-            }
-            if (data.argv) {
-              self.command = data.argv.map(displayToken).join(' ');
-            } else {
-              self.showErrors(data.errors || {});
-            }
-          }).catch(function () {
-            window.SSS.toast('error', 'Não foi possível gerar a prévia. Tente novamente.');
           }).then(function () {
             self.loading = false;
           });

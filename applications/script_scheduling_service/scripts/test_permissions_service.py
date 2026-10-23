@@ -55,6 +55,9 @@ class TestPermissions(unittest.TestCase):
         routes = dict((t["code"], t["route"]) for t in d["screens"])
         self.assertEqual(routes["MANAGE_PROFILES"], ("admin_profiles", "index"))
         self.assertIsNone(routes["CANCEL_TICKET"])  # acao, nao tela
+        # CR-017b: Disparar Scripts leva aos cartoes de Rodar um script; Consultar Logs, a lista de tickets.
+        self.assertEqual(routes["EXEC_SCRIPT"], ("tickets", "catalog"))
+        self.assertEqual(routes["VIEW_LOGS"], ("tickets", "index"))
 
     def test_sem_exec_script_mostra_frase_e_motivo(self):
         d = self.svc.build(self.ctx["consulta"])

@@ -497,16 +497,6 @@ class TicketService(object):
 
     # --------------------------------------------------------------- acoes
 
-    def preview(self, ctx, script_id, environment, answers):
-        """Compila sem gravar e devolve (argv_exibicao | None, erros_por_campo); sensiveis mascarados."""
-        script, env = self._authorize(ctx, script_id, environment)
-        errors = collections.OrderedDict()
-        snapshot, _resolved, _links = self._compile(ctx, script, env, answers,
-                                                          self._tickets.now(), errors)
-        if snapshot is None:
-            return None, dict(errors)
-        return params_compiler.display_argv(json.loads(snapshot)), {}
-
     def trigger_summary(self, ctx, script_id, environment, answers, priority=None, scheduled_at=None):
         """Resumo em frase do modal de confirmacao (README §5.4), montado pelo servidor; nao grava nada.
 
@@ -1190,11 +1180,6 @@ def has_last_run(ctx, script_id, environment):
 def last_answers(ctx, script_id, environment):
     """Respostas reutilizaveis da ultima execucao propria (servico padrao)."""
     return _service().last_answers(ctx, script_id, environment)
-
-
-def preview(ctx, script_id, environment, answers):
-    """Previa do argv mascarado (servico padrao)."""
-    return _service().preview(ctx, script_id, environment, answers)
 
 
 def create_ticket(ctx, ip, script_id, environment, answers, priority, scheduled_at, rerun_of=None):

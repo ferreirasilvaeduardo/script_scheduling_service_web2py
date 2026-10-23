@@ -5,13 +5,6 @@
 import ui_helpers
 icons = URL('static', 'img/icons.svg')
 _t = ticket
-_events = (
-    (u'Criado', _t['created_at']),
-    (u'Agendado para', _t['scheduled_at']),
-    (u'Iniciado', _t['started_at']),
-    (u'Último heartbeat', _t['heartbeat_at']),
-    (u'Finalizado', _t['finished_at']),
-)
 _hidden = {'ticket_id': _t['id']}
 _txt_cancel = u'O pedido ainda não começou a rodar e será cancelado na hora.'
 if _t['status'] == 'RUNNING':
@@ -24,10 +17,7 @@ _info = ui_helpers.status_info(_t['status'])
 }}
 <div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-title">Ticket #{{=_t['id']}}
-      {{status = _t['status']
-      status_reason = _t['status_reason']}}{{include 'components/badge_status.html'}}
-    </h1>
+    <h1 class="sss-page-title">Ticket #{{=_t['id']}}</h1>
     <p class="sss-page-sub"><span class="sss-mono">{{=_t['script_name']}}</span> em <strong>{{=_t['environment']}}</strong> · solicitado por {{=_t['requested_by']}}</p>
   </div>
   <div class="sss-actions">
@@ -61,41 +51,29 @@ _info = ui_helpers.status_info(_t['status'])
   </div>
 </section>
 
-<div class="sss-detail-grid">
-  <section class="sss-card" aria-labelledby="title-summary">
-    <h2 class="sss-card-title" id="title-summary">Resumo</h2>
-    <dl class="sss-card-body sss-summary">
-      <dt>Situação</dt>
-      <dd>{{=_info['label']}}</dd>
-      <dt>Detalhe técnico</dt>
-      <dd><span class="sss-mono">{{=_t['status']}}{{if _t['status_reason']:}} / {{=_t['status_reason']}}{{pass}}</span>{{if _t['reason_description']:}} — {{=_t['reason_description']}}{{pass}}</dd>
-      <dt>Código de retorno</dt>
-      <dd class="sss-mono">{{='-' if _t['return_code'] is None else _t['return_code']}}</dd>
-      <dt>Prioridade</dt>
-      <dd>{{=_t['priority']}}</dd>
-      <dt>Origem</dt>
-      <dd>{{if _t['source'] == 'agendamento':}}Agendamento #{{=_t['schedule_id']}}{{else:}}Manual{{pass}}</dd>
-      <dt>Agente</dt>
-      <dd class="sss-mono">{{=_t['agent_id'] or '-'}}</dd>
-      <dt>PID</dt>
-      <dd class="sss-mono">{{='-' if _t['process_id'] is None else _t['process_id']}}</dd>
-      <dt>Duração</dt>
-      <dd>{{=_t['duration']}}</dd>
-    </dl>
-  </section>
-
-  <section class="sss-card" aria-labelledby="title-time">
-    <h2 class="sss-card-title" id="title-time">Linha do tempo</h2>
-    <ol class="sss-card-body sss-timeline">
-      {{for _label, _when in _events:}}
-      <li class="{{='sss-time-done' if _when is not None else 'sss-time-pending'}}">
-        <span class="sss-time-label">{{=_label}}</span>
-        <span class="sss-time-value">{{=ui_helpers.format_date(_when)}}</span>
-      </li>
-      {{pass}}
-    </ol>
-  </section>
-</div>
+<section class="sss-card" aria-labelledby="title-summary">
+  <h2 class="sss-card-title" id="title-summary">Resumo</h2>
+  <dl class="sss-card-body sss-summary">
+    <dt>Detalhe técnico</dt>
+    <dd><span class="sss-mono">{{=_t['status']}}{{if _t['status_reason']:}} / {{=_t['status_reason']}}{{pass}}</span>{{if _t['reason_description']:}} — {{=_t['reason_description']}}{{pass}}</dd>
+    <dt>Código de retorno</dt>
+    <dd class="sss-mono">{{='-' if _t['return_code'] is None else _t['return_code']}}</dd>
+    <dt>Prioridade</dt>
+    <dd>{{=_t['priority']}}</dd>
+    <dt>Origem</dt>
+    <dd>{{if _t['source'] == 'agendamento':}}Agendamento #{{=_t['schedule_id']}}{{else:}}Manual{{pass}}</dd>
+    <dt>Agente</dt>
+    <dd class="sss-mono">{{=_t['agent_id'] or '-'}}</dd>
+    <dt>PID</dt>
+    <dd class="sss-mono">{{='-' if _t['process_id'] is None else _t['process_id']}}</dd>
+    <dt>Duração</dt>
+    <dd>{{=_t['duration']}}</dd>
+    {{if _t['status'] == 'RUNNING':}}
+    <dt>Último sinal do servidor</dt>
+    <dd>{{=ui_helpers.format_date(_t['heartbeat_at'])}}</dd>
+    {{pass}}
+  </dl>
+</section>
 
 {{if _t.get('record'):}}
 {{record = _t['record']}}

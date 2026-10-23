@@ -190,7 +190,7 @@ class TestTicketService(_BaseTicket):
             self._create(login="admin", script_id="4", environment="PRODUCAO")
         self.assertEqual(cm.exception.reason, "NOT_HOMOLOGATED")
         with self.assertRaises(AccessDenied):
-            self.svc.preview(self.ctx["admin"], "4", "PRODUCAO", {})
+            self.svc.trigger_summary(self.ctx["admin"], "4", "PRODUCAO", {})
 
     def test_script_forjado_e_ambiente_nao_autorizado(self):
         ctx = self.ctx["op.hml"]
@@ -276,13 +276,14 @@ class TestTicketService(_BaseTicket):
     # ----------------------------------------------------- previa e formulario
 
     def test_previa_mascara_sensivel(self):
-        argv, errors = self.svc.preview(self.ctx["op.hml"], "1", "HOMOLOGACAO", {"documento_cliente": SECRET})
-        self.assertEqual(errors, {})
+        r = self.svc.trigger_summary(self.ctx["op.hml"], "1", "HOMOLOGACAO", {"documento_cliente": SECRET})
+        self.assertEqual(r["errors"], {})
+        argv = r["argv"]
         self.assertNotIn(SECRET, " ".join(argv))
         self.assertEqual(argv[argv.index("--documento") + 1], params_compiler.MASK)
-        argv, errors = self.svc.preview(self.ctx["op.hml"], "1", "HOMOLOGACAO", {"modo_exec": "X"})
-        self.assertIsNone(argv)
-        self.assertIn("modo_exec", errors)
+        r = self.svc.trigger_summary(self.ctx["op.hml"], "1", "HOMOLOGACAO", {"modo_exec": "X"})
+        self.assertIsNone(r["argv"])
+        self.assertIn("modo_exec", r["errors"])
 
     def test_formulario_nao_expoe_sensivel(self):
         form = self.svc.prepare_form(self.ctx["op.hml"], "1", "HOMOLOGACAO",
@@ -610,10 +611,10 @@ class TestTicketQuery(_BaseTicket):
         self.assertEqual(det["snapshot"]["path_file"], path)
         self.assertEqual(det["display_argv"][2], path)
         self.assertIn(path, det["display_command"])
-        argv, errors = self.svc.preview(self.ctx["op.hml"], "1", "HOMOLOGACAO",
-                                      {"data_ref": "2026-10-20", "modo_exec": "SIMULACAO"})
-        self.assertEqual(errors, {})
-        self.assertEqual(argv[2], path)
+        r = self.svc.trigger_summary(self.ctx["op.hml"], "1", "HOMOLOGACAO",
+                                     {"data_ref": "2026-10-20", "modo_exec": "SIMULACAO"})
+        self.assertEqual(r["errors"], {})
+        self.assertEqual(r["argv"][2], path)
 
 
 if __name__ == "__main__":

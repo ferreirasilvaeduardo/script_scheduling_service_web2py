@@ -5,21 +5,8 @@ icons = URL('static', 'img/icons.svg')
 }}
 <div class="sss-page-header">
   <h1 class="sss-page-title">Olá, {{=ctx['name']}}</h1>
-  <p class="sss-page-sub">Perfil {{=ctx['profile_name']}}. Escolha uma das funcionalidades disponíveis.</p>
+  <p class="sss-page-sub">Perfil {{=ctx['profile_name']}}. Use o menu para escolher o que fazer.</p>
 </div>
-
-{{if can_trigger:}}
-<section class="sss-card sss-card-highlight" aria-labelledby="panel-trigger">
-  <h2 class="sss-card-title" id="panel-trigger">Disparar script</h2>
-  <div class="sss-card-body sss-chosen">
-    <span>Escolha um script e um ambiente autorizados, preencha o questionário e crie o ticket de execução.</span>
-    <a class="btn btn-sm btn-primary" href="{{=URL(c='tickets', f='new')}}">
-      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#icon-play"></use></svg>
-      <span>Disparar script</span>
-    </a>
-  </div>
-</section>
-{{pass}}
 
 {{if cards:}}
 <div class="sss-panel-grid">
@@ -108,18 +95,5 @@ icons = URL('static', 'img/icons.svg')
 {{if not menu:}}
 <section class="sss-card">
   <div class="sss-card-body">Seu perfil ainda não tem funcionalidades liberadas. Procure um administrador.</div>
-</section>
-{{pass}}
-{{for section in menu:}}
-<section class="sss-card" aria-labelledby="panel-{{=section['section'].lower()}}">
-  <h2 class="sss-card-title" id="panel-{{=section['section'].lower()}}">{{=section['title']}}</h2>
-  <div class="sss-card-body sss-actions">
-    {{for item in section['items']:}}
-    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c=item['route'][0], f=item['route'][1])}}">
-      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#{{=item['icon']}}"></use></svg>
-      <span>{{=item['label']}}</span>
-    </a>
-    {{pass}}
-  </div>
 </section>
 {{pass}}
