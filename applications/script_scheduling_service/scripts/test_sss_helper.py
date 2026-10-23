@@ -367,11 +367,11 @@ class TestSssHelper(unittest.TestCase):
     def _fill(self, base, rel, files):
         dir_value = os.path.join(base, rel)
         os.makedirs(dir_value, 0o700)
-        for name, date in files.items():
+        for name, data in files.items():
             path = os.path.join(dir_value, name)
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "wb") as f:
-                f.write(date)
+                f.write(data)
         return dir_value
 
     def test_relativo_de_pastas_log_passa_no_helper(self):

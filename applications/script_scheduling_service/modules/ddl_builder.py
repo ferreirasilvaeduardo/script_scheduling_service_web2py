@@ -1421,12 +1421,12 @@ def build_validation_script(owner, prefix):
     ]
 
     tab = dict((ent, "{}.{}".format(owner, t["tabela"])) for ent, t in schema.items())
-    date = [
+    data = [
         chk(10, "VERSAO DO ESQUEMA", "=", sql_ident.SCHEMA_VERSION,
             "SELECT MAX(schema_version) FROM {}".format(tab["control"])),
     ]
     for n, (ent, min_value) in enumerate(_seed_rows_by_table(owner, prefix).items()):
-        date.append(chk(11 + n, "LINHAS " + schema[ent]["tabela"].upper(), ">=", min_value,
+        data.append(chk(11 + n, "LINHAS " + schema[ent]["tabela"].upper(), ">=", min_value,
                          "SELECT COUNT(*) FROM {}".format(tab[ent])))
 
     def relatorio(parts):
@@ -1477,7 +1477,7 @@ def build_validation_script(owner, prefix):
         "PROMPT (se as tabelas nao existirem, esta secao falha com ORA-00942: veja a secao 1)",
         "PROMPT ==============================================================================",
     ])
-    rows.extend(relatorio(date))
+    rows.extend(relatorio(data))
     rows.extend([
         "",
         "PROMPT ==============================================================================",

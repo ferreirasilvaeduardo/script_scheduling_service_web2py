@@ -57,11 +57,11 @@ class RepoCatalogFake(RepoCatalog):
                 detail=audit.get("detail"),
             )
 
-    def environments_insert(self, date, audit=None, actor=None):
+    def environments_insert(self, data, audit=None, actor=None):
         """Insere novo ambiente com validacao de CKs, UK e DSN, auditando na mesma operacao."""
         with self._store.lock_catalog:
             actor = self._store.record_actor(audit, actor)
-            name = date.get("name")
+            name = data.get("name")
             if not name or not _RE_ENV_NAME.fullmatch(name):
                 raise RepoViolation("Nome de ambiente invalido (esperado: 1-30 chars [A-Z0-9_])", constraint="ck_tbsss_env_name")
 
@@ -69,14 +69,14 @@ class RepoCatalogFake(RepoCatalog):
                 if a["name"].upper() == name.upper():
                     raise RepoViolation("Ambiente com nome '%s' ja existe" % name, constraint="uk_tbsss_env_name")
 
-            connection = date.get("connection")
+            connection = data.get("connection")
             if connection and "@" in connection:
                 raise RepoViolation("Conexao nao pode conter credencial (@)", constraint="ck_tbsss_env_connection")
 
-            active = date.get("active", "Y")
+            active = data.get("active", "Y")
             if active not in ("Y", "N"):
                 raise RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint="ck_tbsss_env_active")
-            production = date.get("is_production", "N")
+            production = data.get("is_production", "N")
             if production not in ("Y", "N"):
                 raise RepoViolation("Flag producao deve ser 'Y' ou 'N'", constraint="ck_tbsss_env_prod")
 
@@ -84,18 +84,18 @@ class RepoCatalogFake(RepoCatalog):
             new = {
                 "id": aid,
                 "name": name,
-                "description": date.get("description", ""),
+                "description": data.get("description", ""),
                 "connection": connection,
                 "active": active,
                 "is_production": production,
-                "created_at": date.get("created_at"),
+                "created_at": data.get("created_at"),
             }
             self._store.stamp_insert(new, actor)
             self._store.environments[aid] = copy.deepcopy(new)
             self._auditar_ambiente(audit, aid)
             return copy.deepcopy(new)
 
-    def environments_update(self, id, date, expected=None, audit=None, actor=None):
+    def environments_update(self, id, data, expected=None, audit=None, actor=None):
         """Altera ambiente (nome imutavel, trigger tr_tbsss_env_bu), condicional a 'esperado'."""
         with self._store.lock_catalog:
             actor = self._store.record_actor(audit, actor)
@@ -107,29 +107,29 @@ class RepoCatalogFake(RepoCatalog):
                 if current.get(field) != value:
                     raise RepoConflict("Ambiente ID %s alterado por outra operacao (%s)" % (id, field))
 
-            new_name = date.get("name")
+            new_name = data.get("name")
             if new_name is not None and new_name != current["name"]:
                 raise RepoViolation("Nome de ambiente e imutavel", constraint="tr_tbsss_env_bu")
 
             changes = {}
-            new_connection = date.get("connection")
+            new_connection = data.get("connection")
             if new_connection is not None:
                 if "@" in new_connection:
                     raise RepoViolation("Conexao nao pode conter credencial (@)", constraint="ck_tbsss_env_connection")
                 changes["connection"] = new_connection
-            elif "connection" in date:
+            elif "connection" in data:
                 changes["connection"] = None
 
-            if "description" in date:
-                changes["description"] = date["description"]
+            if "description" in data:
+                changes["description"] = data["description"]
 
-            new_active = date.get("active")
+            new_active = data.get("active")
             if new_active is not None:
                 if new_active not in ("Y", "N"):
                     raise RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint="ck_tbsss_env_active")
                 changes["active"] = new_active
 
-            new_production = date.get("is_production")
+            new_production = data.get("is_production")
             if new_production is not None:
                 if new_production not in ("Y", "N"):
                     raise RepoViolation("Flag producao deve ser 'Y' ou 'N'", constraint="ck_tbsss_env_prod")
@@ -200,9 +200,9 @@ class RepoCatalogFake(RepoCatalog):
                 raise RepoNotFound("Script ID %s nao encontrado" % id)
             return copy.deepcopy(self._store.scripts[id])
 
-    def _validar_script(self, date, current_value=None):
+    def _validar_script(self, data, current_value=None):
         """CKs da tabela 6 sobre o registro resultante (atual + dados); devolve as mudancas validadas."""
-        base = dict(current_value or {}, **date)
+        base = dict(current_value or {}, **data)
         if not base.get("name"):
             raise RepoViolation("Nome de script e obrigatorio")
         if base.get("param_type", "NAMED") not in ("NAMED", "POSITIONAL", "NONE"):
@@ -226,33 +226,33 @@ class RepoCatalogFake(RepoCatalog):
             if (current_value is None or sid != current_value["id"]) and s["name"] == base["name"]:
                 raise RepoViolation("Script com nome '%s' ja existe" % base["name"], constraint="uk_tbsss_scr_name")
 
-    def scripts_insert(self, date, audit=None, actor=None):
+    def scripts_insert(self, data, audit=None, actor=None):
         """Insere novo script com validacoes de seguranca e CKs, auditando na mesma operacao."""
         with self._store.lock_catalog:
             actor = self._store.record_actor(audit, actor)
-            self._validar_script(date)
+            self._validar_script(data)
             sid = self._store.next_id("tbsss_scripts")
-            tmout = date.get("timeout_s")
+            tmout = data.get("timeout_s")
             new = {
                 "id": sid,
-                "name": date["name"],
-                "description": date.get("description", ""),
-                "script_group": date.get("script_group"),
-                "category": date.get("category"),
-                "stage": date.get("stage"),
-                "interpreter": date["interpreter"],
-                "path_file": date["path_file"],
-                "param_type": date.get("param_type", "NAMED"),
-                "max_parallel_env": int(date.get("max_parallel_env", 1)),
+                "name": data["name"],
+                "description": data.get("description", ""),
+                "script_group": data.get("script_group"),
+                "category": data.get("category"),
+                "stage": data.get("stage"),
+                "interpreter": data["interpreter"],
+                "path_file": data["path_file"],
+                "param_type": data.get("param_type", "NAMED"),
+                "max_parallel_env": int(data.get("max_parallel_env", 1)),
                 "timeout_s": int(tmout) if tmout is not None else None,
-                "active": date.get("active", "Y"),
+                "active": data.get("active", "Y"),
             }
             self._store.stamp_insert(new, actor)
             self._store.scripts[sid] = copy.deepcopy(new)
             self._auditar_script(audit, sid)
             return copy.deepcopy(new)
 
-    def scripts_update(self, id, date, expected=None, audit=None, actor=None):
+    def scripts_update(self, id, data, expected=None, audit=None, actor=None):
         """Altera script (CKs, esperado e regras de param_type x vinculos) na mesma operacao."""
         with self._store.lock_catalog:
             actor = self._store.record_actor(audit, actor)
@@ -264,7 +264,7 @@ class RepoCatalogFake(RepoCatalog):
                     raise RepoConflict("Script ID %s alterado por outra operacao (%s)" % (id, field))
             fields = ("name", "description", "script_group", "category", "stage", "interpreter", "path_file",
                       "param_type", "max_parallel_env", "timeout_s", "active")
-            changes = dict((k, date[k]) for k in fields if k in date)
+            changes = dict((k, data[k]) for k in fields if k in data)
             self._validar_script(changes, current)
             if "param_type" in changes and changes["param_type"] != current["param_type"]:
                 self._regras_tipo_param(changes["param_type"],
@@ -379,11 +379,11 @@ class RepoCatalogFake(RepoCatalog):
                 detail=audit.get("detail"),
             )
 
-    def parameters_insert(self, date, audit=None, actor=None):
+    def parameters_insert(self, data, audit=None, actor=None):
         """Insere novo parametro validando CKs e UK, auditando na mesma operacao."""
         with self._store.lock_catalog:
             actor = self._store.record_actor(audit, actor)
-            code = date.get("code")
+            code = data.get("code")
             if not code or not _RE_PRM_CODE.fullmatch(code):
                 raise RepoViolation("Codigo de parametro invalido (esperado: 1-30 chars [a-z0-9_])", constraint="ck_tbsss_prm_code")
 
@@ -391,22 +391,22 @@ class RepoCatalogFake(RepoCatalog):
                 if p["code"] == code:
                     raise RepoViolation("Parametro com codigo '%s' ja existe" % code, constraint="uk_tbsss_prm_code")
 
-            tcomp = date.get("component_type")
+            tcomp = data.get("component_type")
             if tcomp not in ("TEXT", "NUMBER", "DATE", "SELECT", "CHECKBOX"):
                 raise RepoViolation("Tipo de componente invalido", constraint="ck_tbsss_prm_ctype")
 
-            flag = date.get("param_flag")
+            flag = data.get("param_flag")
             if flag is not None and flag != "":
                 if not _RE_PRM_FLAG.fullmatch(flag):
                     raise RepoViolation("Flag param_nomeado invalida", constraint="ck_tbsss_prm_flag")
             else:
                 flag = None
 
-            sens = date.get("sensitive", "N")
+            sens = data.get("sensitive", "N")
             if sens not in ("Y", "N"):
                 raise RepoViolation("sensivel deve ser 'Y' ou 'N'", constraint="ck_tbsss_prm_sens")
 
-            active = date.get("active", "Y")
+            active = data.get("active", "Y")
             if active not in ("Y", "N"):
                 raise RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint="ck_tbsss_prm_active")
 
@@ -415,12 +415,12 @@ class RepoCatalogFake(RepoCatalog):
                 "id": pid,
                 "code": code,
                 "param_flag": flag,
-                "label": date.get("label", ""),
-                "description": date.get("description", ""),
+                "label": data.get("label", ""),
+                "description": data.get("description", ""),
                 "component_type": tcomp,
-                "options_json": date.get("options_json"),
-                "default_value": date.get("default_value"),
-                "validation_regex": date.get("validation_regex"),
+                "options_json": data.get("options_json"),
+                "default_value": data.get("default_value"),
+                "validation_regex": data.get("validation_regex"),
                 "sensitive": sens,
                 "active": active,
             }
@@ -429,7 +429,7 @@ class RepoCatalogFake(RepoCatalog):
             self._auditar_parametro(audit, pid)
             return copy.deepcopy(new)
 
-    def parameters_update(self, id, date, expected=None, audit=None, actor=None):
+    def parameters_update(self, id, data, expected=None, audit=None, actor=None):
         """Altera parametro (CKs, dependencias de vinculo e 'esperado') na mesma operacao."""
         with self._store.lock_catalog:
             actor = self._store.record_actor(audit, actor)
@@ -441,22 +441,22 @@ class RepoCatalogFake(RepoCatalog):
                 if current.get(field) != value:
                     raise RepoConflict("Parametro ID %s alterado por outra operacao (%s)" % (id, field))
 
-            changes = dict((k, date[k]) for k in ("label", "description", "options_json", "default_value",
-                                                    "validation_regex") if k in date)
-            if "param_flag" in date:
-                flag = date["param_flag"] or None
+            changes = dict((k, data[k]) for k in ("label", "description", "options_json", "default_value",
+                                                    "validation_regex") if k in data)
+            if "param_flag" in data:
+                flag = data["param_flag"] or None
                 if flag is not None and not _RE_PRM_FLAG.fullmatch(flag):
                     raise RepoViolation("Flag param_nomeado invalida", constraint="ck_tbsss_prm_flag")
                 changes["param_flag"] = flag
-            if "component_type" in date:
-                if date["component_type"] not in ("TEXT", "NUMBER", "DATE", "SELECT", "CHECKBOX"):
+            if "component_type" in data:
+                if data["component_type"] not in ("TEXT", "NUMBER", "DATE", "SELECT", "CHECKBOX"):
                     raise RepoViolation("Tipo de componente invalido", constraint="ck_tbsss_prm_ctype")
-                changes["component_type"] = date["component_type"]
+                changes["component_type"] = data["component_type"]
             for field, ck in (("sensitive", "ck_tbsss_prm_sens"), ("active", "ck_tbsss_prm_active")):
-                if field in date:
-                    if date[field] not in ("Y", "N"):
+                if field in data:
+                    if data[field] not in ("Y", "N"):
                         raise RepoViolation("Flag %s deve ser 'Y' ou 'N'" % field, constraint=ck)
-                    changes[field] = date[field]
+                    changes[field] = data[field]
 
             # Regras de dependencia (README §10) avaliadas sob o mesmo lock da alteracao.
             scripts = [self._store.scripts[sp["script_id"]] for sp in self._store.script_param.values()

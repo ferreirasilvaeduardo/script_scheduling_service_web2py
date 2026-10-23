@@ -258,8 +258,8 @@ class TestTwoAgentsConcurrency(_TwoAgentsBase):
         for tid in short:
             meta = tickets.output_get(tid)
             self.assertEqual((meta["agent_id"], meta["file_count"]), (owners[tid], 1))
-            date = tickets.output_read(tid, 0, meta["size_bytes"])
-            self.assertEqual(zipfile.ZipFile(io.BytesIO(date)).read("resultado.txt"), b"ticket %d\n" % tid)
+            data = tickets.output_read(tid, 0, meta["size_bytes"])
+            self.assertEqual(zipfile.ZipFile(io.BytesIO(data)).read("resultado.txt"), b"ticket %d\n" % tid)
         self.assertEqual(self._output_dirs(set(short)), [], "pastas de saida dos curtos removidas")
 
         # 4. Cancelamento pela web: o agente dono encerra o ticket longo.

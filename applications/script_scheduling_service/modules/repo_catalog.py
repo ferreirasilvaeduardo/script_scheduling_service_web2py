@@ -18,7 +18,7 @@ class RepoCatalog(object):
         """Retorna dict com dados do ambiente ou lanca RepoNotFound."""
         raise NotImplementedError
 
-    def environments_insert(self, date, audit=None, actor=None):
+    def environments_insert(self, data, audit=None, actor=None):
         """Insere novo ambiente e retorna dict com o registro criado.
 
         audit: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
@@ -26,7 +26,7 @@ class RepoCatalog(object):
         """
         raise NotImplementedError
 
-    def environments_update(self, id, date, expected=None, audit=None, actor=None):
+    def environments_update(self, id, data, expected=None, audit=None, actor=None):
         """Atualiza dados do environment e retorna o registro alterado. Nome e imutavel.
 
         expected: opcional, dict campo -> valor lido pelo chamador; o UPDATE e condicional a esses
@@ -47,11 +47,11 @@ class RepoCatalog(object):
         """Retorna dict com dados do script ou lanca RepoNotFound."""
         raise NotImplementedError
 
-    def scripts_insert(self, date, audit=None, actor=None):
+    def scripts_insert(self, data, audit=None, actor=None):
         """Insere novo script e retorna dict com o registro criado (auditoria opcional na mesma transacao)."""
         raise NotImplementedError
 
-    def scripts_update(self, id, date, expected=None, audit=None, actor=None):
+    def scripts_update(self, id, data, expected=None, audit=None, actor=None):
         """Atualiza o script e retorna o registro; esperado divergente lanca RepoConflict.
 
         Trocar param_type revalida os vinculos na mesma operacao: NENHUM com vinculo lanca
@@ -84,7 +84,7 @@ class RepoCatalog(object):
         """Retorna dict com dados do parametro ou lanca RepoNotFound."""
         raise NotImplementedError
 
-    def parameters_insert(self, date, audit=None, actor=None):
+    def parameters_insert(self, data, audit=None, actor=None):
         """Insere novo parametro e retorna dict com o registro criado.
 
         audit: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
@@ -92,7 +92,7 @@ class RepoCatalog(object):
         """
         raise NotImplementedError
 
-    def parameters_update(self, id, date, expected=None, audit=None, actor=None):
+    def parameters_update(self, id, data, expected=None, audit=None, actor=None):
         """Atualiza o parametro e retorna o registro, com as regras de dependencia na mesma operacao.
 
         Lanca RepoViolation com constraint de aplicacao, sem alterar nada, quando:

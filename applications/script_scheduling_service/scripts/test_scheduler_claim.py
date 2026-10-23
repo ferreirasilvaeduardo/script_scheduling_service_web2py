@@ -243,7 +243,7 @@ class _Db(object):
                 marked.append(tid)
         return marked
 
-    def register_agent(self, conn, date, process_exists):
+    def register_agent(self, conn, data, process_exists):
         return 1
 
     def stop_agent(self, conn, agent_id, hostname, pid, mode):
@@ -660,10 +660,10 @@ class TestPending(_Base):
     def test_falha_no_proc_depois_do_spawn_e_spawn_error(self):
         tid = self.db.ticket(self.db.script("sleep 300\n"))
         original = os_platform.write_state
-        def _grava(path, date):
+        def _grava(path, data):
             if path.endswith(executor.PROC):
                 raise OSError(28, "No space left on device")
-            return original(path, date)
+            return original(path, data)
         self.start_agent()
         with mock.patch.object(os_platform, "write_state", side_effect=_grava), \
                 self.assertLogs("sss_scheduler", "ERROR"):

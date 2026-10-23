@@ -112,17 +112,17 @@ class _Base(unittest.TestCase):
                 if a["entity"] == "tbsss_scripts" and a["id"] > self.aud_base]
 
     def _insert(self, svc=None, **changes):
-        date = {"name": "Novo script", "interpreter": "PYTHON3", "path_file": self._p("novo.py"),
+        data = {"name": "Novo script", "interpreter": "PYTHON3", "path_file": self._p("novo.py"),
                  "param_type": "POSITIONAL", "max_parallel_env": "2", "timeout_s": ""}
-        date.update(changes)
-        return (svc or self.svc).save(self.ctx["admin"], IP, None, date)
+        data.update(changes)
+        return (svc or self.svc).save(self.ctx["admin"], IP, None, data)
 
     def _edit(self, sid, **changes):
         f = self.svc.form(self.ctx["admin"], str(sid))
-        date = dict((c, "" if f[c] is None else str(f[c])) for c in scr_mod.EDITABLE_FIELDS)
-        date["version"] = f["version"]
-        date.update(changes)
-        return self.svc.save(self.ctx["admin"], IP, str(sid), date)
+        data = dict((c, "" if f[c] is None else str(f[c])) for c in scr_mod.EDITABLE_FIELDS)
+        data["version"] = f["version"]
+        data.update(changes)
+        return self.svc.save(self.ctx["admin"], IP, str(sid), data)
 
     def _links_json(self, sid):
         screen = self.svc.parameters(self.ctx["admin"], str(sid))
@@ -207,11 +207,11 @@ class TestRegistration(_Base):
         sid = self.catalog.scripts_insert({"name": "Gravavel", "interpreter": "PYTHON3",
                                              "path_file": self._p("gravavel.py"), "param_type": "POSITIONAL"}, actor="teste")["id"]
         f = svc.form(self.ctx["admin"], str(sid))
-        date = dict((c, "" if f[c] is None else str(f[c])) for c in scr_mod.EDITABLE_FIELDS)
-        _sid, errors, _a = svc.save(self.ctx["admin"], IP, str(sid), dict(date, version=f["version"], description="Nova"))
+        data = dict((c, "" if f[c] is None else str(f[c])) for c in scr_mod.EDITABLE_FIELDS)
+        _sid, errors, _a = svc.save(self.ctx["admin"], IP, str(sid), dict(data, version=f["version"], description="Nova"))
         self.assertEqual(errors, {})
         _sid, errors, _a = svc.save(self.ctx["admin"], IP, str(sid),
-                                     dict(date, version=svc.form(self.ctx["admin"], str(sid))["version"],
+                                     dict(data, version=svc.form(self.ctx["admin"], str(sid))["version"],
                                           interpreter="BASH"))
         self.assertEqual(errors, {})
         svc.toggle_active(self.ctx["admin"], IP, str(sid), svc.form(self.ctx["admin"], str(sid))["version"])

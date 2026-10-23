@@ -202,9 +202,9 @@ class AuthService(object):
 
     def _build_ctx(self, state):
         features, envs, scrs = self._matrix(state["profile_id"], state["perm_version"])
-        date = dict(state)
-        date.update(features=features, environments=envs, scripts=scrs)
-        return rbac.user_context(date)
+        data = dict(state)
+        data.update(features=features, environments=envs, scripts=scrs)
+        return rbac.user_context(data)
 
     def _matrix(self, profile_id, perm_version):
         # perm_version muda em toda alteracao de matriz/perfil (README §4.3.A): a chave invalida o cache.

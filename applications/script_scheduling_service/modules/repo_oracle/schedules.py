@@ -327,30 +327,30 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
     # Gravacoes
     # -------------------------------------------------------------------------
 
-    def insert(self, date, audit=None, actor=None, conn=None):
+    def insert(self, data, audit=None, actor=None, conn=None):
         """Insere com as CKs e FKs conferidas antes do INSERT e a auditoria na mesma transacao."""
         actor_clean = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
             now = db_conn.db_now(c)
             new = {
-                "name": date.get("name"),
-                "script_id": int(date["script_id"]),
-                "environment": date["environment"],
-                "user_id": int(date["user_id"]),
-                "priority": date.get("priority", 2),
-                "recurrence_type": date.get("recurrence_type"),
-                "cron_expression": date.get("cron_expression"),
-                "run_time": date.get("run_time"),
-                "week_days": date.get("week_days"),
-                "month_day": date.get("month_day"),
-                "params_json": date.get("params_json", "{}"),
-                "start_date": date.get("start_date") or now,
-                "end_date": date.get("end_date"),
-                "next_run_at": date.get("next_run_at") or now,
-                "last_run_at": date.get("last_run_at"),
-                "last_ticket_id": date.get("last_ticket_id"),
-                "pause_reason": date.get("pause_reason"),
-                "active": date.get("active", "Y"),
+                "name": data.get("name"),
+                "script_id": int(data["script_id"]),
+                "environment": data["environment"],
+                "user_id": int(data["user_id"]),
+                "priority": data.get("priority", 2),
+                "recurrence_type": data.get("recurrence_type"),
+                "cron_expression": data.get("cron_expression"),
+                "run_time": data.get("run_time"),
+                "week_days": data.get("week_days"),
+                "month_day": data.get("month_day"),
+                "params_json": data.get("params_json", "{}"),
+                "start_date": data.get("start_date") or now,
+                "end_date": data.get("end_date"),
+                "next_run_at": data.get("next_run_at") or now,
+                "last_run_at": data.get("last_run_at"),
+                "last_ticket_id": data.get("last_ticket_id"),
+                "pause_reason": data.get("pause_reason"),
+                "active": data.get("active", "Y"),
             }
             self._checar_cks(new)
             self._checar_fks(c, new)
@@ -366,7 +366,7 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
             self._auditar(c, audit, aid)
             return self.get(aid, conn=c)
 
-    def update(self, id, date, expected=None, audit=None, actor=None, conn=None):
+    def update(self, id, data, expected=None, audit=None, actor=None, conn=None):
         """Altera a regra (usuario_id do editor), condicional a 'esperado'; created_* nunca muda."""
         actor_clean = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
@@ -376,8 +376,8 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
             self._conferir_esperado(id, current, expected)
             result = dict(current)
             for k in _COLUMNS_UPDATABLE:
-                if k in date:
-                    result[k] = date[k]
+                if k in data:
+                    result[k] = data[k]
             # Validacao completa antes do UPDATE: um UPDATE rejeitado nao altera nenhuma coluna.
             self._checar_cks(result)
             self._checar_fks(c, result)

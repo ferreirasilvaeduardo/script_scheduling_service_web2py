@@ -64,8 +64,8 @@ class _Fixtures(object):
         return id
 
     def environment(self, label="A", **extra):
-        date = dict({"name": "TST_%s_%s" % (self.suf, label), "description": "Ambiente de teste"}, **extra)
-        env = self._r("catalog").environments_insert(date, actor=self.actor)
+        data = dict({"name": "TST_%s_%s" % (self.suf, label), "description": "Ambiente de teste"}, **extra)
+        env = self._r("catalog").environments_insert(data, actor=self.actor)
         self.note("environments", env["id"])
         return env
 
@@ -76,38 +76,38 @@ class _Fixtures(object):
         return prf
 
     def usuario(self, profile_id, label="u", **extra):
-        date = dict({"login": "tst.%s.%s" % (self.suf, label), "name": "Usuario de teste",
+        data = dict({"login": "tst.%s.%s" % (self.suf, label), "name": "Usuario de teste",
                       "password_hash": "pbkdf2_sha256$1$00$00", "profile_id": profile_id, "active": "Y"}, **extra)
-        u = self._r("users").insert(date, actor=self.actor)
+        u = self._r("users").insert(data, actor=self.actor)
         self.note("users", u["id"])
         return u
 
     def parameter(self, label="a", **extra):
-        date = dict({"code": "tst_%s_%s" % (self.suf, label), "label": "Parametro %s" % label,
+        data = dict({"code": "tst_%s_%s" % (self.suf, label), "label": "Parametro %s" % label,
                       "component_type": "TEXT", "param_flag": "--tst%s%s" % (self.suf, label)}, **extra)
-        prm = self._r("catalog").parameters_insert(date, actor=self.actor)
+        prm = self._r("catalog").parameters_insert(data, actor=self.actor)
         self.note("parameters", prm["id"])
         return prm
 
     def script(self, label="s", **extra):
-        date = dict({"name": "tst_scr_%s_%s" % (self.suf, label), "interpreter": "SH", "param_type": "NAMED",
+        data = dict({"name": "tst_scr_%s_%s" % (self.suf, label), "interpreter": "SH", "param_type": "NAMED",
                       "path_file": "/opt/tst/%s_%s.sh" % (self.suf, label)}, **extra)
-        scr = self._r("catalog").scripts_insert(date, actor=self.actor)
+        scr = self._r("catalog").scripts_insert(data, actor=self.actor)
         self.note("scripts", scr["id"])
         return scr
 
     def schedule(self, script_id, environment, user_id, label="r", **extra):
-        date = dict({"name": "TST %s %s" % (self.suf, label), "script_id": script_id, "environment": environment,
+        data = dict({"name": "TST %s %s" % (self.suf, label), "script_id": script_id, "environment": environment,
                       "user_id": user_id, "priority": 2, "recurrence_type": "DAILY",
                       "run_time": "03:00", "params_json": "{}",
                       "start_date": datetime.datetime(2026, 1, 15, 10, 0),
                       "next_run_at": datetime.datetime(2030, 1, 16, 3, 0)}, **extra)
-        rule = self._r("schedules").insert(date, actor=self.actor)
+        rule = self._r("schedules").insert(data, actor=self.actor)
         self.note("schedules", rule["id"])
         return rule
 
-    def ticket(self, answers=(), actor=None, **date):
-        tid = self._r("tickets").create(date, list(answers), actor=actor)
+    def ticket(self, answers=(), actor=None, **data):
+        tid = self._r("tickets").create(data, list(answers), actor=actor)
         return self.note("tickets", tid)
 
     def scenario(self):
@@ -163,17 +163,17 @@ class BaseRepoContractTest(object):
         c = self.m.scenario()
         tickets = self.obter_repo("tickets")
         rule = self.m.schedule(c["scr"]["id"], c["amb1"]["name"], c["u1"]["id"])
-        date = {"script_id": c["scr"]["id"], "environment": c["amb1"]["name"], "requested_by": c["login"],
+        data = {"script_id": c["scr"]["id"], "environment": c["amb1"]["name"], "requested_by": c["login"],
                  "schedule_id": rule["id"], "scheduled_at": datetime.datetime(2030, 1, 2)}
-        first_id = self.m.ticket(actor="teste", **date)
+        first_id = self.m.ticket(actor="teste", **data)
         first = tickets.get(first_id)
         with self.assertRaises(RepoViolation) as error:
-            self.m.ticket(actor="teste", **date)
+            self.m.ticket(actor="teste", **data)
         self.assertEqual(error.exception.constraint, self.cn("ix", "tickets", "occur"))
         self.assertEqual(tickets.get(first["id"]), first)
-        self.m.ticket(actor="teste", **dict(date, scheduled_at=datetime.datetime(2030, 1, 3)))
-        self.m.ticket(actor="teste", **dict(date, schedule_id=None))
-        self.m.ticket(actor="teste", **dict(date, schedule_id=None))
+        self.m.ticket(actor="teste", **dict(data, scheduled_at=datetime.datetime(2030, 1, 3)))
+        self.m.ticket(actor="teste", **dict(data, schedule_id=None))
+        self.m.ticket(actor="teste", **dict(data, schedule_id=None))
 
     def test_01_crud_ambientes(self):
         cat = self.obter_repo("catalog")
@@ -356,11 +356,11 @@ class BaseRepoContractTest(object):
         prm = cat.parameters_list(filters={"code": c["prm_a"]["code"]})["items"][0]
         self.assertEqual(prm["script_count"], len(cat.parameter_links(prm["id"])))
         self.assertEqual(prm["script_count"], 1)
-        for date, constraint in (({"component_type": "NUMBER"}, "sss_prm_tipo_vinculado"),
+        for data, constraint in (({"component_type": "NUMBER"}, "sss_prm_tipo_vinculado"),
                                   ({"param_flag": "--outra-flag"}, "sss_prm_flag_nomeado"),
                                   ({"active": "N"}, "sss_prm_vinculo_ativo")):
             with self.assertRaises(RepoViolation) as ctx:
-                cat.parameters_update(prm["id"], dict(date, label="Nao deve gravar"), actor="teste")
+                cat.parameters_update(prm["id"], dict(data, label="Nao deve gravar"), actor="teste")
             self.assertEqual(ctx.exception.constraint, constraint)
         self.assertEqual(cat.parameters_get(prm["id"])["label"], prm["label"])
         with self.assertRaises(RepoConflict):
@@ -748,9 +748,9 @@ class BaseLastAdminTest(object):
         rbac = self.obter_repo("rbac")
         admin = rbac.profiles_list(filters={"name": "ADMINISTRATOR"})["items"][0]
         version = admin["perm_version"]
-        for date in ({"active": "N"}, {"is_admin": "N"}):
+        for data in ({"active": "N"}, {"is_admin": "N"}):
             with self.assertRaises(RepoViolation) as ctx:
-                rbac.profiles_update(admin["id"], date,
+                rbac.profiles_update(admin["id"], data,
                                     audit={"actor": "admin", "ip": None, "action": "DEACTIVATE", "detail": "x"})
             self.assertEqual(ctx.exception.constraint, "sss_ultimo_admin")
         current = rbac.profiles_get(admin["id"])
@@ -760,9 +760,9 @@ class BaseLastAdminTest(object):
         usr = self.obter_repo("users")
         admin = usr.get_by_login("admin")
         query = usr.get_by_login("consulta")
-        for date in ({"active": "N"}, {"profile_id": query["profile_id"]}):
+        for data in ({"active": "N"}, {"profile_id": query["profile_id"]}):
             with self.assertRaises(RepoViolation) as ctx:
-                usr.update(admin["id"], date, audit={"actor": "x", "ip": None, "action": "UPDATE", "detail": "x"})
+                usr.update(admin["id"], data, audit={"actor": "x", "ip": None, "action": "UPDATE", "detail": "x"})
             self.assertEqual(ctx.exception.constraint, "sss_ultimo_admin")
         current = usr.get_by_id(admin["id"])
         self.assertEqual((current["active"], current["profile_id"]), ("Y", admin["profile_id"]))

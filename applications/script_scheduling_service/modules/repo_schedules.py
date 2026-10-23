@@ -22,7 +22,7 @@ class RepoSchedules(object):
         """Retorna dict com dados do agendamento ou lanca RepoNotFound."""
         raise NotImplementedError
 
-    def insert(self, date, audit=None, actor=None):
+    def insert(self, data, audit=None, actor=None):
         """Insere novo agendamento e retorna dict com o registro criado.
 
         Aplica as CKs da tabela (README §10, tabela 12) e grava `auditoria` (dict ator, ip, acao,
@@ -30,7 +30,7 @@ class RepoSchedules(object):
         """
         raise NotImplementedError
 
-    def update(self, id, date, expected=None, audit=None, actor=None):
+    def update(self, id, data, expected=None, audit=None, actor=None):
         """Atualiza agendamento (com user_id do editor) e retorna dict atualizado.
 
         UPDATE condicional aos valores lidos em `esperado` (RepoConflict se divergirem), CKs

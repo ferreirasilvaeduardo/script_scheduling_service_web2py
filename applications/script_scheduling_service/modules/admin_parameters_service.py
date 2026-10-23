@@ -220,15 +220,15 @@ class AdminParametersService(object):
 
     # ------------------------------------------------------------- validacao
 
-    def _config(self, ctx, date, current_value, errors):
+    def _config(self, ctx, data, current_value, errors):
         """Tipo, opcoes e regex validados (a configuracao que valida valores); atual e None na inclusao."""
         admin = ctx.get("is_admin") is True
-        kind = admin_crud.text(date.get("component_type"), 20)
+        kind = admin_crud.text(data.get("component_type"), 20)
         if kind not in COMPONENT_TYPES:
             errors["component_type"] = MSG_TYPE_INVALID
             kind = None
 
-        options = admin_crud.text(date.get("options_json"))
+        options = admin_crud.text(data.get("options_json"))
         if kind == "SELECT":
             try:
                 options = params_compiler.validate_registry_options(options)
@@ -241,13 +241,13 @@ class AdminParametersService(object):
 
         regex_current = (current_value or {}).get("validation_regex") or None
         if admin:
-            regex = admin_crud.text(date.get("validation_regex"))
+            regex = admin_crud.text(data.get("validation_regex"))
         else:
             # Nao admin nunca altera a regex: o valor enviado e ignorado e a gravada e preservada.
             regex = regex_current
             if regex_current and kind is not None and kind != (current_value or {}).get("component_type"):
                 errors["component_type"] = MSG_TYPE_WITH_REGEX
-            elif admin_crud.text(date.get("validation_regex")) not in (None, regex_current):
+            elif admin_crud.text(data.get("validation_regex")) not in (None, regex_current):
                 errors["validation_regex"] = MSG_REGEX_ADMIN_ONLY
         if regex is not None and kind not in (None, "TEXT"):
             if admin:
@@ -263,11 +263,11 @@ class AdminParametersService(object):
                     errors["validation_regex"] = exc.message
         return kind, options, regex
 
-    def _validate(self, ctx, date, current_value, errors):
+    def _validate(self, ctx, data, current_value, errors):
         """Registro candidato (campos editaveis + codigo na inclusao) e erros por campo."""
         reg = {}
         if current_value is None:
-            code = admin_crud.identifier(date.get("code"), errors, "code")
+            code = admin_crud.identifier(data.get("code"), errors, "code")
             if code is None:
                 errors["code"] = MSG_CODE_REQUIRED
             elif "code" in errors:
@@ -278,28 +278,28 @@ class AdminParametersService(object):
         else:
             reg["code"] = current_value["code"]
 
-        flag = admin_crud.text(date.get("param_flag"))
+        flag = admin_crud.text(data.get("param_flag"))
         if flag is not None:
             try:
                 params_compiler.validate_flag(flag)
             except ParamError as exc:
                 errors["param_flag"] = exc.message
-        label = admin_crud.free_text(date.get("label"), errors, "label")
+        label = admin_crud.free_text(data.get("label"), errors, "label")
         if label is None:
             errors["label"] = MSG_LABEL_REQUIRED
         elif "label" not in errors and len(label) > LABEL_MAX_LENGTH:
             errors["label"] = MSG_LABEL_LENGTH
-        description = admin_crud.free_text(date.get("description"), errors, "description")
+        description = admin_crud.free_text(data.get("description"), errors, "description")
         if description is not None and len(description) > DESCRIPTION_MAX_LENGTH:
             errors["description"] = MSG_DESCRIPTION_LENGTH
-        kind, options, regex = self._config(ctx, date, current_value, errors)
-        sensitive = "Y" if admin_crud.text(date.get("sensitive"), 1) == "Y" else "N"
+        kind, options, regex = self._config(ctx, data, current_value, errors)
+        sensitive = "Y" if admin_crud.text(data.get("sensitive"), 1) == "Y" else "N"
         reg.update(param_flag=flag, label=label, description=description, component_type=kind, options_json=options,
                    validation_regex=regex, sensitive=sensitive)
 
-        raw = date.get("default_value")
+        raw = data.get("default_value")
         raw = raw if isinstance(raw, str) and raw.strip() else None
-        if admin_crud.text(date.get("remove_default"), 1) == "Y":
+        if admin_crud.text(data.get("remove_default"), 1) == "Y":
             default = None
         elif raw is None and current_value is not None and (current_value.get("sensitive") == "Y" or sensitive == "Y"):
             # Padrao de sensivel e so de escrita: em branco mantem o gravado.
@@ -362,7 +362,7 @@ class AdminParametersService(object):
         self._log.warning("cadastro de parametro rejeitado pelo repositorio (login=%s constraint=%s)",
                           ctx.get("login"), exc.constraint, extra={"action": FEATURE})
 
-    def save(self, ctx, ip, parameter_id, date):
+    def save(self, ctx, ip, parameter_id, data):
         """Inclui ou altera um parametro. Retorna (id, erros). codigo e imutavel depois de criado.
 
         Lanca RepoNotFound e AccessDenied.
@@ -370,7 +370,7 @@ class AdminParametersService(object):
         admin_crud.require_feature(ctx, FEATURE)
         errors = {}
         if parameter_id in (None, ""):
-            reg = self._validate(ctx, date, None, errors)
+            reg = self._validate(ctx, data, None, errors)
             if errors:
                 return None, errors
             new = dict(reg, active="Y")
@@ -386,12 +386,12 @@ class AdminParametersService(object):
             return created["id"], {}
 
         current = self._get(parameter_id)
-        reg = self._validate(ctx, date, current, errors)
+        reg = self._validate(ctx, data, current, errors)
         if not errors:
             self._dependencies(current, reg, errors)
         if errors:
             return current["id"], errors
-        if admin_crud.text(date.get("version"), 64) != _version(current):
+        if admin_crud.text(data.get("version"), 64) != _version(current):
             return current["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
         changes = dict((c, reg[c]) for c in EDITABLE_FIELDS if c != "active")
         after = dict(current, **changes)
@@ -439,7 +439,7 @@ class AdminParametersService(object):
                        ctx.get("login"), current["code"], extra={"action": action})
         return changed
 
-    def test_regex(self, ctx, parameter_id, date, value):
+    def test_regex(self, ctx, parameter_id, data, value):
         """Valida 'value' contra a configuracao em edicao (nao salva). Retorna {ok, value | error}.
 
         Regex na configuracao exige perfil admin. Parametro sensivel devolve o valor mascarado.
@@ -448,22 +448,22 @@ class AdminParametersService(object):
         admin_crud.require_feature(ctx, FEATURE)
         current = self._get(parameter_id) if parameter_id not in (None, "") else None
         errors = {}
-        kind, options, regex = self._config(ctx, date, current, errors)
+        kind, options, regex = self._config(ctx, data, current, errors)
         if regex and ctx.get("is_admin") is not True:
             return {"ok": False, "error": MSG_REGEX_TEST_ADMIN}
         if errors:
             return {"ok": False, "error": u"Corrija a configuração antes de testar: %s" % sorted(errors.values())[0]}
         config = {"code": (current or {}).get("code") or "teste",
-                  "label": admin_crud.text(date.get("label")) or u"Valor de teste",
+                  "label": admin_crud.text(data.get("label")) or u"Valor de teste",
                   "component_type": kind, "options_json": options, "validation_regex": regex,
-                  "sensitive": "Y" if admin_crud.text(date.get("sensitive"), 1) == "Y" else "N"}
+                  "sensitive": "Y" if admin_crud.text(data.get("sensitive"), 1) == "Y" else "N"}
         if not isinstance(value, str):
             return {"ok": False, "error": u"Informe um valor para testar."}
         try:
             normalized = _default_text(params_compiler.validate_value(config, value))
         except ParamError as exc:
             return {"ok": False, "error": exc.message}
-        if admin_crud.text(date.get("sensitive"), 1) == "Y":
+        if admin_crud.text(data.get("sensitive"), 1) == "Y":
             normalized = MASK
         return {"ok": True, "value": normalized}
 
@@ -501,9 +501,9 @@ def form(ctx, parameter_id=None):
     return _service().form(ctx, parameter_id)
 
 
-def save(ctx, ip, parameter_id, date):
+def save(ctx, ip, parameter_id, data):
     """Inclusao ou alteracao de parametro (servico padrao)."""
-    return _service().save(ctx, ip, parameter_id, date)
+    return _service().save(ctx, ip, parameter_id, data)
 
 
 def toggle_active(ctx, ip, parameter_id, version):
@@ -511,6 +511,6 @@ def toggle_active(ctx, ip, parameter_id, version):
     return _service().toggle_active(ctx, ip, parameter_id, version)
 
 
-def test_regex(ctx, parameter_id, date, value):
+def test_regex(ctx, parameter_id, data, value):
     """Teste de valor contra a configuracao em edicao (servico padrao)."""
-    return _service().test_regex(ctx, parameter_id, date, value)
+    return _service().test_regex(ctx, parameter_id, data, value)

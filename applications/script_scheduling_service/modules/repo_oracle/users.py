@@ -237,21 +237,21 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
             finally:
                 cur.close()
 
-    def insert(self, date, audit=None, actor=None, conn=None):
+    def insert(self, data, audit=None, actor=None, conn=None):
         """Insere novo usuario com validacoes e auditoria na mesma transacao."""
         actor_clean = validate_record_actor(audit, actor)
-        login = date.get("login")
+        login = data.get("login")
         if not login or not isinstance(login, str) or not _RE_LOGIN.fullmatch(login):
             raise repo_errors.RepoViolation(
                 "Login invalido (esperado: 3-30 caracteres [a-z0-9._-])",
                 constraint=self.constraint_name("ck", "users", "login"),
             )
 
-        active = str(date.get("active", "Y")).strip().upper()
+        active = str(data.get("active", "Y")).strip().upper()
         if active not in ("Y", "N"):
             raise repo_errors.RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint=self.constraint_name("ck", "users", "active"))
 
-        attempts = int(date.get("failed_attempts", 0))
+        attempts = int(data.get("failed_attempts", 0))
         if attempts < 0:
             raise repo_errors.RepoViolation(
                 "Tentativas falhas nao podem ser negativas", constraint=self.constraint_name("ck", "users", "att")
@@ -265,7 +265,7 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                 if cur.fetchone():
                     raise repo_errors.RepoViolation("Login '%s' ja existe" % login, constraint=self.constraint_name("uk", "users", "login"))
 
-                profile_id = date.get("profile_id")
+                profile_id = data.get("profile_id")
                 cur.execute("SELECT id FROM " + self._tabela_perfis() + " WHERE id = :pid", {"pid": int(profile_id)})
                 if not cur.fetchone():
                     raise repo_errors.RepoViolation("Perfil ID %s nao existe" % profile_id, constraint=self.constraint_name("fk", "users", "prf"))
@@ -292,15 +292,15 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                     {
                         "id": uid,
                         "login": login,
-                        "name": date.get("name", ""),
-                        "password_hash": date.get("password_hash", "!"),
+                        "name": data.get("name", ""),
+                        "password_hash": data.get("password_hash", "!"),
                         "profile_id": int(profile_id),
                         "failed_attempts": attempts,
-                        "locked_until": date.get("locked_until"),
-                        "last_login_at": date.get("last_login_at"),
-                        "password_changed_at": date.get("password_changed_at"),
+                        "locked_until": data.get("locked_until"),
+                        "last_login_at": data.get("last_login_at"),
+                        "password_changed_at": data.get("password_changed_at"),
                         "active": active,
-                        "created_at": date.get("created_at"),
+                        "created_at": data.get("created_at"),
                         "actor": actor_clean,
                     },
                 )
@@ -310,7 +310,7 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
 
             return self.get_by_id(uid, conn=c)
 
-    def update(self, id, date, expected=None, audit=None, actor=None, conn=None):
+    def update(self, id, data, expected=None, audit=None, actor=None, conn=None):
         """Altera usuario (login imutavel) com protecao do ultimo admin (README §4.3.B)."""
         actor_clean = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
@@ -342,11 +342,11 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                     elif val_current != expected_val:
                         raise repo_errors.RepoConflict("Usuario ID %s alterado por outra operacao (%s)" % (id, field))
 
-                new_login = date.get("login")
+                new_login = data.get("login")
                 if new_login is not None and new_login != current["login"]:
                     raise repo_errors.RepoViolation("Login de usuario e imutavel", constraint=self.trigger_name("users", "bu"))
 
-                new_profile = date.get("profile_id")
+                new_profile = data.get("profile_id")
                 profile_changed = False
                 p_new_active = p_current_active
                 p_new_is_admin = p_current_is_admin
@@ -364,7 +364,7 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                         p_new_is_admin = (row_p[1] or "").strip()
                         profile_changed = True
 
-                new_active = date.get("active")
+                new_active = data.get("active")
                 active_changed = False
                 if new_active is not None:
                     new_active = str(new_active).strip().upper()
@@ -409,31 +409,31 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                 ]
                 params = {
                     "id": int(id),
-                    "name": date.get("name", current["name"]),
+                    "name": data.get("name", current["name"]),
                     "profile_id": new_profile if new_profile is not None else current["profile_id"],
                     "active": new_active if new_active is not None else current["active"],
                     "actor": actor_clean,
                 }
-                if "password_hash" in date:
+                if "password_hash" in data:
                     sets.append("password_hash = :password_hash")
-                    params["password_hash"] = date["password_hash"]
-                if "failed_attempts" in date:
-                    attempts = int(date["failed_attempts"])
+                    params["password_hash"] = data["password_hash"]
+                if "failed_attempts" in data:
+                    attempts = int(data["failed_attempts"])
                     if attempts < 0:
                         raise repo_errors.RepoViolation(
                             "Tentativas falhas nao podem ser negativas", constraint=self.constraint_name("ck", "users", "att")
                         )
                     sets.append("failed_attempts = :failed_attempts")
                     params["failed_attempts"] = attempts
-                if "locked_until" in date:
+                if "locked_until" in data:
                     sets.append("locked_until = :locked_until")
-                    params["locked_until"] = date["locked_until"]
-                if "last_login_at" in date:
+                    params["locked_until"] = data["locked_until"]
+                if "last_login_at" in data:
                     sets.append("last_login_at = :last_login_at")
-                    params["last_login_at"] = date["last_login_at"]
-                if "password_changed_at" in date:
+                    params["last_login_at"] = data["last_login_at"]
+                if "password_changed_at" in data:
                     sets.append("password_changed_at = :password_changed_at")
-                    params["password_changed_at"] = date["password_changed_at"]
+                    params["password_changed_at"] = data["password_changed_at"]
 
                 if profile_changed or active_changed:
                     sets.append("session_epoch = session_epoch + 1")

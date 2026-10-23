@@ -688,9 +688,9 @@ class TestTicketOutput(_BaseTicket):
         import zipfile
         with mock.patch.object(ticket_service, "OUTPUT_SLICE_BYTES", 100):
             tid, size, parts = self.svc.output_chunks(self.ctx["consulta"], "17")
-            date = b"".join(parts)
-        self.assertEqual((tid, len(date)), (17, size))
-        self.assertEqual(sorted(zipfile.ZipFile(io.BytesIO(date)).namelist()),
+            data = b"".join(parts)
+        self.assertEqual((tid, len(data)), (17, size))
+        self.assertEqual(sorted(zipfile.ZipFile(io.BytesIO(data)).namelist()),
                          ["rejeitados/linhas_rejeitadas.csv", "resumo.txt"])
         for login, target in (("op.hml", "17"), ("admin", "29"), ("admin", "30"), ("admin", "18"),
                             ("admin", "abc"), ("admin", "99999")):

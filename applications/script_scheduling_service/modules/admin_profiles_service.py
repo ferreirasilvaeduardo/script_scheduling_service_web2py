@@ -154,16 +154,16 @@ class AdminProfilesService(object):
             "record": ui_helpers.record_info(profile, ctx),
         }
 
-    def _validate(self, date, errors):
-        name = admin_crud.identifier(date.get("name"), errors, "name")
+    def _validate(self, data, errors):
+        name = admin_crud.identifier(data.get("name"), errors, "name")
         if name is None:
             errors["name"] = MSG_NAME_REQUIRED
         elif "name" not in errors and not _RE_NAME.fullmatch(name):
             errors["name"] = MSG_NAME_INVALID
-        description = admin_crud.free_text(date.get("description"), errors, "description")
+        description = admin_crud.free_text(data.get("description"), errors, "description")
         if description is not None and len(description) > DESCRIPTION_MAX_LENGTH:
             errors["description"] = MSG_DESCRIPTION_LENGTH
-        is_admin = "Y" if admin_crud.text(date.get("is_admin"), 1) == "Y" else "N"
+        is_admin = "Y" if admin_crud.text(data.get("is_admin"), 1) == "Y" else "N"
         return name, description, is_admin
 
     def _violation(self, ctx, exc, errors):
@@ -182,7 +182,7 @@ class AdminProfilesService(object):
         """Perfil que so admin altera (CR-008, E1): perfil de administrador ou o proprio perfil."""
         return profile["is_admin"] == "Y" or ctx.get("profile_id") == profile["id"]
 
-    def save(self, ctx, ip, profile_id, date):
+    def save(self, ctx, ip, profile_id, data):
         """Inclui (profile_id vazio) ou altera um perfil: name, description, is_admin ('Y' marcado).
 
         Retorna (id, erros). Remover is_admin do ultimo perfil admin ativo gera erro geral.
@@ -191,7 +191,7 @@ class AdminProfilesService(object):
         admin_crud.require_feature(ctx, FEATURE)
         errors = {}
         if profile_id in (None, ""):
-            name, description, is_admin = self._validate(date, errors)
+            name, description, is_admin = self._validate(data, errors)
             if errors:
                 return None, errors
             try:
@@ -211,10 +211,10 @@ class AdminProfilesService(object):
             return created["id"], {}
 
         current = self._get(profile_id)
-        name, description, is_admin = self._validate(date, errors)
+        name, description, is_admin = self._validate(data, errors)
         if errors:
             return current["id"], errors
-        if admin_crud.text(date.get("version"), 64) != admin_crud.version(current, EDITABLE_FIELDS):
+        if admin_crud.text(data.get("version"), 64) != admin_crud.version(current, EDITABLE_FIELDS):
             errors[GENERAL_FIELD] = admin_crud.MSG_CONFLICT
             return current["id"], errors
         try:
@@ -517,9 +517,9 @@ def form(ctx, profile_id=None):
     return _service().form(ctx, profile_id)
 
 
-def save(ctx, ip, profile_id, date):
+def save(ctx, ip, profile_id, data):
     """Inclusao ou alteracao de perfil (servico padrao)."""
-    return _service().save(ctx, ip, profile_id, date)
+    return _service().save(ctx, ip, profile_id, data)
 
 
 def toggle_active(ctx, ip, profile_id, version):

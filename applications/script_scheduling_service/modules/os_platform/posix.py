@@ -247,13 +247,13 @@ def process_exists(pid):
 # Estado local, diretorios e espaco
 # -----------------------------------------------------------------------------
 
-def write_state(path, date):
+def write_state(path, data):
     """JSON em arquivo temporario + rename, 0600 (.sss_spawn, .sss_proc, .sss_result; CR-008, R-01)."""
     tmp = "%s.tmp.%d" % (path, os.getpid())
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(date, f, sort_keys=True)
+            json.dump(data, f, sort_keys=True)
             f.flush()
             os.fsync(f.fileno())
         os.chmod(tmp, 0o600)

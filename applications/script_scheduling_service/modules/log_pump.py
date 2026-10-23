@@ -108,9 +108,9 @@ class Pump(object):
         # open padrao do Python no POSIX nao bloqueia a escrita do filho (O_RDONLY, sem trava).
         with open(self.log_path, "rb") as f:
             f.seek(self.offset_bytes)
-            date = f.read(maximum) if maximum is not None else f.read()
-        self.offset_bytes += len(date)
-        return date
+            data = f.read(maximum) if maximum is not None else f.read()
+        self.offset_bytes += len(data)
+        return data
 
     def collect(self, max_bytes_leitura=DEFAULT_READ):
         """Le ate max_bytes_leitura bytes novos, decodifica, mascara e enfileira. Devolve o texto seguro
@@ -131,13 +131,13 @@ class Pump(object):
         queued = []
         while not self.truncated:
             try:
-                date = self._read(DEFAULT_READ)
+                data = self._read(DEFAULT_READ)
             except OSError as e:
                 self._warn_read(e)
                 break
-            if not date:
+            if not data:
                 break
-            send, _truncated = self.apply_db_cap(self._stream.feed(self._decoder.decode(date)))
+            send, _truncated = self.apply_db_cap(self._stream.feed(self._decoder.decode(data)))
             queued.append(send)
         rest = self._decoder.decode(b"", final=True)
         send, _truncated = self.apply_db_cap(self._stream.feed(rest) + self._stream.finalize())

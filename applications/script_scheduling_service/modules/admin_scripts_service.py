@@ -198,14 +198,14 @@ class AdminScriptsService(object):
                         max_parallel_env=1, timeout_s="", active="Y", version="", active_schedules=0,
                         record=None)
         s = self._get(script_id)
-        date = dict((c, s.get(c)) for c in EDITABLE_FIELDS)
+        data = dict((c, s.get(c)) for c in EDITABLE_FIELDS)
         for c in ("description", "script_group", "category", "stage"):
-            date[c] = admin_crud.normalize(date[c]) or ""
-        date["timeout_s"] = "" if s.get("timeout_s") is None else s["timeout_s"]
-        date.update(common, id=s["id"], version=admin_crud.version(s, EDITABLE_FIELDS),
+            data[c] = admin_crud.normalize(data[c]) or ""
+        data["timeout_s"] = "" if s.get("timeout_s") is None else s["timeout_s"]
+        data.update(common, id=s["id"], version=admin_crud.version(s, EDITABLE_FIELDS),
                      active_schedules=self._active_schedules(script_id=s["id"]),
                      record=ui_helpers.record_info(s, ctx), readiness=self.readiness(ctx, s))
-        return date
+        return data
 
     def readiness(self, ctx, script):
         """Quadro "Quem pode rodar" (CR-017d): se o script ja roda, para quais perfis e o que falta.
@@ -239,8 +239,8 @@ class AdminScriptsService(object):
 
     # ------------------------------------------------------------- validacao
 
-    def _field_text(self, date, field, errors, required_flag=False):
-        value = admin_crud.text(date.get(field))
+    def _field_text(self, data, field, errors, required_flag=False):
+        value = admin_crud.text(data.get(field))
         if value is None:
             if required_flag:
                 errors[field] = MSG_NAME_REQUIRED if field == "name" else MSG_PATH_REQUIRED
@@ -252,8 +252,8 @@ class AdminScriptsService(object):
         return value
 
     @staticmethod
-    def _integer(date, field, minimum, maximum, errors, message, optional=False):
-        value = admin_crud.text(date.get(field), 10)
+    def _integer(data, field, minimum, maximum, errors, message, optional=False):
+        value = admin_crud.text(data.get(field), 10)
         if value is None and optional:
             return None
         if value is None or not _RE_INTEGER.fullmatch(value) or not minimum <= int(value) <= maximum:
@@ -261,19 +261,19 @@ class AdminScriptsService(object):
             return None
         return int(value)
 
-    def _validate(self, date, errors, current_value=None):
+    def _validate(self, data, errors, current_value=None):
         reg = {
-            "name": self._field_text(date, "name", errors, required_flag=True),
-            "description": self._field_text(date, "description", errors),
-            "script_group": self._field_text(date, "script_group", errors),
-            "category": self._field_text(date, "category", errors),
-            "stage": self._field_text(date, "stage", errors),
-            "path_file": self._field_text(date, "path_file", errors, required_flag=True),
-            "max_parallel_env": self._integer(date, "max_parallel_env", 1, 999, errors, MSG_PARALLEL),
-            "timeout_s": self._integer(date, "timeout_s", 1, MAX_TIMEOUT, errors, MSG_TIMEOUT, optional=True),
+            "name": self._field_text(data, "name", errors, required_flag=True),
+            "description": self._field_text(data, "description", errors),
+            "script_group": self._field_text(data, "script_group", errors),
+            "category": self._field_text(data, "category", errors),
+            "stage": self._field_text(data, "stage", errors),
+            "path_file": self._field_text(data, "path_file", errors, required_flag=True),
+            "max_parallel_env": self._integer(data, "max_parallel_env", 1, 999, errors, MSG_PARALLEL),
+            "timeout_s": self._integer(data, "timeout_s", 1, MAX_TIMEOUT, errors, MSG_TIMEOUT, optional=True),
         }
         # Valor exato da allowlist: um HTML adulterado nunca grava outro interpretador.
-        cmd = date.get("interpreter")
+        cmd = data.get("interpreter")
         try:
             path_guard.validate_interpreter(cmd)
         except PathGuardError as exc:
@@ -282,7 +282,7 @@ class AdminScriptsService(object):
         # D7 (README §8.5): a pasta de log do script nao pode ser a dos logs da aplicacao.
         if reg["name"] and "name" not in errors and log_paths.is_reserved_name(reg["name"]):
             errors["name"] = MSG_NAME_RESERVED
-        kind = admin_crud.text(date.get("param_type"), 15)
+        kind = admin_crud.text(data.get("param_type"), 15)
         if kind not in PARAM_TYPES:
             errors["param_type"] = MSG_PARAM_TYPE
         reg["param_type"] = kind
@@ -320,12 +320,12 @@ class AdminScriptsService(object):
 
     # ----------------------------------------------------------------- escrita
 
-    def save(self, ctx, ip, script_id, date):
+    def save(self, ctx, ip, script_id, data):
         """Inclui ou altera um script. Retorna (id, erros, aviso). Lanca RepoNotFound e AccessDenied."""
         admin_crud.require_feature(ctx, FEATURE)
         errors = {}
         current = None if script_id in (None, "") else self._get(script_id)
-        reg = self._validate(date, errors, current)
+        reg = self._validate(data, errors, current)
         self.validate_path(reg["path_file"], errors)
         warning = None
         if script_id in (None, ""):
@@ -347,7 +347,7 @@ class AdminScriptsService(object):
             self._param_type_precheck(current["id"], reg["param_type"], errors)
         if errors:
             return current["id"], errors, None
-        if admin_crud.text(date.get("version"), 64) != admin_crud.version(current, EDITABLE_FIELDS):
+        if admin_crud.text(data.get("version"), 64) != admin_crud.version(current, EDITABLE_FIELDS):
             return current["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}, None
         changes = dict((c, reg[c]) for c in EDITABLE_FIELDS if c != "active")
 
@@ -678,9 +678,9 @@ def form(ctx, script_id=None):
     return _service().form(ctx, script_id)
 
 
-def save(ctx, ip, script_id, date):
+def save(ctx, ip, script_id, data):
     """Inclusao ou alteracao de script (servico padrao)."""
-    return _service().save(ctx, ip, script_id, date)
+    return _service().save(ctx, ip, script_id, data)
 
 
 def toggle_active(ctx, ip, script_id, version):

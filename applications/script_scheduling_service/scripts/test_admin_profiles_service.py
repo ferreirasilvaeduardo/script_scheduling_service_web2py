@@ -65,10 +65,10 @@ class _Base(unittest.TestCase):
         return self.svc.form(self.ctx[actor], str(profile_id))
 
     def _data(self, form, **changes):
-        date = {"name": form["name"], "description": form["description"], "is_admin": form["is_admin"],
+        data = {"name": form["name"], "description": form["description"], "is_admin": form["is_admin"],
                  "version": form["version"]}
-        date.update(changes)
-        return date
+        data.update(changes)
+        return data
 
     def _new_admin_with_user(self):
         new_id, errors = self.svc.save(self.ctx["admin"], IP, None, {"name": "ADMIN_RESERVA", "is_admin": "Y"})

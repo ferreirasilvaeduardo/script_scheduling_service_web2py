@@ -186,18 +186,18 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
             finally:
                 cur.close()
 
-    def profiles_insert(self, date, audit=None, actor=None, conn=None):
+    def profiles_insert(self, data, audit=None, actor=None, conn=None):
         """Insere novo perfil com validacoes de UK e CKs e auditoria na mesma transacao."""
         actor_clean = validate_record_actor(audit, actor)
-        name = date.get("name")
+        name = data.get("name")
         if not name or not str(name).strip():
             raise repo_errors.RepoViolation("Nome de perfil e obrigatorio")
 
-        is_admin = str(date.get("is_admin", "N")).strip().upper()
+        is_admin = str(data.get("is_admin", "N")).strip().upper()
         if is_admin not in ("Y", "N"):
             raise repo_errors.RepoViolation("Flag is_admin deve ser 'Y' ou 'N'", constraint=self.constraint_name("ck", "profiles", "adm"))
 
-        active = str(date.get("active", "Y")).strip().upper()
+        active = str(data.get("active", "Y")).strip().upper()
         if active not in ("Y", "N"):
             raise repo_errors.RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint=self.constraint_name("ck", "profiles", "active"))
 
@@ -212,7 +212,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                     raise repo_errors.RepoViolation("Perfil com nome '%s' ja existe" % name, constraint=self.constraint_name("uk", "profiles", "name"))
 
                 pid = db_conn.next_id(c, self._seq_perfis())
-                perm_version = int(date.get("perm_version", 1))
+                perm_version = int(data.get("perm_version", 1))
 
                 sql_ins = (
                     "INSERT INTO " + self._tabela_perfis() + " "
@@ -226,7 +226,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                     {
                         "id": pid,
                         "name": name.strip(),
-                        "description": date.get("description", ""),
+                        "description": data.get("description", ""),
                         "is_admin": is_admin,
                         "perm_version": perm_version,
                         "active": active,
@@ -239,7 +239,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
 
             return self.profiles_get(pid, conn=c)
 
-    def profiles_update(self, id, date, expected=None, audit=None, actor=None, conn=None):
+    def profiles_update(self, id, data, expected=None, audit=None, actor=None, conn=None):
         """Altera perfil e incrementa perm_version com protecao do ultimo admin (§4.3.B)."""
         actor_clean = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
@@ -265,7 +265,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                     elif val_current != expected_val:
                         raise repo_errors.RepoConflict("Perfil ID %s alterado por outra operacao (%s)" % (id, field))
 
-                new_name = date.get("name")
+                new_name = data.get("name")
                 if new_name and new_name.strip().upper() != current["name"].upper():
                     cur.execute(
                         "SELECT id FROM " + self._tabela_perfis() + " WHERE UPPER(name) = :n AND id != :id",
@@ -274,13 +274,13 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                     if cur.fetchone():
                         raise repo_errors.RepoViolation("Perfil com nome '%s' ja existe" % new_name, constraint=self.constraint_name("uk", "profiles", "name"))
 
-                new_is_admin = date.get("is_admin")
+                new_is_admin = data.get("is_admin")
                 if new_is_admin is not None:
                     new_is_admin = str(new_is_admin).strip().upper()
                     if new_is_admin not in ("Y", "N"):
                         raise repo_errors.RepoViolation("Flag is_admin deve ser 'Y' ou 'N'", constraint=self.constraint_name("ck", "profiles", "adm"))
 
-                new_active = date.get("active")
+                new_active = data.get("active")
                 if new_active is not None:
                     new_active = str(new_active).strip().upper()
                     if new_active not in ("Y", "N"):
@@ -322,7 +322,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                 params = {
                     "id": int(id),
                     "name": new_name.strip() if new_name else current["name"],
-                    "description": date.get("description", current["description"]),
+                    "description": data.get("description", current["description"]),
                     "is_admin": is_admin_effective,
                     "active": active_effective,
                     "actor": actor_clean,

@@ -65,12 +65,12 @@ class _Base(unittest.TestCase):
 class TestAdminOnlyByAdmin(_Base):
 
     def test_gestor_nao_cria_usuario_admin(self):
-        date = {"login": "novo.admin", "name": "Novo", "profile_id": str(P_ADMIN),
+        data = {"login": "novo.admin", "name": "Novo", "profile_id": str(P_ADMIN),
                  "password": NEW_PASSWORD, "confirmation": NEW_PASSWORD}
-        uid, errors = self.svc_usr.save(self.ctx["gestor"], IP, None, date)
+        uid, errors = self.svc_usr.save(self.ctx["gestor"], IP, None, data)
         self.assertEqual((uid, errors), (None, {"profile_id": usr_mod.MSG_ADMIN_ONLY}))
         self.assertIsNone(self.users.get_by_login("novo.admin"))
-        uid, errors = self.svc_usr.save(self.ctx["gestor"], IP, None, dict(date, profile_id=str(P_CONSULTA)))
+        uid, errors = self.svc_usr.save(self.ctx["gestor"], IP, None, dict(data, profile_id=str(P_CONSULTA)))
         self.assertEqual(errors, {})
 
     def test_gestor_nao_se_promove_nem_altera_admin(self):

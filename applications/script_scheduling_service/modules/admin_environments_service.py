@@ -136,16 +136,16 @@ class AdminEnvironmentsService(object):
             "record": ui_helpers.record_info(env, ctx),
         }
 
-    def _validate(self, date, errors):
-        description = admin_crud.free_text(date.get("description"), errors, "description")
+    def _validate(self, data, errors):
+        description = admin_crud.free_text(data.get("description"), errors, "description")
         if description is not None and len(description) > DESCRIPTION_MAX_LENGTH:
             errors["description"] = MSG_DESCRIPTION_LENGTH
-        connection = admin_crud.text(date.get("connection"))
+        connection = admin_crud.text(data.get("connection"))
         error_connection = validate_connection(connection)
         if error_connection:
             errors["connection"] = error_connection
         # Caixa de marcar: so "Y" liga; qualquer outro valor (ou ausente) e "N" (CR-017).
-        production = "Y" if admin_crud.text(date.get("is_production"), 1) == "Y" else "N"
+        production = "Y" if admin_crud.text(data.get("is_production"), 1) == "Y" else "N"
         return description, connection, production
 
     def _violation(self, ctx, exc, errors):
@@ -154,7 +154,7 @@ class AdminEnvironmentsService(object):
         self._log.warning("cadastro de ambiente rejeitado pelo repositorio (login=%s constraint=%s)",
                           ctx.get("login"), exc.constraint, extra={"action": "MANAGE_ENVIRONMENTS"})
 
-    def save(self, ctx, ip, environment_id, date):
+    def save(self, ctx, ip, environment_id, data):
         """Inclui (environment_id vazio) ou altera um ambiente.
 
         dados: nome, descricao, conexao, is_production ('Y' marcado) e versao (edicao). Na edicao o nome enviado e ignorado.
@@ -164,7 +164,7 @@ class AdminEnvironmentsService(object):
         admin_crud.require_feature(ctx, FEATURE)
         errors = {}
         if environment_id in (None, ""):
-            name = admin_crud.identifier(date.get("name"), errors, "name")
+            name = admin_crud.identifier(data.get("name"), errors, "name")
             if name is None:
                 errors["name"] = MSG_NAME_REQUIRED
             elif "name" in errors:
@@ -174,7 +174,7 @@ class AdminEnvironmentsService(object):
             elif log_paths.is_reserved_environment(name):
                 # CR-009: a pasta de log 'internal' e dos logs sem ambiente (aplicacao).
                 errors["name"] = MSG_NAME_RESERVED
-            description, connection, production = self._validate(date, errors)
+            description, connection, production = self._validate(data, errors)
             if errors:
                 return None, errors
             new = {"name": name, "description": description, "connection": connection,
@@ -191,10 +191,10 @@ class AdminEnvironmentsService(object):
             return created["id"], {}
 
         current = self._get(environment_id)
-        description, connection, production = self._validate(date, errors)
+        description, connection, production = self._validate(data, errors)
         if errors:
             return current["id"], errors
-        if admin_crud.text(date.get("version"), 64) != admin_crud.version(current, EDITABLE_FIELDS):
+        if admin_crud.text(data.get("version"), 64) != admin_crud.version(current, EDITABLE_FIELDS):
             errors[GENERAL_FIELD] = admin_crud.MSG_CONFLICT
             return current["id"], errors
         after = dict(current, description=description, connection=connection, is_production=production)
@@ -271,9 +271,9 @@ def form(ctx, environment_id=None):
     return _service().form(ctx, environment_id)
 
 
-def save(ctx, ip, environment_id, date):
+def save(ctx, ip, environment_id, data):
     """Inclusao ou alteracao de ambiente (servico padrao)."""
-    return _service().save(ctx, ip, environment_id, date)
+    return _service().save(ctx, ip, environment_id, data)
 
 
 def toggle_active(ctx, ip, environment_id, version):

@@ -97,8 +97,8 @@ class _Repo(object):
         self.environments = None
         self.registro = None
 
-    def register_agent(self, conn, date, process_exists):
-        self.registro = date
+    def register_agent(self, conn, data, process_exists):
+        self.registro = data
         if self.duplicated:
             raise DuplicateAgent("agent_id ativo em outro-host")
         return 42
@@ -360,8 +360,8 @@ class TestStartupCheck(_Base):
 
     def _dir(self, tid, **states):
         dir_value = executor.prepare_directory(self.work, tid)
-        for name, date in states.items():
-            os_platform.write_state(os.path.join(dir_value, "." + name), date)
+        for name, data in states.items():
+            os_platform.write_state(os.path.join(dir_value, "." + name), data)
         return dir_value
 
     def _group(self, command="sleep 300 & sleep 300"):

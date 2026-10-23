@@ -459,23 +459,23 @@ class SchedulesService(object):
         return frozenset(v["code"] for v in self._catalog.script_params_get(script_id)
                          if v.get("sensitive") == "Y")
 
-    def _rule(self, date, now, errors):
+    def _rule(self, data, now, errors):
         """Campos de recorrencia validados (README §7.2); so os do tipo escolhido sao mantidos."""
-        kind = admin_crud.text(date.get("recurrence_type"), 10)
+        kind = admin_crud.text(data.get("recurrence_type"), 10)
         rule = {"recurrence_type": kind, "cron_expression": None, "run_time": None,
                  "week_days": None, "month_day": None}
         if kind not in TYPE_LABELS:
             errors["recurrence_type"] = MSG_TYPE
         if kind in ("DAILY", "WEEKLY", "MONTHLY"):
-            rule["run_time"] = admin_crud.text(date.get("run_time"), 5)
+            rule["run_time"] = admin_crud.text(data.get("run_time"), 5)
         if kind == "WEEKLY":
-            rule["week_days"] = _weekdays(date.get("week_days"))
+            rule["week_days"] = _weekdays(data.get("week_days"))
         if kind == "MONTHLY":
-            rule["month_day"] = admin_crud.text(date.get("month_day"), 2)
+            rule["month_day"] = admin_crud.text(data.get("month_day"), 2)
         if kind == "CRON":
-            rule["cron_expression"] = admin_crud.text(date.get("cron_expression"), 100)
+            rule["cron_expression"] = admin_crud.text(data.get("cron_expression"), 100)
 
-        start, invalid = _date(date.get("start_date"))
+        start, invalid = _date(data.get("start_date"))
         if invalid:
             errors["start_date"] = MSG_DATE_INVALID
         elif start is None:
@@ -484,7 +484,7 @@ class SchedulesService(object):
             else:
                 # Decisao D3 do F5.2: sem inicio informado, a regra vale a partir de agora.
                 start = recurrence.truncate_seconds(now)
-        end, invalid = _date(date.get("end_date"))
+        end, invalid = _date(data.get("end_date"))
         if kind == "ONCE":
             # data_fim nao se aplica a UNICA (README §7.2): ignorada e gravada nula.
             end, invalid = None, False
@@ -697,40 +697,40 @@ class SchedulesService(object):
         admin_crud.require_feature(ctx, FEATURE)
         errors = errors or {}
         submitted = submitted or {}
-        date = {"editing": False, "step": 1, "groups": [], "script": None, "environments": [], "form": None,
+        data = {"editing": False, "step": 1, "groups": [], "script": None, "environments": [], "form": None,
                  "rule": None, "errors": errors, "single_environment": False}
         current = None
         if schedule_id not in (None, ""):
             current = self._get_visible(ctx, schedule_id)
             script_id, environment = current["script_id"], current["environment"]
-            date["editing"] = True
+            data["editing"] = True
         elif not script_id:
-            date["groups"] = self._trigger_service.available_scripts(ctx)
-            return date
+            data["groups"] = self._trigger_service.available_scripts(ctx)
+            return data
         try:
-            if not date["editing"]:
+            if not data["editing"]:
                 script, environments = self._trigger_service.available_environments(ctx, script_id)
-                date.update(step=2, script=script, environments=environments,
+                data.update(step=2, script=script, environments=environments,
                             single_environment=len(environments) == 1)
                 if not environment and len(environments) == 1:
                     # Um ambiente so: vai direto a recorrencia e ao questionario, como no disparo (CR-017c).
                     environment = environments[0]["name"]
                 if not environment:
-                    return date
+                    return data
             previous = _parameters(current) if current else {}
             if values is None:
                 values = previous
             form = self._trigger_service.prepare_form(ctx, script_id, environment, values, errors)
         except DisparoNegado as exc:
-            if date["editing"]:
+            if data["editing"]:
                 self._log.warning("edicao de agendamento negada (login=%s agendamento=%s reason=%s)",
                                   ctx.get("login"), current["id"], exc.reason, extra={"action": FEATURE})
                 raise OperationDenied(MSG_NO_PERMISSION)
             raise
         for field in form["fields"]:
             field["kept"] = field["sensitive"] and field["code"] in previous
-        date.update(step=3, form=form, rule=self._form_rule(ctx, current, submitted))
-        return date
+        data.update(step=3, form=form, rule=self._form_rule(ctx, current, submitted))
+        return data
 
     def _form_rule(self, ctx, current_value, submitted):
         base = current_value or {"recurrence_type": "DAILY", "priority": DEFAULT_PRIORITY}
@@ -772,7 +772,7 @@ class SchedulesService(object):
             rule["week_days"] = [int(d) for d in text.split(",") if d.isdigit()]
         return rule
 
-    def preview(self, ctx, date):
+    def preview(self, ctx, data):
         """Proximas PREVIEW_COUNT execucoes e a descricao da regra, sem gravar.
 
         Retorna {dates: [texto], description: texto | None, errors: {campo: mensagem}}.
@@ -780,7 +780,7 @@ class SchedulesService(object):
         admin_crud.require_feature(ctx, FEATURE)
         errors = collections.OrderedDict()
         now = self._now()
-        rule = self._rule(date or {}, now, errors)
+        rule = self._rule(data or {}, now, errors)
         if errors:
             return {"dates": [], "description": None, "errors": dict(errors)}
         try:
@@ -793,7 +793,7 @@ class SchedulesService(object):
 
     # ----------------------------------------------------------- gravacao
 
-    def save(self, ctx, ip, date):
+    def save(self, ctx, ip, data):
         """Inclui (sem 'id') ou altera uma regra. Retorna (id | None, erros_por_campo).
 
         date (os dados do formulario): id, version, name, script_id e environment (so na inclusao),
@@ -803,26 +803,26 @@ class SchedulesService(object):
         """
         admin_crud.require_feature(ctx, FEATURE)
         current = None
-        if date.get("id") not in (None, ""):
-            current = self._get_visible(ctx, date.get("id"))
+        if data.get("id") not in (None, ""):
+            current = self._get_visible(ctx, data.get("id"))
             script, env = self._authorize(ctx, current["script_id"], current["environment"])
         else:
-            script, env = self._authorize(ctx, admin_crud.text(date.get("script_id"), 10),
-                                          admin_crud.text(date.get("environment"), 30))
+            script, env = self._authorize(ctx, admin_crud.text(data.get("script_id"), 10),
+                                          admin_crud.text(data.get("environment"), 30))
         now = self._now()
         errors = collections.OrderedDict()
 
-        name = admin_crud.text(date.get("name"))
+        name = admin_crud.text(data.get("name"))
         if name is None:
             errors["name"] = MSG_NAME_REQUIRED
         elif len(name) > NAME_MAX_LENGTH:
             errors["name"] = MSG_NAME_LENGTH
-        rule = self._rule(date, now, errors)
-        priority = self._priority(ctx, date.get("priority"), errors)
+        rule = self._rule(data, now, errors)
+        priority = self._priority(ctx, data.get("priority"), errors)
 
         links = self._links(script["id"])
         previous = _parameters(current) if current else {}
-        answers = self._answers(links, date.get("answers"), previous)
+        answers = self._answers(links, data.get("answers"), previous)
         # Compila o snapshot completo so para validar: o daemon recompila a cada desdobro (README §7.5 passo 5).
         _snapshot, resolved, errors_param = params_compiler.compile_snapshot(script, links, answers, now)
         for code, message in errors_param.items():
@@ -843,7 +843,7 @@ class SchedulesService(object):
         sensitive = set(v["code"] for v in links if v.get("sensitive") == "Y")
         if current is None:
             return self._insert(ctx, ip, record, sensitive)
-        if admin_crud.text(date.get("version"), 64) != version(current, self._sensitive_codes(current["script_id"])):
+        if admin_crud.text(data.get("version"), 64) != version(current, self._sensitive_codes(current["script_id"])):
             return current["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
         return self._update(ctx, ip, current, record, sensitive)
 
@@ -1011,14 +1011,14 @@ def form(ctx, schedule_id=None, script_id=None, environment=None, submitted=None
     return _service().form(ctx, schedule_id, script_id, environment, submitted, values, errors)
 
 
-def preview(ctx, date):
+def preview(ctx, data):
     """Proximas execucoes e descricao da regra (servico padrao)."""
-    return _service().preview(ctx, date)
+    return _service().preview(ctx, data)
 
 
-def save(ctx, ip, date):
+def save(ctx, ip, data):
     """Inclusao ou alteracao de regra (servico padrao)."""
-    return _service().save(ctx, ip, date)
+    return _service().save(ctx, ip, data)
 
 
 def pause(ctx, ip, schedule_id):

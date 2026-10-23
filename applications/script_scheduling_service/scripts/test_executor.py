@@ -354,10 +354,10 @@ class TestSpawnFailures(_Base):
         grandchild = os.path.join(self.root, "neto.pid")
         original = os_platform.write_state
 
-        def _grava(path, date):
+        def _grava(path, data):
             if path.endswith(executor.PROC):
                 raise OSError(28, "No space left on device")
-            return original(path, date)
+            return original(path, data)
 
         with mock.patch.object(os_platform, "write_state", side_effect=_grava), \
                 self.assertLogs("sss_scheduler", "ERROR"):

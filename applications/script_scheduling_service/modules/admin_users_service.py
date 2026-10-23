@@ -147,10 +147,10 @@ class AdminUsersService(object):
                     "locked": False, "locked_until": None, "failed_attempts": 0, "own": False,
                     "record": None}
         u = self._get(user_id)
-        date = public_view(u)
-        date.update(version=admin_crud.version(u, EDITABLE_FIELDS), locked=self.is_locked(u),
+        data = public_view(u)
+        data.update(version=admin_crud.version(u, EDITABLE_FIELDS), locked=self.is_locked(u),
                      own=u["id"] == ctx.get("user_id"), record=ui_helpers.record_info(u, ctx))
-        return date
+        return data
 
     # ----------------------------------------------------------------- escrita
 
@@ -193,7 +193,7 @@ class AdminUsersService(object):
             errors["name"] = MSG_NAME_LENGTH
         return name
 
-    def save(self, ctx, ip, user_id, date):
+    def save(self, ctx, ip, user_id, data):
         """Inclui (login, nome, profile_id, senha, confirmacao) ou altera (nome, profile_id, versao).
 
         Retorna (id, erros). Na edicao o login e a senha enviados sao ignorados. Lanca
@@ -202,16 +202,16 @@ class AdminUsersService(object):
         admin_crud.require_feature(ctx, FEATURE)
         errors = {}
         if user_id in (None, ""):
-            login = admin_crud.identifier(date.get("login"), errors, "login")
+            login = admin_crud.identifier(data.get("login"), errors, "login")
             if login is None:
                 errors["login"] = MSG_LOGIN_REQUIRED
             elif "login" in errors:
                 pass
             elif not _RE_LOGIN.fullmatch(login):
                 errors["login"] = MSG_LOGIN_INVALID
-            name = self._name(date.get("name"), errors)
-            profile_id, profile = self._active_profile(date.get("profile_id"), errors)
-            password = self._password(date.get("password"), date.get("confirmation"), errors)
+            name = self._name(data.get("name"), errors)
+            profile_id, profile = self._active_profile(data.get("profile_id"), errors)
+            password = self._password(data.get("password"), data.get("confirmation"), errors)
             if errors:
                 return None, errors
             try:
@@ -234,8 +234,8 @@ class AdminUsersService(object):
             return created["id"], {}
 
         current = self._get(user_id)
-        name = self._name(date.get("name"), errors)
-        profile_id, profile = self._active_profile(date.get("profile_id"), errors, current["profile_id"])
+        name = self._name(data.get("name"), errors)
+        profile_id, profile = self._active_profile(data.get("profile_id"), errors, current["profile_id"])
         if errors:
             return current["id"], errors
         if current["id"] == ctx.get("user_id") and ctx.get("is_admin") is True and profile["is_admin"] != "Y":
@@ -248,7 +248,7 @@ class AdminUsersService(object):
                                or swap_own, "UPDATE")
         except OperationDenied as exc:
             return current["id"], {GENERAL_FIELD: exc.message}
-        if admin_crud.text(date.get("version"), 64) != admin_crud.version(current, EDITABLE_FIELDS):
+        if admin_crud.text(data.get("version"), 64) != admin_crud.version(current, EDITABLE_FIELDS):
             return current["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
         after = dict(current, name=name, profile_id=profile_id)
         detail = admin_crud.changes_detail(current, after, EDITABLE_FIELDS)
@@ -366,9 +366,9 @@ def profiles(active_only=False):
     return _service().profiles(active_only)
 
 
-def save(ctx, ip, user_id, date):
+def save(ctx, ip, user_id, data):
     """Inclusao ou alteracao de usuario (servico padrao)."""
-    return _service().save(ctx, ip, user_id, date)
+    return _service().save(ctx, ip, user_id, data)
 
 
 def toggle_active(ctx, ip, user_id, version):

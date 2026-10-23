@@ -239,11 +239,11 @@ class RepoSchedulerQueue(object):
             names = ("id", "script_id", "environment", "requested_by", "status", "priority", "cancel_requested",
                      "agent_id", "process_id", "process_start", "parent_ticket_id", "schedule_id",
                      "scheduled_at", "started_at", "created_at", "log_offset_chars", "submitted_params")
-            date = dict(zip(names, r))
-            date["submitted_params"] = _read_lob(date["submitted_params"])
+            data = dict(zip(names, r))
+            data["submitted_params"] = _read_lob(data["submitted_params"])
             for key in ("status", "cancel_requested"):
-                date[key] = (date[key] or "").strip()
-            return date
+                data[key] = (data[key] or "").strip()
+            return data
         finally:
             cur.close()
 
@@ -484,7 +484,7 @@ class RepoSchedulerQueue(object):
         finally:
             cur.close()
 
-    def register_agent(self, conn, date, process_exists, attempts=2):
+    def register_agent(self, conn, data, process_exists, attempts=2):
         """Registro do agente sob FOR UPDATE WAIT 5 (README §8.12 passo 7; CR-007 R-11). Devolve o id.
 
         dados: code, hostname, pid, version, environments, platform, interpreters, critical_config,
@@ -493,7 +493,7 @@ class RepoSchedulerQueue(object):
         """
         for attempt in range(attempts):
             try:
-                return self._registrar_agente(conn, date, process_exists)
+                return self._registrar_agente(conn, data, process_exists)
             except Exception as exc:
                 if attempt + 1 < attempts and db_conn.classify_error(exc) == ("ORA", 1):
                     continue  # ORA-00001 em uk_<prefixo>agt_codigo: outro processo incluiu antes; relê

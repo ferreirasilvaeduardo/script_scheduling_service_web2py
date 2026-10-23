@@ -141,9 +141,9 @@ class _Base(unittest.TestCase):
             f.write(content)
         return path
 
-    def append_bytes(self, path, date):
+    def append_bytes(self, path, data):
         with open(path, "ab") as f:
-            f.write(date)
+            f.write(data)
 
     def pump(self, path, masker=None, cap=LARGE, local_value=LARGE, ticket_id=1):
         return Pump(path, ticket_id, masker or masking.Masker(), cap, local_value)
@@ -165,12 +165,12 @@ class TestReadAndMask(_Base):
         self.assertEqual(self.drain(b).text, "linha 1\nlinha 2\n")
 
     def test_multibyte_cortado_em_todas_as_posicoes(self):
-        date = MB_TEXT.encode("utf-8")
-        for cutoff in range(len(date) + 1):
-            path = self.file(date[:cutoff])
+        data = MB_TEXT.encode("utf-8")
+        for cutoff in range(len(data) + 1):
+            path = self.file(data[:cutoff])
             b = self.pump(path)
             first = b.collect()
-            self.append_bytes(path, date[cutoff:])
+            self.append_bytes(path, data[cutoff:])
             second = b.collect(max_bytes_leitura=7)
             clob = self.drain(b)
             self.assertEqual(clob.text, MB_TEXT, "corte em %d" % cutoff)

@@ -58,17 +58,17 @@ class _Base(unittest.TestCase):
                 if a["entity"] == "tbsss_parameters" and a["id"] > self.aud_base]
 
     def _insert(self, actor="admin", **changes):
-        date = {"code": "novo_param", "label": "Novo parametro", "component_type": "TEXT"}
-        date.update(changes)
-        return self.svc.save(self.ctx[actor], IP, None, date)
+        data = {"code": "novo_param", "label": "Novo parametro", "component_type": "TEXT"}
+        data.update(changes)
+        return self.svc.save(self.ctx[actor], IP, None, data)
 
     def _edit(self, pid, actor="admin", **changes):
         f = self.svc.form(self.ctx[actor], str(pid))
-        date = dict((k, f[k]) for k in ("param_flag", "label", "description", "component_type", "options_json",
+        data = dict((k, f[k]) for k in ("param_flag", "label", "description", "component_type", "options_json",
                                           "default_value", "validation_regex", "version"))
-        date["sensitive"] = f["sensitive"]
-        date.update(changes)
-        return self.svc.save(self.ctx[actor], IP, str(pid), date)
+        data["sensitive"] = f["sensitive"]
+        data.update(changes)
+        return self.svc.save(self.ctx[actor], IP, str(pid), data)
 
 
 class TestRegistration(_Base):
@@ -111,9 +111,9 @@ class TestRegistration(_Base):
         f = self.svc.form(self.ctx["admin"], str(P_CHAVE_API))
         self.assertFalse(f["has_default"])
         self.catalog.parameters_update(P_CHAVE_API, {"default_value": "colocado-por-outro-333"}, actor="teste")
-        date = dict((k, f[k]) for k in ("param_flag", "label", "description", "component_type", "options_json",
+        data = dict((k, f[k]) for k in ("param_flag", "label", "description", "component_type", "options_json",
                                           "default_value", "validation_regex", "version", "sensitive"))
-        _pid, errors = self.svc.save(self.ctx["admin"], IP, str(P_CHAVE_API), dict(date, label="Outro"))
+        _pid, errors = self.svc.save(self.ctx["admin"], IP, str(P_CHAVE_API), dict(data, label="Outro"))
         self.assertEqual(errors, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
 
     def test_inclusao_de_cada_tipo(self):
@@ -126,9 +126,9 @@ class TestRegistration(_Base):
             {"code": "p_check", "component_type": "CHECKBOX", "default_value": "1", "param_flag": "--active"},
         )
         expected = ("SP", "-12.5", "2026-02-28", "B", "true")
-        for date, default in zip(cases, expected):
-            pid, errors = self._insert(**date)
-            self.assertEqual(errors, {}, date["code"])
+        for data, default in zip(cases, expected):
+            pid, errors = self._insert(**data)
+            self.assertEqual(errors, {}, data["code"])
             self.assertEqual(self.catalog.parameters_get(pid)["default_value"], default)
         self.assertEqual(self.catalog.parameters_get(pid)["param_flag"], "--active")
         self.assertEqual(len(self._audits("CREATE")), 5)
@@ -156,8 +156,8 @@ class TestRegistration(_Base):
         for kind, default, extra in (("NUMBER", "abc", {}), ("DATE", "31/12/2026", {}), ("CHECKBOX", "talvez", {}),
                                     ("SELECT", "Z", {"options_json": '{"A": "Alfa"}'}),
                                     ("TEXT", "abc", {"validation_regex": "[0-9]+"})):
-            date = dict(extra, component_type=kind, default_value=default)
-            _pid, errors = self._insert(**date)
+            data = dict(extra, component_type=kind, default_value=default)
+            _pid, errors = self._insert(**data)
             self.assertIn("default_value", errors, kind)
         _pid, errors = self._insert(default_value="x" * 101)
         self.assertEqual(errors, {"default_value": prm_mod.MSG_DEFAULT_LENGTH})
@@ -221,19 +221,19 @@ class TestDependencies(_Base):
             self.svc.toggle_active(self.ctx["admin"], IP, str(pid), f["version"])
 
     def test_regras_atomicas_no_repositorio(self):
-        for date, constraint in (({"component_type": "TEXT"}, "sss_prm_tipo_vinculado"),
+        for data, constraint in (({"component_type": "TEXT"}, "sss_prm_tipo_vinculado"),
                                   ({"param_flag": "--outra"}, "sss_prm_flag_nomeado"),
                                   ({"active": "N"}, "sss_prm_vinculo_ativo")):
             with self.assertRaises(RepoViolation) as cm:
-                self.catalog.parameters_update(P_DATA_REF, date, actor="teste")
+                self.catalog.parameters_update(P_DATA_REF, data, actor="teste")
             self.assertEqual(cm.exception.constraint, constraint)
 
     def test_conflito_de_edicao(self):
         f = self.svc.form(self.ctx["admin"], str(P_DESCRICAO_LOTE))
         self._edit(P_DESCRICAO_LOTE, label="Primeira")
-        date = dict((k, f[k]) for k in ("param_flag", "description", "component_type", "options_json",
+        data = dict((k, f[k]) for k in ("param_flag", "description", "component_type", "options_json",
                                           "default_value", "validation_regex", "version", "sensitive"))
-        _pid, errors = self.svc.save(self.ctx["admin"], IP, str(P_DESCRICAO_LOTE), dict(date, label="Segunda"))
+        _pid, errors = self.svc.save(self.ctx["admin"], IP, str(P_DESCRICAO_LOTE), dict(data, label="Segunda"))
         self.assertEqual(errors, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
 
 

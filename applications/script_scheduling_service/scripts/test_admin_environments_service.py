@@ -152,10 +152,10 @@ class TestEdit(_Base):
         return self.svc.form(self.ctx["admin"], str(aid))
 
     def _save(self, form, **changes):
-        date = {"name": form["name"], "description": form["description"], "connection": form["connection"],
+        data = {"name": form["name"], "description": form["description"], "connection": form["connection"],
                  "is_production": form["is_production"], "version": form["version"]}
-        date.update(changes)
-        return self.svc.save(self.ctx["admin"], IP, str(form["id"]), date)
+        data.update(changes)
+        return self.svc.save(self.ctx["admin"], IP, str(form["id"]), data)
 
     def test_alteracao_auditada_campo_antigo_novo(self):
         form = self._form()

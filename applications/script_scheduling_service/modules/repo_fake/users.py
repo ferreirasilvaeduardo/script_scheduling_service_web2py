@@ -118,13 +118,13 @@ class RepoUsersFake(RepoUsers):
         p = self._store.profiles.get(user["profile_id"])
         return user["active"] == "Y" and p is not None and p["active"] == "Y" and p["is_admin"] == "Y"
 
-    def insert(self, date, audit=None, actor=None):
+    def insert(self, data, audit=None, actor=None):
         """Insere novo usuario com validacoes de integridade, auditando na mesma operacao."""
         # Ordem de locks unica no FAKE: rbac e depois usuarios (como lock_active_admins).
         with self._store.lock_rbac:
             with self._store.lock_users:
                 actor = self._store.record_actor(audit, actor)
-                login = date.get("login")
+                login = data.get("login")
                 if not login or not _RE_LOGIN.fullmatch(login):
                     raise RepoViolation("Login invalido (esperado: 3-30 caracteres [a-z0-9._-])", constraint="ck_tbsss_usr_login")
 
@@ -132,15 +132,15 @@ class RepoUsersFake(RepoUsers):
                     if u["login"] == login:
                         raise RepoViolation("Login '%s' ja existe" % login, constraint="uk_tbsss_usr_login")
 
-                profile_id = date.get("profile_id")
+                profile_id = data.get("profile_id")
                 if profile_id not in self._store.profiles:
                     raise RepoViolation("Perfil ID %s nao existe" % profile_id, constraint="fk_tbsss_usr_prf")
 
-                active = date.get("active", "Y")
+                active = data.get("active", "Y")
                 if active not in ("Y", "N"):
                     raise RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint="ck_tbsss_usr_active")
 
-                attempts = int(date.get("failed_attempts", 0))
+                attempts = int(data.get("failed_attempts", 0))
                 if attempts < 0:
                     raise RepoViolation("Tentativas falhas nao podem ser negativas", constraint="ck_tbsss_usr_att")
 
@@ -148,23 +148,23 @@ class RepoUsersFake(RepoUsers):
                 new = {
                     "id": uid,
                     "login": login,
-                    "name": date.get("name", ""),
-                    "password_hash": date.get("password_hash", "!"),
+                    "name": data.get("name", ""),
+                    "password_hash": data.get("password_hash", "!"),
                     "profile_id": profile_id,
                     "failed_attempts": attempts,
-                    "locked_until": date.get("locked_until"),
-                    "last_login_at": date.get("last_login_at"),
-                    "password_changed_at": date.get("password_changed_at"),
+                    "locked_until": data.get("locked_until"),
+                    "last_login_at": data.get("last_login_at"),
+                    "password_changed_at": data.get("password_changed_at"),
                     "session_epoch": 0,
                     "active": active,
-                    "created_at": date.get("created_at"),
+                    "created_at": data.get("created_at"),
                 }
                 self._store.stamp_insert(new, actor)
                 self._store.users[uid] = copy.deepcopy(new)
                 self._auditar(audit, uid)
                 return copy.deepcopy(new)
 
-    def update(self, id, date, expected=None, audit=None, actor=None):
+    def update(self, id, data, expected=None, audit=None, actor=None):
         """Altera usuario (login imutavel), condicional a 'esperado' e com protecao do ultimo admin."""
         with self._store.lock_rbac:
             with self._store.lock_users:
@@ -178,21 +178,21 @@ class RepoUsersFake(RepoUsers):
                         raise RepoConflict("Usuario ID %s alterado por outra operacao (%s)" % (id, field))
 
                 # Imutabilidade do login (README §10 trigger tr_tbsss_usr_bu)
-                new_login = date.get("login")
+                new_login = data.get("login")
                 if new_login is not None and new_login != current["login"]:
                     raise RepoViolation("Login de usuario e imutavel", constraint="tr_tbsss_usr_bu")
 
-                new_profile = date.get("profile_id")
+                new_profile = data.get("profile_id")
                 if new_profile is not None and new_profile not in self._store.profiles:
                     raise RepoViolation("Perfil ID %s nao existe" % new_profile, constraint="fk_tbsss_usr_prf")
                 profile_changed = new_profile is not None and new_profile != current["profile_id"]
 
-                new_active = date.get("active")
+                new_active = data.get("active")
                 if new_active is not None and new_active not in ("Y", "N"):
                     raise RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint="ck_tbsss_usr_active")
                 active_changed = new_active is not None and new_active != current["active"]
 
-                changes = dict((k, v) for k, v in date.items()
+                changes = dict((k, v) for k, v in data.items()
                                 if k in ("name", "profile_id", "password_hash", "failed_attempts", "locked_until",
                                          "last_login_at", "password_changed_at", "active"))
                 if int(changes.get("failed_attempts", 0) or 0) < 0:

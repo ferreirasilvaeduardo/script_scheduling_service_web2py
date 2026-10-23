@@ -80,11 +80,11 @@ class _Base(unittest.TestCase):
         return [a for a in items if a["entity"] == "tbsss_schedules" and a["id"] > self.aud_base]
 
     def _data(self, **extra):
-        date = {"name": "Regra de teste", "script_id": "1", "environment": "HOMOLOGACAO",
+        data = {"name": "Regra de teste", "script_id": "1", "environment": "HOMOLOGACAO",
                  "recurrence_type": "DAILY", "run_time": "03:00", "priority": "2",
                  "answers": {"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"}}
-        date.update(extra)
-        return date
+        data.update(extra)
+        return data
 
     def _save(self, login="admin", **extra):
         return self.svc.save(self.ctx[login], IP, self._data(**extra))
@@ -253,8 +253,8 @@ class TestEdit(_Base):
 
     def _edit(self, aid, login="admin", **extra):
         reg = self.agd.get(aid)
-        date = self._data(id=str(aid), version=self._version(reg), **extra)
-        return self.svc.save(self.ctx[login], IP, date)
+        data = self._data(id=str(aid), version=self._version(reg), **extra)
+        return self.svc.save(self.ctx[login], IP, data)
 
     def test_edicao_troca_usuario_id_para_o_editor(self):
         aid, _errors = self._save(login="op.prod")
@@ -271,11 +271,11 @@ class TestEdit(_Base):
     def test_edicao_de_regra_do_seed_por_outro_usuario(self):
         # Regra 4: MENSAL, script 2 em HOMOLOGACAO, criada por op.hml (id 3).
         reg = self.agd.get(4)
-        date = {"id": "4", "version": self._version(reg), "name": reg["name"], "recurrence_type": "MONTHLY",
+        data = {"id": "4", "version": self._version(reg), "name": reg["name"], "recurrence_type": "MONTHLY",
                  "run_time": "01:00", "month_day": "1", "priority": "3",
                  "start_date": reg["start_date"].strftime("%Y-%m-%dT%H:%M"),
                  "answers": {"formato_saida": "JSON"}}
-        _id, errors = self.svc.save(self.ctx["op.prod"], IP, date)
+        _id, errors = self.svc.save(self.ctx["op.prod"], IP, data)
         self.assertEqual(errors, {})
         self.assertEqual(self.agd.get(4)["user_id"], 2)
         self.assertIn(u"user_id: 3 (op.hml)%s2 (op.prod)" % ARROW, self._audits("UPDATE")[0]["detail"])
@@ -335,9 +335,9 @@ class TestEdit(_Base):
         reg = self.agd.get(aid)
         original = self.agd.update
 
-        def alterar_com_corrida(id, date, expected=None, audit=None):
+        def alterar_com_corrida(id, data, expected=None, audit=None):
             original(id, {"run_time": "07:00"}, actor="teste")
-            return original(id, date, expected=expected, audit=audit)
+            return original(id, data, expected=expected, audit=audit)
 
         with mock.patch.object(self.agd, "update", side_effect=alterar_com_corrida):
             _id, errors = self.svc.save(self.ctx["admin"], IP,
@@ -357,12 +357,12 @@ class TestEdit(_Base):
         self.assertNotEqual(svc_mod.version(reg), v1)
         aid, errors = self._save(answers={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": SECRET})
         self.assertEqual(errors, {})
-        date = self.svc.form(self.ctx["admin"], str(aid))
-        field = [c for c in date["form"]["fields"] if c["code"] == "documento_cliente"][0]
+        data = self.svc.form(self.ctx["admin"], str(aid))
+        field = [c for c in data["form"]["fields"] if c["code"] == "documento_cliente"][0]
         self.assertTrue(field["kept"])
         self.assertIsNone(field["value"])
-        self.assertNotIn(SECRET, json.dumps(date, default=str))
-        not_sensitive = [c for c in date["form"]["fields"] if c["code"] == "modo_exec"][0]
+        self.assertNotIn(SECRET, json.dumps(data, default=str))
+        not_sensitive = [c for c in data["form"]["fields"] if c["code"] == "modo_exec"][0]
         self.assertEqual(not_sensitive["value"], "REAL")
         self.assertFalse(not_sensitive["kept"])
 
@@ -398,15 +398,15 @@ class TestAgenda(_Base):
         base.update(fields)
         return self.agd.insert(base, actor="teste")["id"]
 
-    def _items(self, date, rule_id):
-        return [o for d in date["days"] for o in d["items"] if o["rule_id"] == rule_id]
+    def _items(self, data, rule_id):
+        return [o for d in data["days"] for o in d["items"] if o["rule_id"] == rule_id]
 
     def test_diaria_sete_dias_com_rotulos(self):
         rid = self._rule()
-        date = self.svc.agenda(self.ctx["admin"])
-        items = self._items(date, rid)
+        data = self.svc.agenda(self.ctx["admin"])
+        items = self._items(data, rid)
         self.assertEqual(len(items), 7)  # 16/01 a 22/01: ate o fim do 7o dia seguinte a 15/01
-        labels = [d["label"] for d in date["days"] if any(o["rule_id"] == rid for o in d["items"])]
+        labels = [d["label"] for d in data["days"] if any(o["rule_id"] == rid for o in d["items"])]
         self.assertEqual(labels[0], u"Amanhã")
         self.assertTrue(labels[1].startswith(u"sábado, 17/01"))
 
@@ -421,10 +421,10 @@ class TestAgenda(_Base):
         late = self._rule(next_run_at=datetime.datetime(2026, 1, 15, 3, 0))
         paused = self._rule(active="N", pause_reason="MANUAL")
         in_prod = self._rule(environment="PRODUCAO")
-        date = self.svc.agenda(self.ctx["admin"])
-        self.assertIn(late, [a["rule_id"] for a in date["delayed"]])
-        self.assertFalse(self._items(date, paused))
-        self.assertTrue(self._items(date, in_prod))
+        data = self.svc.agenda(self.ctx["admin"])
+        self.assertIn(late, [a["rule_id"] for a in data["delayed"]])
+        self.assertFalse(self._items(data, paused))
+        self.assertTrue(self._items(data, in_prod))
         # op.hml nao enxerga PRODUCAO (README §7.6, lista por escopo).
         self.assertFalse(self._items(self.svc.agenda(self.ctx["op.hml"]), in_prod))
 
@@ -678,8 +678,8 @@ class TestPreviewList(_Base):
         aid_active, errors = self._save()
         self.assertEqual(errors, {})
         self.catalog.scripts_update(1, {"active": "N"}, actor="teste")
-        date = self.svc.agenda(self.ctx["admin"])
-        items_r1 = [i for day in date["days"] for i in day["items"] if i["rule_id"] == aid_active]
+        data = self.svc.agenda(self.ctx["admin"])
+        items_r1 = [i for day in data["days"] for i in day["items"] if i["rule_id"] == aid_active]
         self.assertTrue(items_r1)
         self.assertIn(u"Será pausada", items_r1[0].get("warning", ""))
         aid = self.agd.insert({"name": "CRON Problematico", "user_id": 1, "script_id": 1,

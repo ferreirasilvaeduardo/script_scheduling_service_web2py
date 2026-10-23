@@ -74,8 +74,8 @@ class _Plat(object):
 def _zip(files):
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        for name, date in files.items():
-            z.writestr(name, date)
+        for name, data in files.items():
+            z.writestr(name, data)
     return buf.getvalue()
 
 

@@ -52,11 +52,11 @@ class RepoRbacFake(RepoRbac):
                 detail=audit.get("detail"),
             )
 
-    def profiles_insert(self, date, audit=None, actor=None):
+    def profiles_insert(self, data, audit=None, actor=None):
         """Insere novo perfil com validacao de UK e CKs, auditando na mesma operacao."""
         with self._store.lock_rbac:
             actor = self._store.record_actor(audit, actor)
-            name = date.get("name")
+            name = data.get("name")
             if not name:
                 raise RepoViolation("Nome de perfil e obrigatorio")
 
@@ -64,11 +64,11 @@ class RepoRbacFake(RepoRbac):
                 if p["name"].upper() == name.upper():
                     raise RepoViolation("Perfil com nome '%s' ja existe" % name, constraint="uk_tbsss_prf_name")
 
-            is_admin = date.get("is_admin", "N")
+            is_admin = data.get("is_admin", "N")
             if is_admin not in ("Y", "N"):
                 raise RepoViolation("Flag is_admin deve ser 'Y' ou 'N'", constraint="ck_tbsss_prf_adm")
 
-            active = date.get("active", "Y")
+            active = data.get("active", "Y")
             if active not in ("Y", "N"):
                 raise RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint="ck_tbsss_prf_active")
 
@@ -76,9 +76,9 @@ class RepoRbacFake(RepoRbac):
             new = {
                 "id": pid,
                 "name": name,
-                "description": date.get("description", ""),
+                "description": data.get("description", ""),
                 "is_admin": is_admin,
-                "perm_version": int(date.get("perm_version", 1)),
+                "perm_version": int(data.get("perm_version", 1)),
                 "active": active,
             }
             self._store.stamp_insert(new, actor)
@@ -91,7 +91,7 @@ class RepoRbacFake(RepoRbac):
         return sorted(u["id"] for u in self._store.users.values()
                       if u["active"] == "Y" and u["profile_id"] in admin)
 
-    def profiles_update(self, id, date, expected=None, audit=None, actor=None):
+    def profiles_update(self, id, data, expected=None, audit=None, actor=None):
         """Altera perfil e incrementa perm_version; protege o ultimo admin na mesma operacao (§4.3.B)."""
         # Ordem de locks igual a lock_active_admins: rbac e depois usuarios.
         with self._store.lock_rbac:
@@ -106,7 +106,7 @@ class RepoRbacFake(RepoRbac):
                         raise RepoConflict("Perfil ID %s alterado por outra operacao (%s)" % (id, field))
 
                 changes = {}
-                new_name = date.get("name")
+                new_name = data.get("name")
                 if new_name and new_name != current["name"]:
                     for pid, p in self._store.profiles.items():
                         if pid != id and p["name"].upper() == new_name.upper():
@@ -114,14 +114,14 @@ class RepoRbacFake(RepoRbac):
                                                constraint="uk_tbsss_prf_name")
                     changes["name"] = new_name
 
-                if "description" in date:
-                    changes["description"] = date["description"]
+                if "description" in data:
+                    changes["description"] = data["description"]
 
                 for field, ck in (("is_admin", "ck_tbsss_prf_adm"), ("active", "ck_tbsss_prf_active")):
-                    if field in date:
-                        if date[field] not in ("Y", "N"):
+                    if field in data:
+                        if data[field] not in ("Y", "N"):
                             raise RepoViolation("Flag %s deve ser 'Y' ou 'N'" % field, constraint=ck)
-                        changes[field] = date[field]
+                        changes[field] = data[field]
 
                 reduces_admin = current["is_admin"] == "Y" and current["active"] == "Y" and (
                     changes.get("is_admin") == "N" or changes.get("active") == "N")

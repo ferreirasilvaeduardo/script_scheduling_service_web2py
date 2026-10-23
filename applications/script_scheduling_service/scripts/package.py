@@ -192,7 +192,7 @@ def build_package(source, output, version=None):
     top = "sss-%s" % version
     content = [(rel, ler(rel)) for rel in files] + [("routes.py", ROUTES.encode("utf-8"))]
     content.sort()
-    sums = "".join("%s  %s\n" % (hashlib.sha256(date).hexdigest(), rel) for rel, date in content)
+    sums = "".join("%s  %s\n" % (hashlib.sha256(data).hexdigest(), rel) for rel, data in content)
     dirs = set()
     for rel, _d in content:
         parts = rel.split("/")[:-1]
@@ -208,13 +208,13 @@ def build_package(source, output, version=None):
                 with tarfile.open(fileobj=gz, mode="w", format=tarfile.GNU_FORMAT) as tar:
                     tar.addfile(_info(top, 0, 0o755, tarfile.DIRTYPE))
                     items = [(p, None) for p in dirs] + content + [("SHA256SUMS", sums.encode("utf-8"))]
-                    for rel, date in sorted(items, key=lambda x: x[0]):
+                    for rel, data in sorted(items, key=lambda x: x[0]):
                         name = top + "/" + rel
-                        if date is None:
+                        if data is None:
                             tar.addfile(_info(name, 0, 0o755, tarfile.DIRTYPE))
                         else:
                             mode = 0o755 if rel.startswith("bin/") else 0o644
-                            tar.addfile(_info(name, len(date), mode), io.BytesIO(date))
+                            tar.addfile(_info(name, len(data), mode), io.BytesIO(data))
         os.replace(temporary, destination)
     except BaseException:
         if os.path.exists(temporary):

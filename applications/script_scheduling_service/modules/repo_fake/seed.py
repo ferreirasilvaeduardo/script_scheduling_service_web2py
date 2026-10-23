@@ -151,7 +151,7 @@ def _seed_outputs(store):
         (29, "EXCEEDED", "FILES", None, None, None),
         (30, "FAILED", "DEADLINE", None, None, None),
     )
-    for sid, (ticket_id, state, reason, count, size, date) in enumerate(rows, 1):
+    for sid, (ticket_id, state, reason, count, size, data) in enumerate(rows, 1):
         store.ticket_output[sid] = {
             "id": sid,
             "ticket_id": ticket_id,
@@ -160,7 +160,7 @@ def _seed_outputs(store):
             "agent_id": store.tickets[ticket_id]["agent_id"],
             "file_count": count,
             "size_bytes": size,
-            "content": date,
+            "content": data,
         }
     store.seqs["tbsss_ticket_output"] = len(rows)
 

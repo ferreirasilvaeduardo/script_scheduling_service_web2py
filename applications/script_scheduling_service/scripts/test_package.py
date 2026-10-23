@@ -80,9 +80,9 @@ class TestPack(unittest.TestCase):
         self.assertEqual(code, 0, text)
         package = self._package()
         with open(package, "rb") as f:
-            date = f.read()
+            data = f.read()
         with open(os.path.join(self.saida, "SHA256SUMS")) as f:
-            self.assertEqual(f.read(), "%s  %s\n" % (hashlib.sha256(date).hexdigest(), os.path.basename(package)))
+            self.assertEqual(f.read(), "%s  %s\n" % (hashlib.sha256(data).hexdigest(), os.path.basename(package)))
         top = "sss-%s/" % empacotar.sss_config.SSS_VERSION
         with tarfile.open(package) as tar:
             members = dict((m.name[len(top):], m) for m in tar.getmembers() if m.name.startswith(top))

@@ -30,7 +30,7 @@ class RepoUsers(object):
         """
         raise NotImplementedError
 
-    def insert(self, date, audit=None, actor=None):
+    def insert(self, data, audit=None, actor=None):
         """Insere novo usuario e retorna dict com o registro criado.
 
         audit: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
@@ -38,7 +38,7 @@ class RepoUsers(object):
         """
         raise NotImplementedError
 
-    def update(self, id, date, expected=None, audit=None, actor=None):
+    def update(self, id, data, expected=None, audit=None, actor=None):
         """Atualiza campos do usuario pelo ID e retorna o registro. Login e imutavel.
 
         expected: opcional, dict campo -> valor lido; divergencia lanca RepoConflict sem alterar nada.

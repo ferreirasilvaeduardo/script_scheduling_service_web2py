@@ -818,7 +818,7 @@ class TestOracleTickets(unittest.TestCase):
 
             # 2. FKs e UK: nenhuma linha gravada em caso de violacao.
             before = self._count_by_ip(mark_ip)
-            for date, resp, ck in (
+            for data, resp, ck in (
                 (dict(base, script_id=999999999), [], n("fk", "tickets", "scr")),
                 (dict(base, environment="NAO_EXISTE_TST"), [], n("fk", "tickets", "env")),
                 (dict(base, requested_by="nao.existe.tst"), [], n("fk", "tickets", "usr")),
@@ -827,7 +827,7 @@ class TestOracleTickets(unittest.TestCase):
                 (dict(base), [{"parameter_id": prm1}, {"parameter_id": prm1}], n("uk", "ticket_answer", "tck_prm")),
             ):
                 with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                    self.tck.create(date, resp)
+                    self.tck.create(data, resp)
                 self.assertEqual(ctx.exception.constraint, ck)
             self.assertEqual(self._count_by_ip(mark_ip), before)
 
@@ -1069,7 +1069,7 @@ class TestOracleSchedules(unittest.TestCase):
 
             # 2. CKs e FKs: nada gravado em caso de violacao.
             before = self._contar(mark)
-            for date, ck in (
+            for data, ck in (
                 (dict(base, recurrence_type="ANUAL"), n("ck", "schedules", "rtype")),
                 (dict(base, run_time=None), n("ck", "schedules", "fields")),
                 (dict(base, end_date=now - datetime.timedelta(days=1)), n("ck", "schedules", "end")),
@@ -1078,7 +1078,7 @@ class TestOracleSchedules(unittest.TestCase):
                 (dict(base, environment="NAO_EXISTE_TST"), n("fk", "schedules", "env")),
             ):
                 with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                    self.agd.insert(date, actor="teste_agd")
+                    self.agd.insert(data, actor="teste_agd")
                 self.assertEqual(ctx.exception.constraint, ck)
             self.assertEqual(self._contar(mark), before)
 

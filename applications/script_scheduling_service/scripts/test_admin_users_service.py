@@ -65,19 +65,19 @@ class _Base(unittest.TestCase):
                 if a["entity"] == "tbsss_users" and a["id"] > self.aud_base]
 
     def _insert(self, **changes):
-        date = {"login": "maria.silva", "name": "Maria Silva", "profile_id": str(P_CONSULTA),
+        data = {"login": "maria.silva", "name": "Maria Silva", "profile_id": str(P_CONSULTA),
                  "password": NEW_PASSWORD, "confirmation": NEW_PASSWORD}
-        date.update(changes)
-        return self.svc.save(self.ctx["admin"], IP, None, date)
+        data.update(changes)
+        return self.svc.save(self.ctx["admin"], IP, None, data)
 
     def _form(self, uid, actor="admin"):
         return self.svc.form(self.ctx[actor], str(uid))
 
     def _edit(self, uid, actor="admin", **changes):
         f = self._form(uid, actor)
-        date = {"name": f["name"], "profile_id": str(f["profile_id"]), "version": f["version"]}
-        date.update(changes)
-        return self.svc.save(self.ctx[actor], IP, str(uid), date)
+        data = {"name": f["name"], "profile_id": str(f["profile_id"]), "version": f["version"]}
+        data.update(changes)
+        return self.svc.save(self.ctx[actor], IP, str(uid), data)
 
     def _without_secret(self, text, *secrets):
         for s in secrets:

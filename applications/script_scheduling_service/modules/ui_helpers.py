@@ -341,10 +341,10 @@ def visible_actor(actor, ctx):
 
 def record_info(rec, ctx):
     """Colunas de registro com os atores permitidos ao contexto da sessao."""
-    date = dict((c, (rec or {}).get(c)) for c in RECORD_COLUMNS)
+    data = dict((c, (rec or {}).get(c)) for c in RECORD_COLUMNS)
     for field in ("created_by", "updated_by"):
-        date[field] = visible_actor(date[field], ctx)
-    return date
+        data[field] = visible_actor(data[field], ctx)
+    return data
 
 
 def actor_name(actor):

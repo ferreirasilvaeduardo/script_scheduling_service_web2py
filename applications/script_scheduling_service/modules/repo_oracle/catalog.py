@@ -350,16 +350,16 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             raise repo_errors.RepoNotFound("Ambiente ID %s nao encontrado" % id)
         return reg
 
-    def environments_insert(self, date, audit=None, actor=None, conn=None):
+    def environments_insert(self, data, audit=None, actor=None, conn=None):
         """Insere ambiente (CKs, UK e DSN sem credencial) e audita na mesma transacao."""
         actor_clean = validate_record_actor(audit, actor)
-        name = date.get("name")
+        name = data.get("name")
         if not name or not _RE_ENV_NAME.match(name):
             raise repo_errors.RepoViolation("Nome de ambiente invalido (esperado: 1-30 chars [A-Z0-9_])",
                                            constraint=self._ck("environments", "name"))
-        connection = date.get("connection")
-        active = date.get("active", "Y")
-        production = date.get("is_production", "N")
+        connection = data.get("connection")
+        active = data.get("active", "Y")
+        production = data.get("is_production", "N")
 
         with self.write_transaction(conn=conn) as c:
             # Mesma ordem do FAKE: UK antes das CKs. ck_..._amb_nome garante maiusculas, entao a
@@ -380,7 +380,7 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             cur = c.cursor()
             try:
                 cur.execute(self._sql["ENV_INSERT"], {
-                    "id": aid, "name": name, "description": date.get("description", ""),
+                    "id": aid, "name": name, "description": data.get("description", ""),
                     "connection": connection, "active": active, "is_production": production,
                     "actor": actor_clean,
                 })
@@ -389,7 +389,7 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             self._auditar(c, audit, "tbsss_environments", aid)
             return self.environments_get(aid, conn=c)
 
-    def environments_update(self, id, date, expected=None, audit=None, actor=None, conn=None):
+    def environments_update(self, id, data, expected=None, audit=None, actor=None, conn=None):
         """Altera ambiente (nome imutavel, tr_tbsss_env_bu), condicional a 'esperado'."""
         actor_clean = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
@@ -398,28 +398,28 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
                 raise repo_errors.RepoNotFound("Ambiente ID %s nao encontrado" % id)
             self._conferir_esperado(current, expected, "Ambiente", id)
 
-            new_name = date.get("name")
+            new_name = data.get("name")
             if new_name is not None and new_name != current["name"]:
                 raise repo_errors.RepoViolation("Nome de ambiente e imutavel",
                                                constraint=self.trigger_name("environments", "bu"))
             new = dict(current)
-            new_connection = date.get("connection")
+            new_connection = data.get("connection")
             if new_connection is not None:
                 if "@" in new_connection:
                     raise repo_errors.RepoViolation("Conexao nao pode conter credencial (@)",
                                                    constraint=self._ck("environments", "connection"))
                 new["connection"] = new_connection
-            elif "connection" in date:
+            elif "connection" in data:
                 new["connection"] = None
-            if "description" in date:
-                new["description"] = date["description"]
-            new_active = date.get("active")
+            if "description" in data:
+                new["description"] = data["description"]
+            new_active = data.get("active")
             if new_active is not None:
                 if new_active not in ("Y", "N"):
                     raise repo_errors.RepoViolation("Flag ativo deve ser 'Y' ou 'N'",
                                                    constraint=self._ck("environments", "active"))
                 new["active"] = new_active
-            new_production = date.get("is_production")
+            new_production = data.get("is_production")
             if new_production is not None:
                 if new_production not in ("Y", "N"):
                     raise repo_errors.RepoViolation("Flag producao deve ser 'Y' ou 'N'",
@@ -557,10 +557,10 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             "actor": actor,
         }
 
-    def scripts_insert(self, date, audit=None, actor=None, conn=None):
+    def scripts_insert(self, data, audit=None, actor=None, conn=None):
         """Insere script (CKs, UK sensivel a maiusculas) e audita na mesma transacao."""
         actor_clean = validate_record_actor(audit, actor)
-        base = dict(date)
+        base = dict(data)
         base.setdefault("description", "")
         self._validar_script(base)
         with self.write_transaction(conn=conn) as c:
@@ -576,7 +576,7 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             self._auditar(c, audit, "tbsss_scripts", sid)
             return self.scripts_get(sid, conn=c)
 
-    def scripts_update(self, id, date, expected=None, audit=None, actor=None, conn=None):
+    def scripts_update(self, id, data, expected=None, audit=None, actor=None, conn=None):
         """Altera script (CKs, esperado nulo-seguro e regras de param_type x vinculos)."""
         actor_clean = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
@@ -585,7 +585,7 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
                 raise repo_errors.RepoNotFound("Script ID %s nao encontrado" % id)
             self._conferir_esperado(current, expected, "Script", id)
 
-            changes = dict((k, date[k]) for k in _FIELDS_SCR_UPDATABLE if k in date)
+            changes = dict((k, data[k]) for k in _FIELDS_SCR_UPDATABLE if k in data)
             new = dict(current)
             new.update(changes)
             self._validar_script(new)
@@ -712,17 +712,17 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
         if flag is not None and not _RE_PRM_FLAG.match(flag):
             raise repo_errors.RepoViolation("Flag param_nomeado invalida", constraint=self._ck("parameters", "flag"))
 
-    def parameters_insert(self, date, audit=None, actor=None, conn=None):
+    def parameters_insert(self, data, audit=None, actor=None, conn=None):
         """Insere parametro (CKs e UK) e audita na mesma transacao."""
         actor_clean = validate_record_actor(audit, actor)
-        code = date.get("code")
+        code = data.get("code")
         if not code or not _RE_PRM_CODE.match(code):
             raise repo_errors.RepoViolation("Codigo de parametro invalido (esperado: 1-30 chars [a-z0-9_])",
                                            constraint=self._ck("parameters", "code"))
-        tcomp = date.get("component_type")
-        flag = date.get("param_flag") or None
-        sens = date.get("sensitive", "N")
-        active = date.get("active", "Y")
+        tcomp = data.get("component_type")
+        flag = data.get("param_flag") or None
+        sens = data.get("sensitive", "N")
+        active = data.get("active", "Y")
         with self.write_transaction(conn=conn) as c:
             # Mesma ordem do FAKE: a UK e conferida antes das demais CKs.
             if self._existe(c, self._sql["PRM_BY_CODE"], {"code": code}):
@@ -736,10 +736,10 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             cur = c.cursor()
             try:
                 cur.execute(self._sql["PRM_INSERT"], {
-                    "id": pid, "code": code, "param_flag": flag, "label": date.get("label", ""),
-                    "description": date.get("description", ""), "component_type": tcomp,
-                    "options_json": date.get("options_json"), "default_value": date.get("default_value"),
-                    "validation_regex": date.get("validation_regex"), "sensitive": sens, "active": active,
+                    "id": pid, "code": code, "param_flag": flag, "label": data.get("label", ""),
+                    "description": data.get("description", ""), "component_type": tcomp,
+                    "options_json": data.get("options_json"), "default_value": data.get("default_value"),
+                    "validation_regex": data.get("validation_regex"), "sensitive": sens, "active": active,
                     "actor": actor_clean,
                 })
             finally:
@@ -747,7 +747,7 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             self._auditar(c, audit, "tbsss_parameters", pid)
             return self.parameters_get(pid, conn=c)
 
-    def parameters_update(self, id, date, expected=None, audit=None, actor=None, conn=None):
+    def parameters_update(self, id, data, expected=None, audit=None, actor=None, conn=None):
         """Altera parametro com as regras de dependencia de vinculo na mesma transacao."""
         actor_clean = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
@@ -756,19 +756,19 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
                 raise repo_errors.RepoNotFound("Parametro ID %s nao encontrado" % id)
             self._conferir_esperado(current, expected, "Parametro", id)
 
-            changes = dict((k, date[k]) for k in ("label", "description", "options_json", "default_value",
-                                                    "validation_regex") if k in date)
-            if "param_flag" in date:
-                flag = date["param_flag"] or None
+            changes = dict((k, data[k]) for k in ("label", "description", "options_json", "default_value",
+                                                    "validation_regex") if k in data)
+            if "param_flag" in data:
+                flag = data["param_flag"] or None
                 self._validar_flag_nomeado(flag)
                 changes["param_flag"] = flag
-            if "component_type" in date:
-                self._validar_tipo_componente(date["component_type"])
-                changes["component_type"] = date["component_type"]
+            if "component_type" in data:
+                self._validar_tipo_componente(data["component_type"])
+                changes["component_type"] = data["component_type"]
             for field in ("sensitive", "active"):
-                if field in date:
-                    self._validar_flags_parametro(field, date[field])
-                    changes[field] = date[field]
+                if field in data:
+                    self._validar_flags_parametro(field, data[field])
+                    changes[field] = data[field]
 
             # Regras de dependencia (README §10) sob o lock do parametro.
             cur = c.cursor()

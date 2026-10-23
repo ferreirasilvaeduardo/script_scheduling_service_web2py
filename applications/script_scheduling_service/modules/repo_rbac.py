@@ -18,7 +18,7 @@ class RepoRbac(object):
         """Retorna dict com dados do perfil ou lanca RepoNotFound."""
         raise NotImplementedError
 
-    def profiles_insert(self, date, audit=None, actor=None):
+    def profiles_insert(self, data, audit=None, actor=None):
         """Insere novo perfil e retorna dict com o registro criado.
 
         audit: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
@@ -26,7 +26,7 @@ class RepoRbac(object):
         """
         raise NotImplementedError
 
-    def profiles_update(self, id, date, expected=None, audit=None, actor=None):
+    def profiles_update(self, id, data, expected=None, audit=None, actor=None):
         """Atualiza perfil, incrementa perm_version e retorna o registro, tudo na mesma transacao.
 
         expected: opcional, dict campo -> valor lido; divergencia lanca RepoConflict sem alterar nada.
