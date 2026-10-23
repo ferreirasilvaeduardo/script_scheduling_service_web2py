@@ -79,7 +79,7 @@
   [fig] Ticket criado (detalhe) -> CT-05_5.png
   [OK]     Ticket #3391 executado pelo agente real até o fim
   [OK]     Aviso de respostas carregadas da última execução
-  [OK]     Campos preenchidos com as respostas do ticket anterior — /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/input/clone2/gerar_hash_arquivo/extrato_20261022.csv
+  [OK]     Campos preenchidos com as respostas do ticket anterior — /portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/input/clone2/gerar_hash_arquivo/extrato_20261022.csv
   [OK]     Nada é criado até confirmar (a página continua no disparo)
   [fig] Questionário preenchido com a última execução -> CT-05_6.png
 
@@ -354,6 +354,6 @@
   [fig] Ticket criado (detalhe) -> CT-05_5.png
   [OK]     Ticket #3398 executado pelo agente real até o fim
   [OK]     Aviso de respostas carregadas da última execução
-  [OK]     Campos preenchidos com as respostas do ticket anterior — /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/input/clone2/gerar_hash_arquivo/extrato_20261022.csv
+  [OK]     Campos preenchidos com as respostas do ticket anterior — /portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/input/clone2/gerar_hash_arquivo/extrato_20261022.csv
   [OK]     Nada é criado até confirmar (a página continua no disparo)
   [fig] Questionário preenchido com a última execução -> CT-05_6.png

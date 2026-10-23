@@ -6,7 +6,7 @@
 - `docs/prompts/00_INDEX.md` (pré-requisitos)
 
 ## Contexto de Diretório de Trabalho
-- A raiz da aplicação é `applications/script_scheduling_service` a partir da raiz do web2py (`/portaloptrib/TESHUVA/web2py`).
+- A raiz da aplicação é `applications/script_scheduling_service` a partir da raiz do web2py (`/portaloptrib/TESHUVA/SSS/DEV/web2py`).
 - Todos os caminhos criados dentro da aplicação devem residir dentro de `applications/script_scheduling_service/`.
 
 ## Objetivo

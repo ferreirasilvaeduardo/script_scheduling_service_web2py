@@ -380,7 +380,7 @@
       {
         "desc": "Campos preenchidos com as respostas do ticket anterior",
         "ok": true,
-        "detail": "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/input/clone2/gerar_hash_arquivo/extrato_20261022.csv"
+        "detail": "/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/input/clone2/gerar_hash_arquivo/extrato_20261022.csv"
       },
       {
         "desc": "Nada é criado até confirmar (a página continua no disparo)",
