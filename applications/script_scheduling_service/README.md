@@ -413,7 +413,7 @@ password = ...
 * **Contas Oracle por papel (D1b):** dono do esquema (só DDL, usado pelo `init_db.py` com senha digitada, §11.1), **web**, **agente**, **purge** e **monitor** (só leitura, CR-008 E3). Os GRANTs de cada papel estão no §11.1. Nenhuma conta de aplicação (web, agente) altera ou apaga `tbsss_audit`; só a de purge apaga, por retenção.
 * **Usuário de execução:** o script roda com outro usuário do sistema operacional (§8.0), que não lê o `secrets.cfg` (dono = usuário do agente, `0600`). A credencial do ambiente chega ao script só pelas variáveis `SSS_ENVIRONMENT_CONNECTION` e `PADRAO_VALOR_RUN_CONEXAO_BD` (§8.6, CR-010).
 
-* `tbsss_environments.connection` armazena **somente o DSN** (Easy Connect `host:porta/servico` ou alias TNS), nunca credenciais. A CK `ck_tbsss_env_connection` rejeita qualquer valor contendo `@`.
+* `tbsss_environments.connection` armazena **somente o DSN** (Easy Connect `host[:porta]/servico` ou alias TNS), nunca credenciais. A CK `ck_tbsss_env_connection` rejeita qualquer valor contendo `@`.
 * Valores de segredo carregados são registrados no módulo `masking.py`. Eles são substituídos por `****` em todo log do daemon, do web e no `log_output`.
   * Valores com menos de 4 caracteres não são registrados, porque mascará-los apagaria trechos comuns do texto. Segredos reais devem ter 12 caracteres ou mais (§4.2); o risco está aceito no §14.
 
@@ -2149,7 +2149,7 @@ END;
 * **Validação na UI** (`admin_environments_service.py`):
   * `name` segue a CK à risca. Letras minúsculas, espaços (inclusive nas pontas) ou outros caracteres são **rejeitados** com mensagem, não convertidos. O `name` é imutável depois de criado: o campo fica somente leitura e o servidor ignora o valor enviado.
   * `connection` é opcional, como a coluna. Quando preenchida, aceita apenas:
-    * Easy Connect: `^[A-Za-z0-9._-]+:[0-9]{1,5}/[A-Za-z0-9._-]+$`;
+    * Easy Connect: `^[A-Za-z0-9._-]+(:[0-9]{1,5})?/[A-Za-z0-9._-]+$`, com a porta opcional, como o Oracle aceita (sem ela, 1521; CR-018: os DSNs do seed não têm porta);
     * alias TNS: `^[A-Za-z0-9._-]{1,128}$`.
   * Um `@` é recusado com "Informe apenas o DSN; credenciais ficam no secrets.cfg."
   * `description` é opcional, com até 100 caracteres e sem caracteres de controle.

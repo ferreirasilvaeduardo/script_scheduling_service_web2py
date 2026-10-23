@@ -40,5 +40,6 @@
 | 018b | Telas (A4) | Concluído |
 | 018c | Desempenho (A5) | Concluído |
 | 018d | `interpreters` no config do DEV (arquivo local, fora do git) e nota no `DEV_ENVIRONMENT.md` §6.3 | Concluído |
-| 018f | Limpeza de código | Aprovado |
+| 018g | DSN Easy Connect com a porta opcional (`host[:porta]/serviço`): os DSNs do seed, sem porta, eram recusados e impediam editar qualquer ambiente do seed. Achado durante o 018f2 | Concluído |
+| 018f | Limpeza de código: f1 guardas no model e f2 `date` → `data` concluídos; f3 e f4 a seguir | Em andamento |
 | 018e | Nova rodada de evidências (por último, para cobrir o 018f) | Pendente |

@@ -140,10 +140,20 @@ class TestInsert(_Base):
         self.assertEqual(errors, {"description": svc_mod.MSG_DESCRIPTION_LENGTH})
 
     def test_validar_conexao(self):
-        for ok in (None, "db01.local:1521/svc", "localhost:2424/servico_homolog", "ALIAS_TNS", "a.b-c_d"):
+        # CR-018: porta opcional (sem ela, 1521), como os DSNs do seed (ex.: 10.238.55.146/gfprod).
+        for ok in (None, "db01.local:1521/svc", "localhost:2424/servico_homolog", "ALIAS_TNS", "a.b-c_d",
+                   "10.238.55.146/gfprod", "10.238.45.230/svc_gfprodc6"):
             self.assertIsNone(svc_mod.validate_connection(ok), ok)
-        for bad in ("db01:1521", "db01:123456/svc", "db 01:1521/svc", "(DESCRIPTION=(ADDRESS=...))"):
+        for bad in ("db01:1521", "db01:123456/svc", "db 01:1521/svc", "(DESCRIPTION=(ADDRESS=...))", "db01:/svc",
+                    "/svc", "db01/"):
             self.assertEqual(svc_mod.validate_connection(bad), svc_mod.MSG_CONNECTION_INVALID, bad)
+
+
+    def test_dsn_do_seed_aceito_pela_tela(self):
+        # CR-018: um DSN que o seed grava precisa poder ser salvo de volta pela tela (editar o ambiente).
+        import ddl_builder
+        for name, _desc, connection, _prod in ddl_builder.DEFAULT_ENVIRONMENTS:
+            self.assertIsNone(svc_mod.validate_connection(connection), name)
 
 
 class TestEdit(_Base):

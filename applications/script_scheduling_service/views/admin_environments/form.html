@@ -10,7 +10,7 @@ _fields = [
      'help': u'Letras maiúsculas, dígitos e _ (ex.: PRODUCAO). Não pode ser alterado depois de criado.'},
     {'name': 'description', 'label': u'Descrição', 'value': env.get('description'), 'error': errors.get('description'), 'maxlength': 100},
     {'name': 'connection', 'label': 'DSN', 'value': env.get('connection'), 'error': errors.get('connection'), 'maxlength': 250,
-     'help': u'host:porta/serviço (ex.: db01.local:1521/svc) ou alias TNS. Sem usuário nem senha: credenciais ficam no secrets.cfg.'},
+     'help': u'host[:porta]/serviço (ex.: db01.local:1521/svc ou db01.local/svc, que usa a porta 1521) ou alias TNS. Sem usuário nem senha: credenciais ficam no secrets.cfg.'},
 ]
 if not _new:
     _deactivate = env.get('active') == 'Y'

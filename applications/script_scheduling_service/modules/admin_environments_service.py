@@ -23,7 +23,8 @@ _COUNT_PAGE_SIZE = 1  # so o total interessa
 
 _RE_ID = re.compile(r"[0-9]{1,10}")
 _RE_NAME = re.compile(r"[A-Z0-9_]{1,30}")
-_RE_EASY_CONNECT = re.compile(r"[A-Za-z0-9._-]+:[0-9]{1,5}/[A-Za-z0-9._-]+")
+# Easy Connect host[:porta]/servico: sem a porta, o Oracle usa a 1521 (CR-018, DSN do seed).
+_RE_EASY_CONNECT = re.compile(r"[A-Za-z0-9._-]+(?::[0-9]{1,5})?/[A-Za-z0-9._-]+")
 _RE_TNS_ALIAS = re.compile(r"[A-Za-z0-9._-]{1,128}")
 _RE_NAME_FILTER = re.compile(r"[A-Za-z0-9_]{1,30}")
 
@@ -32,7 +33,7 @@ MSG_NAME_INVALID = u"Use de 1 a 30 caracteres: letras maiúsculas, dígitos e _ 
 MSG_NAME_DUPLICATE = u"Já existe um ambiente com este nome."
 MSG_NAME_RESERVED = u"O nome INTERNAL é reservado aos logs da aplicação. Escolha outro nome."
 MSG_CONNECTION_CREDENTIAL = u"Informe apenas o DSN; credenciais ficam no secrets.cfg."
-MSG_CONNECTION_INVALID = (u"Informe um DSN no formato host:porta/serviço (ex.: db01.local:1521/svc) "
+MSG_CONNECTION_INVALID = (u"Informe um DSN no formato host[:porta]/serviço (ex.: db01.local:1521/svc ou db01.local/svc) "
                         u"ou um alias TNS.")
 MSG_CONNECTION_LENGTH = u"O DSN deve ter no máximo %d caracteres." % CONNECTION_MAX_LENGTH
 MSG_DESCRIPTION_LENGTH = u"A descrição deve ter no máximo %d caracteres." % DESCRIPTION_MAX_LENGTH
