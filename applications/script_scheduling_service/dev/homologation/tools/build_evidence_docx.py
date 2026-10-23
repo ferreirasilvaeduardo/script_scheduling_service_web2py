@@ -3,7 +3,8 @@
 
 Uso (da pasta tools/, Python 3 com python-docx):
     SSS_EVIDENCE_DATE=AAAAMMDD [SSS_EVIDENCE_ROUND=n] python3 build_evidence_docx.py [pasta_evidencias] [saida.docx]
-Rodadas conhecidas em RODADAS (20261022: CR-016; 20261023: CR-017; 20261023_r2: CR-018). Padrao: a rodada de
+Rodadas conhecidas em RODADAS (20261022: CR-016; 20261023: CR-017; 20261023_r2: CR-018; 20261023_r3: CR-019
+e CR-020). Padrao: a rodada de
 20261023, ../evidence_<data>[_r<n>] -> ../../../docs/homologation/SSS_Homologation_Evidence_<AAAA-MM-DD>[_r<n>].docx
 """
 import io
@@ -41,7 +42,7 @@ AMBAR = RGBColor(0x8A, 0x5A, 0x00)
 
 ORDEM = ["CT-01", "CT-02", "CT-03", "MASSA", "CT-04", "CT-05", "CT-06", "CT-07", "CT-08", "CT-09", "CT-10",
          "CT-11", "CT-12", "CT-13", "CT-14", "CT-15", "CT-16", "CT-17", "CT-18", "CT-19", "CT-20", "CT-21",
-         "CT-22", "CT-23", "CT-24", "CT-25", "CT-26", "CT-27", "ENCERRAMENTO"]
+         "CT-22", "CT-23", "CT-24", "CT-25", "CT-26", "CT-27", "CT-28", "CT-29", "CT-30", "ENCERRAMENTO"]
 
 # Adaptacao de cada caso ao DEV real (o manual de 18/10 foi escrito sobre a massa simulada do FAKE).
 ADAPTACAO = {
@@ -201,6 +202,38 @@ _OBSERVACOES_1023R2 = [
     u"(no fim, ou nunca, se o processo for cancelado). Scripts SH/BASH escrevem na hora.",
 ]
 
+# Rodada 3 de 23/10/2026 (CR-019 e CR-020), no banco do DEV recriado no CR-020b.
+_ADAPTACAO_1023R3 = dict(_ADAPTACAO_1023R2, **{
+    "CT-01": ADAPTACAO["CT-01"] + u" O banco foi recriado no CR-020b, então o admin voltou à senha inicial.",
+    "CT-15": u"Parâmetro sigiloso documento_cliente_hml criado pela tela (banco recriado). O caminho_arquivo, "
+             u"usado por script ativo, mostra o aviso no lugar do botão Desativar (CR-018b).",
+    "CT-28": u"Caso novo do CR-020a. Nenhum script do seed grava na pasta de saída: o diagnóstico "
+             u"dev/scripts/diagnostico/gerar_saida.sh foi cadastrado pela tela (diag_gerar_saida, só GFPREPROD), "
+             u"rodado pelo admin e desativado no fim; o op.prod navegou e baixou como outra pessoa.",
+    "CT-29": u"Caso novo do CR-020b a 020d, com o agente real: envio pela tela do op.hml para o GFPREPROD, entrega, "
+             u"retrato, EXISTS, substituição com confirmação, subpasta recusada, 413 acima de 50 MiB e um ticket do "
+             u"contar_linhas_arquivo que leu o arquivo enviado.",
+    "CT-30": u"Caso novo do CR-019: o diagnóstico dev/scripts/diagnostico/pasta_trabalho.sh foi cadastrado pela tela "
+             u"(diag_pasta_trabalho, só GFPREPROD), rodado e desativado no fim. O DEV tem [agent] script_work_dir ligado.",
+})
+
+_OBSERVACOES_1023R3 = [
+    u"Terceira rodada do dia. O banco do DEV foi recriado no CR-020b (02 → 01 → 99): os registros das rodadas "
+    u"anteriores não existem mais, e a massa desta rodada foi criada do zero pelas telas (marca %s)." % STAMP,
+    u"Telas novas desde a rodada 2: Saídas (CR-020a, funcionalidade Baixar Saídas) e Entrada (CR-020d, Enviar "
+    u"Arquivos), ambas concedidas no seed a ADMINISTRATOR, OPERATOR_PROD e OPERATOR_HML; o READ_ONLY recebe 403.",
+    u"A entrada pela tela vai pelo banco: o agente grava o arquivo pelo helper put-input como o usuário de "
+    u"execução e publica o retrato da pasta; o web nunca acessa o disco do agente.",
+    u"O purge dos envios (CR-020e) não aparece nesta rodada: o purge.py não roda no DEV (purge_user vazio). A "
+    u"etapa foi ensaiada no CR-020e contra o banco do DEV (conteúdos esvaziados e PURGE auditado).",
+    u"Os dois scripts de diagnóstico (diag_gerar_saida e diag_pasta_trabalho) ficam cadastrados e inativos; Rodar "
+    u"um script continua com os 14 utilitários do seed.",
+    u"Cancelamento no agente real: o log não ganha a linha \"processo encerrado por cancelamento (SIGTERM)\", "
+    u"que só existia na simulação do FAKE; o motivo aparece no Detalhe técnico (CANCELLED / CANCEL_USER).",
+    u"Scripts PYTHON3 rodam com -I e saída em buffer: o log de um script Python aparece quando o buffer descarrega "
+    u"(no fim, ou nunca, se o processo for cancelado). Scripts SH/BASH escrevem na hora.",
+]
+
 _AGENTE_PADRAO = (u"Agente iniciado com bin/sss-scheduler.sh e uma cópia do instance/config.ini do DEV com o mesmo "
                   u"agent_id (srv-linux-local-01), os mesmos ambientes e as mesmas pastas, acrescentando apenas "
                   u"interpreters = PYTHON3=/usr/bin/python3,BASH=/bin/bash,SH=/bin/sh (o padrão é vazio, e sem "
@@ -230,6 +263,17 @@ RODADAS = {
                     "registros": u" Nesta rodada também: o perfil %s_P<hhmm> (inativo) e, no CT-27, a permissão Consultar "
                                  u"Tickets do OPERATOR_HML, a regex do caminho_arquivo e o arquivo do "
                                  u"contar_linhas_arquivo, todos desfeitos no próprio caso." % STAMP},
+}
+RODADAS["20261023_r3"] = {
+    "commit": u"97c8687 (CR-020 concluído; CR-019 em aa7bc1f) mais o roteiro com o CT-28 a CT-30, no mesmo commit "
+              u"deste documento",
+    "adaptacao": _ADAPTACAO_1023R3,
+    "ressalva": dict((k, v) for k, v in _RESSALVA_1022.items() if k != "CT-05"),
+    "defeitos": [], "observacoes": _OBSERVACOES_1023R3,
+    "agente": RODADAS["20261023_r2"]["agente"],
+    "registros": u" Nesta rodada também: o perfil %s_P<hhmm> (inativo), os scripts de diagnóstico diag_gerar_saida "
+                 u"e diag_pasta_trabalho (inativos), os envios da tela de Entrada e a subpasta tela_r3 na pasta de "
+                 u"entrada do contar_linhas_arquivo no GFPREPROD." % STAMP,
 }
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])

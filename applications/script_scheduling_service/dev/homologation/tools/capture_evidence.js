@@ -3,7 +3,8 @@
  * Evidencias reais da homologacao: executa os casos de teste do manual de UI Freeze adaptados ao banco DEV
  * (Oracle) e ao agente real, captura as figuras e confere na propria pagina o resultado esperado.
  * Rodadas: 2026-10-22 (CR-016), 2026-10-23 (CR-017: telas de operacao, agendamento e producao no cadastro)
- * e 2026-10-23 rodada 2 (CR-018: regras de cancelamento e de filtro, avisos de cadastro, nomes e desempenho).
+ * e 2026-10-23 rodada 2 (CR-018: regras de cancelamento e de filtro, avisos de cadastro, nomes e desempenho)
+ * e rodada 3 (CR-019 pasta de trabalho e CR-020 telas de Saidas e de Entrada: CT-28 a CT-30).
  *
  * Uso (servidor web do DEV no ar, agente real no ar):
  *   node capture_evidence.js            -> todos os CTs, na ordem
@@ -1609,6 +1610,237 @@ CTS['CT-27'] = async () => {
     note('As mudanças temporárias (Consultar Tickets do OPERATOR_HML, regex do caminho_arquivo e arquivo do contar_linhas_arquivo) foram desfeitas no próprio CT e ficam na auditoria.');
 };
 
+// ---------------------------------------------------------------------------------------------
+// Rodada 3: CR-019 (pasta de trabalho) e CR-020 (Saidas e Entrada)
+// ---------------------------------------------------------------------------------------------
+const DIAG = path.join(APP, 'dev', 'scripts', 'diagnostico');
+
+// Cadastra (ou reativa) um script de diagnostico pela tela, liberado so no GFPREPROD; devolve o id.
+async function diagScript(name, file, description) {
+    await login('admin');
+    const find = async () => {
+        await go(`/admin_scripts/index?name=${name}`);
+        return page.$$eval('table tbody tr a', (as) => {
+            const a = as.find((x) => /\/admin_scripts\/form\/\d+/.test(x.getAttribute('href')));
+            return a ? parseInt(a.getAttribute('href').match(/form\/(\d+)/)[1], 10) : null;
+        });
+    };
+    let sid = await find();
+    if (!sid) {
+        await go('/admin_scripts/form');
+        await fill('#field-name', name);
+        await fill('#field-description', description);
+        await fill('#field-interpreter', 'SH');
+        await fill('#field-path_file', file);
+        await submit('/admin_scripts/save');
+        sid = await find();
+    } else {
+        await go(`/admin_scripts/form/${sid}`);
+        if (await clickText('button', 'Reativar')) await confirmModal();
+    }
+    await setHomologation(sid, ['GFPREPROD']);
+    return sid;
+}
+
+async function deactivateScript(sid) {
+    await login('admin');
+    await go(`/admin_scripts/form/${sid}`);
+    if (await clickText('button', 'Desativar')) await confirmModal();
+    const t = await text();
+    return t.includes('desativado') || t.includes('Inativo');
+}
+
+// Disparo direto pela URL (script e ambiente ja escolhidos) e confirmacao; devolve o id do ticket.
+async function runDirect(sid, env, answers) {
+    await go(`/tickets/new?script_id=${sid}&environment=${env}`);
+    for (const [code, value] of Object.entries(answers || {})) {
+        await fill(`[name="p_${code}"]`, value);
+    }
+    await clickText('button[data-summary-trigger]', 'Criar ticket', { wait: 1500 });
+    await confirmModal();
+    return ticketFromUrl();
+}
+
+async function fetchInfo(url) {
+    return page.evaluate(async (u) => {
+        const r = await fetch(u, { credentials: 'same-origin' });
+        const buf = new Uint8Array(await r.arrayBuffer());
+        return { status: r.status, cd: r.headers.get('content-disposition'), ct: r.headers.get('content-type'),
+            nosniff: r.headers.get('x-content-type-options'), len: buf.length, head: Array.from(buf.slice(0, 2)),
+            text: new TextDecoder('utf-8').decode(buf.slice(0, 200)) };
+    }, BASE_URL + url);
+}
+
+CTS['CT-28'] = async () => {
+    begin('CT-28', 'CR-020a: Saídas — navegação e download do zip ou de um arquivo');
+    const sid = await diagScript('diag_gerar_saida', path.join(DIAG, 'gerar_saida.sh'),
+        'Diagnostico do CR-020a: grava arquivos na pasta de saida');
+    const tid = await runDirect(sid, 'GFPREPROD', {});
+    state.tickets.ct28 = tid;
+    saveState();
+    let t = '';
+    for (let i = 0; i < 40; i++) {
+        t = await ticketStatus(tid);
+        if ((t.includes('Deu certo') && t.includes('Baixar')) || t.includes('Deu erro')) break;
+        await sleep(3000);
+    }
+    check(`Ticket #${tid} (diag_gerar_saida) deu certo e a saída ficou disponível`, t.includes('Deu certo') && t.includes('Baixar'));
+    await login('op.prod');
+    await go('/default/index');
+    await expectTextCI('Item Saídas no menu do op.prod (Baixar Saídas)', 'Saídas');
+    await go('/outputs/index');
+    await expectText('Nível Ambientes com o GFPREPROD', 'GFPREPROD');
+    await snap('Saídas: ambientes', { full: true });
+    await clickText('table a', 'GFPREPROD', { navigate: true });
+    await clickText('table a', 'diag_gerar_saida', { navigate: true });
+    const hoje = new Date();
+    const diaBr = `${String(hoje.getDate()).padStart(2, '0')}/${String(hoje.getMonth() + 1).padStart(2, '0')}/${hoje.getFullYear()}`;
+    await clickText('table a', diaBr, { navigate: true });
+    await expectText(`Nível Tickets com o #${tid}, solicitante mascarado`, `#${tid}`, 'outra pessoa');
+    await snap('Saídas: tickets do dia', { full: true });
+    await clickText('a', 'Ver arquivos', { navigate: true });
+    await expectText('Arquivos do zip: resumo.txt e o csv com acento na subpasta', 'resumo.txt', 'relatório de testes.csv', 'detalhes');
+    await snap('Saídas: arquivos do zip', { full: true });
+    const z = await fetchInfo(`/outputs/download_zip/${tid}`);
+    check('Baixar zip: application/zip, começa com PK, nosniff', z.status === 200 && z.ct === 'application/zip' &&
+        z.head[0] === 0x50 && z.head[1] === 0x4b && z.nosniff === 'nosniff', `${z.status} ${z.len} bytes`);
+    const f = await fetchInfo(`/outputs/download_file/${tid}?name=${encodeURIComponent('detalhes/relatório de testes.csv')}`);
+    check('Baixar um arquivo: conteúdo certo e nome UTF-8', f.status === 200 && f.text.startsWith('linha;valor') &&
+        /filename\*=UTF-8''relat%C3%B3rio%20de%20testes\.csv/.test(f.cd || ''), f.cd);
+    check('Nome fora do índice do zip: 404', (await fetchInfo(`/outputs/download_file/${tid}?name=..%2Fresumo.txt`)).status === 404);
+    check('Ticket inexistente: 404', (await fetchInfo('/outputs/files?ticket=999999999')).status === 404);
+    await login('consulta');
+    check('consulta sem Baixar Saídas: 403', (await go('/outputs/index')) === 403);
+    await login('admin');
+    await go('/audit/index?action=OUTPUT_DOWNLOAD');
+    await expectText('Auditoria: "Download de saída" do op.prod, zip e arquivo', 'Download de saída', 'op.prod',
+        'zip completo', 'relatório de testes.csv');
+    await snap('Auditoria dos downloads de saída', { full: true });
+    check('Script de diagnóstico desativado ao final', await deactivateScript(sid));
+    note('Nenhum script do seed grava na pasta de saída: o diag_gerar_saida (dev/scripts/diagnostico) foi cadastrado pela tela, rodado e desativado no próprio caso.');
+};
+
+CTS['CT-29'] = async () => {
+    begin('CT-29', 'CR-020b a 020d: Entrada — envio pela tela, entrega pelo agente e uso pelo script');
+    const folder = `tela_r${ROUND || '1'}`;
+    const local = path.join(os.tmpdir(), `remessa_${STAMP.toLowerCase()}.csv`);
+    fs.writeFileSync(local, 'conta;valor\n' + '1;10\n'.repeat(2000));
+    const name = path.basename(local);
+    const sendForm = async (sub, replace) => {
+        const input = await page.$('#field-file');
+        await input.uploadFile(local);
+        await fill('#field-relative_dir', sub);
+        await page.$eval('#field-replace', (e, v) => { e.checked = v; }, replace);
+        if (!replace) {
+            await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }),
+                page.click('form[action*="/inputs/upload"] button[type="submit"]')]);
+            return;
+        }
+        await page.click('form[action*="/inputs/upload"] button[type="submit"]');
+        await sleep(600);
+        await expectText('Substituir: a janela explica o efeito antes do envio', 'Substituir o arquivo?');
+        await snap('Entrada: confirmação antes de substituir');
+        await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), page.evaluate(() =>
+            Array.from(document.querySelectorAll('button')).find((b) => b.innerText.includes('Substituir e enviar')).click())]);
+    };
+    const lastUpload = async () => {
+        for (let i = 0; i < 40; i++) {
+            await page.reload({ waitUntil: 'networkidle0' });
+            const rows = await page.$$eval('section[aria-labelledby="title-uploads"] table tbody tr', (trs) => trs.map((r) => r.innerText));
+            if (rows.length && !rows[0].includes('Aguardando')) return rows[0].replace(/\s+/g, ' ');
+            await sleep(1000);
+        }
+        return '';
+    };
+    await login('op.hml');
+    await go('/default/index');
+    await expectTextCI('Item Entrada no menu do op.hml (Enviar Arquivos)', 'Entrada');
+    await go('/inputs/index');
+    await clickText('a', 'GFPREPROD', { navigate: true });
+    await expectText('Scripts do perfil liberados no ambiente', 'contar_linhas_arquivo');
+    await clickText('a', 'contar_linhas_arquivo', { navigate: true });
+    await snap('Entrada: pasta do script', { full: true });
+    await sendForm(folder, false);
+    await expectText('Envio aceito para o servidor no ar', 'Arquivo enviado para 1 servidor(es): srv-linux-local-01');
+    let row = await lastUpload();
+    check('Últimos envios: Entregue no srv-linux-local-01', row.includes('Entregue') && row.includes(`${folder}/${name}`), row);
+    const disk = path.join(INPUT, 'gfpreprod', 'contar_linhas_arquivo', folder, name);
+    check('Arquivo na pasta de entrada do agente, igual ao enviado e com 0600', fs.existsSync(disk) &&
+        fs.readFileSync(disk).equals(fs.readFileSync(local)) && (fs.statSync(disk).mode & 0o777) === 0o600, disk.replace(APP, ''));
+    await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), page.click('form[action*="/inputs/refresh"] button')]);
+    await expectText('Atualizar retrato: pedido ao servidor', 'Pedimos um retrato novo a 1 servidor(es)');
+    let seen = false;
+    for (let i = 0; i < 20 && !seen; i++) {
+        await sleep(1500);
+        await page.reload({ waitUntil: 'networkidle0' });
+        seen = await has(folder + '/');
+    }
+    check('O retrato mostra a subpasta nova', seen);
+    await clickText('a', folder + '/', { navigate: true });
+    await expectText('Na subpasta: o arquivo e o servidor em que está', name, 'srv-linux-local-01');
+    await snap('Entrada: subpasta pelo retrato do agente', { full: true });
+    await sendForm(folder, false);
+    row = await lastUpload();
+    check('Repetido sem substituir: Falhou — já existia', row.includes('Falhou') && row.includes('já existia'), row);
+    await sendForm(folder, true);
+    row = await lastUpload();
+    check('Com Substituir e a confirmação: Entregue', row.includes('Entregue') && row.includes('(substituir)'), row);
+    await sendForm('../fora', false);
+    await expectText('Subpasta com .. recusada com explicação', "sem '..'");
+    await snap('Entrada: últimos envios e a subpasta recusada', { full: true });
+    const big = await page.evaluate(async (u) => {
+        const fd = new FormData();
+        fd.append('file', new Blob([new Uint8Array(51 * 1024 * 1024)]), 'grande.bin');
+        const r = await fetch(u, { method: 'POST', body: fd, credentials: 'same-origin' });
+        return r.status;
+    }, BASE_URL + '/inputs/upload');
+    check('Envio acima de 50 MiB: 413 antes de ler o corpo', big === 413, 'status ' + big);
+    // uso de ponta a ponta: o script le o arquivo enviado pela tela
+    const tid = await createTicket('contar_linhas_arquivo', 'GFPREPROD', { caminho_arquivo: disk });
+    state.tickets.ct29 = tid;
+    saveState();
+    const fim = await waitStatus(tid, ['Deu certo', 'Deu erro'], 120);
+    await sleep(3000);
+    await go(`/tickets/detail/${tid}`);
+    check(`Ticket #${tid} do contar_linhas_arquivo sobre o arquivo enviado: Deu certo, 2001 linhas`,
+        fim.includes('Deu certo') && /Total de linhas:\s+2001\b/.test(await text()));
+    await snap('Ticket que leu o arquivo enviado pela tela', { full: true });
+    await login('consulta');
+    check('consulta sem Enviar Arquivos: 403', (await go('/inputs/index')) === 403);
+    await login('admin');
+    await go('/audit/index?action=INPUT_DELIVERY');
+    await expectText('Auditoria: "Entrega na entrada" pelo agente', 'Entrega na entrada', 'SYSTEM:srv-linux-local-01');
+    fs.unlinkSync(local);
+};
+
+CTS['CT-30'] = async () => {
+    begin('CT-30', 'CR-019: pasta de trabalho do script (SSS_WORK_DIR)');
+    const sid = await diagScript('diag_pasta_trabalho', path.join(DIAG, 'pasta_trabalho.sh'),
+        'Diagnostico do CR-019: grava na pasta de trabalho (SSS_WORK_DIR)');
+    const tid = await runDirect(sid, 'GFPREPROD', {});
+    state.tickets.ct30 = tid;
+    saveState();
+    const fim = await waitStatus(tid, ['Deu certo', 'Deu erro'], 120);
+    await sleep(3000);
+    await go(`/tickets/detail/${tid}`);
+    check(`Ticket #${tid} (diag_pasta_trabalho) deu certo`, fim.includes('Deu certo'));
+    await expectText('Log: SSS_WORK_DIR na estrutura da saída e HOME na pasta descartável',
+        'Pasta de trabalho:', `script_work/gfpreprod/diag_pasta_trabalho/`, `ticket_${tid}`, 'HOME:', `work/ticket_${tid}/exec`);
+    await snap('Log do ticket com a pasta de trabalho', { full: true });
+    const d = new Date();
+    const p2 = (n) => String(n).padStart(2, '0');
+    const base = path.join(APP, 'script_work', 'gfpreprod', 'diag_pasta_trabalho', String(d.getFullYear()), p2(d.getMonth() + 1), p2(d.getDate()));
+    const found = [];
+    const walk = (dir) => { if (!fs.existsSync(dir)) return; for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, e.name); if (e.isDirectory()) { if (e.name === `ticket_${tid}`) found.push(full); else walk(full); } } };
+    walk(base);
+    check('A pasta de trabalho ficou no disco depois do ticket, com 0700 e o diagnostico.txt', found.length === 1 &&
+        (fs.statSync(found[0]).mode & 0o777) === 0o700 && fs.existsSync(path.join(found[0], 'diagnostico.txt')),
+        found[0] ? found[0].replace(APP, '') : 'nao encontrada');
+    check('Script de diagnóstico desativado ao final', await deactivateScript(sid));
+    note('O DEV tem [agent] script_work_dir ligado (CR-019c); fora do DEV a pasta de cada ambiente é criada pelo root (DEPLOYMENT).');
+};
+
 CTS['ENCERRAMENTO'] = async () => {
     begin('ENCERRAMENTO', 'Encerramento: regras da homologação pausadas (ficam como evidência, sem rodar)');
     await login('admin');
@@ -1626,7 +1858,7 @@ CTS['ENCERRAMENTO'] = async () => {
 
 const ORDER = ['CT-01', 'CT-02', 'CT-03', 'MASSA', 'CT-04', 'CT-05', 'CT-06', 'CT-07', 'CT-08', 'CT-09', 'CT-10',
     'CT-11', 'CT-12', 'CT-13', 'CT-14', 'CT-15', 'CT-16', 'CT-17', 'CT-18', 'CT-19', 'CT-20', 'CT-21', 'CT-22',
-    'CT-23', 'CT-24', 'CT-25', 'CT-26', 'CT-27', 'ENCERRAMENTO'];
+    'CT-23', 'CT-24', 'CT-25', 'CT-26', 'CT-27', 'CT-28', 'CT-29', 'CT-30', 'ENCERRAMENTO'];
 
 module.exports = { CTS };
 
