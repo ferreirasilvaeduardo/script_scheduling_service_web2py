@@ -1505,6 +1505,24 @@ WHEN NOT MATCHED THEN
   VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'DOWNLOAD_OUTPUT', 'OPERATION', 'Baixar Saídas', 'Navegar pelas saídas dos tickets nos ambientes do perfil e baixar o zip ou um arquivo', 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_features dst
+USING (SELECT 'UPLOAD_INPUT' AS code FROM DUAL) src
+ON (dst.code = src.code)
+WHEN MATCHED THEN
+  UPDATE SET dst.name = 'Enviar Arquivos',
+             dst.module = 'OPERATION',
+             dst.description = 'Enviar arquivos para a pasta de entrada dos scripts do perfil, nos ambientes do perfil',
+             dst.active = 'Y',
+             dst.updated_at = SYSDATE,
+             dst.updated_by = 'SYSTEM:init_db'
+  WHERE dst.active <> 'Y'
+     OR dst.name <> 'Enviar Arquivos'
+     OR dst.module <> 'OPERATION'
+     OR dst.description <> 'Enviar arquivos para a pasta de entrada dos scripts do perfil, nos ambientes do perfil'
+WHEN NOT MATCHED THEN
+  INSERT (id, code, module, name, description, active, created_at, created_by)
+  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'UPLOAD_INPUT', 'OPERATION', 'Enviar Arquivos', 'Enviar arquivos para a pasta de entrada dos scripts do perfil, nos ambientes do perfil', 'Y', SYSDATE, 'SYSTEM:init_db');
+
+MERGE INTO openrisow.tbsss_features dst
 USING (SELECT 'MANAGE_USERS' AS code FROM DUAL) src
 ON (dst.code = src.code)
 WHEN MATCHED THEN
@@ -1774,6 +1792,17 @@ MERGE INTO openrisow.tbsss_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsss_profiles p, openrisow.tbsss_features f
+   WHERE p.name = 'ADMINISTRATOR' AND f.code = 'UPLOAD_INPUT'
+) src
+ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
+WHEN NOT MATCHED THEN
+  INSERT (id, profile_id, feature_id, created_at, created_by)
+  VALUES (openrisow.sq_tbsss_profile_feature.NEXTVAL, src.profile_id, src.feature_id, SYSDATE, 'SYSTEM:init_db');
+
+MERGE INTO openrisow.tbsss_profile_feature dst
+USING (
+  SELECT p.id AS profile_id, f.id AS feature_id
+    FROM openrisow.tbsss_profiles p, openrisow.tbsss_features f
    WHERE p.name = 'ADMINISTRATOR' AND f.code = 'MANAGE_USERS'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
@@ -1962,6 +1991,17 @@ WHEN NOT MATCHED THEN
   INSERT (id, profile_id, feature_id, created_at, created_by)
   VALUES (openrisow.sq_tbsss_profile_feature.NEXTVAL, src.profile_id, src.feature_id, SYSDATE, 'SYSTEM:init_db');
 
+MERGE INTO openrisow.tbsss_profile_feature dst
+USING (
+  SELECT p.id AS profile_id, f.id AS feature_id
+    FROM openrisow.tbsss_profiles p, openrisow.tbsss_features f
+   WHERE p.name = 'OPERATOR_PROD' AND f.code = 'UPLOAD_INPUT'
+) src
+ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
+WHEN NOT MATCHED THEN
+  INSERT (id, profile_id, feature_id, created_at, created_by)
+  VALUES (openrisow.sq_tbsss_profile_feature.NEXTVAL, src.profile_id, src.feature_id, SYSDATE, 'SYSTEM:init_db');
+
 MERGE INTO openrisow.tbsss_profile_env dst
 USING (
   SELECT p.id AS profile_id, a.id AS environment_id
@@ -2071,6 +2111,17 @@ USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsss_profiles p, openrisow.tbsss_features f
    WHERE p.name = 'OPERATOR_HML' AND f.code = 'DOWNLOAD_OUTPUT'
+) src
+ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
+WHEN NOT MATCHED THEN
+  INSERT (id, profile_id, feature_id, created_at, created_by)
+  VALUES (openrisow.sq_tbsss_profile_feature.NEXTVAL, src.profile_id, src.feature_id, SYSDATE, 'SYSTEM:init_db');
+
+MERGE INTO openrisow.tbsss_profile_feature dst
+USING (
+  SELECT p.id AS profile_id, f.id AS feature_id
+    FROM openrisow.tbsss_profiles p, openrisow.tbsss_features f
+   WHERE p.name = 'OPERATOR_HML' AND f.code = 'UPLOAD_INPUT'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN

@@ -203,6 +203,9 @@ SCHEMA = collections.OrderedDict([
         ("log_poll_interval_s", FieldDef("int", required=True, min_val=1, max_val=3600)),
         ("trusted_proxies", FieldDef("list_csv", required=False, default=())),
         ("allowed_origins", FieldDef("list_csv", required=True)),
+        # CR-020d: tamanho maximo do arquivo enviado pela tela de Entrada (o POST maior e recusado antes de ser lido).
+        ("input_upload_max_bytes", FieldDef("int", required=False, min_val=1048576, max_val=209715200,
+                                            default=52428800)),
     ])),
     ("retention", collections.OrderedDict([
         ("ticket_retention_days", FieldDef("int", required=True, min_val=1, max_val=3650)),
@@ -266,7 +269,7 @@ class LoggingConfig(_ItemAccessMixin, collections.namedtuple("LoggingConfig", [
 
 class WebConfig(_ItemAccessMixin, collections.namedtuple("WebConfig", [
     "session_idle_timeout_s", "session_max_hours", "login_max_attempts", "login_lockout_s",
-    "log_poll_interval_s", "trusted_proxies", "allowed_origins"
+    "log_poll_interval_s", "trusted_proxies", "allowed_origins", "input_upload_max_bytes"
 ])):
     __slots__ = ()
 

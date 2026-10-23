@@ -322,7 +322,8 @@ class TestBuildMenu(unittest.TestCase):
     def test_admin_ve_catalogo_completo_na_ordem(self):
         menu = ui_menu.build_menu([], True)
         self.assertEqual(self._codes(menu), [
-            ("OPERATION", ["EXEC_SCRIPT", "VIEW_LOGS", "DOWNLOAD_OUTPUT", "MANAGE_SCHEDULES", "VIEW_AUDIT"]),
+            ("OPERATION", ["EXEC_SCRIPT", "VIEW_LOGS", "DOWNLOAD_OUTPUT", "UPLOAD_INPUT", "MANAGE_SCHEDULES",
+                           "VIEW_AUDIT"]),
             ("ADMIN", ["MANAGE_USERS", "MANAGE_PROFILES", "MANAGE_ENVIRONMENTS", "MANAGE_SCRIPTS",
                        "MANAGE_PARAMETERS", "MANAGE_SCHEDULES", "VIEW_AUDIT"]),
         ])

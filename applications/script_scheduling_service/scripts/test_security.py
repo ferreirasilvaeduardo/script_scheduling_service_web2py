@@ -340,5 +340,16 @@ class TestReferrerHeader(unittest.TestCase):
     def test_origin_null_continua_rejeitado(self):
         self.assertFalse(security.is_allowed_origin("null", None, ["http://127.0.0.1:8000"]))
 
+
+class TestTamanhoDoPost(unittest.TestCase):
+    """CR-020d: o POST acima do maior envio e recusado (413) antes de o corpo ser lido pelo post_vars do CSRF."""
+
+    def test_limite_antes_da_leitura_do_corpo(self):
+        path = os.path.join(os.path.dirname(_MODULES), "models", "10_security.py")
+        with open(path, encoding="utf-8") as f:
+            code = f.read()
+        self.assertIn("raise HTTP(413", code)
+        self.assertLess(code.index("input_upload_max_bytes"), code.index('request.post_vars.get("_csrf")'))
+
 if __name__ == "__main__":
     unittest.main()

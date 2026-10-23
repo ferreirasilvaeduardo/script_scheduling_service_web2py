@@ -179,6 +179,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(cfg.web.log_poll_interval_s, 3)
         self.assertEqual(cfg.web.trusted_proxies, ())
         self.assertEqual(cfg.web.allowed_origins, ("http://127.0.0.1:18000",))
+        self.assertEqual(cfg.web.input_upload_max_bytes, 52428800)
 
         # [retention]
         self.assertEqual(cfg.retention.ticket_retention_days, 180)
@@ -741,6 +742,10 @@ class TestConfigCR007(unittest.TestCase):
                                                  "input_dir": os.path.join(base, "s", "input")})
         for v in ("0", "366"):
             self._refusal("script_work_retention_days", logging={"script_work_retention_days": v})
+        # CR-020d: limite do envio pela tela de Entrada.
+        for v in ("1048575", "209715201"):
+            self._refusal("input_upload_max_bytes", web={"input_upload_max_bytes": v})
+        self.assertEqual(self._load(web={"input_upload_max_bytes": "1048576"}).web.input_upload_max_bytes, 1048576)
         self.assertEqual(self._load(logging={"script_work_retention_days": "30"}).logging.script_work_retention_days, 30)
         for key, bad, good in (("output_max_bytes", ("1048575", "209715201"), ("1048576", "209715200")),
                                    ("output_max_files", ("0", "10001"), ("1", "10000"))):

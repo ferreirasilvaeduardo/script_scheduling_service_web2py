@@ -585,6 +585,7 @@ Responde às duas perguntas mais comuns do administrador, sem abrir perfil por p
 | `VIEW_LOGS` | Tickets de ambientes autorizados ao perfil (admin: todos). Respostas de parâmetros `sensitive = 'Y'` aparecem mascaradas. **Sem** `VIEW_LOGS`, quem tem `EXEC_SCRIPT` vê, lista e lê o log apenas dos **próprios** tickets |
 | `CANCEL_TICKET` | Cancelar ticket de terceiro em ambiente autorizado, **junto com** `VIEW_LOGS` (CR-018a): só cancela quem enxerga o ticket na lista e no detalhe. Sem `VIEW_LOGS`, `CANCEL_TICKET` não vale para tickets de terceiros. A decisão é de `rbac.can_cancel`. **Sem** esta funcionalidade, o solicitante com `EXEC_SCRIPT` pode cancelar apenas os próprios tickets, mesmo que tenha perdido o acesso ao ambiente |
 | `DOWNLOAD_OUTPUT` (CR-020a) | Navegar pelas saídas `AVAILABLE` dos tickets de ambientes autorizados ao perfil (admin: todos), inclusive de outras pessoas, e baixar o zip ou um arquivo dele (§5.9). O download pelo detalhe do ticket continua com a regra do log |
+| `UPLOAD_INPUT` (CR-020d) | Ver a pasta de entrada e enviar arquivos para ela, só em script **e** ambiente do perfil (admin: todos), script ativo homologado em ambiente ativo (§5.10) |
 | `MANAGE_SCHEDULES` | Criar e editar regras. O `user_id` da regra é o criador, e cada desdobro roda sob os privilégios vigentes desse usuário |
 
 #### D. Catálogo canônico de funcionalidades (seed)
@@ -594,6 +595,7 @@ Responde às duas perguntas mais comuns do administrador, sem abrir perfil por p
 | `OPERATION` | `EXEC_SCRIPT` | Rodar Scripts | Preencher questionários e abrir tickets |
 | `OPERATION` | `VIEW_LOGS` | Consultar Tickets | Acompanhar os tickets e ler o log em tempo quase real |
 | `OPERATION` | `CANCEL_TICKET` | Cancelar Tickets | Cancelar tickets de terceiros nos ambientes consultados (com Consultar Tickets) |
+| `OPERATION` | `UPLOAD_INPUT` | Enviar Arquivos | Enviar arquivos para a pasta de entrada dos scripts do perfil, nos ambientes do perfil (CR-020d; no seed, com ADMINISTRATOR, OPERATOR_PROD e OPERATOR_HML) |
 | `OPERATION` | `DOWNLOAD_OUTPUT` | Baixar Saídas | Navegar pelas saídas dos tickets nos ambientes do perfil e baixar o zip ou um arquivo (CR-020a; no seed, com ADMINISTRATOR, OPERATOR_PROD e OPERATOR_HML) |
 | `ADMIN` | `MANAGE_USERS` | Gestão de Usuários | Gerenciar operadores e credenciais |
 | `ADMIN` | `MANAGE_PROFILES` | Gestão de Perfis | Gerenciar perfis e matrizes de permissão |
@@ -1008,6 +1010,20 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
 * **Downloads** (`GET`): `outputs/download_zip/<id>` (o zip inteiro, `application/zip`) e `outputs/download_file/<id>?name=<nome>` (um arquivo, `application/octet-stream`). O nome pedido precisa ser **exatamente** um item do índice do zip; caminho montado, pasta ou nome acima de 500 caracteres são recusados. O `Content-Disposition` leva só o último nível do nome, sem aspas, barra nem caractere de controle, com versão ASCII e `filename*` UTF-8; com `Content-Length`, `Cache-Control: no-store` e `X-Content-Type-Options: nosniff`.
 * **Auditoria:** todo download grava `OUTPUT_DOWNLOAD` (§4.4) antes do envio; navegar não audita.
 * **Contrato (leituras novas):** `RepoTickets.output_summary(level, environment_scope, environment, script_id)`, com `level` em `environment`, `script` ou `day`, e `RepoTickets.output_tickets(environment, script_id, day_from, day_to, page, size, environment_scope)`. Só leem `tbsss_ticket_output` sem o BLOB, com escopo e filtros por bind; o dia é um intervalo de `started_at`, sem função na coluna no `WHERE` (AGENTS §4.12).
+
+### 5.10 Entrada (CR-020d)
+
+**Entrada** (`inputs/index`, exige `UPLOAD_INPUT`, item "Entrada" do menu Operação): a pasta de entrada dos scripts (§8.14), vista e alimentada pela tela. A pasta existe só no servidor de cada agente; a tela mostra o retrato que cada agente mandou e o envio vai pelo banco.
+
+* **Níveis:** Ambientes (os do perfil, ativos) → Scripts (os do perfil, ativos e homologados no ambiente) → a pasta do script, com as subpastas navegáveis (`?dir=`). Fora do escopo ou parâmetro fora do formato: **404**.
+* **Pasta:** montada a partir dos retratos (`tbsss_input_listing`) de todos os agentes: subpastas, e cada arquivo com tamanho, data e os servidores em que está. Para cada agente, quando o retrato foi feito e se um novo foi pedido. **Atualizar retrato** (`inputs/refresh`, POST) pede um retrato novo a cada servidor no ar do ambiente.
+* **Enviar arquivo** (`inputs/upload`, POST multipart):
+  * arquivo, subpasta (preenchida com a pasta atual; em branco é a própria pasta do script) e **Substituir se já existir**. Com a caixa marcada, uma janela explica o efeito antes do envio (`static/js/app/inputs.js`; sem JavaScript, o envio segue direto, porque a caixa já é a escolha explícita);
+  * nome e subpasta seguem a regra do helper `put-input` (§8.0) e são conferidos antes de gravar; o nome é o do arquivo no computador (só o último nível);
+  * **tamanho máximo** `[web] input_upload_max_bytes` (padrão 50 MiB). O modelo de segurança recusa com **413** qualquer POST com `Content-Length` acima dele (mais 64 KiB de folga do formulário) **antes** de ler o corpo; o serviço confere de novo o tamanho real;
+  * o SHA-256 é calculado na web e o envio vai para todos os agentes vivos do ambiente (§10, tabelas 19 e 20). Sem nenhum: "Nenhum servidor deste ambiente está no ar agora. Tente de novo mais tarde." e nada é gravado.
+* **Últimos envios** do script no ambiente (de todas as subpastas, com o caminho completo): arquivo, quem enviou (mascarado como no resto do sistema), quando, tamanho e a situação em cada servidor (Aguardando, Entregue ou Falhou, com o motivo em linguagem simples), paginados de 20 em 20, com o link **Atualizar** (sem atualização automática).
+* **Auditoria:** `INPUT_UPLOAD` no envio e `INPUT_DELIVERY` na entrega (§4.4); navegar e pedir retrato não auditam.
 
 ## 6. Parâmetros, Validação e Compilação do Snapshot
 
@@ -2849,6 +2865,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[logging]` | `max_local_log_size_bytes` | inteiro | 1.024 a 10.737.418.240 |
 | `[logging]` | `app_log_retention_days`, `local_log_retention_days` | inteiro | 1 a 3.650 |
 | `[logging]` | `output_retention_days` (CR-012) | inteiro | 1 a 365, padrão 7 |
+| `[web]` | `input_upload_max_bytes` (CR-020d) | inteiro | 1.048.576 a 209.715.200, padrão 52.428.800; o POST acima disso é recusado com 413 antes de ser lido (§5.10) |
 | `[logging]` | `script_work_retention_days` (CR-019) | inteiro | 1 a 365, padrão 7 |
 | `[web]` | `session_idle_timeout_s`, `login_lockout_s` | inteiro | 1 a 86.400 |
 | `[web]` | `session_max_hours` (CR-008) | inteiro | 1 a 168, padrão 12 |

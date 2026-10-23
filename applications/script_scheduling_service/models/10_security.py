@@ -115,6 +115,19 @@ if _rerouting_error:
     # Sem isto, o web2py tentaria ler de novo o wsgi.input pelo CONTENT_LENGTH herdado e bloquearia.
     request._body = io.BytesIO()
 
+# CR-020d: o corpo do POST e lido abaixo (post_vars do CSRF); um corpo acima do maior envio permitido pela tela de
+# Entrada (mais a folga do formulario multipart) e recusado antes, sem ser lido.
+_POST_MARGIN_BYTES = 65536
+if (request.env.request_method or "GET").upper() not in ("GET", "HEAD", "OPTIONS") and not _rerouting_error:
+    try:
+        _body_size = int(request.env.content_length or 0)
+    except ValueError:
+        _body_size = -1
+    if _body_size < 0 or _body_size > _cfg.web.input_upload_max_bytes + _POST_MARGIN_BYTES:
+        _log.warning("requisicao rejeitada (motivo=tamanho bytes=%s caminho=%s ip=%s)", request.env.content_length,
+                     request.env.path_info, request.env.remote_addr, extra={"action": "CSRF"})
+        raise HTTP(413, u"O arquivo passa do tamanho máximo permitido.", **response.headers)
+
 if (request.env.request_method or "GET").upper() not in ("GET", "HEAD", "OPTIONS") \
         and not _rerouting_error:
     if not security.is_allowed_origin(request.env.http_origin, request.env.http_referer, _allowed_origins()):

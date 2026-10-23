@@ -66,6 +66,7 @@ login_max_attempts = 5
 login_lockout_s = 900
 log_poll_interval_s = 3
 trusted_proxies =
+input_upload_max_bytes = 52428800   ; CR-020d: maior arquivo enviado pela tela de Entrada (1 MiB a 200 MiB)
 allowed_origins = http://127.0.0.1:18000   ; Ex. https://sss.empresa.local lista separada por vírgula, validada contra Origin/Referer
 
 [retention]
