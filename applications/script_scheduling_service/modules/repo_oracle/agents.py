@@ -2,10 +2,10 @@
 """Implementacao Oracle 11gR2 do repositorio de agentes (F7.3, agregado AUDITORIA_AGENTES; AGENTS §4).
 
 Leituras do painel de agentes com a mesma semantica do repo_fake/agents.py (README §2.5, §8.7):
-- tickets_running e running_without_pid usam a expressao CASE textualmente identica a de ix_tck_run
+- tickets_running e running_without_pid usam a expressao CASE textualmente identica a de ix_tbsss_tck_run
   (AGENTS §4.8, importada do sql_ident) e nunca leem CLOB;
 - unattended_queue agrupa os PENDING vencidos pelo interpretador do cadastro (JOIN em tbsss_scripts,
-  o mesmo criterio do claim; CR-008, R-15), lendo so ix_tck_fila (status, ambiente, script_id e o inicio
+  o mesmo criterio do claim; CR-008, R-15), lendo so ix_tbsss_tck_queue (status, ambiente, script_id e o inicio
   da espera; CR-013); a comparacao com os agentes saudaveis fica em Python, como no FAKE;
 - o SQL da fila e do rodando sem PID e o calculo dos pares atendidos vem do repo_oracle/health.py (F9.1b),
   o mesmo do scripts/health.py: a tela e o monitoramento nao divergem;
@@ -80,7 +80,7 @@ class RepoAgentsOracle(BaseRepoOracle, RepoAgents):
         return [self.tuple_to_dict(_COLS_AGT, r) for r in self._ler(self._sql["LIST"], conn=conn)]
 
     def tickets_running(self, code, conn=None):
-        """Tickets RUNNING do agente pela expressao de ix_tck_run, por id, sem CLOB."""
+        """Tickets RUNNING do agente pela expressao de ix_tbsss_tck_run, por id, sem CLOB."""
         rows = self._ler(self._sql["TICKETS_RUNNING"], {"code": code}, conn=conn)
         return [self.tuple_to_dict(_COLS_TCK, r) for r in rows]
 

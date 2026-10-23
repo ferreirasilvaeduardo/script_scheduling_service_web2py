@@ -17,7 +17,7 @@ COLS_AGENT = ("code", "status", "heartbeat_at", "environments", "interpreters", 
 COLS_NO_PID = ("id", "script_id", "environment", "agent_id", "started_at")
 
 # {agt}, {tck}, {scr}, {amb}, {aud} e {ctl} recebem apenas nomes qualificados por sql_ident (validados).
-# status = 'PENDING' na coluna lider de ix_tck_fila (CR-013): faixa so dos PENDING, lida so no indice
+# status = 'PENDING' na coluna lider de ix_tbsss_tck_queue (CR-013): faixa so dos PENDING, lida so no indice
 # (ambiente, script_id e o inicio da espera); o inicio <= :agora equivale a scheduled_at <= :agora, porque
 # created_at nunca passa de agora. Agrupa por script antes do JOIN com o catalogo. Nenhum CLOB e lido.
 SQL_QUEUE = (
@@ -27,7 +27,7 @@ SQL_QUEUE = (
     "JOIN {scr} s ON s.id = g.script_id GROUP BY g.environment, s.interpreter"
 )
 # ">= CHR(1)" equivale a IS NOT NULL para o agent_id ([A-Za-z0-9._-], todos acima de CHR(1)), mas vira
-# faixa de ix_tck_run (INDEX RANGE SCAN); com IS NOT NULL o otimizador varria a tabela (EXPLAIN, F7.3).
+# faixa de ix_tbsss_tck_run (INDEX RANGE SCAN); com IS NOT NULL o otimizador varria a tabela (EXPLAIN, F7.3).
 SQL_RUNNING_NO_PID = (
     "SELECT " + ", ".join(COLS_NO_PID) + " FROM {tck} "
     "WHERE " + _RUN + " >= CHR(1) AND status = 'RUNNING' AND process_id IS NULL "
@@ -35,10 +35,10 @@ SQL_RUNNING_NO_PID = (
 )
 _SQL_AGENTS = "SELECT " + ", ".join(COLS_AGENT) + " FROM {agt} ORDER BY code"
 _SQL_ENVIRONMENTS = "SELECT name FROM {env} WHERE active = 'Y' ORDER BY name"
-# Fila vencida inteira, so no indice ix_tck_fila (mesma faixa do SQL_QUEUE).
+# Fila vencida inteira, so no indice ix_tbsss_tck_queue (mesma faixa do SQL_QUEUE).
 _SQL_QUEUE_OVERDUE = ("SELECT COUNT(*), MIN(" + _START + ") FROM {tck} WHERE status = 'PENDING' AND "
                      + _START + " <= :now")
-# ator na coluna de ix_aud_ator: faixa so das linhas do purge.
+# ator na coluna de ix_tbsss_aud_actor: faixa so das linhas do purge.
 _SQL_LAST_PURGE = ("SELECT MAX(created_at) FROM {aud} WHERE actor = 'SYSTEM:purge' AND action = 'PURGE'"
                      " AND created_at >= :cutoff")
 _SQL_VERSION = "SELECT schema_version FROM {ctl} WHERE id = 1"
@@ -107,11 +107,11 @@ class RepoHealth(object):
         return [r[0] for r in self._ler(conn, "environments")]
 
     def queue_by_pair(self, conn, now):
-        """Linhas (ambiente, interpretador, quantidade, mais_antigo) dos PENDING vencidos."""
+        """Linhas (environment, interpreter, quantity, oldest) dos PENDING vencidos."""
         return self._ler(conn, "queue", {"now": now})
 
     def overdue_queue(self, conn, now):
-        """(quantidade, mais_antigo) dos PENDING vencidos; mais_antigo None sem fila."""
+        """(quantidade, mais antigo) dos PENDING vencidos; o mais antigo e None sem fila."""
         count, old = self._ler(conn, "overdue_queue", {"now": now})[0]
         return int(count or 0), old
 

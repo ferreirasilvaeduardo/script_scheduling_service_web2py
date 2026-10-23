@@ -198,7 +198,7 @@ class TestDdlBuilder(unittest.TestCase):
         self.assertIn("ck_tbsss_usr_epoch", constraints)
         self.assertIn("session_epoch >= 0", constraints["ck_tbsss_usr_epoch"])
 
-        # tbsss_agents.pid_daemon
+        # tbsss_agents.daemon_pid
         self.assertIn("daemon_pid NUMBER(10)", tables["tbsss_agents"])
 
         # tbsss_tickets.log_offset_chars e ck
@@ -260,7 +260,7 @@ class TestGrantsByRole(unittest.TestCase):
         ]))
 
     def test_nunca_concede_a_public(self):
-        """O script de implantacao nao concede nada a PUBLIC (tbsss_users guarda senha_hash)."""
+        """O script de implantacao nao concede nada a PUBLIC (tbsss_users guarda password_hash)."""
         script = ddl_builder.build_full_deploy_script("openrisow", "tbsss_", user_roles=self.roles)
         self.assertNotIn("PUBLIC", script.upper().replace("NENHUM GRANT A PUBLIC", ""))
         self.assertIn("GRANT SELECT ON openrisow.tbsss_agents TO sss_monitor;", script)
@@ -296,7 +296,7 @@ class TestGrantsByRole(unittest.TestCase):
 
 
 class TestOracle11gExpressionNormalization(unittest.TestCase):
-    """Testes de normalizar_expressao com textos reais do Oracle 11gR2 (CR-008, R-14)."""
+    """Testes de normalize_expression com textos reais do Oracle 11gR2 (CR-008, R-14)."""
 
     def test_fbi_texto_real_11g(self):
         """FBI com CASE e aspas duplas no 11gR2 bate normalizado contra o registro."""
@@ -497,14 +497,14 @@ class TestDdlSeedAndRollback(unittest.TestCase):
         self.assertIn(ddl_builder.HOMOLOGATION_DEFAULT_PASSWORD_HASH, seed)
 
     def test_validacao_sem_hash_e_com_owner_prefixo_parametrizados(self):
-        """99_validar: nao mostra senha_hash, nao fixa owner/prefixo e respeita o limite de linha do SQL*Plus."""
+        """99_validate_deploy: nao mostra password_hash, nao fixa owner/prefixo e respeita o limite de linha do SQL*Plus."""
         sql = ddl_builder.build_validation_script("SSS_APP", "abc_")
         self.assertNotIn("tbsss", sql.lower())
         self.assertNotIn("openrisow", sql.lower())
         self.assertNotIn("user_tables", sql.lower())
         self.assertIn("SSS_APP.abc_users", sql)
         self.assertIn("owner = 'SSS_APP'", sql)
-        # senha_hash so aparece dentro do CASE que diz se a senha esta definida (AGENTS §3.3).
+        # password_hash so aparece dentro do CASE que diz se a senha esta definida (AGENTS §3.3).
         uses = [l for l in sql.splitlines() if "password_hash" in l]
         self.assertEqual(uses, ["       CASE WHEN u.password_hash IS NULL THEN 'N' ELSE 'Y' END AS senha_definida"])
         self.assertLessEqual(max(len(l) for l in sql.splitlines()), 2499)

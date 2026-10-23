@@ -31,7 +31,7 @@ INCONSISTENT = "INCONSISTENT"
 def clob_units(text, supplementary_unit=2):
     """Comprimento do texto como o CLOB o conta: caractere fora do BMP vale supplementary_unit posicoes
     (2 em AL32UTF8, UTF-16 interno; 1 num charset de um byte, onde vira o caractere de substituicao).
-    O agente mede a unidade no banco (RepoSchedulerLog.unidade_suplementar)."""
+    O agente mede a unidade no banco (RepoSchedulerLog.supplementary_unit)."""
     if supplementary_unit == 1:
         return len(text)
     return len(text.encode("utf-16-le")) // 2
@@ -168,9 +168,9 @@ class Pump(object):
             return False
 
     def apply_db_cap(self, text):
-        """(texto_para_enviar, truncou). O total no CLOB, marcador incluido, nunca passa do teto.
+        """(texto para enviar, truncou). O total no CLOB, marcador incluido, nunca passa do teto.
 
-        Enquanto cabe, envia ate max - bytes_do_marcador e retem o resto (no maximo o tamanho do marcador),
+        Enquanto cabe, envia ate max - os bytes do marcador e retem o resto (no maximo o tamanho do marcador),
         para decidir no fim entre o conteudo integral e o corte com marcador. Ao exceder, envia o prefixo que
         cabe antes do marcador e o marcador, uma unica vez.
         """

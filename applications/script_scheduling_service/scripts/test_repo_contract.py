@@ -779,7 +779,7 @@ class TestRepoContractFake(unittest.TestCase, BaseRepoContractTest):
         return repo_factory.get(name)
 
     def test_saida_do_ticket_no_seed(self):
-        """CR-012: metadados sem o conteudo; fatias so do DISPONIVEL; o Oracle e testado em test_scheduler_saida."""
+        """CR-012: metadados sem o conteudo; fatias so do DISPONIVEL; o Oracle e testado em test_scheduler_output."""
         import io
         import zipfile
         tickets = self.obter_repo("tickets")

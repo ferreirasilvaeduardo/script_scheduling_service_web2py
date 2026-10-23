@@ -35,7 +35,7 @@ def _valid_id(value):
 def user_context(state):
     """Monta o contexto de autorizacao a partir do estado de sessao e da matriz do perfil.
 
-    estado: dict de RepoUsers.obter_estado_sessao acrescido de 'features'
+    estado: dict de RepoUsers.get_session_state acrescido de 'features'
     (codigos), 'environments' (nomes) e 'scripts' (ids).
     """
     return {

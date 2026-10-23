@@ -225,7 +225,7 @@ class Expansion(object):
         return True
 
     def _build_ticket(self, rule, script, links, login, priority, occurrence, now):
-        """(ticket, linhas_ticket_resp, None) ou (None, None, detalhe do INVALID_PARAM sem valores; R-26)."""
+        """(ticket, linhas de ticket_answer, None) ou (None, None, detalhe do INVALID_PARAM sem valores; R-26)."""
         if script is None:
             return None, None, "script inexistente"
         try:

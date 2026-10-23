@@ -258,7 +258,7 @@ class TestSSSLogging(unittest.TestCase):
         self.assertIs(logger1, logger2)
         self.assertEqual(len(logger2.handlers), 1)
 
-        # obter_logger tambem devolve o mesmo singleton
+        # get_logger tambem devolve o mesmo singleton
         logger3 = sss_logging.get_logger("sss_web", cfg)
         self.assertIs(logger1, logger3)
 

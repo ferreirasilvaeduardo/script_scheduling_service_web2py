@@ -308,7 +308,7 @@ class SchedulesService(object):
     def _check_expansion_problem(self, reg, now):
         """Avalia se a regra sofreria pausa no desdobro (README §7.5 passos 2 e 5; CR-007 R-26).
 
-        Retorna (codigo_motivo, texto_motivo) ou None se estiver apta.
+        Retorna (codigo do motivo, texto do motivo) ou None se estiver apta.
         """
         try:
             state = self._users.get_session_state(reg["user_id"])
@@ -794,7 +794,7 @@ class SchedulesService(object):
     # ----------------------------------------------------------- gravacao
 
     def save(self, ctx, ip, data):
-        """Inclui (sem 'id') ou altera uma regra. Retorna (id | None, erros_por_campo).
+        """Inclui (sem 'id') ou altera uma regra. Retorna (id | None, erros por campo).
 
         date (os dados do formulario): id, version, name, script_id e environment (so na inclusao),
         recurrence_type, cron_expression, run_time, week_days, month_day, start_date, end_date,

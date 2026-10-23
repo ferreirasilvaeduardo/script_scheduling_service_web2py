@@ -29,7 +29,7 @@ TICKET = {"requested_by": "ana", "priority": 2, "submitted_params": "{\"versao\"
 
 
 class _Types(object):
-    """Captura os setinputsizes por cursor (definir_tipos_entrada)."""
+    """Captura os setinputsizes por cursor (set_input_types)."""
 
     def __init__(self):
         self.calls = []

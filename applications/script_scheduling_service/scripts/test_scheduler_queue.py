@@ -114,7 +114,7 @@ class TestWithoutDb(unittest.TestCase):
         self.repo = RepoSchedulerQueue("OWN_X", "pfx_")
 
     def test_candidatos_sql_literal_e_binds_gerados(self):
-        # CR-013: catalogo do agente, RUNNING por par e a janela por ambiente x prioridade em ix_tck_fila.
+        # CR-013: catalogo do agente, RUNNING por par e a janela por ambiente x prioridade em ix_tbsss_tck_queue.
         conn = _Conn([("FROM OWN_X.pfx_scripts WHERE interpreter IN", (3, [(3, 2), (4, 1), (5, 1)])),
                       ("WHERE status = 'RUNNING' AND environment IN", (1, [(4, "PRD", 1)])),
                       ("UNION ALL", (2, [(7, 3, "PRD"), (8, 4, "HML")]))])

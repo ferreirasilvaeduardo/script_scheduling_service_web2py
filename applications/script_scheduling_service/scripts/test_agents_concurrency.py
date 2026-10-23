@@ -31,7 +31,7 @@ LONG_MARK = 3017  # sleep exclusivo do script longo, para achar orfaos pelo argv
 
 
 class _TwoAgentsBase(unittest.TestCase):
-    """Fixture de dois agentes reais (F8.3d, reaproveitada no F8.4e por test_ha_agentes_reais)."""
+    """Fixture de dois agentes reais (F8.3d, reaproveitada no F8.4e por test_ha_real_agents)."""
 
     AGENT_PREFIX = "tst-f83d"
     CONFIG_EXTRA = {}

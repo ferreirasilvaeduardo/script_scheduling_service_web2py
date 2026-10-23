@@ -17,7 +17,7 @@ class RepoAgents(object):
         """PENDING com scheduled_at <= agora sem agente OK/DELAYED para o par ambiente/interpretador.
 
         Retorna grupos ordenados por ambiente e interpretador: ambiente, interpretador,
-        quantidade e mais_antigo (menor inicio da espera, GREATEST(scheduled_at, created_at); CR-013). O interpretador e o do cadastro
+        quantity e oldest (menor inicio da espera, GREATEST(scheduled_at, created_at); CR-013). O interpretador e o do cadastro
         (tbsss_scripts.interpretador, join), o mesmo criterio do claim (CR-008, R-15); nenhum
         CLOB e lido (nem submitted_params nem log_output).
         """

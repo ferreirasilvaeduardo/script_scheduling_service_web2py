@@ -1122,7 +1122,7 @@ class TestOracleSchedules(unittest.TestCase):
             self.assertEqual(self.agd.list({"name": mark.lower()}, environment_scope=[])["total"], 0)
             self.assertEqual([i["id"] for i in self.agd.list({"name": mark.lower(), "active": "N"})["items"]], [])
 
-            # 7. ticket_status e a ocorrencia unica do agendamento (ix_<prefixo>tck_ocor, CR-007 R-27).
+            # 7. ticket_status e a ocorrencia unica do agendamento (ix_<prefixo>tck_occur, CR-007 R-27).
             tck = repo_factory.get("tickets")
             self.assertIsNone(self.agd.ticket_status(None))
             self.assertIsNone(self.agd.ticket_status(999999999))
@@ -1183,10 +1183,10 @@ class TestOracleAuditAgents(unittest.TestCase):
         self.assertIn("SSS_TEST_AUD.abc_scripts", agt._sql["QUEUE"])
 
     def test_painel_usa_as_expressoes_dos_indices_e_nenhum_clob(self):
-        """AGENTS §4.8: CASE textualmente identico ao de ix_tck_run/ix_tck_fila; sem CLOB (CR-008, R-15)."""
+        """AGENTS §4.8: CASE textualmente identico ao de ix_tbsss_tck_run/ix_tbsss_tck_queue; sem CLOB (CR-008, R-15)."""
         self.assertIn("(" + sql_ident.FBI_TCK_RUN_AGENT_CASE + ") = :code", self.agt._sql["TICKETS_RUNNING"])
         self.assertIn("(" + sql_ident.FBI_TCK_RUN_AGENT_CASE + ") >= CHR(1)", self.agt._sql["RUNNING_NO_PID"])
-        # CR-013: so ix_tck_fila (status lider e o inicio da espera), agrupado por script antes do JOIN.
+        # CR-013: so ix_tbsss_tck_queue (status lider e o inicio da espera), agrupado por script antes do JOIN.
         self.assertIn("WHERE status = 'PENDING' AND " + sql_ident.FBI_TCK_QUEUE_START + " <= :now", self.agt._sql["QUEUE"])
         self.assertIn("JOIN " + self.agt._idents["scr"] + " s ON s.id = g.script_id", self.agt._sql["QUEUE"])
         for name in ("TICKETS_RUNNING", "QUEUE", "RUNNING_NO_PID"):

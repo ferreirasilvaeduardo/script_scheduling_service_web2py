@@ -53,7 +53,7 @@ class RepoAgentsFake(RepoAgents):
             for t in self._store.tickets.values():
                 if t["status"] != "PENDING" or t["scheduled_at"] > now:
                     continue
-                # Inicio da espera (CR-013): o mesmo de ix_tck_fila e do envelhecimento da fila.
+                # Inicio da espera (CR-013): o mesmo de ix_tbsss_tck_queue e do envelhecimento da fila.
                 start = max(t["scheduled_at"], t.get("created_at") or t["scheduled_at"])
                 # Mesmo criterio do claim: interpretador do cadastro, sem ler o snapshot (CR-008, R-15).
                 key = (t["environment"], interpreters.get(t["script_id"]))

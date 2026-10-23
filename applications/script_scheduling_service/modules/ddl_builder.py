@@ -14,7 +14,7 @@ DDLItem = collections.namedtuple("DDLItem", [
 ])
 
 # Catalogo canonico de funcionalidades (README §4.3.D)
-# Tuplas: (modulo, codigo, nome_exibicao, finalidade)
+# Tuplas: (modulo, codigo, nome de exibicao, finalidade)
 FEATURE_CATALOG = (
     ("OPERATION", "EXEC_SCRIPT", "Rodar Scripts", "Preencher questionários e abrir tickets"),
     ("OPERATION", "VIEW_LOGS", "Consultar Tickets", "Acompanhar os tickets e ler o log em tempo quase real"),
@@ -55,7 +55,7 @@ DEFAULT_PROFILES = (
     ), ("CLONE2", "CLONE1", "CLONE6", "CLONE7", "GFPREPROD")),
 )
 
-# Catalogo padrao de usuarios de homologacao e demonstracao (login, nome, perfil_nome)
+# Catalogo padrao de usuarios de homologacao e demonstracao (login, nome, nome do perfil)
 DEFAULT_USERS = (
     ("admin", "Super Administrador", "ADMINISTRATOR"),
     ("op.prod", "Operador Producao", "OPERATOR_PROD"),
@@ -665,7 +665,7 @@ GRANT_ROLES = ("web", "agent", "purge", "monitor")
 def build_grants_by_role(owner, prefix, user_roles):
     """Gera comandos GRANT para os usuarios informados por papel (README §11.1).
 
-    user_roles: dict com mapeamento papel -> usuario_oracle, ex:
+    user_roles: dict com mapeamento papel -> usuario Oracle, ex:
       {'web': 'sss_web', 'agent': 'sss_agente', 'purge': 'sss_purge', 'monitor': 'sss_monitor'}
 
     Nunca concede a PUBLIC. A conta de cada papel e validada como identificador Oracle (entra no
@@ -1545,7 +1545,7 @@ def build_full_deploy_script(owner, prefix, lob_storage="SECUREFILE",
     Para no primeiro erro (WHENEVER SQLERROR EXIT FAILURE ROLLBACK, revisao de 2026-10-20): um
     esquema parcial nunca e anunciado como sucesso. Reaplicar exige o 02_rollback antes (ciclo
     02 -> 01 -> 99). Os GRANTs seguem so os papeis do README §11.1; nada e concedido a PUBLIC
-    (tbsss_users guarda senha_hash).
+    (tbsss_users guarda password_hash).
     """
     sql_ddl = build_ddl_script(owner, prefix, lob_storage=lob_storage)
     sql_seed = build_seed_script(

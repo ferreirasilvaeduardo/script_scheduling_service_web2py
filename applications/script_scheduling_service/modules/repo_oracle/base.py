@@ -115,7 +115,7 @@ def translate_oracle_error(exc, constraint_padrao=None, prefix=None):
 def write_audit(conn, sql_tbl_aud, sql_seq_aud, audit, entity, entity_id):
     """Grava linha(s) em tbsss_audit na mesma transacao (README §4.4, §10).
 
-    Nunca corta nem completa valores (paridade com o FAKE e o test_06b): actor required com ate 40
+    Nunca corta nem completa valores (paridade com o FAKE e o test_06b do test_repo_contract): actor required com ate 40
     caracteres e detail com ate 1.000; fora disso, RepoViolation antes do INSERT, e a transacao toda
     e desfeita.
     """

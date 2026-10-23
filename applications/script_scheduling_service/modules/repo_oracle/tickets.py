@@ -464,7 +464,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
             cur = c.cursor()
             try:
                 db_conn.set_input_types(cur, **kinds)
-                # Ocorrencia repetida do agendamento: ORA-00001 em ix_<prefixo>tck_ocor (RepoViolation).
+                # Ocorrencia repetida do agendamento: ORA-00001 em ix_<prefixo>tck_occur (RepoViolation).
                 cur.execute(self._sql["INSERT"], binds)
             finally:
                 cur.close()

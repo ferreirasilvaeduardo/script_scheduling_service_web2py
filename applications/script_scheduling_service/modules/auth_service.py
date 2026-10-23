@@ -55,7 +55,7 @@ class AuthService(object):
     # ------------------------------------------------------------------ login
 
     def authenticate(self, login, password_value, ip):
-        """Autentica login/senha. Retorna (ctx, None) no sucesso ou (None, mensagem_generica)."""
+        """Autentica login/senha. Retorna (ctx, None) no sucesso ou (None, mensagem generica)."""
         now = self._clock()
         login_norm = login.strip().lower() if isinstance(login, str) else ""
         password_ok_kind = isinstance(password_value, str) and 0 < len(password_value) <= PASSWORD_MAX

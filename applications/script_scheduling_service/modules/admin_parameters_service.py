@@ -174,7 +174,7 @@ class AdminParametersService(object):
         return dict(result, items=items)
 
     def form(self, ctx, parameter_id=None):
-        """Dados do formulario. Padrao de parametro sensivel nunca e devolvido (apenas 'tem_padrao')."""
+        """Dados do formulario. Padrao de parametro sensivel nunca e devolvido (apenas 'has_default')."""
         admin_crud.require_feature(ctx, FEATURE)
         can_regex = rbac.has_feature(ctx, FEATURE) and ctx.get("is_admin") is True
         if parameter_id in (None, ""):

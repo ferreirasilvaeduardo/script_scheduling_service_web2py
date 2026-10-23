@@ -510,7 +510,7 @@ class TestRepoSchedulerLog(unittest.TestCase):
         self.assertNotIsInstance(ctx.exception, LogOffsetMismatch)
 
     def test_bind_out_pelos_tres_drivers(self):
-        """variavel_saida/valor_saida escolhem o tipo VARCHAR de cada combinacao (Thin/Thick: oracledb;
+        """output_variable/output_value escolhem o tipo VARCHAR de cada combinacao (Thin/Thick: oracledb;
         cx_Oracle: STRING); o resultado lido e o mesmo."""
         oracledb = mock.Mock(__name__="oracledb", DB_TYPE_VARCHAR="ODB_VARCHAR", DB_TYPE_CLOB="ODB_CLOB")
         cx = mock.Mock(__name__="cx_Oracle", STRING="CX_STRING", CLOB="CX_CLOB")

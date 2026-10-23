@@ -77,7 +77,7 @@ def minute_parts(dt):
 
 # ---------------------------------------------------------------------------
 # 1. Logs de execucao de cada ticket (CR-005 D5, R-a, R-b, README §8.4)
-#    log_dir/<ambiente>/<pasta_do_script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log (CR-009)
+#    log_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log (CR-009)
 # ---------------------------------------------------------------------------
 
 def run_log_dir(log_dir, environment, script_name, started_at, script_id=None):

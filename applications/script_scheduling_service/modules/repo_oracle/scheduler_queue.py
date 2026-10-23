@@ -118,7 +118,7 @@ class RepoSchedulerQueue(object):
 
         Tres leituras curtas, sem varrer a fila: (1) os scripts dos interpretadores do agente e o teto;
         (2) os RUNNING por script e ambiente; (3) a janela: para cada ambiente e prioridade original, os
-        `lote` primeiros por (inicio, id) em ix_tck_fila, so dos scripts abaixo do teto, juntados e ordenados
+        `lote` primeiros por (inicio, id) em ix_tbsss_tck_queue, so dos scripts abaixo do teto, juntados e ordenados
         por (prioridade efetiva, inicio, id). Dentro de uma prioridade, a efetiva so cai com a espera, entao
         a janela contem o lote exato da ordem completa (inicio = GREATEST(scheduled_at, created_at)).
         """
@@ -420,7 +420,7 @@ class RepoSchedulerQueue(object):
         return self.finalize(conn, ticket_id, agent_id, "FAILED", "FENCED", -2)
 
     def own_sweep(self, conn, agent_id):
-        """{ticket_id: cancel_requested} dos RUNNING deste agente (README §8.7; ix_tck_run)."""
+        """{ticket_id: cancel_requested} dos RUNNING deste agente (README §8.7; ix_tbsss_tck_run)."""
         cur = conn.cursor()
         try:
             cur.execute("SELECT id, cancel_requested FROM " + self._tck + " WHERE (" + _RUN + ") = :agent_id",
@@ -442,7 +442,7 @@ class RepoSchedulerQueue(object):
 
     def heartbeat(self, conn, agent_id, hostname, pid, ids):
         """Heartbeat dos tickets (executemany, arraydmlrowcounts) e do agente numa transacao, com o SYSDATE
-        (README §8.7; CR-007 R-11, R-28). Devolve (ids_perdidos, sysdate). Rotina tecnica: sem updated_*.
+        (README §8.7; CR-007 R-11, R-28). Devolve (ids perdidos, sysdate). Rotina tecnica: sem updated_*.
         rowcount 0 no agente: ROLLBACK e RegistrationLost. O chamador captura o instante monotonico ANTES desta
         chamada e o promove so se ela voltar (CR-008, R-09)."""
         ids = [int(i) for i in ids]
@@ -489,14 +489,14 @@ class RepoSchedulerQueue(object):
 
         dados: code, hostname, pid, version, environments, platform, interpreters, critical_config,
         node_offline_timeout_s. process_exists: os_platform.process_exists (o repositorio nao conhece o SO).
-        Duplicidade: DuplicateAgent. Corrida na inclusao (uk_<prefixo>agt_codigo): ROLLBACK e nova tentativa.
+        Duplicidade: DuplicateAgent. Corrida na inclusao (uk_<prefixo>agt_code): ROLLBACK e nova tentativa.
         """
         for attempt in range(attempts):
             try:
                 return self._registrar_agente(conn, data, process_exists)
             except Exception as exc:
                 if attempt + 1 < attempts and db_conn.classify_error(exc) == ("ORA", 1):
-                    continue  # ORA-00001 em uk_<prefixo>agt_codigo: outro processo incluiu antes; relê
+                    continue  # ORA-00001 em uk_<prefixo>agt_code: outro processo incluiu antes; relê
                 raise
 
     def _registrar_agente(self, conn, d, process_exists):

@@ -80,7 +80,7 @@ class AccessDenied(Exception):
 class RerunError(Exception):
     """Reexecucao nao gravada (recompilacao invalida ou falha de persistencia).
 
-    erros: dict codigo_campo -> mensagem, ja seguro para exibicao (sem valores).
+    erros: dict codigo do campo -> mensagem, ja seguro para exibicao (sem valores).
     """
 
     def __init__(self, ticket_id, errors):
@@ -605,7 +605,7 @@ class TicketService(object):
 
     def create_ticket(self, ctx, ip, script_id, environment, answers, priority, scheduled_at,
                      rerun_of=None):
-        """Cria o ticket (README §5.4). Retorna (ticket_id | None, erros_por_campo).
+        """Cria o ticket (README §5.4). Retorna (ticket_id | None, erros por campo).
 
         rerun_of (opcional) vincula o novo ticket ao original (README §5.5), exigindo
         as mesmas regras de reexecutar e o mesmo script/environment. Lanca AccessDenied quando

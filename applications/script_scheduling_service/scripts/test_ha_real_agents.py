@@ -3,7 +3,7 @@
 
 Com SSS_TEST_ORACLE=1, a fixture do F8.3d (_TwoAgentsBase: dados proprios, um config.ini por agente, limpeza
 unica depois de derrubar os agentes) e tempos de fencing reduzidos dentro das invariantes I1 a I4 (README §8.9):
-call 5 s, heartbeat 2 s, fence 12 s, kill_grace 2 s e node_offline 24 s.
+call 5 s, heartbeat 2 s, fence 12 s, kill_grace_s 2 s e node_offline 24 s.
 
 * CRON '* * * * *' por 3 minutos com os dois agentes: exatamente 1 ticket por minuto, sem duplicata (README §7.5).
 * kill -9 no agente dono durante uma execucao: o outro marca NODE_OFFLINE depois de node_offline_timeout_s

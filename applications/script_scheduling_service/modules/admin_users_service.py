@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Cadastro de usuarios (README §4.2, §4.3.B, §4.4, §10 tabela 9). Padrao em docs/ADMIN_CRUD_PATTERN.md.
 
-Senha e hash nunca saem deste modulo: listagem e formulario devolvem registros sem senha_hash, e a
+Senha e hash nunca saem deste modulo: listagem e formulario devolvem registros sem password_hash, e a
 auditoria registra apenas o fato ('senha redefinida'). Nao importa gluon fora de _servico.
 """
 import re
@@ -61,7 +61,7 @@ def _id(value):
 
 
 def public_view(user):
-    """Copia do usuario sem senha_hash (e sem qualquer campo nao listado)."""
+    """Copia do usuario sem password_hash (e sem qualquer campo nao listado)."""
     return dict((c, user.get(c)) for c in _PUBLIC_FIELDS)
 
 
@@ -121,7 +121,7 @@ class AdminUsersService(object):
     # ----------------------------------------------------------------- leitura
 
     def list(self, ctx, filters, page, size):
-        """Pagina de usuarios (login ASC) sem senha_hash, com perfil_nome e bloqueado."""
+        """Pagina de usuarios (login ASC) sem password_hash, com profile_name e locked."""
         admin_crud.require_feature(ctx, FEATURE)
         repo_filters = dict((k, v) for k, v in filters.items() if k != "state")
         state = filters.get("state")
@@ -140,7 +140,7 @@ class AdminUsersService(object):
         return dict(result, items=items)
 
     def form(self, ctx, user_id=None):
-        """Dados do formulario sem senha_hash; na edicao inclui versao, bloqueio e se e o proprio usuario."""
+        """Dados do formulario sem password_hash; na edicao inclui versao, bloqueio e se e o proprio usuario."""
         admin_crud.require_feature(ctx, FEATURE)
         if user_id in (None, ""):
             return {"id": None, "login": "", "name": "", "profile_id": None, "active": "Y", "version": "",
@@ -352,7 +352,7 @@ def _service():
 
 
 def list_page(ctx, filters, page, size):
-    """Pagina de usuarios sem senha_hash (servico padrao)."""
+    """Pagina de usuarios sem password_hash (servico padrao)."""
     return _service().list(ctx, filters, page, size)
 
 

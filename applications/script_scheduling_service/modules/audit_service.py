@@ -309,7 +309,7 @@ class AuditService(object):
                     size=result["size"], total_capped=result.get("total_capped", False))
 
     def export_csv(self, ctx, ip, input_value):
-        """Exportacao com os filtros e o RBAC da tela: retorna (nome_arquivo, linhas, blocos).
+        """Exportacao com os filtros e o RBAC da tela: retorna (nome do arquivo, linhas, blocos).
 
         blocos e um gerador de bytes UTF-8 (com BOM, separador ';') de no maximo
         EXPORT_LIMIT linhas. A exportacao e auditada (AUDIT_EXPORT) antes do streaming,

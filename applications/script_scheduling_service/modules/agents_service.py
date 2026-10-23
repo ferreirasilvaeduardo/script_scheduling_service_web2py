@@ -119,7 +119,7 @@ class AgentsService(object):
     def dashboard(self, ctx, now=None):
         """Agentes com saude derivada, idade do heartbeat e tickets RUNNING (somente leitura).
 
-        Retorna {"agents": [...], "summary": {codigo_saude: quantidade}, "now": datetime}.
+        Retorna {"agents": [...], "summary": {codigo de saude: quantidade}, "now": datetime}.
         """
         admin_crud.require_feature(ctx, FEATURE)
         now = now or self._clock()

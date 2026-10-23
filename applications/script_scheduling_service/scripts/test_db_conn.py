@@ -474,7 +474,7 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
                 self.assertEqual(resilient.backoff_s, 2.0)
 
     def test_orcamento_conexao_s(self):
-        """Valida orcamento_conexao_s com Easy Connect e descritores TNS com aviso de timeout (CR-008, R-17)."""
+        """Valida connection_budget_s com Easy Connect e descritores TNS com aviso de timeout (CR-008, R-17)."""
         db_conn.reset_selection()
 
         # 1. Easy Connect: 1 endereco, retorna call_timeout_s
@@ -498,7 +498,7 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
         self.assertTrue(any("CONEXAO_ACIMA_DO_PRAZO" in m and "40s" in m for m in cm.output))
 
     def test_conferir_versao_esquema(self):
-        """conferir_versao_esquema() valida schema_version da tabela controle contra sql_ident (CR-007, D4)."""
+        """check_schema_version() valida schema_version da tabela controle contra sql_ident (CR-007, D4)."""
         mock_conn = mock.MagicMock()
         mock_cur = mock.MagicMock()
         mock_conn.cursor.return_value = mock_cur
@@ -523,7 +523,7 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
         self.assertIn("ausente na tabela de controle", str(ctx.exception))
 
     def test_definir_tipos_entrada_date_setinputsizes(self):
-        """definir_tipos_entrada converte TIPO_DATE para o tipo de data nativo do driver ativo."""
+        """set_input_types converte TIPO_DATE para o tipo de data nativo do driver ativo."""
         mock_cur = mock.MagicMock()
 
         # Simulando oracledb
@@ -556,7 +556,7 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
         self.assertIn(db_conn.TIPO_BLOB, db_conn.TIPOS_NEUTROS)
 
     def test_tipo_varchar_variavel_saida_e_valor_saida(self):
-        """variavel_saida e valor_saida operam com OUT binds nos drivers sem expor cursor.var."""
+        """output_variable e output_value operam com OUT binds nos drivers sem expor cursor.var."""
         mock_cur = mock.MagicMock()
         mock_var = mock.MagicMock()
         mock_var.getvalue.return_value = "VALOR_RETORNADO_PLSQL"
@@ -624,7 +624,7 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
             self.assertNotIn(password_super_secret, record)
 
     def test_tipo_varchar_tres_modos(self):
-        """TIPO_VARCHAR e variavel_saida/valor_saida operam identicamente nos tres modos."""
+        """TIPO_VARCHAR e output_variable/output_value operam identicamente nos tres modos."""
         modes = [
             ("thin", "oracledb", "DB_TYPE_VARCHAR"),
             ("thick", "oracledb", "DB_TYPE_VARCHAR"),
@@ -647,7 +647,7 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
                     self.assertEqual(db_conn.output_value(v), "RESULTADO_OK")
 
     def test_traduzir_erro(self):
-        """traduzir_erro mapeia corretamente para RepoViolation, RepoConflict, RepoUnavailable e RepoError."""
+        """translate_error mapeia corretamente para RepoViolation, RepoConflict, RepoUnavailable e RepoError."""
         import repo_errors
         # Violacao
         e1 = db_conn.translate_error(Exception("ORA-00001: unique constraint violated"))

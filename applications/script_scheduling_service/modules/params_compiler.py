@@ -403,7 +403,7 @@ def build_agent_argv(interpreter, executable, script_real, args):
 
 
 def compile_snapshot(script, links, answers, now):
-    """Compila o snapshot v5 (README §6.5) -> (json_str | None, resolvidos, erros_por_campo).
+    """Compila o snapshot v5 (README §6.5) -> (json_str | None, resolvidos, erros por campo).
 
     Guarda o interpretador logico, o path_file absoluto e apenas os argumentos: o argv real e montado
     pelo agente com o proprio executavel. Erros sao acumulados.
@@ -433,7 +433,7 @@ def compile_snapshot(script, links, answers, now):
 
 
 def validate_snapshot(json_str, cfg):
-    """Pre-valida o snapshot no claim (README §8.4 passo 1) e devolve (snap, argv_real, script_real);
+    """Pre-valida o snapshot no claim (README §8.4 passo 1) e devolve (snap, argv, script_real);
     lanca SnapshotError. script_real (o path_file resolvido) alimenta o SSS_SCRIPT_DIR do env_builder.
 
     cfg expoe interpretadores (dict logico -> executavel do agente) e, opcional, sss_dirs (log_dir, work_dir e

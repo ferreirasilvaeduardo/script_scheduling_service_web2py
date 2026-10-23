@@ -33,7 +33,7 @@ _CHAR1 = ("active", "sensitive", "required")
 
 
 class DuplicateOccurrence(RuntimeError):
-    """ORA-00001 em ix_tck_ocor: outro caminho ja gerou o ticket desta ocorrencia (README §7.5 passo 6, R-31)."""
+    """ORA-00001 em ix_tbsss_tck_occur: outro caminho ja gerou o ticket desta ocorrencia (README §7.5 passo 6, R-31)."""
 
 
 def system_actor(agent_id):
@@ -188,7 +188,7 @@ class RepoSchedulerSchedules(object):
 
     def _inserir_ticket(self, conn, rule, ticket_id, ticket, answers, actor):
         """INSERT do ticket e do ticket_answer (README §7.5 passo 6): schedule_id, source_ip NULL,
-        scheduled_at = ocorrencia (CR-007 R-27, CR-008 R-03). ORA-00001 em ix_tck_ocor: DuplicateOccurrence."""
+        scheduled_at = ocorrencia (CR-007 R-27, CR-008 R-03). ORA-00001 em ix_tbsss_tck_occur: DuplicateOccurrence."""
         cur = conn.cursor()
         try:
             db_conn.set_input_types(cur, scheduled_at=db_conn.TIPO_DATE, params=db_conn.TIPO_CLOB)

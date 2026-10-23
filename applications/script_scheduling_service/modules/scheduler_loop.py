@@ -195,7 +195,7 @@ class Agent(object):
         if self.cfg is None:
             try:
                 self.cfg = self._load_config()
-            except sss_config.ConfigError as exc:  # obter_config ja registrou o CRITICAL (README §12.1)
+            except sss_config.ConfigError as exc:  # get_config ja registrou o CRITICAL (README §12.1)
                 raise StartupFailure(EXIT_CONFIG, str(exc))
         agent = self.cfg.agent
         self.log.extra["agent"] = agent.agent_id

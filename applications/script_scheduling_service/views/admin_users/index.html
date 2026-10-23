@@ -1,6 +1,6 @@
 {{extend 'layout.html'}}
 {{
-# Lista de usuários (padrão de CRUD administrativo). O serviço já remove senha_hash dos itens.
+# Lista de usuários (padrão de CRUD administrativo). O serviço já remove password_hash dos itens.
 import ui_helpers
 _opt_state = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos'), ('B', 'Bloqueados')]
 _opt_profile = [('', 'Todos')] + [(str(_pf['id']), _pf['name']) for _pf in profiles]
