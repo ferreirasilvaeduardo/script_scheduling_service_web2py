@@ -160,7 +160,7 @@ Todas as telas, quem pode abrir cada uma e para que servem. Telas marcadas com *
 | **Quem pode o quê** (CR-004) | `admin_profiles/who_can` | `MANAGE_PROFILES` | Descobrir quem pode rodar um script ou usar um ambiente (§4.3.B.2) |
 | Usuários | `admin_users/*` | `MANAGE_USERS` | Cadastrar pessoas, senhas e bloqueios |
 | Parâmetros | `admin_parameters/*` | `MANAGE_PARAMETERS` | Cadastrar as perguntas que os scripts fazem (§6.2) |
-| Scripts | `admin_scripts/*` | `MANAGE_SCRIPTS` | Cadastrar scripts, onde podem rodar e que perguntas fazem (§8.5) |
+| Scripts | `admin_scripts/*` | `MANAGE_SCRIPTS` | Cadastrar scripts, onde podem rodar e que perguntas fazem (§8.5). Na edição, o quadro "Quem pode rodar" diz se o script já roda e o que falta (§4.3.B.2, CR-017d) |
 | Auditoria | `audit/index` | `VIEW_AUDIT` | Ver quem fez o quê e quando (§4.4) |
 | Agentes | `audit/agents` | `VIEW_AUDIT` | Ver se os servidores que rodam os scripts estão bem (§13). Item próprio no menu Operação; a Auditoria não tem mais abas (CR-017c) |
 
@@ -573,6 +573,10 @@ Responde às duas perguntas mais comuns do administrador, sem abrir perfil por p
 * A regra usada é a mesma de `rbac.can_execute` (§4.3.A), aplicada perfil a perfil. O cálculo é feito no service com as leituras que já existem no contrato (`profiles_list`, `matrix_get`, catálogo e homologações), sem método novo.
 * Cada perfil tem um link para a matriz dele (§4.3.B.1).
 * A tela de perfis ganha o botão "Quem pode o quê".
+* **Quadro "Quem pode rodar" no cadastro do script (CR-017d):** a conta "por script" fica em `admin_profiles_service.script_runners`, sem guarda de funcionalidade, e é a mesma usada por esta tela (que exige `MANAGE_PROFILES`) e pelo formulário de edição do script (`MANAGE_SCRIPTS`). O quadro é só de leitura e mostra:
+  * a situação: "Pronto para rodar." (script ativo, liberado em ambiente ativo e com perfil de usuários ativos que pode rodá-lo, inclusive um não administrador), "Só administradores podem rodar." ou "Ainda não pode rodar.";
+  * o que falta, em frase simples e com o link para a tela certa: "O script está desativado." (botão Reativar), "Ainda não foi liberado em nenhum ambiente ativo." (Homologação), "Só administradores podem rodá-lo: nenhum outro perfil tem este script." (Perfis, para quem tem `MANAGE_PROFILES`) e "Nenhum usuário ativo está nos perfis que podem rodá-lo." (Usuários, para quem tem `MANAGE_USERS`);
+  * a tabela dos perfis ativos que podem rodá-lo, com os ambientes e a quantidade de usuários ativos, e o link "Ver em Quem pode o quê" para quem tem `MANAGE_PROFILES`.
 
 #### C. Escopo das funcionalidades operacionais
 

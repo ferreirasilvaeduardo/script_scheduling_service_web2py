@@ -19,6 +19,7 @@ import auth_service
 import repo_factory
 import security
 from admin_crud import GENERAL_FIELD, AccessDenied, OperationDenied
+from admin_profiles_service import AdminProfilesService
 from admin_scripts_service import AdminScriptsService
 from path_guard import Code
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
@@ -433,6 +434,51 @@ class TestPreview(_Base):
 
 
 @_SKIP_ROOT
+class TestReadiness(_Base):
+    """CR-017d: quadro "Quem pode rodar" do formulario, com a conta de "Quem pode o que"."""
+
+    def setUp(self):
+        super(TestReadiness, self).setUp()
+        self.rbac = repo_factory.get("rbac")
+        profiles = AdminProfilesService(self.rbac, self.catalog, repo_factory.get("users"), self.log)
+        self.svc = AdminScriptsService(self.catalog, repo_factory.get("schedules"), self.ENV, self.log,
+                                       lambda: NOW, runners=profiles.script_runners)
+        # So o op.hml (perfil 3) tem o script 1, em HOMOLOGACAO; os demais nao administradores, nada.
+        self.rbac.matrix_save(2, [1], [1], [], actor="teste")
+        self.rbac.matrix_save(3, [1], [2], [1], actor="teste")
+        self.rbac.matrix_save(4, [2], [1, 2], [], actor="teste")
+
+    def _ready(self):
+        return self.svc.form(self.ctx["admin"], "1")["readiness"]
+
+    def test_pronto_com_perfis_e_ambientes(self):
+        r = self._ready()
+        self.assertEqual((r["state"], r["css_class"], r["missing"]), (scr_mod.MSG_READY_OK, "success", []))
+        names = dict((p["name"], p["details"]) for p in r["profiles"])
+        self.assertEqual(names["OPERATOR_HML"], ["HOMOLOGACAO"])
+        self.assertTrue(r["can_manage_profiles"])
+
+    def test_so_administradores(self):
+        self.rbac.matrix_save(3, [1], [2], [], actor="teste")
+        r = self._ready()
+        self.assertEqual((r["state"], [m["code"] for m in r["missing"]]), (scr_mod.MSG_READY_ADMIN_ONLY, ["profiles"]))
+
+    def test_sem_homologacao(self):
+        self.catalog.homologation_save(1, [], actor="teste")
+        r = self._ready()
+        self.assertEqual((r["state"], r["css_class"]), (scr_mod.MSG_READY_NOT, "danger"))
+        self.assertEqual([m["code"] for m in r["missing"]], ["homologation"])
+
+    def test_script_desativado(self):
+        self.catalog.scripts_update(1, {"active": "N"}, actor="teste")
+        r = self._ready()
+        self.assertEqual(r["state"], scr_mod.MSG_READY_NOT)
+        self.assertIn("inactive", [m["code"] for m in r["missing"]])
+
+    def test_sem_calculo_injetado_nao_tem_quadro(self):
+        self.assertIsNone(self._service(self.ENV).form(self.ctx["admin"], "1")["readiness"])
+
+
 class TestNoHashAndLink(_Base):
     """CR-011: o cadastro nao calcula nem registra hash do arquivo, e o caminho pode ter link simbolico."""
 

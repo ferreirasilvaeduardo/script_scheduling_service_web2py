@@ -69,6 +69,13 @@ class TestLastRuns(_Base):
 
 class TestRoutineCatalog(_Base):
 
+    def test_agendar_so_com_manage_schedules(self):
+        # CR-017c: o atalho Agendar dos cartoes segue MANAGE_SCHEDULES (admin tem todas).
+        self.assertTrue(self.svc.can_schedule(self.ctx["admin"]))
+        self.assertFalse(self.svc.can_schedule(self.ctx["op.hml"]))
+        self.assertTrue(self.svc.can_schedule(dict(self.ctx["op.hml"],
+                                                   features=frozenset(["EXEC_SCRIPT", "MANAGE_SCHEDULES"]))))
+
     def test_cartoes_iguais_ao_disparo_e_ultima_no_escopo(self):
         ctx = self.ctx["op.hml"]
         groups = self.svc.routine_catalog(ctx)

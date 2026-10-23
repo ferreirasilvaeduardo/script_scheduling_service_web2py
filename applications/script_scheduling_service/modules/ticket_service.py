@@ -723,6 +723,13 @@ class TicketService(object):
             result.append({"script_group": g["script_group"], "category": g["category"], "cards": cards})
         return result
 
+    def can_schedule(self, ctx):
+        """Botao "Agendar" nos cartoes (README §5.8, CR-017c): so com MANAGE_SCHEDULES.
+
+        O cartao ja exige can_execute, a mesma regra que o agendamento pede ao editor (README §7.6).
+        """
+        return rbac.has_feature(ctx, "MANAGE_SCHEDULES")
+
     def script_history(self, ctx, script_id):
         """Historico do script nos ultimos 30 dias (README §5.8, CR-004 T4). So leitura.
 
@@ -1165,6 +1172,11 @@ def trigger_summary(ctx, script_id, environment, answers, priority=None, schedul
 def script_history(ctx, script_id):
     """Historico de 30 dias do script (servico padrao)."""
     return _service().script_history(ctx, script_id)
+
+
+def can_schedule(ctx):
+    """Atalho Agendar nos cartoes (servico padrao)."""
+    return _service().can_schedule(ctx)
 
 
 def routine_catalog(ctx):

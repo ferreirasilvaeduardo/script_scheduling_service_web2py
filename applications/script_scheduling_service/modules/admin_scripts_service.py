@@ -15,6 +15,7 @@ import admin_crud
 import params_compiler
 import log_paths
 import path_guard
+import rbac
 import ui_helpers
 from admin_crud import GENERAL_FIELD, OperationDenied
 from params_compiler import ParamError, PARAM_TYPES
@@ -62,6 +63,13 @@ PATH_MESSAGES = {
 }
 VALIDATION_NOTE = (u"O arquivo é conferido pelo agente, no servidor onde o script roda, no momento da execução "
                  u"(pode ser link simbólico).")
+MSG_READY_OK = u"Pronto para rodar."
+MSG_READY_ADMIN_ONLY = u"Só administradores podem rodar."
+MSG_READY_NOT = u"Ainda não pode rodar."
+MSG_READY_INACTIVE = u"O script está desativado."
+MSG_READY_NO_HOMOLOGATION = u"Ainda não foi liberado em nenhum ambiente ativo."
+MSG_READY_ONLY_ADMIN = u"Só administradores podem rodá-lo: nenhum outro perfil tem este script."
+MSG_READY_NO_USERS = u"Nenhum usuário ativo está nos perfis que podem rodá-lo."
 MSG_NAME_REQUIRED = u"Informe o nome do script."
 MSG_NAME_DUPLICATE = u"Já existe um script com este nome."
 MSG_CONTROL_CHARS = u"O campo contém caracteres de controle não permitidos."
@@ -147,12 +155,14 @@ def _links_version(links, mapping):
 class AdminScriptsService(object):
     """Regras do cadastro de scripts com repositorios, configuracao do agente, relogio e log injetados."""
 
-    def __init__(self, catalog, schedules, sss_env, log, clock):
+    def __init__(self, catalog, schedules, sss_env, log, clock, runners=None):
         self._catalog = catalog
         self._schedules = schedules
         self._env = sss_env
         self._log = log
         self._clock = clock
+        # Quem pode rodar o script (admin_profiles_service.script_runners): a conta de "Quem pode o que".
+        self._runners = runners
 
     def _get(self, script_id):
         sid = _id(script_id)
@@ -187,8 +197,38 @@ class AdminScriptsService(object):
         date["timeout_s"] = "" if s.get("timeout_s") is None else s["timeout_s"]
         date.update(common, id=s["id"], version=admin_crud.version(s, EDITABLE_FIELDS),
                      active_schedules=self._active_schedules(script_id=s["id"]),
-                     record=ui_helpers.record_info(s, ctx))
+                     record=ui_helpers.record_info(s, ctx), readiness=self.readiness(ctx, s))
         return date
+
+    def readiness(self, ctx, script):
+        """Quadro "Quem pode rodar" (CR-017d): se o script ja roda, para quais perfis e o que falta.
+
+        Retorna None sem o calculo injetado, ou {state, css_class, profiles, missing: [{code, text}],
+        can_manage_profiles, can_manage_users}. code: inactive | homologation | profiles | users.
+        """
+        if self._runners is None:
+            return None
+        found = self._runners(script["id"])
+        profiles = found["profiles"]
+        with_users = [p for p in profiles if p["active_users"] > 0]
+        missing = []
+        if script.get("active") != "Y":
+            missing.append({"code": "inactive", "text": MSG_READY_INACTIVE})
+        if not found["homologated"]:
+            missing.append({"code": "homologation", "text": MSG_READY_NO_HOMOLOGATION})
+        elif not [p for p in profiles if not p["is_admin"]]:
+            missing.append({"code": "profiles", "text": MSG_READY_ONLY_ADMIN})
+        if found["homologated"] and profiles and not with_users:
+            missing.append({"code": "users", "text": MSG_READY_NO_USERS})
+        if script.get("active") != "Y" or not found["homologated"] or not with_users:
+            state, css_class = MSG_READY_NOT, "danger"
+        elif missing:
+            state, css_class = MSG_READY_ADMIN_ONLY, "warning"
+        else:
+            state, css_class = MSG_READY_OK, "success"
+        return {"state": state, "css_class": css_class, "profiles": profiles, "missing": missing,
+                "can_manage_profiles": rbac.has_feature(ctx, "MANAGE_PROFILES"),
+                "can_manage_users": rbac.has_feature(ctx, "MANAGE_USERS")}
 
     # ------------------------------------------------------------- validacao
 
@@ -576,12 +616,14 @@ def _service():
             factory = current.repo_factory
             cfg = current.sss_cfg
             tickets = factory.get("tickets")
+            import admin_profiles_service
             _default = AdminScriptsService(
                 catalog=factory.get("catalog"),
                 schedules=factory.get("schedules"),
                 sss_env=cfg.app.sss_env,
                 log=sss_logging.get_logger("sss_web", cfg),
                 clock=tickets.now,
+                runners=admin_profiles_service._service().script_runners,
             )
         return _default
 

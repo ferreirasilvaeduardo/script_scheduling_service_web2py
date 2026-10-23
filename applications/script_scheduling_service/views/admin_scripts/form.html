@@ -96,6 +96,51 @@ pass
   </form>
 </section>
 
+{{_ready = _s.get('readiness')}}
+{{if not _new and _ready:}}
+<section class="sss-card" aria-labelledby="title-readiness">
+  <h2 class="sss-card-title" id="title-readiness">Quem pode rodar</h2>
+  <div class="sss-card-body">
+    <div class="alert alert-{{=_ready['css_class']}} sss-alert mb-2" role="status">
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{='icon-play' if _ready['css_class'] == 'success' else 'icon-alert'}}"></use></svg>
+      <strong>{{=_ready['state']}}</strong>
+    </div>
+    {{if _ready['missing']:}}
+    <p class="mb-1"><strong>O que falta:</strong></p>
+    <ul class="mb-3">
+      {{for _m in _ready['missing']:}}
+      <li>{{=_m['text']}}
+        {{if _m['code'] == 'homologation':}} <a href="{{=URL(c='admin_scripts', f='homologation', args=[_s['id']])}}">Abrir a homologação</a>
+        {{elif _m['code'] == 'profiles' and _ready['can_manage_profiles']:}} <a href="{{=URL(c='admin_profiles', f='index')}}">Abrir os perfis</a>
+        {{elif _m['code'] == 'users' and _ready['can_manage_users']:}} <a href="{{=URL(c='admin_users', f='index')}}">Abrir os usuários</a>
+        {{elif _m['code'] == 'inactive':}} Use o botão Reativar no topo da página.
+        {{pass}}
+      </li>
+      {{pass}}
+    </ul>
+    {{pass}}
+    {{if _ready['profiles']:}}
+    <div class="table-responsive">
+      <table class="table table-sm sss-table mb-2">
+        <caption class="visually-hidden">Perfis que podem rodar este script</caption>
+        <thead><tr><th scope="col">Perfil</th><th scope="col">Onde pode rodar</th><th scope="col">Usuários ativos</th></tr></thead>
+        <tbody>
+          {{for _p in _ready['profiles']:}}
+          <tr>
+            <td>{{=_p['name']}}{{if _p['is_admin']:}} <span class="badge text-bg-secondary">administrador</span>{{pass}}</td>
+            <td>{{=', '.join(_p['details'])}}</td>
+            <td>{{=_p['active_users']}}</td>
+          </tr>
+          {{pass}}
+        </tbody>
+      </table>
+    </div>
+    {{pass}}
+    {{if _ready['can_manage_profiles']:}}<p class="mb-0"><a href="{{=URL(c='admin_profiles', f='who_can', vars=dict(script=_s['id']))}}">Ver em Quem pode o quê</a></p>{{pass}}
+  </div>
+</section>
+{{pass}}
+
 {{if not _new and _s.get('record'):}}
 {{record = _s['record']}}
 {{include 'components/record.html'}}

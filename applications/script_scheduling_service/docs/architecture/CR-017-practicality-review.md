@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Em andamento.** Aprovado pelo responsável pelo produto em 2026-10-23, com o escopo 017a a 017d. 017a a 017c concluídos |
+| Status | **Em andamento.** Aprovado pelo responsável pelo produto em 2026-10-23, com o escopo 017a a 017d. 017a a 017d concluídos; a nova rodada de evidências de homologação vem a seguir |
 | Origem | Revisão tela a tela e processo a processo (2026-10-23): a lógica de negócio está correta, mas há um aviso de segurança que não funciona com os ambientes reais, uma lacuna de navegação e telas que repetem a mesma informação ou a mesma escolha |
 | Restrições | Sem dependência nova. Python 3.6. Mudança de esquema só no 017a, dentro da `SCHEMA_VERSION` 1, que continua aberta até a primeira produção (AGENTS §4.16) |
 | Afeta | README §2.4.3, §5.4, §10 (tabela 1) e §11.1. `AGENTS.md` §3.4 e §7. Código: `sql_ident`, `ddl_builder`, `init_db`, `repo_oracle/catalog`, `repo_fake`, `admin_environments_service`, `ticket_service`, `ui_menu` e as telas de ambientes e de disparo |
@@ -41,7 +41,7 @@
 | 017a | D1, D2, D3 (A1 e A2) | Concluído |
 | 017b | Telas de operação: disparo unificado com Rotinas disponíveis, sem a pré-visualização repetida, etapa 2 pulada com um ambiente; detalhe do ticket sem repetição; painel sem o menu repetido; ajuda da prioridade com o envelhecimento (A3 a A6) | Concluído |
 | 017c | Agendamento com a mesma escolha do disparo, atalho "Agendar", Agenda e Agentes no menu (A7) | Concluído |
-| 017d | Quadro "Quem pode rodar" no formulário do script (A8) | Pendente |
+| 017d | Quadro "Quem pode rodar" no formulário do script (A8) | Concluído |
 
 ## 4. Decisões do 017b
 
@@ -59,7 +59,14 @@
 | D10 | Agendar | Botão nos cartões de Rodar um script, só com `MANAGE_SCHEDULES` |
 | D11 | Menu | Agenda e Agentes no menu Operação, com os ícones já existentes; a Auditoria perde as abas |
 
-## 6. Validação do 017a
+## 6. Decisões do 017d
+
+| # | Decisão | Resumo |
+|---|---|---|
+| D12 | Quem pode rodar | O quadro do cadastro de scripts usa `admin_profiles_service.script_runners`, a mesma conta de "Quem pode o quê". Parâmetro obrigatório não entra como requisito: não impede o script de rodar |
+| D13 | Agendar | A regra do atalho sai do controller para `ticket_service.can_schedule`, com teste (pendência do 017c) |
+
+## 7. Validação do 017a
 
 * `test_admin_environments_service`, `test_ticket_service`, `test_ui_helpers`, `test_db_schema`, `test_ddl_builder` e as demais suítes afetadas (ver AGENTS §7).
 * Banco DEV recriado e bateria Oracle (`SSS_TEST_ORACLE=1`).

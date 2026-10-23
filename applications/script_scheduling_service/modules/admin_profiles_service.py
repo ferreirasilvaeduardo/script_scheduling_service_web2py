@@ -312,22 +312,7 @@ class AdminProfilesService(object):
                     "reason": reason, "details": details, "active_users": self.active_users(profile["id"])}
 
         if sid is not None and sid in scripts:
-            script = scripts[sid]
-            result["script"] = script
-            if script.get("active") != "Y":
-                result["warning"] = u"Este script está inativo: ninguém consegue rodá-lo agora."
-            for p in profiles:
-                m = self._rbac.matrix_get(p["id"])
-                if p["is_admin"] == "Y":
-                    envs, reason_text = homologados(sid), u"administrador"
-                elif exec_id and exec_id[0] in m["funcs"] and sid in m["scrs"]:
-                    envs, reason_text = homologados(sid) & set(m["ambs"]), u"tem Disparar Scripts, o ambiente e o script"
-                else:
-                    continue
-                if not envs:
-                    continue
-                item = linha(p, reason_text, sorted(environments[a]["name"] for a in envs))
-                result["profiles" if p["active"] == "Y" else "inactive_items"].append(item)
+            result.update(self._script_runners(scripts[sid], environments, exec_id, profiles, homologados, linha))
         elif aid is not None and aid in environments:
             env = environments[aid]
             result["environment"] = env
@@ -347,6 +332,47 @@ class AdminProfilesService(object):
         else:
             raise RepoNotFound("script ou ambiente inexistente")
         return result
+
+    def _script_runners(self, script, environments, exec_id, profiles, homologated, row):
+        """Perfis que podem rodar o script (regra de rbac.can_execute por perfil), ativos e inativos."""
+        sid = script["id"]
+        found = {"script": script, "profiles": [], "inactive_items": [], "warning": None,
+                 "homologated": sorted(environments[a]["name"] for a in homologated(sid))}
+        if script.get("active") != "Y":
+            found["warning"] = u"Este script está inativo: ninguém consegue rodá-lo agora."
+        for p in profiles:
+            m = self._rbac.matrix_get(p["id"])
+            if p["is_admin"] == "Y":
+                envs, reason_text = homologated(sid), u"administrador"
+            elif exec_id and exec_id[0] in m["funcs"] and sid in m["scrs"]:
+                envs, reason_text = homologated(sid) & set(m["ambs"]), u"tem Disparar Scripts, o ambiente e o script"
+            else:
+                continue
+            if not envs:
+                continue
+            item = row(p, reason_text, sorted(environments[a]["name"] for a in envs))
+            found["profiles" if p["active"] == "Y" else "inactive_items"].append(item)
+        return found
+
+    def script_runners(self, script_id):
+        """Quem pode rodar o script, sem guarda de funcionalidade: a mesma conta de who_can por script.
+
+        Usada pelo quadro "Quem pode rodar" do cadastro de scripts (CR-017d), que tem guarda propria.
+        Lanca RepoNotFound para script inexistente.
+        """
+        script = self._catalog.scripts_get(script_id)
+        environments = dict((a["id"], a) for a in self._catalog.environments_list(page=1, size=_CATALOG_MAX)["items"])
+        exec_id = [f["id"] for f in self._rbac.features_list() if f["code"] == "EXEC_SCRIPT"]
+        profiles = self._rbac.profiles_list(page=1, size=_CATALOG_MAX)["items"]
+
+        def homologated(sid):
+            return set(i for i in self._catalog.homologation_get(sid) if environments.get(i, {}).get("active") == "Y")
+
+        def row(profile, reason, details):
+            return {"id": profile["id"], "name": profile["name"], "is_admin": profile["is_admin"] == "Y",
+                    "reason": reason, "details": details, "active_users": self.active_users(profile["id"])}
+
+        return self._script_runners(script, environments, exec_id, profiles, homologated, row)
 
     # --------------------------------------------------------------- matriz
 
