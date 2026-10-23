@@ -29,12 +29,13 @@ FEATURE_CATALOG = (
 )
 
 # Catalogo padrao de ambientes atendidos (nome, descricao, conexao)
+# (nome, descricao, conexao, is_production). is_production so vale na inclusao: o MERGE nao desfaz o cadastro (CR-017).
 DEFAULT_ENVIRONMENTS = (
-    ("CLONE2", "BRTLVLTS1199PL (10.238.10.209)", "10.238.55.146/gfprod"),
-    ("CLONE1", "BRTLVLTS1198PL (10.238.10.208)", "10.238.55.145/gfprod"),
-    ("CLONE6", "BRTLVLTS3089SL (10.238.10.210)", "10.238.45.230/svc_gfprodc6"),
-    ("CLONE7", "BRTLVLTS1216PL (10.238.10.109)", "10.238.45.230/svc_gfprodc7"),
-    ("GFPREPROD", "BRTLVLTY3067SL (10.129.177.188)", "10.129.177.188/GFPR"),
+    ("CLONE2", "BRTLVLTS1199PL (10.238.10.209)", "10.238.55.146/gfprod", "Y"),
+    ("CLONE1", "BRTLVLTS1198PL (10.238.10.208)", "10.238.55.145/gfprod", "Y"),
+    ("CLONE6", "BRTLVLTS3089SL (10.238.10.210)", "10.238.45.230/svc_gfprodc6", "Y"),
+    ("CLONE7", "BRTLVLTS1216PL (10.238.10.109)", "10.238.45.230/svc_gfprodc7", "Y"),
+    ("GFPREPROD", "BRTLVLTY3067SL (10.129.177.188)", "10.129.177.188/GFPR", "Y"),
 )
 
 # Catalogo padrao de perfis operacionais e administrativos (nome, descricao, is_admin, funcionalidades, ambientes)
@@ -195,6 +196,7 @@ COLUMN_COMMENTS = {
         "description": "Descricao detalhada do ambiente, servidor host e finalidade",
         "connection": "String de conexao ou alias DSN/TNS sugerido para o banco de dados do ambiente",
         "active": "Indicador de vigencia do ambiente (Y=Ativo, N=Inativo)",
+        "is_production": "Ambiente de producao: o disparo mostra alerta e confirmacao em vermelho (Y/N)",
     },
     "profiles": {
         "id": "Identificador unico sequencial do perfil (chave primaria)",
@@ -867,7 +869,7 @@ def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admi
     # 2. Ambientes padrao (inseridos antes dos perfis para permitir vinculo de profile_env)
     tb_env = "{}.{}".format(owner, schema["environments"]["tabela"])
     sq_env = "{}.{}".format(owner, schema["environments"]["sequence"])
-    for env_name, env_desc, env_conn in DEFAULT_ENVIRONMENTS:
+    for env_name, env_desc, env_conn, env_prod in DEFAULT_ENVIRONMENTS:
         sql_env = (
             "MERGE INTO {tb} dst\n"
             "USING (SELECT '{name}' AS name FROM DUAL) src\n"
@@ -882,14 +884,15 @@ def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admi
             "     OR NVL(dst.description, '~') <> '{desc}'\n"
             "     OR NVL(dst.connection, '~') <> '{conn}'\n"
             "WHEN NOT MATCHED THEN\n"
-            "  INSERT (id, name, description, connection, active, created_at, created_by)\n"
-            "  VALUES ({sq}.NEXTVAL, '{name}', '{desc}', '{conn}', 'Y', SYSDATE, 'SYSTEM:init_db');"
+            "  INSERT (id, name, description, connection, active, is_production, created_at, created_by)\n"
+            "  VALUES ({sq}.NEXTVAL, '{name}', '{desc}', '{conn}', 'Y', '{prod}', SYSDATE, 'SYSTEM:init_db');"
         ).format(
             tb=tb_env,
             sq=sq_env,
             name=_escape_sql(env_name),
             desc=_escape_sql(env_desc),
             conn=_escape_sql(env_conn),
+            prod=_escape_sql(env_prod),
         )
         commands.append(sql_env)
 
@@ -1051,7 +1054,7 @@ def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admi
         commands.append(sql_scr)
 
         # 5a. Homologacao do script nos 5 ambientes padrao
-        for env_name, _, _ in DEFAULT_ENVIRONMENTS:
+        for env_name, _, _, _ in DEFAULT_ENVIRONMENTS:
             sql_senv = (
                 "MERGE INTO {tb_senv} dst\n"
                 "USING (\n"

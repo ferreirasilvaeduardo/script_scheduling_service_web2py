@@ -80,7 +80,8 @@ def save():
     _require_method("POST")
     ctx = _require_func(_FUNC)
     environment_id = _text(request.post_vars.get("id"), 11)
-    submitted = dict((c, _text(request.post_vars.get(c), 300)) for c in ("name", "description", "connection", "version"))
+    submitted = dict((c, _text(request.post_vars.get(c), 300)) for c in ("name", "description", "connection", "is_production",
+                                                                         "version"))
     try:
         saved_id, errors = service.save(ctx, _client_ip(), environment_id, submitted)
     except RepoNotFound:
@@ -97,11 +98,13 @@ def save():
     try:
         data = service.form(ctx, environment_id) if environment_id else service.form(ctx)
     except RepoError:
-        data = {"id": None, "name": "", "active": "Y", "version": "", "active_schedules": 0, "homologated_scripts": 0}
+        data = {"id": None, "name": "", "is_production": "N", "active": "Y", "version": "", "active_schedules": 0,
+                "homologated_scripts": 0}
     if admin_crud.GENERAL_FIELD not in errors:
         connection = submitted["connection"] or ""
         # Nunca devolve ao HTML um DSN com credencial digitado por engano.
-        data = dict(data, description=submitted["description"] or "", connection="" if "@" in connection else connection)
+        data = dict(data, description=submitted["description"] or "", connection="" if "@" in connection else connection,
+                    is_production="Y" if submitted["is_production"] == "Y" else "N")
         if not environment_id:
             data["name"] = submitted["name"] or ""
         else:

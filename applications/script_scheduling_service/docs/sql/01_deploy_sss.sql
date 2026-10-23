@@ -63,6 +63,7 @@ CREATE TABLE openrisow.tbsss_environments (
     description VARCHAR2(100 CHAR),
     connection VARCHAR2(250 CHAR),
     active CHAR(1) DEFAULT 'Y' NOT NULL,
+    is_production CHAR(1) DEFAULT 'N' NOT NULL,
     created_at DATE DEFAULT SYSDATE NOT NULL,
     created_by VARCHAR2(40 CHAR) NOT NULL,
     updated_at DATE,
@@ -336,6 +337,8 @@ ALTER TABLE openrisow.tbsss_environments ADD CONSTRAINT pk_tbsss_environments PR
 ALTER TABLE openrisow.tbsss_environments ADD CONSTRAINT uk_tbsss_env_name UNIQUE (name);
 
 ALTER TABLE openrisow.tbsss_environments ADD CONSTRAINT ck_tbsss_env_active CHECK (active IN ('Y', 'N'));
+
+ALTER TABLE openrisow.tbsss_environments ADD CONSTRAINT ck_tbsss_env_prod CHECK (is_production IN ('Y', 'N'));
 
 ALTER TABLE openrisow.tbsss_environments ADD CONSTRAINT ck_tbsss_env_name CHECK (REGEXP_LIKE(name, '^[A-Z0-9_]{1,30}$'));
 
@@ -997,6 +1000,7 @@ COMMENT ON COLUMN openrisow.tbsss_environments.name IS 'Nome mnemonico unico do 
 COMMENT ON COLUMN openrisow.tbsss_environments.description IS 'Descricao detalhada do ambiente, servidor host e finalidade';
 COMMENT ON COLUMN openrisow.tbsss_environments.connection IS 'String de conexao ou alias DSN/TNS sugerido para o banco de dados do ambiente';
 COMMENT ON COLUMN openrisow.tbsss_environments.active IS 'Indicador de vigencia do ambiente (Y=Ativo, N=Inativo)';
+COMMENT ON COLUMN openrisow.tbsss_environments.is_production IS 'Ambiente de producao: o disparo mostra alerta e confirmacao em vermelho (Y/N)';
 COMMENT ON COLUMN openrisow.tbsss_environments.created_at IS 'Data e hora da criacao do registro no banco de dados (imutavel)';
 COMMENT ON COLUMN openrisow.tbsss_environments.created_by IS 'Identificador do usuario ou servico responsavel pela criacao (imutavel)';
 COMMENT ON COLUMN openrisow.tbsss_environments.updated_at IS 'Data e hora da ultima alteracao de negocio (nulo ate a primeira alteracao)';
@@ -1421,8 +1425,8 @@ WHEN MATCHED THEN
      OR NVL(dst.description, '~') <> 'BRTLVLTS1199PL (10.238.10.209)'
      OR NVL(dst.connection, '~') <> '10.238.55.146/gfprod'
 WHEN NOT MATCHED THEN
-  INSERT (id, name, description, connection, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_environments.NEXTVAL, 'CLONE2', 'BRTLVLTS1199PL (10.238.10.209)', '10.238.55.146/gfprod', 'Y', SYSDATE, 'SYSTEM:init_db');
+  INSERT (id, name, description, connection, active, is_production, created_at, created_by)
+  VALUES (openrisow.sq_tbsss_environments.NEXTVAL, 'CLONE2', 'BRTLVLTS1199PL (10.238.10.209)', '10.238.55.146/gfprod', 'Y', 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_environments dst
 USING (SELECT 'CLONE1' AS name FROM DUAL) src
@@ -1437,8 +1441,8 @@ WHEN MATCHED THEN
      OR NVL(dst.description, '~') <> 'BRTLVLTS1198PL (10.238.10.208)'
      OR NVL(dst.connection, '~') <> '10.238.55.145/gfprod'
 WHEN NOT MATCHED THEN
-  INSERT (id, name, description, connection, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_environments.NEXTVAL, 'CLONE1', 'BRTLVLTS1198PL (10.238.10.208)', '10.238.55.145/gfprod', 'Y', SYSDATE, 'SYSTEM:init_db');
+  INSERT (id, name, description, connection, active, is_production, created_at, created_by)
+  VALUES (openrisow.sq_tbsss_environments.NEXTVAL, 'CLONE1', 'BRTLVLTS1198PL (10.238.10.208)', '10.238.55.145/gfprod', 'Y', 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_environments dst
 USING (SELECT 'CLONE6' AS name FROM DUAL) src
@@ -1453,8 +1457,8 @@ WHEN MATCHED THEN
      OR NVL(dst.description, '~') <> 'BRTLVLTS3089SL (10.238.10.210)'
      OR NVL(dst.connection, '~') <> '10.238.45.230/svc_gfprodc6'
 WHEN NOT MATCHED THEN
-  INSERT (id, name, description, connection, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_environments.NEXTVAL, 'CLONE6', 'BRTLVLTS3089SL (10.238.10.210)', '10.238.45.230/svc_gfprodc6', 'Y', SYSDATE, 'SYSTEM:init_db');
+  INSERT (id, name, description, connection, active, is_production, created_at, created_by)
+  VALUES (openrisow.sq_tbsss_environments.NEXTVAL, 'CLONE6', 'BRTLVLTS3089SL (10.238.10.210)', '10.238.45.230/svc_gfprodc6', 'Y', 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_environments dst
 USING (SELECT 'CLONE7' AS name FROM DUAL) src
@@ -1469,8 +1473,8 @@ WHEN MATCHED THEN
      OR NVL(dst.description, '~') <> 'BRTLVLTS1216PL (10.238.10.109)'
      OR NVL(dst.connection, '~') <> '10.238.45.230/svc_gfprodc7'
 WHEN NOT MATCHED THEN
-  INSERT (id, name, description, connection, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_environments.NEXTVAL, 'CLONE7', 'BRTLVLTS1216PL (10.238.10.109)', '10.238.45.230/svc_gfprodc7', 'Y', SYSDATE, 'SYSTEM:init_db');
+  INSERT (id, name, description, connection, active, is_production, created_at, created_by)
+  VALUES (openrisow.sq_tbsss_environments.NEXTVAL, 'CLONE7', 'BRTLVLTS1216PL (10.238.10.109)', '10.238.45.230/svc_gfprodc7', 'Y', 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_environments dst
 USING (SELECT 'GFPREPROD' AS name FROM DUAL) src
@@ -1485,8 +1489,8 @@ WHEN MATCHED THEN
      OR NVL(dst.description, '~') <> 'BRTLVLTY3067SL (10.129.177.188)'
      OR NVL(dst.connection, '~') <> '10.129.177.188/GFPR'
 WHEN NOT MATCHED THEN
-  INSERT (id, name, description, connection, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_environments.NEXTVAL, 'GFPREPROD', 'BRTLVLTY3067SL (10.129.177.188)', '10.129.177.188/GFPR', 'Y', SYSDATE, 'SYSTEM:init_db');
+  INSERT (id, name, description, connection, active, is_production, created_at, created_by)
+  VALUES (openrisow.sq_tbsss_environments.NEXTVAL, 'GFPREPROD', 'BRTLVLTY3067SL (10.129.177.188)', '10.129.177.188/GFPR', 'Y', 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_profiles dst
 USING (SELECT 'ADMINISTRATOR' AS name FROM DUAL) src

@@ -303,6 +303,17 @@ class TestTicketService(_BaseTicket):
 class TestTriggerClarity(_BaseTicket):
     """CR-004 U4 (README §5.4, "Clareza no disparo")."""
 
+    def test_producao_vem_do_cadastro_e_nao_do_nome(self):
+        # CR-017: o alerta de producao segue tbsss_environments.is_production.
+        _script, envs = self.svc.available_environments(self.ctx["admin"], "1")
+        self.assertEqual(dict((a["name"], a["production"]) for a in envs),
+                         {"PRODUCAO": True, "HOMOLOGACAO": False})
+        form = self.svc.prepare_form(self.ctx["op.hml"], "1", "HOMOLOGACAO")
+        self.assertFalse(form["environment"]["production"])
+        self.catalog.environments_update(2, {"is_production": "Y"}, actor="teste")
+        form = self.svc.prepare_form(self.ctx["op.hml"], "1", "HOMOLOGACAO")
+        self.assertTrue(form["environment"]["production"])
+
     def test_resumo_em_frase_com_sensivel_mascarado(self):
         r = self.svc.trigger_summary(self.ctx["op.hml"], "1", "HOMOLOGACAO",
                                     {"documento_cliente": "12345678900"}, "3", "")

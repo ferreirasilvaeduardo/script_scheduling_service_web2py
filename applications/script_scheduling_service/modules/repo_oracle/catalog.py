@@ -26,7 +26,7 @@ _RE_PRM_FLAG = re.compile(r"^-{1,2}[A-Za-z0-9][A-Za-z0-9_-]{0,27}$")
 _LIMIT_TOTAL = 10001
 _BATCH_IN = 500
 
-_COLS_ENV = ("id", "name", "description", "connection", "active",
+_COLS_ENV = ("id", "name", "description", "connection", "active", "is_production",
              "created_at", "created_by", "updated_at", "updated_by")
 _COLS_SCR = ("id", "name", "description", "script_group", "category", "stage", "interpreter", "path_file",
              "param_type", "max_parallel_env", "timeout_s", "active",
@@ -60,12 +60,13 @@ _SQL_ENV_LIST = (
 )
 _SQL_ENV_COUNT = "SELECT COUNT(*) FROM (SELECT id FROM {env} WHERE {where_count})"
 _SQL_ENV_INSERT = (
-    "INSERT INTO {env} (id, name, description, connection, active, created_at, created_by, updated_at, updated_by) "
-    "VALUES (:id, :name, :description, :connection, :active, SYSDATE, :actor, NULL, NULL)"
+    "INSERT INTO {env} (id, name, description, connection, active, is_production, created_at, created_by, "
+    "updated_at, updated_by) "
+    "VALUES (:id, :name, :description, :connection, :active, :is_production, SYSDATE, :actor, NULL, NULL)"
 )
 _SQL_ENV_UPDATE = (
     "UPDATE {env} SET description = :description, connection = :connection, active = :active, "
-    "updated_at = SYSDATE, updated_by = :actor WHERE id = :id"
+    "is_production = :is_production, updated_at = SYSDATE, updated_by = :actor WHERE id = :id"
 )
 
 _SQL_SCR_GET = "SELECT " + _column_list(_COLS_SCR) + " FROM {scr} WHERE id = :id"
@@ -358,6 +359,7 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
                                            constraint=self._ck("environments", "name"))
         connection = date.get("connection")
         active = date.get("active", "Y")
+        production = date.get("is_production", "N")
 
         with self.write_transaction(conn=conn) as c:
             # Mesma ordem do FAKE: UK antes das CKs. ck_..._amb_nome garante maiusculas, entao a
@@ -371,12 +373,16 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             if active not in ("Y", "N"):
                 raise repo_errors.RepoViolation("Flag ativo deve ser 'Y' ou 'N'",
                                                constraint=self._ck("environments", "active"))
+            if production not in ("Y", "N"):
+                raise repo_errors.RepoViolation("Flag producao deve ser 'Y' ou 'N'",
+                                               constraint=self._ck("environments", "prod"))
             aid = db_conn.next_id(c, self._seq["environments"])
             cur = c.cursor()
             try:
                 cur.execute(self._sql["ENV_INSERT"], {
                     "id": aid, "name": name, "description": date.get("description", ""),
-                    "connection": connection, "active": active, "actor": actor_clean,
+                    "connection": connection, "active": active, "is_production": production,
+                    "actor": actor_clean,
                 })
             finally:
                 cur.close()
@@ -413,12 +419,18 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
                     raise repo_errors.RepoViolation("Flag ativo deve ser 'Y' ou 'N'",
                                                    constraint=self._ck("environments", "active"))
                 new["active"] = new_active
+            new_production = date.get("is_production")
+            if new_production is not None:
+                if new_production not in ("Y", "N"):
+                    raise repo_errors.RepoViolation("Flag producao deve ser 'Y' ou 'N'",
+                                                   constraint=self._ck("environments", "prod"))
+                new["is_production"] = new_production
 
             cur = c.cursor()
             try:
                 cur.execute(self._sql["ENV_UPDATE"], {
                     "id": int(id), "description": new["description"], "connection": new["connection"],
-                    "active": new["active"], "actor": actor_clean,
+                    "active": new["active"], "is_production": new["is_production"], "actor": actor_clean,
                 })
                 if cur.rowcount != 1:
                     raise repo_errors.RepoConflict("Ambiente ID %s alterado por outra operacao" % id)

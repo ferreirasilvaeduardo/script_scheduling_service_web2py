@@ -5,11 +5,13 @@ Funcao pura: nao importa gluon nem acessa repositorios.
 """
 
 # CANCEL_TICKET e uma acao dentro das telas de tickets, nao uma tela propria; fica fora do menu.
+# O codigo do item pode ser uma tupla: o item aparece com qualquer um deles. Tickets vale para
+# EXEC_SCRIPT (proprios) e VIEW_LOGS (ambientes), como ticket_service.can_query (CR-017).
 _CATALOG = (
     ("OPERATION", u"Operação", (
         ("EXEC_SCRIPT", u"Rotinas disponíveis", "tickets", "catalog", "icon-file-code"),
         ("EXEC_SCRIPT", u"Disparar Scripts", "tickets", "new", "icon-play"),
-        ("VIEW_LOGS", u"Consultar Logs", "tickets", "index", "icon-list"),
+        (("VIEW_LOGS", "EXEC_SCRIPT"), u"Tickets", "tickets", "index", "icon-list"),
     )),
     ("ADMIN", u"Administração", (
         ("MANAGE_USERS", u"Gestão de Usuários", "admin_users", "index", "icon-users"),
@@ -40,10 +42,11 @@ def build_menu(features, is_admin, current_route=None):
     for section, title, items in _CATALOG:
         visible = []
         for code, label, controller, function, icon in items:
-            if not (admin or code in granted):
+            codes = code if isinstance(code, tuple) else (code,)
+            if not (admin or granted.intersection(codes)):
                 continue
             visible.append({
-                "code": code,
+                "code": codes[0],
                 "label": label,
                 "route": (controller, function),
                 "icon": icon,

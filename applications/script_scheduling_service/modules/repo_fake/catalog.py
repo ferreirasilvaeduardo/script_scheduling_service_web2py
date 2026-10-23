@@ -76,6 +76,9 @@ class RepoCatalogFake(RepoCatalog):
             active = date.get("active", "Y")
             if active not in ("Y", "N"):
                 raise RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint="ck_tbsss_env_active")
+            production = date.get("is_production", "N")
+            if production not in ("Y", "N"):
+                raise RepoViolation("Flag producao deve ser 'Y' ou 'N'", constraint="ck_tbsss_env_prod")
 
             aid = self._store.next_id("tbsss_environments")
             new = {
@@ -84,6 +87,7 @@ class RepoCatalogFake(RepoCatalog):
                 "description": date.get("description", ""),
                 "connection": connection,
                 "active": active,
+                "is_production": production,
                 "created_at": date.get("created_at"),
             }
             self._store.stamp_insert(new, actor)
@@ -124,6 +128,12 @@ class RepoCatalogFake(RepoCatalog):
                 if new_active not in ("Y", "N"):
                     raise RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint="ck_tbsss_env_active")
                 changes["active"] = new_active
+
+            new_production = date.get("is_production")
+            if new_production is not None:
+                if new_production not in ("Y", "N"):
+                    raise RepoViolation("Flag producao deve ser 'Y' ou 'N'", constraint="ck_tbsss_env_prod")
+                changes["is_production"] = new_production
 
             # Validacao completa antes de aplicar: um UPDATE rejeitado nao altera nenhuma coluna.
             current.update(changes)

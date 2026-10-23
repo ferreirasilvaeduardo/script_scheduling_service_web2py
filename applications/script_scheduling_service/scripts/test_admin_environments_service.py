@@ -76,7 +76,8 @@ class TestInsert(_Base):
         # CR-003 P6 (README §4.4): so os campos preenchidos.
         _id, errors = self._insert(name="QA_03", description="", connection="")
         self.assertEqual(errors, {})
-        self.assertEqual(self._audits("CREATE")[0]["detail"], "name: QA_03")
+        # is_production e caixa de marcar: sempre tem valor e entra no detalhe (CR-017), como is_admin.
+        self.assertEqual(self._audits("CREATE")[0]["detail"], "name: QA_03; is_production: N")
 
     def test_inclusao_com_auditoria(self):
         aid, errors = self._insert()
@@ -152,7 +153,7 @@ class TestEdit(_Base):
 
     def _save(self, form, **changes):
         date = {"name": form["name"], "description": form["description"], "connection": form["connection"],
-                 "version": form["version"]}
+                 "is_production": form["is_production"], "version": form["version"]}
         date.update(changes)
         return self.svc.save(self.ctx["admin"], IP, str(form["id"]), date)
 
@@ -168,6 +169,20 @@ class TestEdit(_Base):
         self.assertIn(u"connection: %s%sdb-hml2.local:1521/svc" % (old, ARROW), aud[0]["detail"])
         self.assertIn(u"description: ", aud[0]["detail"])
         self.assertEqual(aud[0]["entity_id"], AMB_HOMOLOGACAO)
+
+    def test_marcar_e_desmarcar_producao(self):
+        # CR-017: caixa de marcar; ausente (desmarcada) grava 'N'. Auditado como campo antigo -> novo.
+        _id, errors = self._save(self._form(), is_production="Y")
+        self.assertEqual(errors, {})
+        self.assertEqual(self.catalog.environments_get(AMB_HOMOLOGACAO)["is_production"], "Y")
+        self.assertIn(u"is_production: N%sY" % ARROW, self._audits("UPDATE")[0]["detail"])
+        form = self._form()
+        self.assertEqual(form["is_production"], "Y")
+        del form["is_production"]
+        form["is_production"] = None
+        _id, errors = self._save(form)
+        self.assertEqual(errors, {})
+        self.assertEqual(self.catalog.environments_get(AMB_HOMOLOGACAO)["is_production"], "N")
 
     def test_tentativa_de_alterar_nome_e_ignorada(self):
         form = self._form()

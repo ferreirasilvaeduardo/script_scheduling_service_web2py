@@ -12,6 +12,7 @@ for _a in result['items']:
         'name': _a['name'],
         'description': _a.get('description') or '-',
         'connection': _a.get('connection') or '-',
+        'production': u'Sim' if _a.get('is_production') == 'Y' else u'Não',
         'active': _a['active'],
         'action': {'href': URL(c='admin_environments', f='form', args=[_a['id']]), 'label': 'Editar', 'description': u'Editar ambiente %s' % _a['name']},
     })
@@ -20,6 +21,7 @@ table = {'caption': 'Ambientes cadastrados', 'error': error, 'rows': _rows, 'emp
     {'key': 'name', 'label': 'Nome', 'kind': 'mono'},
     {'key': 'description', 'label': u'Descrição'},
     {'key': 'connection', 'label': 'DSN', 'kind': 'mono'},
+    {'key': 'production', 'label': u'Produção'},
     {'key': 'active', 'label': u'Situação', 'kind': 'active'},
     {'key': 'action', 'label': u'Ações', 'kind': 'action'},
 ]}

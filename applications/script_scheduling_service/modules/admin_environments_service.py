@@ -14,8 +14,8 @@ from admin_crud import GENERAL_FIELD
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 FEATURE = "MANAGE_ENVIRONMENTS"
-EDITABLE_FIELDS = ("description", "connection", "active")
-INSERT_FIELDS = ("name", "description", "connection")
+EDITABLE_FIELDS = ("description", "connection", "is_production", "active")
+INSERT_FIELDS = ("name", "description", "connection", "is_production")
 DESCRIPTION_MAX_LENGTH = 100
 CONNECTION_MAX_LENGTH = 250
 _SCRIPTS_PAGE = 500
@@ -119,7 +119,8 @@ class AdminEnvironmentsService(object):
         """
         admin_crud.require_feature(ctx, FEATURE)
         if environment_id in (None, ""):
-            return {"id": None, "name": "", "description": "", "connection": "", "active": "Y", "version": "",
+            return {"id": None, "name": "", "description": "", "connection": "", "is_production": "N",
+                    "active": "Y", "version": "",
                     "active_schedules": 0, "homologated_scripts": 0, "record": None}
         env = self._get(environment_id)
         return {
@@ -127,6 +128,7 @@ class AdminEnvironmentsService(object):
             "name": env["name"],
             "description": admin_crud.normalize(env.get("description")) or "",
             "connection": admin_crud.normalize(env.get("connection")) or "",
+            "is_production": env.get("is_production") or "N",
             "active": env["active"],
             "version": admin_crud.version(env, EDITABLE_FIELDS),
             "active_schedules": self.active_schedules(env["name"]),
@@ -142,7 +144,9 @@ class AdminEnvironmentsService(object):
         error_connection = validate_connection(connection)
         if error_connection:
             errors["connection"] = error_connection
-        return description, connection
+        # Caixa de marcar: so "Y" liga; qualquer outro valor (ou ausente) e "N" (CR-017).
+        production = "Y" if admin_crud.text(date.get("is_production"), 1) == "Y" else "N"
+        return description, connection, production
 
     def _violation(self, ctx, exc, errors):
         field, message = _FIELD_BY_CONSTRAINT.get(exc.constraint, (GENERAL_FIELD, admin_crud.MSG_FAILURE))
@@ -153,7 +157,7 @@ class AdminEnvironmentsService(object):
     def save(self, ctx, ip, environment_id, date):
         """Inclui (environment_id vazio) ou altera um ambiente.
 
-        dados: nome, descricao, conexao e versao (edicao). Na edicao o nome enviado e ignorado.
+        dados: nome, descricao, conexao, is_production ('Y' marcado) e versao (edicao). Na edicao o nome enviado e ignorado.
         Retorna (id, erros); erros e dict campo -> mensagem (GENERAL_FIELD para conflito/falha).
         Lanca RepoNotFound (edicao de id inexistente) e AccessDenied.
         """
@@ -170,10 +174,11 @@ class AdminEnvironmentsService(object):
             elif log_paths.is_reserved_environment(name):
                 # CR-009: a pasta de log 'internal' e dos logs sem ambiente (aplicacao).
                 errors["name"] = MSG_NAME_RESERVED
-            description, connection = self._validate(date, errors)
+            description, connection, production = self._validate(date, errors)
             if errors:
                 return None, errors
-            new = {"name": name, "description": description, "connection": connection, "active": "Y"}
+            new = {"name": name, "description": description, "connection": connection,
+                   "is_production": production, "active": "Y"}
             audit = admin_crud.audit_entry(ctx, ip, "CREATE",
                                              admin_crud.insert_detail(new, INSERT_FIELDS))
             try:
@@ -186,19 +191,20 @@ class AdminEnvironmentsService(object):
             return created["id"], {}
 
         current = self._get(environment_id)
-        description, connection = self._validate(date, errors)
+        description, connection, production = self._validate(date, errors)
         if errors:
             return current["id"], errors
         if admin_crud.text(date.get("version"), 64) != admin_crud.version(current, EDITABLE_FIELDS):
             errors[GENERAL_FIELD] = admin_crud.MSG_CONFLICT
             return current["id"], errors
-        after = dict(current, description=description, connection=connection)
+        after = dict(current, description=description, connection=connection, is_production=production)
         detail = admin_crud.changes_detail(current, after, EDITABLE_FIELDS)
         if detail is None:
             return current["id"], {}
         try:
             self._catalog.environments_update(
-                current["id"], {"description": description, "connection": connection},
+                current["id"], {"description": description, "connection": connection,
+                                "is_production": production},
                 expected=admin_crud.expected(current, EDITABLE_FIELDS),
                 audit=admin_crud.audit_entry(ctx, ip, "UPDATE", detail))
         except RepoConflict:

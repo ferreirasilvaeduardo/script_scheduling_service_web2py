@@ -65,6 +65,11 @@ pass
     {{for field in _fields:}}
     {{include 'components/form_field.html'}}
     {{pass}}
+    <div class="form-check mb-3">
+      <input class="form-check-input" type="checkbox" id="field-is_production" name="is_production" value="Y" aria-describedby="field-is_production-help"{{if env.get('is_production') == 'Y':}} checked{{pass}}>
+      <label class="form-check-label" for="field-is_production">Ambiente de produção</label>
+      <div class="form-text" id="field-is_production-help">Marque se este ambiente é de produção. No disparo e no agendamento, ele aparece com o selo "Produção", e a confirmação mostra um alerta e o botão em vermelho.</div>
+    </div>
     <div class="sss-form-actions">
       <button type="submit" class="btn btn-primary">{{='Incluir ambiente' if _new else u'Salvar alterações'}}</button>
       <a class="btn btn-outline-secondary" href="{{=URL(c='admin_environments', f='index')}}">Cancelar</a>

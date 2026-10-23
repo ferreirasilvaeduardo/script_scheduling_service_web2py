@@ -22,7 +22,6 @@ GENERAL_FIELD = params_compiler.GENERAL_KEY
 PRIORITY_FIELD = "priority"
 SCHEDULED_AT_FIELD = "scheduled_at"
 DEFAULT_PRIORITY = 2
-PRODUCTION_ENVIRONMENT = "PRODUCAO"
 
 MSG_SCRIPT_UNAVAILABLE = (u"O script não está disponível para execução neste servidor. "
                            u"Contate o administrador.")
@@ -335,7 +334,8 @@ class TicketService(object):
         environments = self._executable_environments(ctx, script)
         if not environments:
             self._deny(ctx, rbac.Reason.NO_ENVIRONMENT, script["id"], None)
-        return script, [{"id": a["id"], "name": a["name"], "description": a.get("description") or ""}
+        return script, [{"id": a["id"], "name": a["name"], "description": a.get("description") or "",
+                         "production": a.get("is_production") == "Y"}
                         for a in environments]
 
     def _links(self, script_id):
@@ -419,7 +419,7 @@ class TicketService(object):
             "script": {"id": script["id"], "name": script["name"], "description": script.get("description") or "",
                        "param_type": script["param_type"]},
             "environment": {"id": env["id"], "name": env["name"], "description": env.get("description") or "",
-                         "production": env["name"] == PRODUCTION_ENVIRONMENT},
+                         "production": env.get("is_production") == "Y"},
             "fields": fields,
             "priorities": priorities,
         }

@@ -193,6 +193,8 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
   * só `GET`; não gravam nada e não auditam;
   * usam o mesmo guarda e o mesmo escopo de ambiente da lista de tickets. Item fora do escopo responde 404;
   * nada fora do perfil do usuário vai para o HTML, nem escondido.
+* **Ambiente de produção (CR-017, README §5.4):** o destaque de produção (selo, alerta e botão vermelho) vem só de `tbsss_environments.is_production`. Nunca decida "é produção" pelo nome do ambiente.
+* **Menu:** o item de menu de uma tela segue o mesmo guarda da tela. Quando a tela aceita mais de uma funcionalidade, o item em `ui_menu._CATALOG` recebe a tupla dos códigos (ex.: Tickets, `EXEC_SCRIPT` ou `VIEW_LOGS`, CR-017).
 * **Proteções de administração no service**, nunca só na tela: desativar o próprio usuário, tirar o próprio perfil de administrador ou deixar o sistema sem administrador ativo é negado (README §4.3.B).
 
 ---
@@ -367,6 +369,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 | `test_auth_service.py` | Login, revalidação e sessão (README §4.2), inclusive a revogação por `session_epoch` (logout, troca e redefinição de senha, desativação, troca de perfil) e a vida máxima `session_max_hours` (CR-008, E2); a mensagem de bloqueio de "Minha senha" (`lock_message`) e os nomes de `auth_service` usados pelos controllers |
 | `test_admin_users_service.py`, `test_admin_profiles_service.py` | CRUD, autoproteções e o último administrador; **E1 do CR-008:** quem não é administrador não inclui nem move ninguém para perfil administrativo, não redefine senha, não desbloqueia, não desativa nem troca o perfil de um administrador, não marca nem desmarca `is_admin`, não altera perfil administrativo nem a matriz do próprio perfil, sem gravar nem auditar |
 | `test_admin_scripts_service.py` | Cadastro e homologação de scripts; no nó web só o formato e as pastas do sistema são conferidos, sem conferir o arquivo nem calcular hash, e um link para pasta do sistema é recusado (CR-011) |
+| CR-017 em `test_admin_environments_service.py`, `test_ticket_service.py` e `test_ui_helpers.py` | `is_production` marcado e desmarcado no cadastro, com auditoria; o destaque de produção do disparo segue o cadastro e não o nome; item "Tickets" do menu com `EXEC_SCRIPT` ou `VIEW_LOGS` |
 | `test_catalog_service.py` | Rotinas disponíveis e histórico: mesmo escopo da lista de tickets (com e sem `VIEW_LOGS`), script fora das rotinas dá 404, contrato sem LOB e limitado, números do resumo iguais aos do gráfico e geometria do gráfico |
 | `test_color_contrast.py` | Todo par texto/fundo dos tokens de `sss.css` com contraste WCAG AA (≥ 4,5:1), nos modos claro e escuro |
 | `test_db_conn.py` `[F7.0]` | Com módulos falsos de driver: cadeia `auto` Thin → Thick → cx_Oracle, parada em erro de autenticação, valores forçados, senha fora de argv/ambiente/log, mapa de erros por driver e modo, inclusive *call timeout* e erros de failover (CR-007, R-12), reconexão sem `sleep`; cálculo do orçamento de abertura do DSN descritor (CR-008, R-17); sondagem com a conta do papel que conecta (`--user` no argv, senha só no stdin; o `connect` do papel `monitor` sonda com a conta do monitor, F9.1d); primeira conexão em INFO (`Conectando`/`Conexao estabelecida`) e o WARN `Tentando reconexao` só nas reconexões (F9.1d) |

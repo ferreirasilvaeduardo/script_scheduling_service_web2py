@@ -228,15 +228,17 @@ def _run_seed(conn, owner, prefix, admin_login=None, admin_name=None, admin_pass
              OR NVL(dst.description, '~') <> NVL(:description, '~')
              OR NVL(dst.connection, '~') <> NVL(:connection, '~')
         WHEN NOT MATCHED THEN
-          INSERT (id, name, description, connection, active, created_at, created_by)
-          VALUES ({sq_env}.NEXTVAL, :name, :description, :connection, 'Y', SYSDATE, 'SYSTEM:init_db')
+          INSERT (id, name, description, connection, active, is_production, created_at, created_by)
+          VALUES ({sq_env}.NEXTVAL, :name, :description, :connection, 'Y', :is_production, SYSDATE,
+                  'SYSTEM:init_db')
         """.format(tb_env=tb_env, sq_env=sq_env)
 
-        for env_name, env_desc, env_conn in ddl_builder.DEFAULT_ENVIRONMENTS:
+        for env_name, env_desc, env_conn, env_prod in ddl_builder.DEFAULT_ENVIRONMENTS:
             cursor.execute(sql_merge_env, {
                 "name": env_name,
                 "description": env_desc,
                 "connection": env_conn,
+                "is_production": env_prod,
             })
 
         # 3. Perfis padrao e matrizes de permissao (DEFAULT_PROFILES)
@@ -447,7 +449,7 @@ def _run_seed(conn, owner, prefix, admin_login=None, admin_name=None, admin_pass
                 "timeout_s": s_tmout,
             })
 
-            for env_name, _, _ in ddl_builder.DEFAULT_ENVIRONMENTS:
+            for env_name, _, _, _ in ddl_builder.DEFAULT_ENVIRONMENTS:
                 cursor.execute(sql_merge_senv, {"scr_name": s_name, "env_name": env_name})
 
             for prf_name, _, _, _, _ in ddl_builder.DEFAULT_PROFILES:

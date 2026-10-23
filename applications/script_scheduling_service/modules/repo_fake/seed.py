@@ -198,6 +198,8 @@ def load_seed(store, force=False, dev_password=None):
                                     {"id": 8, "name": "GFPREPROD", "description": "BRTLVLTY3067SL (10.129.177.188)", "connection": "10.129.177.188/GFPR", "active": "Y"},
                                 ]
                                 for a in envs:
+                                    # CR-017: HOMOLOGACAO e DESENV sao os casos de ambiente fora de producao.
+                                    a["is_production"] = "N" if a["name"] in ("HOMOLOGACAO", "DESENV") else "Y"
                                     a["created_at"] = base_dt - datetime.timedelta(days=90)
                                     store.environments[a["id"]] = a
                                 store.seqs["tbsss_environments"] = 8

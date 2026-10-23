@@ -150,7 +150,7 @@ Todas as telas, quem pode abrir cada uma e para que servem. Telas marcadas com *
 | **Rotinas disponíveis** (CR-004) | `tickets/catalog` | `EXEC_SCRIPT` | Conhecer os scripts que você pode rodar, onde e como foram as últimas execuções (§5.8) |
 | **Histórico do script** (CR-004) | `tickets/history/<script_id>` | `EXEC_SCRIPT` | Ver como o script se saiu nos últimos 30 dias (§5.8) |
 | Disparar script | `tickets/new` | `EXEC_SCRIPT` | Pedir para rodar um script agora ou num horário (§5.4, **CR-004**: resumo em frase e exemplos) |
-| Tickets | `tickets/index` | `EXEC_SCRIPT` ou `VIEW_LOGS` | Acompanhar os pedidos e o que está rodando (§4.3.C) |
+| Tickets | `tickets/index` | `EXEC_SCRIPT` ou `VIEW_LOGS` | Acompanhar os pedidos e o que está rodando (§4.3.C). No menu Operação, o item "Tickets" aparece com qualquer uma das duas (CR-017) |
 | Detalhe do ticket | `tickets/detail/<id>` | Quem pode ver o ticket | Saber o que aconteceu, ver o log, cancelar ou repetir (§5.7, **CR-004**: frase-resumo e etapas) |
 | **Saída do ticket** (CR-012) | `tickets/output/<id>` | Quem pode ler o log do ticket | Baixar o zip com os arquivos que o script deixou na pasta de saída (§8.13) |
 | Agendamentos | `schedules/index`, `form` | `MANAGE_SCHEDULES` | Criar e cuidar das regras que rodam sozinhas (§7.6) |
@@ -848,6 +848,7 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
   * Uma resposta que não vale mais no catálogo atual (opção removida, formato novo) fica vazia, com o aviso "esta resposta mudou desde a última vez".
   * Nada é gravado até a confirmação, que segue o fluxo normal (§5.4).
 * **Aviso de horário:** ao lado do campo de agendamento aparece "Horário do servidor do banco de dados" (§5.4, passo 4).
+* **Ambiente de produção (CR-017):** um ambiente com `is_production = 'Y'` (§10, tabela 1) aparece com o selo "Produção" na escolha do ambiente (etapa 2), no ambiente escolhido (etapa 3) e no formulário de agendamento. No modal de confirmação do disparo, mostra o alerta "Ambiente de produção" e o botão de criar em vermelho. A marcação é só do cadastro: o nome do ambiente não tem significado.
 
 ### 5.5 Reexecução
 
@@ -2109,6 +2110,7 @@ END;
   * `ck_tbsss_env_active`
   * `ck_tbsss_env_name (REGEXP_LIKE(name, '^[A-Z0-9_]{1,30}$'))`; o nome `INTERNAL` é reservado à pasta dos logs sem ambiente (CR-009) e é recusado pelo cadastro (`admin_environments_service`), sem constraint no banco
   * `ck_tbsss_env_connection (connection IS NULL OR INSTR(connection, '@') = 0)`
+  * `ck_tbsss_env_prod (is_production IN ('Y', 'N'))` (CR-017)
   * `ck_tbsss_env_upd` (colunas de registro, CR-006)
 * Trigger extra: `tr_tbsss_env_bu` (nome imutável)
 * **Colunas:**
@@ -2117,6 +2119,7 @@ END;
   * `description VARCHAR2(100 CHAR)`
   * `connection VARCHAR2(250 CHAR)` (somente DSN, opcional)
   * `active CHAR(1) DEFAULT 'Y' NOT NULL`
+  * `is_production CHAR(1) DEFAULT 'N' NOT NULL` (CR-017: ambiente de produção, §5.4)
   * `created_at DATE DEFAULT SYSDATE NOT NULL`
   * `created_by VARCHAR2(40 CHAR) NOT NULL` (CR-006)
   * `updated_at DATE` (CR-006)
@@ -2128,6 +2131,7 @@ END;
     * alias TNS: `^[A-Za-z0-9._-]{1,128}$`.
   * Um `@` é recusado com "Informe apenas o DSN; credenciais ficam no secrets.cfg."
   * `description` é opcional, com até 100 caracteres e sem caracteres de controle.
+  * `is_production` é uma caixa de marcar "Ambiente de produção": marcada grava `'Y'`; desmarcada, `'N'` (CR-017). Entra na versão do formulário e na auditoria (`CREATE` com `is_production: S|N`; `UPDATE` com `is_production: N → S`), e a lista de ambientes mostra a coluna "Produção".
 
 ### 2. `tbsss_profiles`
 * PK `pk_tbsss_profiles` · UK `uk_tbsss_prf_name (name)`
@@ -2516,7 +2520,7 @@ END;
   * não há opção de `DROP` nem `--recreate`, inclusive em DEV. Objetos existentes nunca são removidos automaticamente por `init_db.py`.
 * **Seed Completo** via `MERGE` (idempotente):
   * **Funcionalidades e Controle:** catálogo canônico de 10 funcionalidades (§4.3.D) e a linha de `tbsss_control` (versão do esquema e auditoria de versão).
-  * **Ambientes Padrão (`tbsss_environments`):** os 5 ambientes homologados (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`).
+  * **Ambientes Padrão (`tbsss_environments`):** os 5 ambientes homologados (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`), todos com `is_production = 'Y'` (CR-017). A marcação só é gravada na inclusão: o `MERGE` não desfaz uma alteração feita no cadastro.
   * **Dicionário de Parâmetros (`tbsss_parameters`):** 19 parâmetros reutilizáveis (`TEXT`, `NUMBER`, `SELECT`).
   * **Catálogo de Scripts Utilitários (`tbsss_scripts`):** 14 rotinas de manipulação de arquivos em Python 3 e Shell POSIX (`zipar_arquivos`, `descompactar_zip`, `quebrar_arquivo`, `juntar_arquivos`, `converter_encoding`, `substituir_texto`, `remover_duplicadas`, `gerar_hash_arquivo`, `compactar_targz`, `descompactar_targz`, `contar_linhas_arquivo`, `filtrar_linhas`, `ordenar_arquivo`, `limpar_linhas_vazias`). Especificação completa em `docs/UTILITY_SCRIPTS.md`.
   * **Homologação por Ambiente (`tbsss_script_env`):** todas as 14 rotinas homologadas para os 5 ambientes (70 registros).

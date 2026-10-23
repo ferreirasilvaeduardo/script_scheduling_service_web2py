@@ -220,6 +220,20 @@ class BaseRepoContractTest(object):
             cat.environments_update(env["id"], {"connection": "app@host/svc"}, actor="teste")
         self.assertEqual(ctx.exception.constraint, self.cn("ck", "environments", "connection"))
 
+    def test_03b_ambiente_producao(self):
+        # CR-017: is_production nasce 'N', aceita 'Y' na inclusao e na alteracao; outro valor viola a CK.
+        cat = self.obter_repo("catalog")
+        env = self.m.environment("PRD0")
+        self.assertEqual(cat.environments_get(env["id"])["is_production"], "N")
+        prod = cat.environments_insert({"name": "TST_%s_PRD1" % self.m.suf, "is_production": "Y"}, actor="teste")
+        self.m.note("environments", prod["id"])
+        self.assertEqual(cat.environments_get(prod["id"])["is_production"], "Y")
+        changed = cat.environments_update(prod["id"], {"is_production": "N"}, actor="teste")
+        self.assertEqual(changed["is_production"], "N")
+        with self.assertRaises(RepoViolation) as ctx:
+            cat.environments_update(prod["id"], {"is_production": "S"}, actor="teste")
+        self.assertEqual(ctx.exception.constraint, self.cn("ck", "environments", "prod"))
+
     def test_04_imutabilidade_nome_ambiente_e_login_usuario(self):
         c = self.m.scenario()
         with self.assertRaises(RepoViolation) as ctx:

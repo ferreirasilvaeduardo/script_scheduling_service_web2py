@@ -66,7 +66,7 @@ _steps = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
       {{for _a in environments:}}
       <li>
         <a class="sss-choice" href="{{=URL(c='tickets', f='new', vars={'script_id': script['id'], 'environment': _a['name']})}}">
-          <span class="sss-choice-name">{{=_a['name']}}{{if _a['name'] == 'PRODUCAO':}} <span class="badge text-bg-danger">Produção</span>{{pass}}</span>
+          <span class="sss-choice-name">{{=_a['name']}}{{if _a['production']:}} <span class="badge text-bg-danger">Produção</span>{{pass}}</span>
           <span class="sss-choice-desc">{{=_a['description']}}</span>
         </a>
       </li>

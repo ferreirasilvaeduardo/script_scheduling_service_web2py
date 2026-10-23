@@ -340,7 +340,17 @@ class TestBuildMenu(unittest.TestCase):
             ("ADMIN", ["MANAGE_SCHEDULES"]),
         ])
         self.assertEqual(self._codes(ui_menu.build_menu(["EXEC_SCRIPT"], False)),
-                         [("OPERATION", ["EXEC_SCRIPT", "EXEC_SCRIPT"])])
+                         [("OPERATION", ["EXEC_SCRIPT", "EXEC_SCRIPT", "VIEW_LOGS"])])
+
+    def test_tickets_aparece_com_exec_script_ou_view_logs(self):
+        # CR-017: a lista de tickets aceita EXEC_SCRIPT (proprios), entao o menu tambem.
+        for features in (["EXEC_SCRIPT"], ["VIEW_LOGS"]):
+            with self.subTest(features=features):
+                routes = [i["route"] for s in ui_menu.build_menu(features, False) for i in s["items"]]
+                self.assertIn(("tickets", "index"), routes)
+        item = [i for s in ui_menu.build_menu(["EXEC_SCRIPT"], False) for i in s["items"]
+                if i["route"] == ("tickets", "index")][0]
+        self.assertEqual(item["label"], u"Tickets")
 
     def test_codigo_desconhecido_ou_caixa_diferente_ignorado(self):
         self.assertEqual(ui_menu.build_menu(["exec_script", "CANCEL_TICKET", "XYZ"], False), [])

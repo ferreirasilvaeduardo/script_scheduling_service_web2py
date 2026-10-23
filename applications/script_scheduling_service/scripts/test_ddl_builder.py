@@ -442,7 +442,7 @@ class TestInitDbSeedMock(unittest.TestCase):
             elif re.search(r"MERGE INTO %s dst" % re.escape(tb_penv), sql):
                 self.assertIn(binds["env_name"], gravados)
                 ligados += 1
-        self.assertEqual(gravados, set(n for n, _d, _c in ddl_builder.DEFAULT_ENVIRONMENTS))
+        self.assertEqual(gravados, set(n for n, _d, _c, _p in ddl_builder.DEFAULT_ENVIRONMENTS))
         self.assertEqual(ligados, sum(len(p[4]) for p in ddl_builder.DEFAULT_PROFILES))
 
 

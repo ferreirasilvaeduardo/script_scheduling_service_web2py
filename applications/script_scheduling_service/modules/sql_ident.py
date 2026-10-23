@@ -153,6 +153,7 @@ def _build_table_registry():
             ('description', {'name': 'description', 'tipo': 'VARCHAR2(100 CHAR)', 'not_null': False, 'default': None}),
             ('connection', {'name': 'connection', 'tipo': 'VARCHAR2(250 CHAR)', 'not_null': False, 'default': None}),
             ('active', {'name': 'active', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'Y'"}),
+            ('is_production', {'name': 'is_production', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'N'"}),
             ('created_at', {'name': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
@@ -162,6 +163,7 @@ def _build_table_registry():
         ('fks', OrderedDict()),
         ('cks', OrderedDict([
             ('active', {'sufixo': 'active', 'expr': "active IN ('Y', 'N')"}),
+            ('prod', {'sufixo': 'prod', 'expr': "is_production IN ('Y', 'N')"}),
             ('name', {'sufixo': 'name', 'expr': "REGEXP_LIKE(name, '^[A-Z0-9_]{1,30}$')"}),
             ('connection', {'sufixo': 'connection', 'expr': "connection IS NULL OR INSTR(connection, '@') = 0"}),
         ])),
