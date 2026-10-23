@@ -32,8 +32,8 @@ _Agent = collections.namedtuple("_Agent", (
     "agent_id", "environments", "work_dir", "interpreters", "exec_users",
     "exec_work_dir", "heartbeat_interval_s", "fence_timeout_s", "node_offline_timeout_s", "kill_grace_s",
     "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "queue_aging_min", "child_locale",
-    "output_dir", "input_dir"))
-_Agent.__new__.__defaults__ = (None, None)  # CR-012 e CR-014: sem output_dir nem input_dir por padrao
+    "output_dir", "input_dir", "script_work_dir"))
+_Agent.__new__.__defaults__ = (None, None, None)  # CR-012, CR-014 e CR-019: pastas opcionais desligadas
 _Cfg = collections.namedtuple("_Cfg", "agent logging app oracle secrets")
 _NS = collections.namedtuple("_NS", "log_dir")
 _App = collections.namedtuple("_App", "sss_env")
@@ -271,6 +271,26 @@ class TestSteps(_Base):
         logs = self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=cfg, plat=plat))
         self.assertEqual(seen, [(os.path.join(input_value, "dev"), "exec1")])
         self.assertTrue(any("pasta de entrada:" in x for x in logs))
+
+    def test_cr019_pasta_de_trabalho_na_subida(self):
+        # CR-019 (README §8.12 passo 4): script_work_dir como a de saida.
+        self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(script_work_dir="/usr/local/sss-work")))
+        self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(script_work_dir=os.path.join(self.root, "nao"))))
+        work = os.path.join(self.root, "trabalho")
+        os.mkdir(work, 0o755)
+        self.agent(cfg=self.cfg(script_work_dir=work)).initialize()
+        seen = []
+
+        def _pastas(pairs):
+            seen.extend(pairs)
+            return ["%s deve ser diretorio de exec1 sem escrita de grupo nem de outros" % pairs[0][0]]
+        plat = _Plat(validate_execution=lambda *a, **k: [], validate_output_dirs=_pastas)
+        cfg = self.cfg(sss_env="PROD", exec_work_dir=self.root, exec_users=(("DEV", "exec1"),),
+                       script_work_dir=work)
+        logs = self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=cfg, plat=plat))
+        self.assertEqual(seen, [(os.path.join(work, "dev"), "exec1")])
+        self.assertTrue(any("pasta de trabalho:" in x for x in logs))
+        self.assertIn(work, sl._sss_dirs(cfg), "script nem interpretador dentro dela (SSS_DIR)")
 
     def test_pasta_de_saida_na_subida(self):
         # CR-012 (README §8.12 passo 4): output_dir fora das pastas do sistema e existente.

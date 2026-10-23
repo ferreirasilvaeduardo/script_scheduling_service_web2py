@@ -8,6 +8,7 @@ padrao, sem importar a aplicacao nem ler o config.ini. Valida os proprios argume
 
 Subcomandos:
   run                                         especificacao JSON pela entrada padrao; execve do script
+                                              (cria as pastas de saida, de entrada e de trabalho pedidas)
   term <pgid> <process_start>                 SIGTERM ao grupo (identidade do lider conferida)
   kill <pgid> <process_start>                 SIGKILL ao grupo (idem)
   clean <base_dir> <ticket_id>                remove <base_dir>/ticket_<id>/ sem seguir links
@@ -17,7 +18,8 @@ Subcomandos:
                                               zip da pasta de saida do ticket na saida padrao (CR-012)
   clean-output <base> <relativo>              remove a pasta de saida do ticket sem seguir links (CR-012)
   purge-output <base> <dias> [count]          remove as pastas de minuto de saida mais antigas que <dias>
-                                              (com "count", so conta: --dry-run do purge)
+                                              (com "count", so conta: --dry-run do purge); serve tambem a
+                                              pasta de trabalho, que tem o mesmo formato (CR-019)
 
 Codigos de saida: 0 sucesso, 2 uso invalido, 3 recusado (identidade divergente), 4 erro do sistema,
 5 nao suportado nesta plataforma, 6 pasta de saida vazia ou inexistente, 7 saida acima do limite de
@@ -120,7 +122,8 @@ def _own_directory(path):
 
 
 def _output_dir(base, relative, create=False):
-    """Pasta de saida do ticket, conferida nivel a nivel sem seguir links; criar=True cria com 0700.
+    """Pasta de saida (ou de trabalho, CR-019) do ticket, conferida nivel a nivel sem seguir links; criar=True
+    cria com 0700.
 
     Devolve o caminho, ou None se algum nivel nao existir (e criar=False).
     """
@@ -195,13 +198,8 @@ def _read_spec(input_value):
                 or not all(isinstance(x, int) and not isinstance(x, bool) for x in value):
             _error(INVALID_USAGE, "limite de recurso invalido")
         limits[name] = (value[0], value[1])
-    output = spec.get("output")
-    if output is not None:
-        if not isinstance(output, dict) or set(output) != {"base", "relativo"}:
-            _error(INVALID_USAGE, "saida invalida")
-        _base_dir(output["base"], "base")
-        if _relative_parts(output["relativo"])[6] != "ticket_%d" % ticket_id:
-            _error(INVALID_USAGE, "saida de outro ticket")
+    output = _ticket_folder(spec, "output", "saida", ticket_id)
+    work = _ticket_folder(spec, "work", "pasta de trabalho", ticket_id)
     input_value = spec.get("input")
     if input_value is not None:
         if not isinstance(input_value, dict) or set(input_value) != {"base", "relativo"}:
@@ -209,12 +207,25 @@ def _read_spec(input_value):
         _base_dir(input_value["base"], "base")
         if not isinstance(input_value["relativo"], str) or not _RE_SCRIPT_DIR.match(input_value["relativo"]):
             _error(INVALID_USAGE, "entrada fora do formato <script>")
-    return ticket_id, argv, env, limits, _base_dir(spec.get("base_dir")), output, input_value
+    return ticket_id, argv, env, limits, _base_dir(spec.get("base_dir")), output, input_value, work
+
+
+def _ticket_folder(spec, key, name, ticket_id):
+    """{base, relativo} de uma pasta por ticket (saida, CR-012; trabalho, CR-019), ou None se ausente."""
+    value = spec.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, dict) or set(value) != {"base", "relativo"}:
+        _error(INVALID_USAGE, "%s invalida" % name)
+    _base_dir(value["base"], "base")
+    if _relative_parts(value["relativo"])[6] != "ticket_%d" % ticket_id:
+        _error(INVALID_USAGE, "%s de outro ticket" % name)
+    return value
 
 
 def _run(input_value=None, run=os.execve):
     """Cria <pasta_base>/ticket_<id>/ e tmp/ (0700), entra nela, aplica umask e limites e faz execve."""
-    ticket_id, argv, env, limits, dir_base, output, dir_input = _read_spec(
+    ticket_id, argv, env, limits, dir_base, output, dir_input, work = _read_spec(
         input_value or sys.stdin.buffer)
     dir_value = _ticket_dir(dir_base, ticket_id)
     try:
@@ -231,6 +242,9 @@ def _run(input_value=None, run=os.execve):
         if dir_input is not None:
             # CR-014: a pasta de entrada do script, permanente, do usuario de execucao (README §8.14).
             _input_dir(dir_input["base"], dir_input["relativo"])
+        if work is not None:
+            # CR-019: a pasta de trabalho do ticket, do usuario de execucao, que fica depois dele (README §8.15).
+            _output_dir(work["base"], work["relativo"], create=True)
         os.chdir(dir_value)
         os.umask(0o077)
         for name, pair in sorted(limits.items()):

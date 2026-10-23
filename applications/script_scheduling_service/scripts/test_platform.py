@@ -352,6 +352,19 @@ class TestOutputDir(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             os_platform.create_input_dir(base, "ligada")
 
+    def test_cr019_dev_cria_a_pasta_de_trabalho(self):
+        base = os.path.join(self.root, "work_scripts", "producao")
+        dir_value = os_platform.create_script_work_dir(base, self.rel)
+        self.assertEqual((dir_value, os.stat(dir_value).st_mode & 0o777), (os.path.join(base, self.rel), 0o700))
+        self.assertEqual(os_platform.create_script_work_dir(base, self.rel), dir_value, "idempotente")
+        outside = os.path.join(self.root, "fora_trabalho")
+        os.mkdir(outside)
+        os.symlink(outside, os.path.join(base, "ligada"))
+        with self.assertRaises(RuntimeError) as ctx:
+            os_platform.create_script_work_dir(base, "ligada/2026/10/20/14/05/ticket_12")
+        self.assertIn("pasta de trabalho", str(ctx.exception))
+        self.assertEqual(os.listdir(outside), [])
+
     def test_dev_recusa_link_no_caminho(self):
         os.makedirs(self.base)
         outside = os.path.join(self.root, "fora")

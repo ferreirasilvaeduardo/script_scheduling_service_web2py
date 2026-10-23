@@ -190,6 +190,15 @@ class TestEnvBuilder(unittest.TestCase):
         self.assertEqual(env["SSS_INPUT_DIR"], "/srv/sss/input/producao/carga")
         self.assertNotIn("SSS_INPUT_DIR", without)
 
+    def test_cr019_pasta_de_trabalho_so_quando_informada(self):
+        with self.assertLogs("sss_scheduler", "WARNING"):
+            env = env_builder.build(_cfg(), _secrets(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
+                                        work_folder="/srv/sss/work/producao/carga/2026/10/20/03/00/ticket_41")
+            without = env_builder.build(_cfg(), _secrets(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX")
+        self.assertEqual(env["SSS_WORK_DIR"], "/srv/sss/work/producao/carga/2026/10/20/03/00/ticket_41")
+        self.assertNotIn("SSS_WORK_DIR", without)
+        self.assertNotEqual(env["HOME"], env["SSS_WORK_DIR"], "HOME e cwd continuam na pasta descartavel")
+
     def test_cr015a_so_nomes_em_ingles(self):
         """Troca direta (CR-015a): nenhum nome antigo chega ao script, nem com todos os dados presentes."""
         old = ("SSS_TICKET_PAI_ID", "SSS_AMBIENTE", "SSS_AMBIENTE_DESCRICAO", "SSS_AMBIENTE_DSN",

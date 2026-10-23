@@ -91,11 +91,13 @@ class _Log(logging.LoggerAdapter):
 
 
 def _sss_dirs(cfg):
-    """Pastas do SSS onde nenhum script nem interpretador pode ficar (SSS_DIR, README §8.5). CR-014: inclui
-    output_dir e input_dir, que o usuario de execucao grava (um script ali poderia ser trocado por outro)."""
+    """Pastas do SSS onde nenhum script nem interpretador pode ficar (SSS_DIR, README §8.5). CR-014 e CR-019:
+    inclui output_dir, input_dir e script_work_dir, que o usuario de execucao grava (um script ali poderia ser
+    trocado por outro)."""
     agent = cfg.agent
     return tuple(d for d in (cfg.logging.log_dir, agent.work_dir, agent.exec_work_dir,
-                             getattr(agent, "output_dir", None), getattr(agent, "input_dir", None)) if d)
+                             getattr(agent, "output_dir", None), getattr(agent, "input_dir", None),
+                             getattr(agent, "script_work_dir", None)) if d)
 
 
 def _read_state(folder, name, plat):
@@ -241,46 +243,29 @@ class Agent(object):
                 self.log.critical("execucao fora de DEV: %s", failure)
             if failures:
                 self._fail(EXIT_DIRECTORIES, "%d falha(s) na conferencia do helper e do sudoers", len(failures))
-        self._check_output_dir()
-        self._check_input_dir()
+        self._check_user_dir("output_dir", "pasta de saida", "pastas de saida (CR-012)")
+        self._check_user_dir("input_dir", "pasta de entrada", "pastas de entrada (CR-014)")
+        self._check_user_dir("script_work_dir", "pasta de trabalho", "pastas de trabalho (CR-019)")
 
-    def _check_input_dir(self):
-        """CR-014 (README §8.12 passo 4): input_dir fora das pastas do sistema; fora de DEV, a pasta de cada
-        ambiente atendido do usuario de execucao dele, sem escrita de grupo nem de outros (como a de saida)."""
+    def _check_user_dir(self, key, name, plural):
+        """README §8.12 passo 4: a pasta da chave fora das pastas do sistema; fora de DEV, a pasta de cada
+        ambiente atendido do usuario de execucao dele, sem escrita de grupo nem de outros (CR-012, CR-014, CR-019)."""
         agent = self.cfg.agent
-        if not agent.input_dir:
+        folder = getattr(agent, key, None)
+        if not folder:
             return
-        code = self.plat.validate_restricted_dir(agent.input_dir)
+        code = self.plat.validate_restricted_dir(folder)
         if code:
-            self._fail(EXIT_DIRECTORIES, "input_dir %s recusado: %s", agent.input_dir, code)
+            self._fail(EXIT_DIRECTORIES, "%s %s recusado: %s", key, folder, code)
         if self.cfg.app.sss_env == "DEV" and not agent.exec_users:
             return
-        pairs = [(os.path.join(agent.input_dir, log_paths.environment_dir(env)), self._exec_user(env))
+        pairs = [(os.path.join(folder, log_paths.environment_dir(env)), self._exec_user(env))
                  for env in agent.environments if self._exec_user(env)]
         failures = self.plat.validate_output_dirs(pairs)
         for failure in failures:
-            self.log.critical("pasta de entrada: %s", failure)
+            self.log.critical("%s: %s", name, failure)
         if failures:
-            self._fail(EXIT_DIRECTORIES, "%d falha(s) nas pastas de entrada (CR-014)", len(failures))
-
-    def _check_output_dir(self):
-        """CR-012 (README §8.12 passo 4): output_dir fora das pastas do sistema; fora de DEV, a pasta de cada
-        ambiente atendido do usuario de execucao dele, sem escrita de grupo nem de outros."""
-        agent = self.cfg.agent
-        if not agent.output_dir:
-            return
-        code = self.plat.validate_restricted_dir(agent.output_dir)
-        if code:
-            self._fail(EXIT_DIRECTORIES, "output_dir %s recusado: %s", agent.output_dir, code)
-        if self.cfg.app.sss_env == "DEV" and not agent.exec_users:
-            return
-        pairs = [(os.path.join(agent.output_dir, log_paths.environment_dir(env)), self._exec_user(env))
-                 for env in agent.environments if self._exec_user(env)]
-        failures = self.plat.validate_output_dirs(pairs)
-        for failure in failures:
-            self.log.critical("pasta de saida: %s", failure)
-        if failures:
-            self._fail(EXIT_DIRECTORIES, "%d falha(s) nas pastas de saida (CR-012)", len(failures))
+            self._fail(EXIT_DIRECTORIES, "%d falha(s) nas %s", len(failures), plural)
 
     def _step5_instance(self):
         work = self.cfg.agent.work_dir
@@ -1162,6 +1147,7 @@ class Agent(object):
         connection = None
         output = None
         input_value = None
+        work = None
         try:
             if agent.input_dir:
                 # CR-014 (README §8.14): pasta permanente do script no ambiente, com o nome do snapshot.
@@ -1172,20 +1158,26 @@ class Agent(object):
                 base, relative = log_paths.output_dir(agent.output_dir, ticket["environment"], snap["script_name"],
                                                         item.started_at, item.tid, snap.get("script_id"))
                 output = output_phase.Output(item.tid, base, relative, user, work_dir_ticket)
+            if getattr(agent, "script_work_dir", None):
+                # CR-019 (README §8.15): pasta de trabalho com as partes da pasta de saida e o mesmo minuto.
+                work = log_paths.script_work_dir(agent.script_work_dir, ticket["environment"], snap["script_name"],
+                                                 item.started_at, item.tid, snap.get("script_id"))
             ticket_env = dict(ticket, started_at=item.started_at)
             env = env_builder.build(self.cfg, self.secrets, ticket_env, context["environment"], script_real,
                                         work_dir_ticket, dict(os.environ), self.plat.NAME, snapshot=snap,
                                         schedule=context["schedule"], log_path=path,
                                         timeout_sec=timeout, hostname=self.hostname, version=sss_config.SSS_VERSION,
                                         output_dir=output.folder if output else None,
-                                        input_dir=os.path.join(*input_value) if input_value else None)
+                                        input_dir=os.path.join(*input_value) if input_value else None,
+                                        work_folder=os.path.join(*work) if work else None)
             connection = env.get(env_builder.CONNECTION_VAR)
         except Exception as exc:  # noqa: BLE001 - CR-007 R-17: SPAWN_ERROR
             ex = executor.failure_before_spawn(fd, item.tid, exc, label, work_dir_ticket)
             return self._after_start(item, ex, snap, connection)
         ex = executor.start(item.tid, argv, fd, env, work_dir_ticket, user, agent.exec_work_dir,
                               dict(self.plat.DEFAULT_RLIMITS), label,
-                              output=(output.base, output.relative) if output else None, input_value=input_value)
+                              output=(output.base, output.relative) if output else None, input_value=input_value,
+                              work=work)
         if not ex.spawn_error:
             item.output = output
         item.timeout_s = timeout

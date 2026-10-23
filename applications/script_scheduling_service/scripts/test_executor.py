@@ -457,6 +457,22 @@ class TestSpawnFailures(_Base):
                              input_value=(base, "teste_script"))
         self.assertEqual(os.stat(os.path.join(base, "teste_script")).st_mode & 0o777, 0o700)
 
+    def test_cr019_trabalho_na_especificacao_e_criado_em_dev(self):
+        rel = "carga/2026/10/20/03/00/ticket_15"
+        self.assertEqual(executor.build_spec(15, ["/bin/true"], {}, {}, "/srv/exec/sssprd",
+                                                work=("/srv/sss/work/producao", rel))["work"],
+                         {"base": "/srv/sss/work/producao", "relativo": rel})
+        self.assertNotIn("work", executor.build_spec(15, ["/bin/true"], {}, {}, "/srv/exec/sssprd"))
+        base = os.path.join(self.root, "work_scripts", "dev")
+        rel = "teste_script/2026/10/20/03/00/ticket_17"
+        wd = executor.prepare_directory(self.work, 17)
+        fd, _ = executor.open_log(self.logs, "DEV", "Teste Script", STARTED_AT, 17)
+        with mock.patch.object(os_platform, "start_process", side_effect=RuntimeError("parar")), \
+                self.assertLogs("sss_scheduler", "ERROR"):
+            executor.start(17, ["/bin/true"], fd, {}, wd, None, None, os_platform.DEFAULT_RLIMITS, "SSS-srv-01-17",
+                             work=(base, rel))
+        self.assertEqual(os.stat(os.path.join(base, rel)).st_mode & 0o777, 0o700)
+
 
 class TestSnapshotV4(_Base):
 

@@ -26,6 +26,7 @@ from os_platform.posix import (  # noqa: E402,F401
     create_work_dir,
     create_input_dir,
     create_output_dir,
+    create_script_work_dir,
     stop_ticket,
     free_space_mb,
     write_state,

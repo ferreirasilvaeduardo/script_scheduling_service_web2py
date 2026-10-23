@@ -138,11 +138,12 @@ def open_log(log_dir, environment, script_name, started_at, ticket_id, script_id
     return fd, path
 
 
-def build_spec(ticket_id, argv, env, rlimits, base_dir, output=None, input_value=None):
+def build_spec(ticket_id, argv, env, rlimits, base_dir, output=None, input_value=None, work=None):
     """Especificacao do helper run (README §8.0), serializada em JSON pela plataforma.
 
     saida: (base, relativo) da pasta de saida do ticket (CR-012), que o helper cria antes do script.
     entrada: (base, relativo) da pasta de entrada do script (CR-014), que o helper cria se nao existir.
+    work: (base, relativo) da pasta de trabalho do ticket (CR-019), que o helper cria antes do script.
     """
     spec = {
         "ticket_id": int(ticket_id),
@@ -155,6 +156,8 @@ def build_spec(ticket_id, argv, env, rlimits, base_dir, output=None, input_value
         spec["output"] = {"base": output[0], "relativo": output[1]}
     if input_value is not None:
         spec["input"] = {"base": input_value[0], "relativo": input_value[1]}
+    if work is not None:
+        spec["work"] = {"base": work[0], "relativo": work[1]}
     return spec
 
 
@@ -191,7 +194,7 @@ def failure_before_spawn(log_fd, ticket_id, error, label, work_dir_ticket=None):
 
 
 def start(ticket_id, argv, log_fd, env, work_dir_ticket, exec_user, exec_work_dir, rlimits, label,
-            output=None, input_value=None):
+            output=None, input_value=None, work=None):
     """Inicia o script e devolve a Execucao (README §8.4 passos 3 a 5; CR-008 R-01).
 
     Ordem: .sss_spawn -> os_platform.start_process -> rename do log para ticket_<id>_<PID>.log ->
@@ -201,6 +204,7 @@ def start(ticket_id, argv, log_fd, env, work_dir_ticket, exec_user, exec_work_di
 
     saida: (base, relativo) da pasta de saida (CR-012): o helper run a cria; em DEV, a plataforma.
     entrada: (base, relativo) da pasta de entrada (CR-014), permanente: idem, so se nao existir.
+    work: (base, relativo) da pasta de trabalho (CR-019): como a saida, mas fica no disco depois do ticket.
     """
     agent = _agent_from_label(label)
     dir_base = os.path.join(exec_work_dir, exec_user) if exec_user else None
@@ -209,7 +213,7 @@ def start(ticket_id, argv, log_fd, env, work_dir_ticket, exec_user, exec_work_di
         if execution.log_path is None:
             raise ValueError("log_fd nao foi aberto por abrir_log")
         if exec_user:
-            spec = build_spec(ticket_id, argv, env, rlimits, dir_base, output, input_value)
+            spec = build_spec(ticket_id, argv, env, rlimits, dir_base, output, input_value, work)
         else:
             # DEV sem usuario de execucao: o cwd e a pasta exec de work_dir/ticket_<id> (CR-008, R-36).
             cwd = os_platform.create_work_dir(os.path.join(work_dir_ticket, "exec"))
@@ -219,6 +223,8 @@ def start(ticket_id, argv, log_fd, env, work_dir_ticket, exec_user, exec_work_di
                 os_platform.create_output_dir(output[0], output[1])
             if input_value is not None:
                 os_platform.create_input_dir(input_value[0], input_value[1])
+            if work is not None:
+                os_platform.create_script_work_dir(work[0], work[1])
         os_platform.write_state(os.path.join(work_dir_ticket, SPAWN), {
             "ticket_id": int(ticket_id), "exec_user": exec_user,
             "monotonic": time.monotonic(), "wall": time.time()})

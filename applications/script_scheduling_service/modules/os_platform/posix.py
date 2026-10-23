@@ -506,6 +506,16 @@ def _helper_argv(subcommand, args, exec_user=None):
 def create_output_dir(base, relative):
     """So em DEV sem usuario de execucao: cria base e cada nivel do relativo com 0700, recusando link ou item
     que nao seja diretorio do proprio usuario (fora de DEV, quem cria e o helper run)."""
+    return _create_ticket_dir(base, relative, "pasta de saida")
+
+
+def create_script_work_dir(base, relative):
+    """Pasta de trabalho do ticket (CR-019, README §8.15), so em DEV sem usuario de execucao: as regras de
+    create_output_dir (fora de DEV, quem cria e o helper run)."""
+    return _create_ticket_dir(base, relative, "pasta de trabalho")
+
+
+def _create_ticket_dir(base, relative, name):
     current = None
     for part in [base] + relative.split("/"):
         current = part if current is None else os.path.join(current, part)
@@ -518,7 +528,7 @@ def create_output_dir(base, relative):
                 pass
         st = os.lstat(current)
         if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid():
-            raise RuntimeError("pasta de saida com item que nao e diretorio do agente")
+            raise RuntimeError("%s com item que nao e diretorio do agente" % name)
     os.chmod(current, 0o700)
     return current
 

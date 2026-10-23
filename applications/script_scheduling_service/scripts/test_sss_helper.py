@@ -329,6 +329,41 @@ class TestSssHelper(unittest.TestCase):
         self.assertEqual(_helper("run", entrada=json.dumps(spec).encode("utf-8"))[0], 2)
         self.assertEqual(os.listdir(outside), [])
 
+    def test_cr019_run_cria_a_pasta_de_trabalho_que_fica(self):
+        # CR-019 (README §8.15): criada antes do script com 0700 nivel a nivel; o helper nao a remove.
+        base = os.path.join(self.root, "work_scripts", "producao")
+        os.makedirs(base, 0o700)
+        rel = "carga/2026/10/20/14/05/ticket_12"
+        script = os.path.join(self.root, "trabalha.py")
+        with open(script, "w") as f:
+            f.write("import os\nopen(os.path.join(os.environ['SSS_WORK_DIR'], 't.txt'), 'w').write('ok')\n")
+        target = os.path.join(base, rel)
+        spec = {"ticket_id": 12, "argv": [sys.executable, script], "env": {"SSS_WORK_DIR": target},
+                "base_dir": self.base, "work": {"base": base, "relativo": rel}}
+        code, error = _helper("run", entrada=json.dumps(spec).encode("utf-8"))
+        self.assertEqual(code, 0, error)
+        with open(os.path.join(target, "t.txt")) as f:
+            self.assertEqual(f.read(), "ok")
+        current = base
+        for part in rel.split("/"):
+            current = os.path.join(current, part)
+            self.assertEqual(os.stat(current).st_mode & 0o777, 0o700, current)
+
+    def test_cr019_run_recusa_pasta_de_trabalho_invalida(self):
+        base = os.path.join(self.root, "work_scripts", "producao")
+        os.makedirs(base, 0o700)
+        valid = {"ticket_id": 12, "argv": ["/bin/true"], "env": {}, "base_dir": self.base}
+        for work in ({"base": base}, {"base": base, "relativo": "x/2026/10/20/14/05/ticket_13"},
+                     {"base": base, "relativo": "x/2026/10/20/14/ticket_12"},
+                     {"base": "relativa", "relativo": "x/2026/10/20/14/05/ticket_12"}):
+            self.assertEqual(_helper("run", entrada=json.dumps(dict(valid, work=work)).encode("utf-8"))[0], 2, work)
+        outside = os.path.join(self.root, "fora_trabalho")
+        os.mkdir(outside)
+        os.symlink(outside, os.path.join(base, "x"))
+        spec = dict(valid, work={"base": base, "relativo": "x/2026/10/20/14/05/ticket_12"})
+        self.assertEqual(_helper("run", entrada=json.dumps(spec).encode("utf-8"))[0], 2, "link recusado")
+        self.assertEqual(os.listdir(outside), [])
+
     def test_run_cria_a_pasta_de_entrada_e_preserva_o_conteudo(self):
         # CR-014 (README §8.14): permanente; o script le, grava e apaga; a existente fica como esta.
         base = os.path.join(self.root, "input", "producao")

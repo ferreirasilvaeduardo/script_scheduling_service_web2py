@@ -66,6 +66,14 @@ class TestLogDirs(unittest.TestCase):
         self.assertEqual(log_paths.output_dir("/s", "HML", u"!!!", dt, 7, script_id=3)[1],
                          "script_3/2026/04/05/08/09/ticket_7")
 
+    def test_cr019_pasta_de_trabalho_com_as_partes_da_saida(self):
+        # CR-019 (README §8.15): mesmo formato da pasta de saida, sob a base propria.
+        dt = datetime.datetime(2026, 4, 5, 8, 9, 30)
+        self.assertEqual(log_paths.script_work_dir("/srv/sss/work", "PRODUCAO", u"Carga Diária", dt, 41),
+                         ("/srv/sss/work/producao", "carga_diaria/2026/04/05/08/09/ticket_41"))
+        self.assertEqual(log_paths.script_work_dir("/w", "HML", u"!!!", dt, 7, script_id=3)[1],
+                         log_paths.output_dir("/s", "HML", u"!!!", dt, 7, script_id=3)[1])
+
     def test_pasta_entrada_so_ambiente_e_script(self):
         # CR-014 (README §8.14): permanente, sem data nem ticket; nome do script minusculo, sem acento nem espaco.
         self.assertEqual(log_paths.input_dir("/srv/sss/input", "PRODUCAO", u"Carga Diária"),

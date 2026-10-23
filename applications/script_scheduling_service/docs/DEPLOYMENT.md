@@ -66,6 +66,7 @@ Fora de DEV, a conta da aplicação igual à dona do esquema é recusada (CR-008
 | `/var/lib/sss/exec/<usuário>` | Diretório de trabalho dos scripts, um por usuário de execução | o usuário de execução | `0700` | `[agent] exec_work_dir` = `/var/lib/sss/exec` |
 | `/var/lib/sss/output/<ambiente>` | Saída dos scripts (opcional, CR-012) | o usuário de execução | `0700` (pai `0755`, do `sss`) | `[agent] output_dir` |
 | `/var/lib/sss/input/<ambiente>` | Entrada dos scripts, uma subpasta permanente por script (opcional, CR-014) | o usuário de execução | `0700` (pai `0755`, do `sss`) | `[agent] input_dir` |
+| `/var/lib/sss/script_work/<ambiente>` | Pasta de trabalho dos scripts, uma por ticket, mantida até a retenção (opcional, CR-019) | o usuário de execução | `0700` (pai `0755`, do `sss`) | `[agent] script_work_dir` |
 | `/opt/sss/bin/sss-helper` | Helper de execução (agentes) | `root` | `0755` (pasta só do root) | — |
 
 ---
@@ -281,6 +282,9 @@ install -o sssprd -g sssprd -m 0700 -d /var/lib/sss/output/producao    # nome do
 # CR-014, só com [agent] input_dir preenchido: idem para a entrada (a pasta de cada script o helper cria)
 install -o sss -g sss -m 0755 -d /var/lib/sss/input
 install -o sssprd -g sssprd -m 0700 -d /var/lib/sss/input/producao
+# CR-019, só com [agent] script_work_dir preenchido: idem para a pasta de trabalho (a de cada ticket o helper cria)
+install -o sss -g sss -m 0755 -d /var/lib/sss/script_work
+install -o sssprd -g sssprd -m 0700 -d /var/lib/sss/script_work/producao
 visudo -f /etc/sudoers.d/sss
 ```
 
@@ -301,8 +305,9 @@ sss ALL=(ssshml) NOPASSWD: /opt/sss/bin/sss-helper
 
 ## 9. Scripts cadastrados (CR-005, CR-011)
 
-* O caminho cadastrado (`path_file`) é **absoluto**, em qualquer pasta fora das pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`) e fora das pastas do SSS (`log_dir`, `work_dir`, `exec_work_dir`, `output_dir` e `input_dir`).
+* O caminho cadastrado (`path_file`) é **absoluto**, em qualquer pasta fora das pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`) e fora das pastas do SSS (`log_dir`, `work_dir`, `exec_work_dir`, `output_dir`, `input_dir` e `script_work_dir`).
 * **Pasta de entrada (CR-014):** com `[agent] input_dir`, cada script recebe `SSS_INPUT_DIR` = `input_dir/<ambiente>/<nome do script em minúsculo, sem acento nem espaço>/` (ex.: "Carga Diária" em `PRODUCAO` → `/var/lib/sss/input/producao/carga_diaria/`). A pasta é criada na primeira execução e **nunca** é limpa pelo SSS: quem deposita os arquivos e o próprio script cuidam do conteúdo. Para depositar arquivos de fora, use o usuário de execução do ambiente (ou um processo dele).
+* **Pasta de trabalho (CR-019):** com `[agent] script_work_dir`, cada ticket recebe `SSS_WORK_DIR` = `script_work_dir/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, criada antes da execução e mantida depois dela, para consulta no servidor do agente. O `HOME` e a pasta corrente do script continuam na pasta descartável de `exec_work_dir`.
 * Pode ser um link simbólico. O arquivo **real** precisa existir no servidor do agente, ser arquivo regular, ser legível pelo usuário de execução e **não** ter escrita de grupo nem de outros (`chmod go-w`).
 * O conteúdo e a versão do script são controlados pelo ambiente: o SSS não confere hash nem dono (CR-011). Quem grava na pasta do script muda o que vai rodar.
 * O nó web confere só o formato do caminho. A conferência do arquivo é feita pelo agente, antes de cada execução; uma recusa aparece como `PRECHECK_FAILED` (§15).
@@ -433,7 +438,7 @@ WantedBy=multi-user.target
 * No `ExecStart` do web, `<recycle>` vai sem aspas: o `systemd` não passa pelo shell.
 * `KillMode=mixed` manda o `SIGTERM` só ao processo principal e, se o prazo acabar, o `SIGKILL` a todo o grupo. O agente encerra os próprios scripts antes disso.
 * **Atenção no agente:** `NoNewPrivileges=yes` impede o `sudo` e, com ele, o helper. Por isso fica fora da unit do agente, ao contrário do pedido original do F9.1. Valide com a segurança da empresa.
-* `ReadWritePaths` precisa incluir também `output_dir` e `input_dir` (se usados) e as pastas `exec_work_dir`, que ficam em `/var/lib/sss` neste layout.
+* `ReadWritePaths` precisa incluir também `output_dir`, `input_dir` e `script_work_dir` (se usados) e as pastas `exec_work_dir`, que ficam em `/var/lib/sss` neste layout.
 * Ative com `systemctl daemon-reload && systemctl enable --now sss-web sss-scheduler`.
 
 ---
@@ -601,7 +606,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | 13 | `interpreter SH (/bin/sh) recusado: <código>` | Interpretador mapeado inexistente ou inseguro | Ajuste `[agent] interpreters` (caminho absoluto, executável, fora das pastas do SSS) |
 | 13 | `[agent] interpreters vazio: o agente nao executaria nada` | Chave vazia | Preencha |
 | 13 | Linhas `execucao fora de DEV: <falha>` e depois `N falha(s) na conferencia do helper e do sudoers` | Helper ou `sudoers` incompletos: `helper ... nao pertence ao root`, `... deve ter modo 0755`, `sudo -n -l sem a regra do helper para <usuário>`, `<pasta> deve pertencer a <usuário> com modo 0700`, `usuario de execucao <x> nao existe` | §8 e §4.2 |
-| 13 | `<nome> <caminho> recusado: <código>` (`log_dir`, `work_dir`...), `output_dir ... recusado` / `pasta de saida: <falha>` e `input_dir ... recusado` / `pasta de entrada: <falha>` | Pasta ausente, sem escrita ou nas pastas do sistema | §4 e §8 |
+| 13 | `<nome> <caminho> recusado: <código>` (`log_dir`, `work_dir`...), `output_dir ... recusado` / `pasta de saida: <falha>` e `input_dir ... recusado` / `pasta de entrada: <falha>` e `script_work_dir ... recusado` / `pasta de trabalho: <falha>` | Pasta ausente, sem escrita ou nas pastas do sistema | §4 e §8 |
 | 14 | `Outra instancia do agente ja esta em execucao (<work_dir>/sss-<agent_id>.lock)` | Outro agente com o mesmo `work_dir` e `agent_id` | Pare o outro, ou use `config.ini` próprio (§7.1) |
 | 15 | `sem conexao com o Oracle` ou `banco: <erro>` (ex.: `Versao do esquema incompativel: esperada N, encontrada M`) | Banco inacessível, driver (§15.2) ou versão do esquema | §15.2, §15.3 ou a migração (§18) |
 | 16 | `agent_id duplicado: ...` | Outro agente ativo com o mesmo `agent_id` | `agent_id` único por agente |
@@ -643,7 +648,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | `FAILED` / `PRECHECK_FAILED` | `pre-validacao recusada: <código>` e `[SSS] pre-validacao recusada: <código> (agente X)` | Ver os códigos abaixo | Ver abaixo |
 | ↳ `NOT_FOUND`, `NO_ACCESS`, `NOT_A_FILE` | | O arquivo real não existe, não é legível ou não é arquivo, no servidor do agente | Corrija o arquivo no agente (§9) |
 | ↳ `GROUP_OTHER_WRITABLE` | | Arquivo real com escrita de grupo ou outros | `chmod go-w <arquivo>` |
-| ↳ `SYSTEM_DIR`, `SSS_DIR` | | Script nas pastas do sistema ou nas do SSS (inclusive `output_dir` e `input_dir`, CR-014) | Mova o script e corrija o cadastro |
+| ↳ `SYSTEM_DIR`, `SSS_DIR` | | Script nas pastas do sistema ou nas do SSS (inclusive `output_dir`, `input_dir` e `script_work_dir`, CR-014 e CR-019) | Mova o script e corrija o cadastro |
 | ↳ `INTERPRETER_UNAVAILABLE` | | O interpretador do script não está mapeado **neste** agente | `[agent] interpreters` |
 | ↳ `UNSUPPORTED_VERSION` | | Ticket criado por uma versão anterior (snapshot antes da versão 5) | Dispare de novo pela tela |
 | ↳ `REGISTRATION_CHANGED`, `SCRIPT_INACTIVE`, `NOT_HOMOLOGATED`, `ENVIRONMENT_INACTIVE`, `NO_PERMISSION` | | O cadastro mudou entre o disparo e a execução | Confira o cadastro e dispare de novo |
@@ -748,7 +753,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 - [ ] `ls applications/` mostra só `script_scheduling_service`; `curl .../admin/...` dá 404; `controllers/dev.py` ausente
 - [ ] `secrets.cfg` com `0600` e dono `sss`, só com as seções do papel
 - [ ] Helper em `/opt/sss/bin/sss-helper` (root, `0755`) e `sudoers` de cada usuário de execução (§8)
-- [ ] Com `output_dir` ou `input_dir`: a pasta de cada ambiente atendido criada pelo root, do usuário de execução, `0700` (§8)
+- [ ] Com `output_dir`, `input_dir` ou `script_work_dir`: a pasta de cada ambiente atendido criada pelo root, do usuário de execução, `0700` (§8)
 - [ ] `log_dir` em partição própria, com alerta de uso (§4.3)
 - [ ] Senha inicial do seed trocada (§5.3)
 - [ ] `cron` do purge e `health.py` no monitoramento (§12, §13)

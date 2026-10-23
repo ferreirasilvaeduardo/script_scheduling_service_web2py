@@ -100,6 +100,15 @@ def output_dir(output_dir, environment, script_name, started_at, ticket_id, scri
     return base, relative
 
 
+def script_work_dir(script_work_dir, environment, script_name, started_at, ticket_id, script_id=None):
+    """Pasta de trabalho do ticket (CR-019, README §8.15), com as mesmas partes da pasta de saida.
+
+    Devolve (base, relativo) no formato de output_dir: base = script_work_dir/<ambiente> e relativo =
+    <pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>.
+    """
+    return output_dir(script_work_dir, environment, script_name, started_at, ticket_id, script_id)
+
+
 def input_dir(input_dir, environment, script_name, script_id=None):
     """Pasta de entrada do script (CR-014, README §8.14): permanente, uma por ambiente e script, sem data nem ticket.
 

@@ -724,6 +724,24 @@ class TestConfigCR007(unittest.TestCase):
         self._refusal("input_dir", agent={"input_dir": os.path.dirname(cfg.logging.log_dir)})
         self._refusal("input_dir", agent={"input_dir": os.path.join(base, "s", "input"),
                                            "output_dir": os.path.join(base, "s")})
+        # CR-019 (README §8.15): script_work_dir opcional, sem sobrepor as pastas do SSS, a de saida nem a de entrada.
+        self.assertIsNone(cfg.agent.script_work_dir)
+        self.assertEqual(cfg.logging.script_work_retention_days, 7)
+        ok = self._load(agent={"script_work_dir": os.path.join(base, "trabalho_teste")})
+        self.assertEqual(ok.agent.script_work_dir, os.path.join(base, "trabalho_teste"))
+        self._refusal("script_work_dir", agent={"script_work_dir": "relativa/work"})
+        self._refusal("script_work_dir", agent={"script_work_dir": os.path.join(cfg.agent.work_dir, "sw")})
+        self._refusal("script_work_dir", agent={"script_work_dir": os.path.join(cfg.logging.log_dir, "sw")})
+        self._refusal("script_work_dir", agent={"script_work_dir": os.path.dirname(cfg.logging.log_dir)})
+        self._refusal("script_work_dir", agent={"script_work_dir": os.path.join(base, "s", "sw"),
+                                                 "exec_work_dir": os.path.join(base, "s")})
+        self._refusal("script_work_dir", agent={"script_work_dir": os.path.join(base, "s", "sw"),
+                                                 "output_dir": os.path.join(base, "s")})
+        self._refusal("script_work_dir", agent={"script_work_dir": os.path.join(base, "s"),
+                                                 "input_dir": os.path.join(base, "s", "input")})
+        for v in ("0", "366"):
+            self._refusal("script_work_retention_days", logging={"script_work_retention_days": v})
+        self.assertEqual(self._load(logging={"script_work_retention_days": "30"}).logging.script_work_retention_days, 30)
         for key, bad, good in (("output_max_bytes", ("1048575", "209715201"), ("1048576", "209715200")),
                                    ("output_max_files", ("0", "10001"), ("1", "10000"))):
             for v in bad:

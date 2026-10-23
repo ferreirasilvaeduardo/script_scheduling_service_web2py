@@ -80,7 +80,7 @@ def _set(env, name, value):
 
 def build(cfg, secrets, ticket, environment, script_real, work_dir_ticket, environ_daemon, platform_name,
               snapshot=None, schedule=None, log_path=None, timeout_sec=None, hostname=None, version=None,
-              output_dir=None, input_dir=None):
+              output_dir=None, input_dir=None, work_folder=None):
     """Ambiente exato do filho (README §8.6, tabela POSIX; CR-010). Variavel bloqueada: ValueError.
 
     ticket: dict com id, ambiente e, quando houver, parent_ticket_id, schedule_id, prioridade, started_at
@@ -91,6 +91,7 @@ def build(cfg, secrets, ticket, environment, script_real, work_dir_ticket, envir
     .log.parcial aberto por executor.open_log; timeout_seg: o prazo efetivo; hostname e versao: do agente;
     output_dir: a pasta de saida do ticket (CR-012), so quando o agente tem output_dir.
     input_dir: a pasta de entrada do script (CR-014), so quando o agente tem input_dir.
+    work_folder: a pasta de trabalho do ticket (CR-019), so quando o agente tem script_work_dir.
     """
     if platform_name not in PLATFORMS:
         raise ValueError("Plataforma nao suportada: %s" % platform_name)
@@ -146,6 +147,7 @@ def build(cfg, secrets, ticket, environment, script_real, work_dir_ticket, envir
         _set(env, "SSS_LOG_FILE", os.path.basename(log_path))
     _set(env, "SSS_OUTPUT_DIR", output_dir)
     _set(env, "SSS_INPUT_DIR", input_dir)
+    _set(env, "SSS_WORK_DIR", work_folder)
     _set(env, "SSS_AGENT_HOST", hostname)
     _set(env, "SSS_VERSION", version)
     # Ambiente: descricao, DSN (sem credencial), usuario e a connect string (mascarada em todo log).
