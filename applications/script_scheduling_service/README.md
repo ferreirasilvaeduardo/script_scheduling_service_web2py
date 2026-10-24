@@ -352,6 +352,7 @@ applications/script_scheduling_service/
   instance/config.ini         # configuração sem segredos (§12)
   dev/scripts/                # árvore de scripts de exemplo para DEV/testes (nunca implantada)
   dev/homologation/            # ferramentas de homologação: figuras do manual de UI Freeze e evidências reais no DEV
+  dev/web_harness/             # [CR-021] roteiros Playwright das telas contra o backend FAKE (nunca implantados)
                               # (capture_evidence.js + build_evidence_docx.py; Puppeteer e .docx; nunca implantadas)
 docs/
   prompts/                    # prompts de execução faseada (UI-first)

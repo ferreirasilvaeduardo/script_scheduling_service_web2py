@@ -92,14 +92,19 @@ class ConnectTest(unittest.TestCase):
     """Abertura da sessao na requisicao."""
 
     def test_flash_moves_to_response_like_web2py(self):
-        """session.flash vai para response.flash e sai da sessao (o cookie sera regravado sem ele)."""
+        """session.flash vai para response.flash e sai da sessao.
+
+        Regressao do CR-021d1b: o retrato e do cookie como chegou (com o flash), para a sessao sem o
+        flash ser diferente dele e o cookie ser regravado; antes o flash voltava a cada pagina.
+        """
         codec = SessionCodec(KEY)
         response = Response()
-        session, reason, snapshot = connect(codec.dumps(dict(DATA, flash={"kind": "success", "message": "ok"})),
-                                            codec, response)
+        received = codec.dumps(dict(DATA, flash={"kind": "success", "message": "ok"}))
+        session, reason, snapshot = connect(received, codec, response)
         self.assertEqual(response.flash, {"kind": "success", "message": "ok"})
         self.assertNotIn("flash", session)
-        self.assertEqual((reason, snapshot), (None, codec.dumps(DATA)))
+        self.assertEqual((reason, snapshot), (None, received))
+        self.assertNotEqual(codec.dumps(session), snapshot, "a sessao mudou: o cookie sera regravado")
 
     def test_renew_with_clear(self):
         """renew(clear_session=True) esvazia, como o web2py com sessao em cookie; sem clear, mantem."""

@@ -66,11 +66,11 @@ class UrlParityTest(unittest.TestCase):
 
 
 class ParsePathTest(unittest.TestCase):
-    """Leitura do PATH_INFO."""
+    """Leitura do PATH_INFO, que o servidor ja entrega decodificado (uma vez so)."""
 
     def test_route_with_extension_and_args(self):
-        """Controller, funcao, extensao e args decodificados."""
-        route = routing.parse_path("/%s/tickets/detail.load/17/a%%20b" % APP, APP)
+        """Controller, funcao, extensao e args, sem decodificar de novo."""
+        route = routing.parse_path("/%s/tickets/detail.load/17/a b" % APP, APP)
         self.assertEqual(route, routing.Route("tickets", "detail", "load", ["17", "a b"]))
 
     def test_defaults(self):
@@ -79,20 +79,39 @@ class ParsePathTest(unittest.TestCase):
                          routing.Route("default", "index", "html", []))
 
     def test_static(self):
-        """Arquivo estatico com o caminho decodificado."""
+        """Arquivo estatico com o caminho como veio."""
         self.assertEqual(routing.parse_path("/%s/static/js/app/dom.js" % APP, APP),
                          routing.StaticRoute("js/app/dom.js"))
 
+    def test_no_double_decoding(self):
+        """Regressao do CR-021d1b: %252e%252e chega do servidor como '%2e%2e' e fica literal.
+
+        Antes o roteador decodificava de novo: '%2e%2e%2fmodels' virava '../models' (travessia).
+        """
+        self.assertEqual(routing.parse_path("/%s/static/%%2e%%2e/models/00_config.py" % APP, APP),
+                         routing.StaticRoute("%2e%2e/models/00_config.py"))
+        self.assertEqual(routing.parse_path("/%s/default/index/%%2e%%2e" % APP, APP).args, ["%2e%2e"])
+        # O caso que abria a travessia: a barra codificada virava '../' dentro de um trecho so.
+        self.assertEqual(
+            routing.parse_path("/%s/static/%%2e%%2e%%2fmodels%%2f00_config.py" % APP, APP),
+            routing.StaticRoute("%2e%2e%2fmodels%2f00_config.py"))
+
+    def test_decode_path_info(self):
+        """Latin-1 do WSGI vira UTF-8; UTF-8 invalido nao e rota."""
+        raw = "/app/tickets/detail/ação".encode("utf-8").decode("latin-1")
+        self.assertEqual(routing.decode_path_info(raw), "/app/tickets/detail/ação")
+        with self.assertRaises(routing.InvalidPath):
+            routing.decode_path_info(b"/app/\xff".decode("latin-1"))
+
     def test_rejects_what_is_not_a_route(self):
-        """Travessia, funcao privada, formato, extensao, controle e UTF-8 invalido nao sao rota."""
+        """Travessia, funcao privada, formato, extensao e caracteres de controle nao sao rota."""
         bad = (
             "/outra_app/default/index", "/%s/" % APP, "/%s/default/_private" % APP,
             "/%s/Default/index" % APP, "/%s/default/index.php" % APP, "/%s/default/in-dex" % APP,
-            "/%s/default/index/../x" % APP, "/%s/default/index/%%2e%%2e" % APP,
-            "/%s/default/index/a%%00b" % APP, "/%s/default/index/a%%0ab" % APP,
+            "/%s/default/index/../x" % APP, "/%s/default/index/." % APP,
+            "/%s/default/index/a\x00b" % APP, "/%s/default/index/a\nb" % APP,
             "/%s/default/index/a\\b" % APP, "/%s/default//index" % APP,
-            "/%s/static/../models/00_config.py" % APP, "/%s/static/%%2e%%2e/x" % APP,
-            "/%s/default/index/%%ff" % APP,
+            "/%s/static/../models/00_config.py" % APP, "/%s/static/js/../../x" % APP,
         )
         for path in bad:
             with self.subTest(path=path):

@@ -114,7 +114,10 @@ def connect(cookie_value: Optional[str], codec: SessionCodec,
     permite ao app regravar o cookie so quando a sessao mudou.
     """
     session, reason = codec.loads(cookie_value)
+    # O retrato e do cookie como chegou: tirar o flash muda a sessao e obriga a regravar o cookie
+    # (senao a mensagem ficaria no navegador e voltaria a cada pagina).
+    snapshot = codec.dumps(session)
     if session.flash:
         response.flash, session.flash = session.flash, None
         del session.flash
-    return session, reason, codec.dumps(session)
+    return session, reason, snapshot

@@ -6,6 +6,10 @@ Formato mantido do web2py:
 exatamente o que o ``gluon.html.URL`` gera para as formas usadas nas views (paridade conferida em
 test_web_routing.py enquanto o gluon existe); ``parse_path`` faz o caminho inverso, recusando o que
 nao e rota (travessia, funcao privada, caracteres de controle).
+
+O caminho chega a ``parse_path`` JA DECODIFICADO: o servidor WSGI faz o unquote (o wsgiref, em
+latin-1) e o app passa para UTF-8 (``decode_path_info``). Decodificar de novo aqui transformaria
+``%252e%252e`` em ``..`` (dupla decodificacao, travessia).
 """
 import re
 import urllib.parse
@@ -71,19 +75,26 @@ def url(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     return path
 
 
-def _segment(raw: str) -> str:
-    """Um trecho do caminho decodificado; travessia e caracteres de controle nao sao rota."""
-    try:
-        value = urllib.parse.unquote(raw, errors="strict")
-    except UnicodeDecodeError as exc:
-        raise InvalidPath("trecho com UTF-8 invalido") from exc
+def _segment(value: str) -> str:
+    """Um trecho do caminho, sem decodificar de novo; travessia e controle nao sao rota."""
     if value in ("", ".", "..") or "\\" in value or _RE_CONTROL.search(value):
         raise InvalidPath("trecho invalido no caminho")
     return value
 
 
+def decode_path_info(path_info: str) -> str:
+    """PATH_INFO do WSGI (bytes do URL em latin-1, PEP 3333) como texto UTF-8.
+
+    UTF-8 invalido levanta InvalidPath.
+    """
+    try:
+        return path_info.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError) as exc:
+        raise InvalidPath("caminho com UTF-8 invalido") from exc
+
+
 def parse_path(path: str, application: str) -> Union[Route, StaticRoute]:
-    """Rota (controller, funcao, extensao, args) ou arquivo estatico a partir do PATH_INFO.
+    """Rota (controller, funcao, extensao, args) ou estatico a partir do PATH_INFO decodificado.
 
     Funcao que comeca com '_' nunca e rota (AGENTS §5.1). Levanta InvalidPath para todo o resto.
     """
