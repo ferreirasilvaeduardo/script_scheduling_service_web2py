@@ -3,7 +3,7 @@
 
 So leitura: nao grava nem audita. A regra de execucao e a do disparo (rbac.can_execute via
 ticket_service), para que a tela nunca diga algo diferente do que o disparo faz.
-Nao importa gluon fora de _servico.
+Nao importa gluon.
 """
 import threading
 
@@ -121,15 +121,16 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            from gluon import current
+            import app_context
+            import repo_factory
             import sss_logging
             import ticket_service
-            factory = current.repo_factory
+            factory = repo_factory
             _default = PermissionsService(
                 rbac_repo=factory.get("rbac"),
                 catalog=factory.get("catalog"),
                 trigger_service=ticket_service._service(),
-                log=sss_logging.get_logger("sss_web", current.sss_cfg),
+                log=sss_logging.get_logger("sss_web", app_context.require_config()),
             )
         return _default
 

@@ -3,8 +3,7 @@
 
 CSRF e Origin de todo POST sao validados em models/10_security.py.
 """
-from gluon import current
-
+import app_context
 import ticket_service
 import ui_helpers
 from repo_errors import RepoError, RepoNotFound
@@ -43,7 +42,7 @@ def _new_page(ctx, script_id, environment, values=None, errors=None, priority=No
                  general_error=errors.get(ticket_service.GENERAL_FIELD), priority=priority,
                  scheduled_at=scheduled_at or "", focus_field=None, rerun_of=rerun_of,
                  has_last=False, used_last=warnings is not None, single_environment=False,
-                 aging_min=current.sss_cfg.agent.queue_aging_min)
+                 aging_min=app_context.require_config().agent.queue_aging_min)
     if not script_id:
         return data
     script, environments = ticket_service.available_environments(ctx, script_id)
@@ -201,7 +200,7 @@ def detail():
     log_viewer = {
         "url_chunk": URL(c="logs", f="chunk", vars={"ticket_id": ticket["id"]}),
         "download_url": URL(c="logs", f="download", vars={"ticket_id": ticket["id"]}),
-        "interval_s": current.sss_cfg.web.log_poll_interval_s,
+        "interval_s": app_context.require_config().web.log_poll_interval_s,
         "max_chars": ticket_service.LOG_MAX_CHARS,
     }
     return dict(ticket=ticket, log_viewer=log_viewer)

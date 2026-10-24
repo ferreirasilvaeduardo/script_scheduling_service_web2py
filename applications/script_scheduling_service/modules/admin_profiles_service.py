@@ -2,7 +2,7 @@
 """Cadastro de perfis e matriz de permissoes (README §4.3, §4.4, §10 tabelas 2-5 e 7).
 
 Segue docs/ADMIN_CRUD_PATTERN.md. A protecao do ultimo administrador e a troca da matriz sao
-operacoes unicas do repositorio (sem check-then-act aqui). Nao importa gluon fora de _servico.
+operacoes unicas do repositorio (sem check-then-act aqui). Nao importa gluon.
 """
 import collections
 import re
@@ -495,14 +495,15 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            from gluon import current
+            import app_context
+            import repo_factory
             import sss_logging
-            factory = current.repo_factory
+            factory = repo_factory
             _default = AdminProfilesService(
                 rbac_repo=factory.get("rbac"),
                 catalog=factory.get("catalog"),
                 users=factory.get("users"),
-                log=sss_logging.get_logger("sss_web", current.sss_cfg),
+                log=sss_logging.get_logger("sss_web", app_context.require_config()),
             )
         return _default
 

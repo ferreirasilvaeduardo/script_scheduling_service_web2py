@@ -2,7 +2,7 @@
 """Regras de agendamento recorrente (README §4.3.C MANAGE_SCHEDULES, §7, §10 tabela 12).
 
 Segue docs/ADMIN_CRUD_PATTERN.md: nao importa gluon, recebe ctx e ip por parametro e o servico
-padrao do processo web e criado sob demanda (_servico). O relogio e injetado: na web, o
+padrao do processo web e criado sob demanda (_service). O relogio e injetado: na web, o
 SYSDATE do repositorio de tickets; nos testes, um relogio fixo.
 
 A regra roda sob os privilegios de quem a definiu por ultimo (README §10): toda inclusao ou
@@ -949,11 +949,12 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            from gluon import current
+            import app_context
+            import repo_factory
             import sss_logging
             import ticket_service
-            factory = current.repo_factory
-            cfg = current.sss_cfg
+            factory = repo_factory
+            cfg = app_context.require_config()
             tickets = factory.get("tickets")
             _default = SchedulesService(
                 schedules=factory.get("schedules"),

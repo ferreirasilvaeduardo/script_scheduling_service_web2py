@@ -3,13 +3,12 @@
 import datetime
 import re
 
-from gluon import current
-
+import app_context
 import ui_helpers
 
 
 def _require_dev():
-    if current.sss_cfg.app.sss_env != "DEV":
+    if app_context.require_config().app.sss_env != "DEV":
         raise HTTP(404)
 
 

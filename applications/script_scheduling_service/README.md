@@ -314,6 +314,7 @@ applications/script_scheduling_service/
     sql_ident.py              # registro de identificadores, validação de owner/prefixo, nomes qualificados
     repo_errors.py            # exceções de contrato (§2.5)
     repo_factory.py           # seleção do backend FAKE/ORACLE (banco real via repo_oracle)
+    app_context.py            # [CR-021c] configuração do processo (no lugar do gluon.current)
     repo_*.py                 # contratos abstratos por agregado (sem SQL)
     repo_fake/                # implementação em memória + seed (somente DEV)
     repo_oracle/              # implementação SQL Oracle 11gR2 (único local com SQL, §2.7) [F7.3]

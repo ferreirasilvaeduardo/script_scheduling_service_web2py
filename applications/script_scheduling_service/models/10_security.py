@@ -6,6 +6,7 @@ Roda antes de qualquer controller (README §4.2, AGENTS §3.4).
 import io
 import time
 
+import app_context
 import auth_service
 import masking
 import rbac
@@ -14,9 +15,11 @@ import sss_config
 import sss_logging
 import ui_helpers
 import ui_menu
+# So para o usuario da requisicao (current.sss_ctx); a configuracao vem do app_context (CR-021c).
+from gluon import current
 from repo_errors import RepoUnavailable
 
-_cfg = current.sss_cfg
+_cfg = app_context.require_config()
 _secrets = sss_config.get_secrets("sss_web")
 _log = sss_logging.get_logger("sss_web", _cfg)
 masking.install_filter_on_handlers()

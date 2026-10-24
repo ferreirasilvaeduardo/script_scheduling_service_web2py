@@ -166,11 +166,12 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            from gluon import current
+            import app_context
+            import repo_factory
             import sss_logging
             import sss_config
-            factory = current.repo_factory
-            cfg = current.sss_cfg
+            factory = repo_factory
+            cfg = app_context.require_config()
             _default = AgentsService(
                 agents=factory.get("agents"),
                 catalog=factory.get("catalog"),

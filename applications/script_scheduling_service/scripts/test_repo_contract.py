@@ -29,8 +29,8 @@ import unittest
 from unittest import mock
 
 import _testenv  # noqa: F401
-from gluon import current
 
+import app_context
 import repo_factory
 import sql_ident
 from repo_schedules import RepoSchedules
@@ -875,10 +875,9 @@ class _OracleContract(object):
     @classmethod
     def setUpClass(cls):
         from _oracle_test_support import prepare_disposable_schema
-        cls._tinha_sss_cfg = hasattr(current, "sss_cfg")
-        cls._previous_sss_cfg = getattr(current, "sss_cfg", None)
+        cls._previous_sss_cfg = app_context.get_config()
         cls.oracle_cfg = prepare_disposable_schema("web")
-        current.sss_cfg = cls.oracle_cfg
+        app_context.set_config(cls.oracle_cfg)
 
     @classmethod
     def tearDownClass(cls):
@@ -887,10 +886,7 @@ class _OracleContract(object):
         # O pool Thin do papel web mantem uma thread viva; os testes do agente exigem thread unica.
         from repo_oracle import base as base_oracle
         base_oracle.discard_pools()
-        if cls._tinha_sss_cfg:
-            current.sss_cfg = cls._previous_sss_cfg
-        elif hasattr(current, "sss_cfg"):
-            delattr(current, "sss_cfg")
+        app_context.set_config(cls._previous_sss_cfg)
 
     def setUp(self):
         repo_factory.configure({"app": {"sss_env": "DEV"}})
@@ -1128,13 +1124,13 @@ class TestFailFastRegression(unittest.TestCase):
     """Regressao: fabrica sem padrao silencioso e FAKE sem coercao silenciosa de entrada."""
 
     def setUp(self):
-        self._previous_sss_cfg = getattr(current, "sss_cfg", None)
-        current.sss_cfg = None
+        self._previous_sss_cfg = app_context.get_config()
+        app_context.set_config(None)
         repo_factory.configure(None)
         repo_factory.reset_singletons()
 
     def tearDown(self):
-        current.sss_cfg = self._previous_sss_cfg
+        app_context.set_config(self._previous_sss_cfg)
         repo_factory.configure(None)
         repo_factory.reset_singletons()
 
@@ -1160,12 +1156,12 @@ class TestFailFastRegression(unittest.TestCase):
         cfg_app = sss_config.AppConfig(sss_env="PROD")
         self.assertEqual(repo_factory._resolve_config({"app": cfg_app}), ("ORACLE", "PROD"))
 
-    def test_usa_current_sss_cfg_quando_sem_override(self):
-        current.sss_cfg = {"app": {"data_backend": "FAKE", "sss_env": "DEV"}}
+    def test_usa_app_context_quando_sem_override(self):
+        app_context.set_config({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
         self.assertIsInstance(repo_factory.get("users"), RepoUsers)
 
         repo_factory.reset_singletons()
-        current.sss_cfg = {"app": {"data_backend": "FAKE", "sss_env": "PROD"}}
+        app_context.set_config({"app": {"data_backend": "FAKE", "sss_env": "PROD"}})
         with self.assertRaises(RuntimeError):
             repo_factory.get("users")
 

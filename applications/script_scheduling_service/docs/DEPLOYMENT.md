@@ -1036,9 +1036,8 @@ $PY -m unittest discover -s scripts -p "test_*.py" 2>&1 | tail -3     # Ran ... 
 
 # 4. Teste de carga da configuração (§10) na pasta nova
 cd $NOVO && umask 077
-echo 'print("SSS: configuracao OK (sss_env=%s, owner=%s, prefixo=%s, agent_id=%s)" % (current.sss_cfg.app.sss_env, current.sss_cfg.oracle.owner, current.sss_cfg.oracle.table_prefix, current.sss_cfg.agent.agent_id))' > /tmp/sss_diag.py
-$PY web2py.py -S script_scheduling_service -M -R /tmp/sss_diag.py 2>&1 | grep -E "^SSS:|ConfigError"
-rm -f /tmp/sss_diag.py
+# Python puro, sem o shell do web2py (CR-021c): a mesma configuracao que a web carrega.
+$PY -c 'import sys; sys.path.insert(0, "applications/script_scheduling_service/modules"); import sss_config; c = sss_config.get_config("sss_web"); print("SSS: configuracao OK (sss_env=%s, owner=%s, prefixo=%s, agent_id=%s)" % (c.app.sss_env, c.oracle.owner, c.oracle.table_prefix, c.agent.agent_id))' 2>&1 | grep -E "^SSS:|ConfigError"
 # esperado: SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)
 
 # 5. Conferir que os scripts de operação usam o caminho $SSS/web2py e não dependem do log antigo
@@ -1144,9 +1143,8 @@ $PY -m unittest discover -s scripts -p "test_*.py" 2>&1 | tail -3     # Ran 819 
 
 # 4. Teste de carga da configuração (§10) na pasta nova
 cd $NOVO && umask 077
-echo 'print("SSS: configuracao OK (sss_env=%s, owner=%s, prefixo=%s, agent_id=%s)" % (current.sss_cfg.app.sss_env, current.sss_cfg.oracle.owner, current.sss_cfg.oracle.table_prefix, current.sss_cfg.agent.agent_id))' > /tmp/sss_diag.py
-$PY web2py.py -S script_scheduling_service -M -R /tmp/sss_diag.py 2>&1 | grep -E "^SSS:|ConfigError"
-rm -f /tmp/sss_diag.py
+# Python puro, sem o shell do web2py (CR-021c): a mesma configuracao que a web carrega.
+$PY -c 'import sys; sys.path.insert(0, "applications/script_scheduling_service/modules"); import sss_config; c = sss_config.get_config("sss_web"); print("SSS: configuracao OK (sss_env=%s, owner=%s, prefixo=%s, agent_id=%s)" % (c.app.sss_env, c.oracle.owner, c.oracle.table_prefix, c.agent.agent_id))' 2>&1 | grep -E "^SSS:|ConfigError"
 # esperado: SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)
 
 # 5. Conferir que os scripts de operação usam o caminho $SSS/web2py e exportam um locale UTF-8

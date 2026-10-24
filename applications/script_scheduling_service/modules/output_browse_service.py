@@ -283,12 +283,13 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            from gluon import current
+            import app_context
+            import repo_factory
             import sss_logging
-            factory = current.repo_factory
+            factory = repo_factory
             _default = OutputBrowseService(tickets=factory.get("tickets"), catalog=factory.get("catalog"),
                                            audit=factory.get("audit"),
-                                           log=sss_logging.get_logger("sss_web", current.sss_cfg))
+                                           log=sss_logging.get_logger("sss_web", app_context.require_config()))
         return _default
 
 

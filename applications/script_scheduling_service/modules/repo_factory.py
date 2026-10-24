@@ -9,8 +9,7 @@ import logging
 import os
 import threading
 
-from gluon import current
-
+import app_context
 import masking
 import security
 
@@ -43,7 +42,7 @@ def reset_singletons():
 
 
 def _resolve_config(config_param=None):
-    """Resolve (backend, sss_env) do parametro, do override ou de current.sss_cfg.
+    """Resolve (backend, sss_env) do parametro, do override ou do app_context.
 
     O config.ini nao tem mais data_backend: sem a chave, o backend e ORACLE. So o dict de teste
     passado a configurar() pode pedir FAKE. Sem configuracao, ou sem [app] sss_env, falha.
@@ -52,9 +51,9 @@ def _resolve_config(config_param=None):
     if cfg is None:
         cfg = _config_override
     if cfg is None:
-        cfg = getattr(current, "sss_cfg", None)
+        cfg = app_context.get_config()
     if cfg is None:
-        raise RuntimeError("Configuracao ausente: informe config ou carregue models/00_config.py (current.sss_cfg)")
+        raise RuntimeError("Configuracao ausente: informe config ou carregue models/00_config.py (app_context)")
 
     app = cfg["app"]
     backend = app.get("data_backend", "ORACLE") if isinstance(app, dict) else "ORACLE"

@@ -3,7 +3,7 @@
 
 Validacao de cadastro forte: options_json e regex sao validadas no servidor (o editor do cliente e so
 conveniencia) e a regex nunca roda no navegador. Regras de dependencia com vinculos sao reverificadas
-pelo repositorio na mesma operacao. Nao importa gluon fora de _servico.
+pelo repositorio na mesma operacao. Nao importa gluon.
 """
 import collections
 import json
@@ -476,11 +476,12 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            from gluon import current
+            import app_context
+            import repo_factory
             import sss_logging
             _default = AdminParametersService(
-                catalog=current.repo_factory.get("catalog"),
-                log=sss_logging.get_logger("sss_web", current.sss_cfg),
+                catalog=repo_factory.get("catalog"),
+                log=sss_logging.get_logger("sss_web", app_context.require_config()),
                 rules=schedules_service._service(),
             )
         return _default

@@ -2,7 +2,7 @@
 """Cadastro de ambientes (README §4.1, §4.3.D MANAGE_ENVIRONMENTS, §10 tabela 1).
 
 Segue docs/ADMIN_CRUD_PATTERN.md. Recebe ctx e ip como parametros; o servico padrao do
-processo web importa gluon apenas sob demanda (_servico).
+processo web le a configuracao do app_context (_service). Nao importa gluon.
 """
 import re
 import threading
@@ -251,13 +251,14 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            from gluon import current
+            import app_context
+            import repo_factory
             import sss_logging
-            factory = current.repo_factory
+            factory = repo_factory
             _default = AdminEnvironmentsService(
                 catalog=factory.get("catalog"),
                 schedules=factory.get("schedules"),
-                log=sss_logging.get_logger("sss_web", current.sss_cfg),
+                log=sss_logging.get_logger("sss_web", app_context.require_config()),
             )
         return _default
 

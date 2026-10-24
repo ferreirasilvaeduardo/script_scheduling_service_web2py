@@ -2,7 +2,7 @@
 """Cadastro de usuarios (README §4.2, §4.3.B, §4.4, §10 tabela 9). Padrao em docs/ADMIN_CRUD_PATTERN.md.
 
 Senha e hash nunca saem deste modulo: listagem e formulario devolvem registros sem password_hash, e a
-auditoria registra apenas o fato ('senha redefinida'). Nao importa gluon fora de _servico.
+auditoria registra apenas o fato ('senha redefinida'). Nao importa gluon.
 """
 import re
 import threading
@@ -340,13 +340,14 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            from gluon import current
+            import app_context
+            import repo_factory
             import sss_logging
-            factory = current.repo_factory
+            factory = repo_factory
             _default = AdminUsersService(
                 users=factory.get("users"),
                 rbac_repo=factory.get("rbac"),
-                log=sss_logging.get_logger("sss_web", current.sss_cfg),
+                log=sss_logging.get_logger("sss_web", app_context.require_config()),
             )
         return _default
 

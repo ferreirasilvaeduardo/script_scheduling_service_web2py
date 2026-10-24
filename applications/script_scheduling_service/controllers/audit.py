@@ -4,9 +4,8 @@ nenhuma action altera agentes. Regras em modules/audit_service.py e modules/agen
 
 CSRF e Origin de todo POST sao validados em models/10_security.py.
 """
-from gluon import current
-
 import agents_service
+import app_context
 import audit_service
 import ticket_service
 import ui_helpers
@@ -105,5 +104,5 @@ def agents():
     response.title = u"Agentes — SSS"
     response.sss_scripts = [_JS_AGENTS]
     data["legend"] = agents_service.legend()
-    data["thresholds"] = current.sss_cfg.agent
+    data["thresholds"] = app_context.require_config().agent
     return data

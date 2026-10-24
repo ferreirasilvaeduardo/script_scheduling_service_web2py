@@ -11,8 +11,7 @@ import datetime
 import re
 import threading
 
-from gluon import current
-
+import app_context
 import db_conn
 import repo_errors
 import sql_ident
@@ -162,7 +161,7 @@ class BaseRepoOracle(object):
 
     def _resolver_config(self):
         if self._cfg is None:
-            self._cfg = getattr(current, "sss_cfg", None)
+            self._cfg = app_context.get_config()
         if self._cfg is None:
             try:
                 self._cfg = sss_config.get_config()

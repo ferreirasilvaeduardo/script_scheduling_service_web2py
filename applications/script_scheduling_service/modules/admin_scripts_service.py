@@ -3,7 +3,7 @@
 
 Segue docs/ADMIN_CRUD_PATTERN.md. O cadastro confere so o formato do path_file e as pastas do sistema (CR-011,
 S1): o arquivo e conferido pelo agente, no servidor onde o script roda. Regras de param_type x vinculos sao
-reverificadas pelo repositorio na mesma operacao. Nao importa gluon fora de _servico.
+reverificadas pelo repositorio na mesma operacao. Nao importa gluon.
 """
 import collections
 import hashlib
@@ -644,10 +644,11 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            from gluon import current
+            import app_context
+            import repo_factory
             import sss_logging
-            factory = current.repo_factory
-            cfg = current.sss_cfg
+            factory = repo_factory
+            cfg = app_context.require_config()
             tickets = factory.get("tickets")
             import admin_profiles_service
             _default = AdminScriptsService(

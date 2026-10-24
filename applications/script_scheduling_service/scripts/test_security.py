@@ -2,7 +2,6 @@
 """Testes de security.py (F2.1): hash de senha, politica, CSRF, Origin, sessao e cookies."""
 import _testenv  # noqa: F401
 
-import ast
 import os
 import re
 import unittest
@@ -268,24 +267,6 @@ class TestCookiesSeguros(unittest.TestCase):
         output = c["b"].OutputString()
         self.assertIn("HttpOnly", output)
         self.assertIn("Secure", output)
-
-
-class TestPureModules(unittest.TestCase):
-
-    def test_sem_gluon(self):
-        for name in ("security.py", "masking.py"):
-            with open(os.path.join(_MODULES, name), "r", encoding="utf-8") as f:
-                tree = ast.parse(f.read())
-            for no in ast.walk(tree):
-                if isinstance(no, ast.Import):
-                    names = [a.name for a in no.names]
-                elif isinstance(no, ast.ImportFrom):
-                    names = [no.module or ""]
-                else:
-                    continue
-                for n in names:
-                    self.assertFalse(n.split(".")[0] == "gluon", "%s importa %s" % (name, n))
-
 
 
 class TestValidateNext(unittest.TestCase):

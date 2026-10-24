@@ -16,6 +16,7 @@ from unittest import mock
 
 import _oracle_test_support
 import _testenv  # noqa: F401
+import app_context
 import db_conn
 import repo_errors
 import repo_factory
@@ -30,31 +31,26 @@ from repo_oracle.schedules import RepoSchedulesOracle
 from repo_oracle.tickets import RepoTicketsOracle
 from repo_tickets import RepoTickets
 from repo_users import RepoUsers
-from gluon import current
 
 
 def _prepare_real_db(cls):
     """Valida o banco real (modo descartavel ou compartilhado) antes de qualquer DML.
 
-    Com banco real, o cfg validado vai para current.sss_cfg durante a classe (os repositorios Oracle
+    Com banco real, o cfg validado vai para o app_context durante a classe (os repositorios Oracle
     leem owner, prefixo, DSN e segredos dele) e e restaurado no tearDownClass.
     """
     cls.tem_banco_real = _oracle_test_support.real_db_configured()
-    cls._tinha_sss_cfg = hasattr(current, "sss_cfg")
-    cls._previous_sss_cfg = getattr(current, "sss_cfg", None)
+    cls._previous_sss_cfg = app_context.get_config()
     if cls.tem_banco_real:
         cls.cfg = _oracle_test_support.prepare_disposable_schema("web")
-        current.sss_cfg = cls.cfg
+        app_context.set_config(cls.cfg)
     repo_factory.configure({"app": {"data_backend": "ORACLE", "sss_env": "DEV"}})
 
 
 def _restore_real_db(cls):
     repo_factory.configure(None)
     repo_factory.reset_singletons()
-    if cls._tinha_sss_cfg:
-        current.sss_cfg = cls._previous_sss_cfg
-    elif hasattr(current, "sss_cfg"):
-        delattr(current, "sss_cfg")
+    app_context.set_config(cls._previous_sss_cfg)
 
 
 class TestOracleRbacUsers(unittest.TestCase):
