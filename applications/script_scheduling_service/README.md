@@ -315,6 +315,7 @@ applications/script_scheduling_service/
     repo_errors.py            # exceções de contrato (§2.5)
     repo_factory.py           # seleção do backend FAKE/ORACLE (banco real via repo_oracle)
     app_context.py            # [CR-021c] configuração do processo (no lugar do gluon.current)
+    web/                      # [CR-021d1] núcleo web próprio (WSGI, request, multipart, response, sessão assinada, rotas); ligado no CR-021e
     repo_*.py                 # contratos abstratos por agregado (sem SQL)
     repo_fake/                # implementação em memória + seed (somente DEV)
     repo_oracle/              # implementação SQL Oracle 11gR2 (único local com SQL, §2.7) [F7.3]
@@ -439,6 +440,7 @@ password = ...
   * Senhas com mais de 1.024 caracteres são recusadas sem calcular o hash (proteção contra negação de serviço).
 * **Sessão:**
   * Armazenada em **cookie cifrado** do web2py (`session.connect(request, response, cookie_key=<secrets>)`). Isso dispensa DAL e funciona com N nós web sem sessão aderente.
+  * **A partir do CR-021e** (núcleo web próprio, `modules/web/session.py`, D1): cookie `sss_session` **assinado** (`v1.<payload>.<assinatura>`: JSON em base64url e HMAC-SHA256 com uma chave derivada do `cookie_key`), não cifrado. Quem tem o cookie pode ler o conteúdo, mas não alterá-lo; a revogação continua pelo `session_epoch`. Atributos `HttpOnly`, `SameSite=Lax`, `Path=/script_scheduling_service/` e `Secure` (com a mesma exceção de DEV sobre HTTP). Cookie inválido vira sessão vazia, com o motivo em WARN. A troca de formato encerra uma vez as sessões abertas.
   * O payload é mínimo: `user_id`, `login`, `profile_id`, `perm_version`, `session_epoch`, `login_at`, `csrf_token` e `last_access`.
   * A sessão é renovada no login (`session.renew()`).
   * O timeout por inatividade é `session_idle_timeout_s`. A expiração por inatividade é registrada só no log (INFO), sem auditoria.
