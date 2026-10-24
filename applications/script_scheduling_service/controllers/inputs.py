@@ -2,12 +2,22 @@
 """Tela de Entrada (CR-020d, README §5.10): navegar pela pasta de entrada dos scripts e enviar arquivos.
 
 A regra fica em modules/input_browse_service.py. CSRF, Origin e o tamanho maximo do POST sao validados em
-models/10_security.py (o POST acima do limite e recusado com 413 antes de o corpo ser lido). Fora do escopo ou
+webapp/security.py (o POST acima do limite e recusado com 413 antes de o corpo ser lido). Fora do escopo ou
 com parametro invalido: 404. Envio e pedido de retrato sao POST com redirecionamento para a pasta.
 """
 import input_browse_service as browse
 from input_browse_service import InvalidRequest
 from repo_errors import RepoError, RepoNotFound
+
+from webapp import security as _security
+from webapp.context import URL, redirect, request, response, session
+from webapp.security import client_ip as _client_ip
+from webapp.security import not_found as _not_found
+from webapp.security import require_func as _require_func
+from webapp.security import require_method as _require_method
+from webapp.security import text as _text
+
+_log = _security.LOG
 
 _FEATURE = "UPLOAD_INPUT"
 _ACTION = "ENTRADA"

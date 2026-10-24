@@ -26,7 +26,7 @@ class TestEnvSkeleton(unittest.TestCase):
         expected_dirs = [
             os.path.join(self.web2py_root, "bin"),
             os.path.join(self.app_dir, "controllers"),
-            os.path.join(self.app_dir, "models"),
+            os.path.join(self.app_dir, "webapp"),
             os.path.join(self.app_dir, "modules"),
             os.path.join(self.app_dir, "modules", "repo_fake"),
             os.path.join(self.app_dir, "modules", "repo_oracle"),
@@ -58,7 +58,6 @@ class TestEnvSkeleton(unittest.TestCase):
         expected_gitkeeps = [
             os.path.join(self.web2py_root, "bin", ".gitkeep"),
             os.path.join(self.app_dir, "controllers", ".gitkeep"),
-            os.path.join(self.app_dir, "models", ".gitkeep"),
             os.path.join(self.app_dir, "views", "components", ".gitkeep"),
             os.path.join(self.app_dir, "static", "css", ".gitkeep"),
             os.path.join(self.app_dir, "static", "img", ".gitkeep"),

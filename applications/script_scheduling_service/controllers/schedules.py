@@ -2,7 +2,7 @@
 """Regras de agendamento (README §4.3.C MANAGE_SCHEDULES, §7). Regras de negocio ficam em
 modules/schedules_service.py; padrao de telas em docs/ADMIN_CRUD_PATTERN.md.
 
-CSRF e Origin de todo POST sao validados em models/10_security.py.
+CSRF e Origin de todo POST sao validados em webapp/security.py.
 """
 import admin_crud
 import schedules_service as service
@@ -10,6 +10,17 @@ import ui_helpers
 from admin_crud import AccessDenied, OperationDenied
 from repo_errors import RepoConflict, RepoError, RepoNotFound
 from ticket_service import AccessDenied as TriggerDenied
+
+from webapp import security as _security
+from webapp.context import URL, redirect, request, response, session
+from webapp.security import client_ip as _client_ip
+from webapp.security import denied as _denied
+from webapp.security import not_found as _not_found
+from webapp.security import require_func as _require_func
+from webapp.security import require_method as _require_method
+from webapp.security import text as _text
+
+_log = _security.LOG
 
 _FUNC = "MANAGE_SCHEDULES"
 _PARAM_PREFIX = "p_"

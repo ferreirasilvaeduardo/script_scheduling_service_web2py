@@ -10,6 +10,16 @@ import output_browse_service as browse
 from output_browse_service import InvalidRequest
 from repo_errors import RepoError, RepoNotFound
 
+from webapp import security as _security
+from webapp.context import HTTP, request, response
+from webapp.security import client_ip as _client_ip
+from webapp.security import not_found as _not_found
+from webapp.security import require_func as _require_func
+from webapp.security import require_method as _require_method
+from webapp.security import text as _text
+
+_log = _security.LOG
+
 _FEATURE = "DOWNLOAD_OUTPUT"
 _ACTION = "OUTPUT_DOWNLOAD"
 _MSG_NOT_FOUND = u"Saída não encontrada."

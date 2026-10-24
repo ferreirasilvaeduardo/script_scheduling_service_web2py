@@ -2,7 +2,7 @@
 """Cadastro de usuarios (README §4.2, §4.3.B, MANAGE_USERS). Padrao em docs/ADMIN_CRUD_PATTERN.md.
 
 Regras ficam em modules/admin_users_service.py; CSRF e Origin de todo POST sao validados em
-models/10_security.py. Senhas sao retiradas de request.vars assim que lidas: o ticket de erro do
+webapp/security.py. Senhas sao retiradas de request.vars assim que lidas: o ticket de erro do
 web2py grava as variaveis da requisicao.
 """
 import admin_crud
@@ -11,6 +11,17 @@ import security
 import ui_helpers
 from admin_crud import AccessDenied, OperationDenied
 from repo_errors import RepoConflict, RepoError, RepoNotFound
+
+from webapp import security as _security
+from webapp.context import URL, redirect, request, response, session
+from webapp.security import client_ip as _client_ip
+from webapp.security import denied as _denied
+from webapp.security import not_found as _not_found
+from webapp.security import require_func as _require_func
+from webapp.security import require_method as _require_method
+from webapp.security import text as _text
+
+_log = _security.LOG
 
 _FUNC = "MANAGE_USERS"
 _SIZES = (20, 50, 100)

@@ -285,10 +285,10 @@ Regras de topologia:
 
 * É proibido instanciar o scheduler em threads dos workers web.
 * O daemon é **single-threaded**: um laço de eventos com `time.sleep`/`select`. No POSIX, essa decisão torna seguro o uso de `preexec_fn` (§8.4).
-  * A regra vale para o **processo inteiro**, não só para o código do SSS. O daemon sobe via `web2py.py -S ... -M -R`, que carrega o web2py e os models. A inicialização do daemon confere que só existe a thread principal (`threading.active_count() == 1`) antes do primeiro spawn, e aborta com CRITICAL se houver outra.
+  * A regra vale para o **processo inteiro**, não só para o código do SSS. O daemon sobe por `scripts/run_scheduler.py`, em Python puro, sem o servidor web. A inicialização do daemon confere que só existe a thread principal (`threading.active_count() == 1`) antes do primeiro spawn, e aborta com CRITICAL se houver outra.
 * O nó web **nunca** sinaliza nem encerra processos do sistema operacional.
 * **Usuários do sistema operacional (CR-007, D1):** o nó web e o agente rodam com contas dedicadas, sem login interativo nem privilégio administrativo. O script de cada ambiente roda com o **usuário de execução** daquele ambiente (`[agent] exec_users`, §8.0), diferente do usuário do agente. O agente nunca roda como root e só troca de usuário pelo helper `sss-helper`, chamado por `sudo` com regra fixa. Assim, o script não lê os segredos, os logs nem o ambiente do agente.
-* `models/*.py` deve ser leve, pois é carregado pelo daemon com `-M`. Esses arquivos não podem executar DDL, abrir conexão no import nem fazer I/O pesado.
+* O servidor web (`scripts/run_web.py`, CR-021e) e o daemon são processos separados; `webapp/` e os controllers não podem executar DDL, abrir conexão no import nem fazer I/O pesado.
 
 ### 3.2 Estrutura de diretórios
 
@@ -303,9 +303,7 @@ bin/
   sss-helper                  # [F8.0] helper de execução com o usuário de execução (run/term/kill/clean/stop-ticket/pack/clean-output/purge-output), instalado pelo root em /opt/sss/bin (§8.0, CR-007)
 applications/script_scheduling_service/
   controllers/                # default.py (login), tickets.py, logs.py, agendamentos.py, admin_*.py, auditoria.py, dev.py (somente DEV)
-  models/
-    00_config.py              # carga e validação de config (sem I/O de banco)
-    10_security.py            # sessão, cabeçalhos HTTP, CSRF, guarda RBAC
+  webapp/                     # [CR-021e] camada web: requisição por thread e URL, sessão/CSRF/cabeçalhos/guardas, página de erro, montagem do servidor
   modules/
     sss_config.py             # parser e validação tipada do config.ini e do secrets.cfg
     sss_logging.py            # configuração de logging (§13)
@@ -345,6 +343,7 @@ applications/script_scheduling_service/
     health.py                  # [F9.1] verificação de saúde no padrão Nagios (§13, CR-007); consultas em repo_oracle/health.py
     probe_driver.py          # [F7.0] sondagem isolada de um candidato de driver (Thin, Thick, cx_Oracle) (§2.3, CR-002)
     run_scheduler.py          # [F8.3] entrypoint do daemon
+    run_web.py                # [CR-021e] entrypoint do servidor web (núcleo próprio, sem web2py)
     purge.py                  # [F9.1] retenção (§11.3)
     test_*.py                 # testes unittest (AGENTS.md §7)
   static/bootstrap/  static/js/app/ (dom.js primeiro)  static/css/  static/img/  static/fonts/
@@ -440,8 +439,7 @@ password = ...
   * O rehash da senha (iterações abaixo do vigente) é gravado na mesma operação do sucesso do login.
   * Senhas com mais de 1.024 caracteres são recusadas sem calcular o hash (proteção contra negação de serviço).
 * **Sessão:**
-  * Armazenada em **cookie cifrado** do web2py (`session.connect(request, response, cookie_key=<secrets>)`). Isso dispensa DAL e funciona com N nós web sem sessão aderente.
-  * **A partir do CR-021e** (núcleo web próprio, `modules/web/session.py`, D1): cookie `sss_session` **assinado** (`v1.<payload>.<assinatura>`: JSON em base64url e HMAC-SHA256 com uma chave derivada do `cookie_key`), não cifrado. Quem tem o cookie pode ler o conteúdo, mas não alterá-lo; a revogação continua pelo `session_epoch`. Atributos `HttpOnly`, `SameSite=Lax`, `Path=/script_scheduling_service/` e `Secure` (com a mesma exceção de DEV sobre HTTP). Cookie inválido vira sessão vazia, com o motivo em WARN. A troca de formato encerra uma vez as sessões abertas.
+  * Armazenada no cookie `sss_session` **assinado** (CR-021e, D1; `modules/web/session.py`): `v1.<payload>.<assinatura>`, JSON em base64url e HMAC-SHA256 com uma chave derivada do `cookie_key`. Dispensa banco e funciona com N nós web sem sessão aderente. O conteúdo pode ser lido por quem tem o cookie, mas não alterado; a revogação continua pelo `session_epoch`. Atributos `HttpOnly`, `SameSite=Lax`, `Path=/script_scheduling_service/` e `Secure` (com a exceção de DEV sobre HTTP). Cookie inválido vira sessão vazia, com o motivo em WARN. A troca do cookie do web2py pelo `sss_session` encerrou uma vez as sessões abertas.
   * O payload é mínimo: `user_id`, `login`, `profile_id`, `perm_version`, `session_epoch`, `login_at`, `csrf_token` e `last_access`.
   * A sessão é renovada no login (`session.renew()`).
   * O timeout por inatividade é `session_idle_timeout_s`. A expiração por inatividade é registrada só no log (INFO), sem auditoria.

@@ -15,7 +15,7 @@
     <h1 class="sss-card-title" id="error-title">{{=happened}}</h1>
     <p class="mb-2"><strong>O que fazer agora:</strong> {{=todo}}</p>
     {{if permissions:}}<p class="mb-2"><a href="{{=URL(c='default', f='permissions')}}">Ver o que eu posso fazer</a></p>{{pass}}
-    <p class="mb-0 sss-text-muted">Código do erro: {{=code}}</p>
+    <p class="mb-0 sss-text-muted">Código do erro: {{=code}}</p>{{if incident:}}<p class="mb-0 sss-text-muted">Ocorrência: <span class="sss-mono">{{=incident}}</span></p>{{pass}}
   </section>
 </main>
 </body>

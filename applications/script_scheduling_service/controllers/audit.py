@@ -2,7 +2,7 @@
 """Trilha de auditoria e painel de agentes (README §4.3.D VIEW_AUDIT, §4.4, §13). Somente leitura:
 nenhuma action altera agentes. Regras em modules/audit_service.py e modules/agents_service.py.
 
-CSRF e Origin de todo POST sao validados em models/10_security.py.
+CSRF e Origin de todo POST sao validados em webapp/security.py.
 """
 import agents_service
 import app_context
@@ -12,6 +12,16 @@ import ui_helpers
 from admin_crud import AccessDenied
 from audit_service import InvalidFilters
 from repo_errors import RepoError
+
+from webapp import security as _security
+from webapp.context import HTTP, URL, redirect, request, response, session
+from webapp.security import client_ip as _client_ip
+from webapp.security import denied as _denied
+from webapp.security import require_func as _require_func
+from webapp.security import require_method as _require_method
+from webapp.security import text as _text
+
+_log = _security.LOG
 
 _FUNC = "VIEW_AUDIT"
 _JS_AGENTS = "js/app/agents.js"

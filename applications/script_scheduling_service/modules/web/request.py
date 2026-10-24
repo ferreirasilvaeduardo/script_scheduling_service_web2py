@@ -67,6 +67,14 @@ def parse_query(text: str) -> Storage:
     return _collect(pairs)
 
 
+class Args(list):
+    """``request.args`` do web2py: lista que tambem se chama, ``args(0)`` e None fora do indice."""
+
+    def __call__(self, index: int, default: Any = None) -> Any:
+        """Elemento ``index`` ou ``default`` quando nao existe."""
+        return self[index] if -len(self) <= index < len(self) else default
+
+
 def _read_exactly(stream: BinaryIO, length: int) -> bytes:
     chunks = []
     left = length
@@ -90,7 +98,7 @@ class Request:  # pylint: disable=too-many-instance-attributes
         self.controller = route.controller
         self.function = route.function
         self.extension = route.extension
-        self.args = list(route.args)
+        self.args = Args(route.args)
         self.max_body_bytes = max_body_bytes
         self._limits = limits._replace(max_body_bytes=max_body_bytes)
         self._get_vars: Optional[Storage] = None

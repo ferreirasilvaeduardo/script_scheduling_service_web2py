@@ -312,7 +312,7 @@ class TestReferrerHeader(unittest.TestCase):
     """Regressao: 'no-referrer' faz o navegador enviar Origin: null e todo POST de formulario vira 403."""
 
     def test_referrer_policy_same_origin(self):
-        path = os.path.join(os.path.dirname(_MODULES), "models", "10_security.py")
+        path = os.path.join(os.path.dirname(_MODULES), "webapp", "security.py")
         with open(path, encoding="utf-8") as f:
             code = f.read()
         self.assertRegex(code, r'"Referrer-Policy":\s*"same-origin"')
@@ -326,11 +326,13 @@ class TestTamanhoDoPost(unittest.TestCase):
     """CR-020d: o POST acima do maior envio e recusado (413) antes de o corpo ser lido pelo post_vars do CSRF."""
 
     def test_limite_antes_da_leitura_do_corpo(self):
-        path = os.path.join(os.path.dirname(_MODULES), "models", "10_security.py")
+        # CR-021e: o hook confere o tamanho (_check_size) antes do CSRF, que le o corpo (post_vars).
+        path = os.path.join(os.path.dirname(_MODULES), "webapp", "security.py")
         with open(path, encoding="utf-8") as f:
             code = f.read()
-        self.assertIn("raise HTTP(413", code)
-        self.assertLess(code.index("input_upload_max_bytes"), code.index('request.post_vars.get("_csrf")'))
+        self.assertIn("raise HTTP(413)", code)
+        hook = code[code.index("def before_request"):code.index("def after_request")]
+        self.assertLess(hook.index("_check_size()"), hook.index("_check_origin_and_csrf(cfg)"))
 
 if __name__ == "__main__":
     unittest.main()

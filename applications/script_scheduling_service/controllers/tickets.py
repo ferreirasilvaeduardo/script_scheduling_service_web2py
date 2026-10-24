@@ -1,13 +1,26 @@
 # -*- coding: utf-8 -*-
 """Disparo de script e tickets (README §5). Regras de negocio ficam em modules/ticket_service.py.
 
-CSRF e Origin de todo POST sao validados em models/10_security.py.
+CSRF e Origin de todo POST sao validados em webapp/security.py.
 """
 import app_context
 import ticket_service
 import ui_helpers
 from repo_errors import RepoError, RepoNotFound
 from ticket_service import AccessDenied, RerunError
+
+from webapp import security as _security
+from webapp.context import HTTP, URL, redirect, request, response, session
+from webapp.security import client_ip as _client_ip
+from webapp.security import denied as _denied
+from webapp.security import not_found as _not_found
+from webapp.security import require_func as _require_func
+from webapp.security import require_login as _require_login
+from webapp.security import require_method as _require_method
+from webapp.security import require_query as _require_query
+from webapp.security import text as _text
+
+_log = _security.LOG
 
 _PARAM_PREFIX = "p_"
 _JS_TRIGGER = "js/app/trigger.js"

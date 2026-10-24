@@ -2,7 +2,7 @@
 """Cadastro de scripts, homologacao e vinculo de parametros (README §4.3.A, §6.3, §8.5, MANAGE_SCRIPTS).
 
 Padrao em docs/ADMIN_CRUD_PATTERN.md. Regras ficam em modules/admin_scripts_service.py; CSRF e Origin
-de todo POST sao validados em models/10_security.py. Listas enviadas pelo cliente sao revalidadas inteiras.
+de todo POST sao validados em webapp/security.py. Listas enviadas pelo cliente sao revalidadas inteiras.
 """
 import admin_crud
 import admin_scripts_service as service
@@ -10,6 +10,17 @@ import path_guard
 import ui_helpers
 from admin_crud import AccessDenied, OperationDenied
 from repo_errors import RepoConflict, RepoError, RepoNotFound
+
+from webapp import security as _security
+from webapp.context import URL, redirect, request, response, session
+from webapp.security import client_ip as _client_ip
+from webapp.security import denied as _denied
+from webapp.security import not_found as _not_found
+from webapp.security import require_func as _require_func
+from webapp.security import require_method as _require_method
+from webapp.security import text as _text
+
+_log = _security.LOG
 
 _FUNC = "MANAGE_SCRIPTS"
 _SIZES = (20, 50, 100)

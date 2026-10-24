@@ -750,6 +750,15 @@ class TestConfigCR007(unittest.TestCase):
         for v in ("1048575", "209715201"):
             self._refusal("input_upload_max_bytes", web={"input_upload_max_bytes": v})
         self.assertEqual(self._load(web={"input_upload_max_bytes": "1048576"}).web.input_upload_max_bytes, 1048576)
+        # CR-021e (D5): servidor web proprio.
+        web_cfg = self._load().web
+        self.assertEqual((web_cfg.max_threads, web_cfg.socket_timeout_s), (16, 30))
+        for key, bad, good in (("max_threads", ("0", "257"), ("1", "256")),
+                               ("socket_timeout_s", ("4", "301"), ("5", "300"))):
+            for v in bad:
+                self._refusal(key, web={key: v})
+            for v in good:
+                self.assertEqual(getattr(self._load(web={key: v}).web, key), int(v))
         self.assertEqual(self._load(logging={"script_work_retention_days": "30"}).logging.script_work_retention_days, 30)
         for key, bad, good in (("output_max_bytes", ("1048575", "209715201"), ("1048576", "209715200")),
                                    ("output_max_files", ("0", "10001"), ("1", "10000"))):

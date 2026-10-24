@@ -28,6 +28,9 @@ TOKEN_EXCEPTIONS_BY_PATH = {
 
 # Tokens e chamadas proibidos em Python 3.6 / SSS (AGENTS §2.1, §3.2, §3.4)
 FORBIDDEN_PATTERNS = [
+    # Versoes de correcao da 3.6 (o minimo e o 3.6.0, AGENTS §2.1)
+    (r"\bNoReturn\b", "'typing.NoReturn' proibido (Python >= 3.6.2)"),
+    (r"\bAsyncGenerator\b", "'typing.AsyncGenerator' proibido (Python >= 3.6.1)"),
     # Python 3.7+
     (r"\bdataclasses\b", "modulo 'dataclasses' proibido (Python >= 3.7)"),
     (r"\bdataclass\b", "decorator 'dataclass' proibido (Python >= 3.7)"),
@@ -413,6 +416,7 @@ class TestPy36Compat(unittest.TestCase):
             ("os.system('id')", "os.system"),
             ("eval('1+1')", "eval"),
             ("XML(variavel)", "XML()"),
+            ("from typing import NoReturn", "NoReturn"),
             ('<div x-html="msg"></div>', "x-html"),
             ('<span x-text="label"></span>', "x-text"),
             ('<div x-on:click.prevent="go"></div>', "x-on"),

@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Padrao do pacote modules/web/ (CR-021, D8), conferido por AST.
+"""Padrao D8 do codigo novo do CR-021, conferido por AST: modules/web/, webapp/ e scripts/run_web.py.
 
 Linhas de ate 99 colunas; funcoes e metodos publicos com anotacoes de tipo e docstring; classes publicas
-com docstring; imports entre modulos do pacote so relativos; nada fora da biblioteca padrao.
+com docstring; imports entre modulos de um pacote so relativos. O nucleo web/ so usa a biblioteca
+padrao; o webapp/ e o run_web.py usam tambem os modulos da aplicacao e o web.
 """
 import ast
 import io
@@ -11,25 +12,51 @@ import unittest
 
 import _testenv  # noqa: F401 - ajusta sys.path sem importar gluon
 
-PACKAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "modules", "web")
+APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PACKAGE_DIR = os.path.join(APP_DIR, "modules", "web")
+WEBAPP_DIR = os.path.join(APP_DIR, "webapp")
+RUN_WEB = os.path.join(APP_DIR, "scripts", "run_web.py")
 MAX_COLUMNS = 99
 # Biblioteca padrao usada pelo pacote; modulo novo entra aqui de proposito (nunca dependencia de fora).
 STDLIB = {
-    "ast", "base64", "binascii", "datetime", "decimal", "email", "errno", "hashlib", "hmac", "html", "http",
-    "io", "json", "logging", "mimetypes", "os", "posixpath", "re", "select", "signal", "socket",
-    "socketserver", "stat", "sys", "tempfile", "threading", "time", "traceback", "typing", "urllib",
+    "argparse", "ast", "base64", "binascii", "datetime", "decimal", "email", "errno", "hashlib", "hmac", "html", "http",
+    "inspect", "io", "json", "logging", "mimetypes", "os", "posixpath", "re", "select", "signal", "socket",
+    "socketserver", "stat", "sys", "tempfile", "threading", "time", "traceback", "types", "typing", "urllib",
     "uuid", "wsgiref",
 }
 
 
+def _app_modules():
+    """Nomes dos modulos da aplicacao (modules/*.py e subpacotes)."""
+    folder = os.path.join(APP_DIR, "modules")
+    return {os.path.splitext(name)[0] for name in os.listdir(folder)
+            if name.endswith(".py") or os.path.isdir(os.path.join(folder, name))}
+
+
+def _allowed(name):
+    """Raizes de import permitidas para o arquivo ``name`` (relativo)."""
+    if name.startswith("web/"):
+        return STDLIB
+    if name.startswith("webapp/"):
+        # O bootstrap registra os controllers por import explicito.
+        return STDLIB | _app_modules() | {"web", "controllers"}
+    return STDLIB | _app_modules() | {"web", "webapp"}
+
+
+def _parse(path, key, result):
+    with io.open(path, encoding="utf-8") as handle:
+        text = handle.read()
+    result[key] = (text, ast.parse(text, filename=key))
+
+
 def _sources():
-    """{nome do arquivo: (texto, arvore)} de todos os .py do pacote."""
+    """{caminho relativo: (texto, arvore)} do codigo novo do CR-021."""
     result = {}
-    for name in sorted(os.listdir(PACKAGE_DIR)):
-        if name.endswith(".py"):
-            with io.open(os.path.join(PACKAGE_DIR, name), encoding="utf-8") as handle:
-                text = handle.read()
-            result[name] = (text, ast.parse(text, filename=name))
+    for prefix, folder in (("web/", PACKAGE_DIR), ("webapp/", WEBAPP_DIR)):
+        for name in sorted(os.listdir(folder)):
+            if name.endswith(".py"):
+                _parse(os.path.join(folder, name), prefix + name, result)
+    _parse(RUN_WEB, "scripts/run_web.py", result)
     return result
 
 
@@ -52,7 +79,8 @@ class PackageStyleTest(unittest.TestCase):
 
     def setUp(self):
         self.sources = _sources()
-        self.assertIn("__init__.py", self.sources)
+        self.assertIn("web/__init__.py", self.sources)
+        self.assertIn("webapp/__init__.py", self.sources)
 
     def test_line_length(self):
         """Nenhuma linha passa de 99 colunas."""
@@ -94,12 +122,13 @@ class PackageStyleTest(unittest.TestCase):
                     roots = [(node.module or "").split(".")[0]]
                 else:
                     continue
-                problems.extend("%s: import de %s" % (name, root) for root in roots if root not in STDLIB)
+                allowed = _allowed(name)
+                problems.extend("%s: import de %s" % (name, root) for root in roots if root not in allowed)
         self.assertEqual(problems, [])
 
     def test_all_matches_exports(self):
         """__all__ do pacote lista exatamente o que o __init__ importa."""
-        _text, tree = self.sources["__init__.py"]
+        _text, tree = self.sources["web/__init__.py"]
         imported = {alias.asname or alias.name for node in tree.body if isinstance(node, ast.ImportFrom)
                     for alias in node.names}
         declared = set()

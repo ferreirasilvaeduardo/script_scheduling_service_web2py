@@ -2,13 +2,24 @@
 """Dicionario de parametros (README §6, MANAGE_PARAMETERS). Padrao em docs/ADMIN_CRUD_PATTERN.md.
 
 Regras ficam em modules/admin_parameters_service.py; CSRF e Origin de todo POST sao validados em
-models/10_security.py. O editor de opcoes do cliente e conveniencia: o servidor revalida tudo.
+webapp/security.py. O editor de opcoes do cliente e conveniencia: o servidor revalida tudo.
 """
 import admin_crud
 import admin_parameters_service as service
 import ui_helpers
 from admin_crud import AccessDenied, OperationDenied
 from repo_errors import RepoConflict, RepoError, RepoNotFound
+
+from webapp import security as _security
+from webapp.context import URL, redirect, request, response, session
+from webapp.security import client_ip as _client_ip
+from webapp.security import denied as _denied
+from webapp.security import not_found as _not_found
+from webapp.security import require_func as _require_func
+from webapp.security import require_method as _require_method
+from webapp.security import text as _text
+
+_log = _security.LOG
 
 _FUNC = "MANAGE_PARAMETERS"
 _SIZES = (20, 50, 100)

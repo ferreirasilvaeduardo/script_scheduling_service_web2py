@@ -6,6 +6,10 @@ import re
 import app_context
 import ui_helpers
 
+from webapp.context import HTTP, URL, request, response
+from webapp.security import require_func as _require_func
+from webapp.security import require_login as _require_login
+
 
 def _require_dev():
     if app_context.require_config().app.sss_env != "DEV":
@@ -107,7 +111,7 @@ def _demo_form():
 def components():
     _require_login()
     _require_dev()
-    # POST chega aqui ja validado (CSRF + Origin) por models/10_security.py.
+    # POST chega aqui ja validado (CSRF + Origin) por webapp/security.py.
     if request.env.request_method not in ("GET", "HEAD", "POST"):
         raise HTTP(405)
     response.title = u"Componentes — SSS"

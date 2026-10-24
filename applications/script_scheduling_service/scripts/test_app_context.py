@@ -18,7 +18,7 @@ MODULES_DIR = os.path.join(APP_DIR, "modules")
 REPO_ROOT = os.path.dirname(os.path.dirname(APP_DIR))
 # Codigo que roda: a aplicacao (sem docs/, que guarda o historico) e os launchers da raiz.
 CODE_DIRS = (os.path.join(REPO_ROOT, "bin"),) + tuple(
-    os.path.join(APP_DIR, name) for name in ("controllers", "models", "modules", "scripts", "views"))
+    os.path.join(APP_DIR, name) for name in ("controllers", "modules", "scripts", "views", "webapp"))
 _RE_OLD_CONTEXT = re.compile(r"\bcurrent\.(?:sss_cfg|repo_factory)\b")
 
 

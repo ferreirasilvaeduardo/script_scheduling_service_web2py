@@ -1,18 +1,25 @@
 # -*- coding: utf-8 -*-
-"""Painel inicial, login e logout (README §4.2). CSRF e Origin de todo POST sao validados em models/10_security.py."""
+"""Painel inicial, login e logout (README §4.2). CSRF e Origin de todo POST sao validados em webapp/security.py."""
 import time
 
-from gluon import current
-
-import schedules_service
 import agents_service
 import auth_service
 import permissions_service
 import rbac
+import schedules_service
 import security
 import ticket_service
 import ui_helpers
 from repo_errors import RepoError
+
+from webapp import context as _context
+from webapp import security as _security
+from webapp.context import URL, redirect, request, response, session
+from webapp.security import client_ip as _client_ip
+from webapp.security import require_login as _require_login
+from webapp.security import require_method as _require_method
+
+_log = _security.LOG
 
 _MSG_CARD_FAILED = u"Não foi possível carregar este quadro. Tente novamente em instantes."
 
@@ -54,7 +61,7 @@ def login():
     method = (request.env.request_method or "GET").upper()
     response.title = u"Entrar — SSS"
     target = security.validate_next(request.vars.get("next"))
-    if current.sss_ctx:
+    if _context.user():
         redirect(target or URL(c="default", f="index"))
 
     message = None
@@ -79,8 +86,8 @@ def login():
 
 def logout():
     _require_method("POST")
-    if current.sss_ctx:
-        auth_service.logout(current.sss_ctx, _client_ip())
+    if _context.user():
+        auth_service.logout(_context.user(), _client_ip())
     session.clear()
     session.csrf_token = security.generate_csrf_token()
     session.flash = {"kind": "success", "message": u"Você saiu do sistema."}

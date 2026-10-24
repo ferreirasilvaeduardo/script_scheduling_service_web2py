@@ -7,6 +7,15 @@ import ticket_service
 from repo_errors import RepoError, RepoNotFound
 from ticket_service import InvalidOffset
 
+from webapp import security as _security
+from webapp.context import HTTP, request, response
+from webapp.security import not_found as _not_found
+from webapp.security import require_method as _require_method
+from webapp.security import require_query as _require_query
+from webapp.security import text as _text
+
+_log = _security.LOG
+
 _MSG_LOG_FAILED = u"Não foi possível ler o log. Tente novamente em instantes."
 _MSG_NOT_FOUND = u"Ticket não encontrado."
 
