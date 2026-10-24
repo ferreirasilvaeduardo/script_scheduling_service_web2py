@@ -543,6 +543,11 @@ class Agent(object):
         stop = os.path.join(agent.work_dir, "sss-%s.stop" % self.agent_id)
         end = None if limit_s is None else self.clock() + limit_s
         while True:
+            # Antes dos ciclos: com a parada ja pedida, o orquestrador desta volta nao pode fazer claim nem
+            # desdobro (README §8.11).
+            code = self._handle_stop(stop_event, stop)
+            if code is not None:
+                return code
             self._iteration()
             self._check_fence()
             now = self.clock()
@@ -564,19 +569,29 @@ class Agent(object):
                 self.log.critical("REGISTRO_PERDIDO: %s; encerramento TERMINATE", exc, extra={"action": "HB"})
                 self.stop_all("TERMINATE", registration_lost=True)
                 return EXIT_REGISTRATION_LOST
-            if stop_event.is_set() or os.path.exists(stop):
-                if agent.shutdown_mode != "DRAIN":
-                    return self.stop_all("TERMINATE")
-                if self._drain_until is None:
-                    self._start_drain()
-                if self._drained() or self.clock() >= self._drain_until:
-                    return self.stop_all("DRAIN")
+            # Depois dos ciclos: um sinal que chegou durante eles e tratado sem esperar a proxima volta.
+            code = self._handle_stop(stop_event, stop)
+            if code is not None:
+                return code
             if (until is not None and until()) or (end is not None and self.clock() >= end):
                 return self.exit_code
             wait_s = min(self.deadlines.values()) - self.clock()
             self._wait(max(0.0, min(MAX_WAIT_INTERVAL_S, wait_s)))
 
     # ---------------------------------------------------- parada DRAIN (README §8.11)
+
+    def _handle_stop(self, stop_event, stop_path):
+        """Parada pedida (flag ou arquivo .stop): TERMINATE encerra ja; DRAIN suspende claim e desdobro e
+        encerra ao drenar ou ao vencer shutdown_grace_s. Devolve o codigo de saida, ou None para seguir."""
+        if not (stop_event.is_set() or os.path.exists(stop_path)):
+            return None
+        if self.cfg.agent.shutdown_mode != "DRAIN":
+            return self.stop_all("TERMINATE")
+        if self._drain_until is None:
+            self._start_drain()
+        if self._drained() or self.clock() >= self._drain_until:
+            return self.stop_all("DRAIN")
+        return None
 
     def _start_drain(self):
         """DRAIN: para claim e desdobro e aguarda os filhos por ate shutdown_grace_s, mantendo heartbeat,

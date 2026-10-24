@@ -1952,7 +1952,7 @@ END;
 ### 8.11 Graceful shutdown do daemon
 
 * SIGTERM/SIGINT e o arquivo `work_dir/sss-<agent_id>.stop` apenas acionam uma flag; o laço trata o restante.
-* O daemon para de fazer desdobro e claim.
+* O daemon para de fazer desdobro e claim. O pedido de parada é conferido no **início de cada volta, antes de qualquer ciclo** (com a parada já pedida, o orquestrador daquela volta não faz claim nem desdobro), e de novo depois dos ciclos, para um sinal que chegou durante eles.
 
 | `shutdown_mode` | Comportamento |
 |---|---|

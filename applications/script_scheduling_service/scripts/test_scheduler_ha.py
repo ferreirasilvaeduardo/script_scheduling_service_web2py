@@ -767,6 +767,25 @@ class TestShutdown(tsc._Base):
         self.assertFalse(_os.path.exists(stop), ".stop removido")
         self.assertTrue(any("DRAIN: parada pedida" in l for l in logs.output))
 
+    def _assert_stop_before_claim(self, mode):
+        """Regressao: com a parada ja pedida, a primeira volta (orquestrador vencido) nao faz claim nem
+        desdobro; antes, o pedido so era conferido depois dos ciclos (README §8.11)."""
+        tid = self.db.ticket(self.db.script("echo nao devia rodar\n"))
+        self.start_agent(shutdown_mode=mode)
+        self._stop()
+        with self.assertLogs("sss_scheduler", "WARNING"):
+            self.assertEqual(self.run_loop(lambda: False, limit=20), 0)
+        ticket = self.db.tickets[tid]
+        self.assertEqual((ticket["status"], ticket["process_id"]), ("PENDING", None), "sem claim depois da parada")
+        self.assertIsNone(self.ag.expansion, "sem desdobro depois da parada")
+        self.assertEqual(self.db.stopped_flag, mode)
+
+    def test_parada_pedida_antes_da_volta_drain_nao_faz_claim(self):
+        self._assert_stop_before_claim("DRAIN")
+
+    def test_parada_pedida_antes_da_volta_terminate_nao_faz_claim(self):
+        self._assert_stop_before_claim("TERMINATE")
+
     def test_drain_com_prazo_vencido_vira_terminate(self):
         tid = self.db.ticket(self.db.script("sleep 300\n"))
         self.start_agent(shutdown_mode="DRAIN", shutdown_grace_s=1)
