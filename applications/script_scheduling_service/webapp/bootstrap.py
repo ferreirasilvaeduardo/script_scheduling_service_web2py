@@ -2,9 +2,10 @@
 """Montagem do servidor web (CR-021e): configuracao, controllers, views e o Application.
 
 Era o models/00_config.py mais o despacho do web2py. Os controllers ficam num registro de imports
-explicitos (o projeto proibe import dinamico); o ``dev`` so entra com ``sss_env = DEV``, porque nao
-vai no pacote. Action e toda funcao definida no proprio modulo do controller, sem '_' no inicio e
-sem parametro obrigatorio (como no web2py): nomes importados, como ``redirect``, nunca viram rota.
+explicitos (o projeto proibe import dinamico); o ``dev`` so entra com ``sss_env = DEV`` e se o
+arquivo existir, porque nao vai no pacote (um DEV instalado pelo pacote roda sem ele, como no
+web2py). Action e toda funcao definida no proprio modulo do controller, sem '_' no inicio e sem
+parametro obrigatorio (como no web2py): nomes importados, como ``redirect``, nunca viram rota.
 """
 import inspect
 import os
@@ -22,6 +23,7 @@ from .context import APPLICATION, URL
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VIEWS_DIR = os.path.join(APP_DIR, "views")
 STATIC_DIR = os.path.join(APP_DIR, "static")
+DEV_CONTROLLER = os.path.join(APP_DIR, "controllers", "dev.py")
 _TEMPLATES = Templates(VIEWS_DIR)
 
 
@@ -44,8 +46,9 @@ def controllers(cfg: Any) -> Dict[str, ModuleType]:
     registry = {module.__name__.rsplit(".", 1)[1]: module for module in (
         admin_environments, admin_parameters, admin_profiles, admin_scripts, admin_users, audit,
         default, inputs, logs, outputs, schedules, tickets)}
-    if cfg.app.sss_env == "DEV":
-        # Fora do pacote de implantacao (README §12.2): so importado em DEV.
+    if cfg.app.sss_env == "DEV" and os.path.isfile(DEV_CONTROLLER):
+        # Fora do pacote de implantacao (README §12.2): so em DEV e so se estiver presente (achado
+        # no ensaio do pacote do CR-021f3: sem o arquivo, o servidor nao subia).
         from controllers import dev
         registry["dev"] = dev
     return registry

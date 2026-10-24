@@ -106,6 +106,11 @@ class RegistryTest(unittest.TestCase):
         self.assertEqual(set(bootstrap.controllers(self._cfg("DEV"))), files)
         self.assertEqual(set(bootstrap.controllers(self._cfg("PROD"))), files - {"dev"})
 
+    def test_dev_without_file_is_not_registered(self):
+        """DEV instalado pelo pacote (sem controllers/dev.py): o servidor sobe sem a rota dev."""
+        with mock.patch.object(bootstrap, "DEV_CONTROLLER", os.path.join(APP_DIR, "nao_existe.py")):
+            self.assertNotIn("dev", bootstrap.controllers(self._cfg("DEV")))
+
     def test_only_module_functions_are_actions(self):
         """Nome importado (redirect, URL, HTTP, guardas) nunca vira rota; privada e com parametro tambem nao."""
         registry = bootstrap.controllers(self._cfg("DEV"))

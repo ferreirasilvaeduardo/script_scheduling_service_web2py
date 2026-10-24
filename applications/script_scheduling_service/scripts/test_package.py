@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """Testes do scripts/package.py (README §12.2; F9.1c; CR-005; CR-003 P10).
 
-Arvore falsa do web2py em diretorio temporario: pacote gerado, SHA256SUMS de fora conferindo com o tar.gz e o de
-dentro com cada arquivo, tar reprodutivel, routes.py gerado, bin/sss-helper executavel, pastas de runtime do
-web2py ausentes, runtime vazias presentes, DEV e testes fora; recusa (sem gravar nada e sem imprimir o valor) com
-secrets.cfg, credencial fora do placeholder, bytecode, link simbolico e outra aplicacao.
+Arvore falsa do repositorio em diretorio temporario: pacote gerado, SHA256SUMS de fora conferindo com o tar.gz e o
+de dentro com cada arquivo, tar reprodutivel, bin/sss-helper executavel, sem nada do web2py (CR-021f), DEV, testes
+e pastas de execucao fora; recusa (sem gravar nada e sem imprimir o valor) com secrets.cfg, credencial fora do
+placeholder, bytecode, link simbolico, outra aplicacao e resto do web2py na raiz.
 """
 import _testenv  # noqa: F401
 
@@ -12,6 +12,8 @@ import hashlib
 import io
 import os
 import shutil
+import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -27,16 +29,14 @@ class TestPack(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp(prefix="sss_test_pacote_")
         self.addCleanup(shutil.rmtree, self.root, True)
-        self.origem = os.path.join(self.root, "web2py")
+        self.origem = os.path.join(self.root, "repo")
         self.saida = os.path.join(self.root, "dist")
         files = {
-            "web2py.py": "# web2py\n", "anyserver.py": "# anyserver\n", "routes.py": "# DEV\n",
-            "gluon/__init__.py": "", "gluon/main.py": "# main\n", "gluon/tests/test_x.py": "",
-            "gluon/packages/pydal/test-venv/bin/pip": "#!/x/python\n",
             "bin/sss-web.sh": "#!/bin/bash\n", "bin/sss-scheduler.sh": "#!/bin/bash\n",
             "bin/sss-stop.sh": "#!/bin/bash\n", "bin/sss-helper": "#!/usr/bin/env python3\n",
             "bin/start_local.sh": "#!/bin/bash\n", "CLAUDE.md": "x", "parameters_8000.py": "x",
             APP + "/controllers/default.py": "# default\n", APP + "/controllers/dev.py": "# dev\n",
+            APP + "/scripts/run_web.py": "# servidor\n", APP + "/webapp/bootstrap.py": "# web\n",
             APP + "/views/dev/index.html": "x", APP + "/dev/scripts/a.py": "x",
             APP + "/modules/repo_fake/__init__.py": "x", APP + "/modules/sss_config.py": "x",
             APP + "/instance/config.ini": "[oracle]\nuser = sss_web\n",
@@ -90,31 +90,31 @@ class TestPack(unittest.TestCase):
             for line in sums.splitlines():
                 hash_, rel = line.split("  ", 1)
                 self.assertEqual(hashlib.sha256(tar.extractfile(top + rel).read()).hexdigest(), hash_, rel)
-            routes = tar.extractfile(top + "routes.py").read().decode("utf-8")
         files = set(n for n, m in members.items() if m.isfile())
-        self.assertIn('default_application = "script_scheduling_service"', routes)
         self.assertEqual(members["bin/sss-helper"].mode, 0o755, "helper executavel")
-        self.assertEqual((members["bin/sss-helper"].uid, members["web2py.py"].mode), (0, 0o644))
-        for rel in ("web2py.py", "anyserver.py", "gluon/main.py", "bin/sss-web.sh", "bin/sss-scheduler.sh",
-                    "bin/sss-stop.sh", APP + "/controllers/default.py", APP + "/scripts/purge.py",
+        self.assertEqual((members["bin/sss-helper"].uid, members[APP + "/scripts/run_web.py"].mode),
+                         (0, 0o644))
+        for rel in ("bin/sss-web.sh", "bin/sss-scheduler.sh", "bin/sss-stop.sh",
+                    APP + "/controllers/default.py", APP + "/scripts/run_web.py",
+                    APP + "/webapp/bootstrap.py", APP + "/scripts/purge.py",
                     APP + "/instance/config.ini.example", APP + "/instance/secrets.cfg.example",
                     APP + "/docs/DEPLOYMENT.md"):
             self.assertIn(rel, files)
-        for dir_value in empacotar.EMPTY_RUNTIME_DIRS:
-            self.assertTrue(members[APP + "/" + dir_value].isdir(), dir_value)
         forbidden = [n for n in members if any(n == APP + "/" + p or n.startswith(APP + "/" + p + "/") for p in (
             "applications", "deposit", "logs", "site-packages", "scripts/logs", "work", "dev", "views/dev",
             "modules/repo_fake", "controllers/dev.py", "instance/config.ini", "scripts/test_purge.py",
-            "scripts/_testenv.py", "sessions/abc", "errors/e"))]
+            "scripts/_testenv.py", "sessions", "errors"))]
         self.assertEqual(forbidden, [])
-        self.assertFalse([n for n in members if "/tests/" in n or "test-venv" in n], "testes do upstream fora")
+        # CR-021f: nada do web2py, nem pasta de runtime vazia
+        self.assertFalse([n for n in members
+                          if n.split("/", maxsplit=1)[0] in empacotar.WEB2PY_ROOT_LEFTOVERS])
         self.assertFalse(set(("bin/start_local.sh", "CLAUDE.md", "parameters_8000.py")) & files)
 
     def test_tar_reprodutivel(self):
         self.assertEqual(self._main()[0], 0)
         with open(self._package(), "rb") as f:
             first = f.read()
-        os.utime(os.path.join(self.origem, "web2py.py"), (1, 1))
+        os.utime(os.path.join(self.origem, APP, "scripts", "run_web.py"), (1, 1))
         self.assertEqual(self._main()[0], 0)
         with open(self._package(), "rb") as f:
             self.assertEqual(f.read(), first)
@@ -140,15 +140,44 @@ class TestPack(unittest.TestCase):
         self._write(APP + "/modules/x.pyc", "x")
         self._write(APP + "/modules/__pycache__/y.cpython-36.pyc", "x")
         self._write("applications/admin/controllers/default.py", "x")
-        os.symlink("/etc", os.path.join(self.origem, "gluon", "fora"))
+        os.symlink("/etc", os.path.join(self.origem, APP, "modules", "fora"))
         text = self._refused("modules/x.pyc: bytecode")
         self.assertIn("__pycache__/y.cpython-36.pyc: bytecode", text)
-        self.assertIn("gluon/fora: link simbolico", text)
+        self.assertIn("modules/fora: link simbolico", text)
+
+    def test_resto_do_web2py_na_raiz_recusa(self):
+        """CR-021f: gluon/, web2py.py, anyserver.py ou routes.py na origem recusam o pacote."""
+        for rel in ("gluon/main.py", "web2py.py", "anyserver.py", "routes.py"):
+            with self.subTest(rel=rel):
+                self._write(rel, "x")
+                top = rel.split("/", maxsplit=1)[0]
+                self._refused(f"{top}: resto do web2py na raiz")
+                path = os.path.join(self.origem, top)
+                if os.path.isdir(path):
+                    shutil.rmtree(path)
+                else:
+                    os.remove(path)
+        self.assertEqual(self._main()[0], 0, "sem os restos, o pacote sai")
 
     def test_verificar_codigo_de_dev_e_admin(self):
         problems = empacotar.check([APP + "/controllers/dev.py", APP + "/modules/repo_fake/a.py",
-                                        "applications/admin/x.py", APP + "/deposit/x"], lambda rel: b"")
-        self.assertEqual(len(problems), 4, problems)
+                                        "applications/admin/x.py", APP + "/deposit/x", APP + "/sessions/s",
+                                        "gluon/main.py", "web2py.py"], lambda rel: b"")
+        self.assertEqual(len(problems), 7, problems)
+
+    def test_rodando_de_dentro_da_copia_que_empacota(self):
+        """Regressao do ensaio do CR-021f3: o package.py da copia limpa importava o sss_config e gravava
+        modules/__pycache__ na propria copia, e o pacote era recusado por bytecode."""
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, "package.py"), encoding="utf-8") as f:
+            self._write(APP + "/scripts/package.py", f.read())
+        self._write(APP + "/modules/sss_config.py",
+                    f"SSS_VERSION = {empacotar.sss_config.SSS_VERSION!r}\n")
+        p = subprocess.run([sys.executable, os.path.join(self.origem, APP, "scripts", "package.py"),
+                            "--source", self.origem, "--out-dir", self.saida], check=False,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
+        self.assertEqual(p.returncode, 0, p.stdout.decode("utf-8", "replace"))
+        self.assertFalse(os.path.exists(os.path.join(self.origem, APP, "modules", "__pycache__")))
 
     def test_helper_ausente(self):
         os.remove(os.path.join(self.origem, "bin", "sss-helper"))
@@ -160,6 +189,8 @@ class TestPack(unittest.TestCase):
         self.assertFalse([a for a in files if "/repo_fake/" in a or a.endswith("controllers/dev.py")
                           or "/scripts/test_" in a or a.endswith("instance/config.ini")])
         self.assertIn(APP + "/modules/repo_oracle/purge.py", files)
+        self.assertIn(APP + "/scripts/run_web.py", files)
+        self.assertEqual(_problems, [], "a arvore real nao tem resto do web2py nem link (CR-021f)")
 
 
 class TestPackageStartsWithoutDev(unittest.TestCase):

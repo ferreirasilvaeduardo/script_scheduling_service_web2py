@@ -2915,19 +2915,16 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
 
 `bin/sss-helper` (CR-007, D1) é o helper de execução do §8.0. O pacote o leva, mas ele só vale depois de copiado pelo root para `/opt/sss/bin/sss-helper` (dono root, `0755`), com a regra de sudoers do `DEPLOYMENT.md`.
 
-**Pacote de implantação (F9.1):** `python scripts/package.py [--source <raiz do web2py>] [--out-dir <pasta>]`, só com a biblioteca padrão.
+**Pacote de implantação (F9.1; sem web2py desde o CR-021f3):** `python scripts/package.py [--source <raiz do repositório>] [--out-dir <pasta>]`, só com a biblioteca padrão.
 * Gera `<saida>/sss-<version>.tar.gz` (padrão `<origem>/dist/`; versão `sss_config.SSS_VERSION`), com tudo sob `sss-<versao>/` e um `SHA256SUMS` de cada arquivo dentro do pacote, e `<saida>/SHA256SUMS` com o hash do `tar.gz` (`sha256sum -c SHA256SUMS`). O tar é reprodutível: ordem, dono (0), data e modos fixos (`0755` no `bin/`, `0644` nos demais arquivos).
-* **Entram:** `web2py.py`, `anyserver.py`, `gluon/` (sem `tests/`, `test-venv/`, `.pytest_cache/` e `ci/` do upstream), um `routes.py` **gerado** com `default_application = "script_scheduling_service"` e o `routes_onerror` da aplicação (o `routes.py` do repositório não muda, para não alterar as URLs do DEV), `bin/sss-web.sh`, `bin/sss-scheduler.sh`, `bin/sss-stop.sh`, `bin/sss-helper` e a aplicação com `docs/` e os `instance/*.example`. As pastas `sessions`, `errors`, `cache`, `databases`, `uploads`, `private` e `cron` entram vazias.
-* **Não entram:** `controllers/dev.py`, `views/dev/`, `dev/`, `modules/repo_fake/`, `instance/config.ini`, `instance/web.env`, `log/`, `logs/`, `work/`, `exec/`, os testes (`scripts/test_*.py` e os auxiliares `_testenv.py`, `_oracle_test_support.py`, `_output_memory.py`), as pastas de runtime do web2py dentro da aplicação (abaixo), os launchers de DEV e os arquivos da raiz que não são do web2py.
-* **Recusa** (código 1, sem gravar nada) se o pacote tiver um `secrets.cfg` real, `*.pyc`, `__pycache__`, `controllers/dev.py`, `repo_fake`, outra aplicação (`/admin/`, `welcome`, `examples`), pasta de runtime do web2py, link simbólico, ou `password`/`cookie_key` com valor em `.ini`, `.cfg`, `.ini.example` ou `.cfg.example` (pelo nome do arquivo). A única exceção é o valor exato `CHANGE_ME` em `instance/secrets.cfg.example`. A mensagem cita arquivo e linha, nunca o valor.
-* Uma árvore de desenvolvimento sempre tem `__pycache__` e o `secrets.cfg` local, então o pacote é gerado de uma cópia limpa: `git archive HEAD | tar -x -C <pasta>` e `python <pasta>/applications/script_scheduling_service/scripts/package.py --source <pasta>`.
+* **Entram:** `bin/sss-web.sh`, `bin/sss-scheduler.sh`, `bin/sss-stop.sh`, `bin/sss-helper` e a aplicação com `docs/` e os `instance/*.example`. O servidor web é o `scripts/run_web.py` da própria aplicação; nada do web2py entra (nem pasta de runtime vazia).
+* **Não entram:** `controllers/dev.py`, `views/dev/`, `dev/`, `modules/repo_fake/`, `instance/config.ini`, `instance/web.env`, `log/`, `logs/`, `work/`, `exec/`, os testes (`scripts/test_*.py` e os auxiliares `_testenv.py`, `_oracle_test_support.py`, `_output_memory.py`), as pastas de runtime que o web2py criava dentro da aplicação numa cópia antiga (`sessions`, `errors`, `cache`, `databases`, `uploads`, `private`, `cron`, `applications`, `deposit`, `site-packages`), os launchers de DEV e os demais arquivos da raiz.
+* **Recusa** (código 1, sem gravar nada) se o pacote tiver um `secrets.cfg` real, `*.pyc`, `__pycache__`, `controllers/dev.py`, `repo_fake`, outra aplicação (`/admin/`, `welcome`, `examples`), resto do web2py (`gluon/`, `web2py.py`, `anyserver.py` ou `routes.py` na raiz, ou pasta de runtime dele), link simbólico, ou `password`/`cookie_key` com valor em `.ini`, `.cfg`, `.ini.example` ou `.cfg.example` (pelo nome do arquivo). A única exceção é o valor exato `CHANGE_ME` em `instance/secrets.cfg.example`. A mensagem cita arquivo e linha, nunca o valor.
+* O `package.py` não grava bytecode (`sys.dont_write_bytecode`), para poder rodar de dentro da própria cópia que empacota (CR-021f3). Uma árvore de desenvolvimento sempre tem `__pycache__` e o `secrets.cfg` local, então o pacote é gerado de uma cópia limpa: `git archive HEAD | tar -x -C <pasta>` e `python <pasta>/applications/script_scheduling_service/scripts/package.py --source <pasta>`.
 
-**Pastas de runtime do web2py:** o web2py cria as pastas `applications/`, `deposit/`, `logs/` e `site-packages/` no diretório corrente quando é executado fora da raiz. Essas pastas nunca fazem parte da aplicação: o `.gitignore` as ignora dentro de `applications/script_scheduling_service/`, e os launchers e a documentação sempre executam a partir da raiz do web2py.
-
-**Hardening do web2py em HML e PROD:**
-* As aplicações de exemplo `admin`, `welcome` e `examples` são **removidas** do pacote implantado.
-* `routes.py` fixa `script_scheduling_service` como aplicação padrão e única.
-* `applications/script_scheduling_service/controllers/dev.py` não é implantado.
+**Sem web2py (CR-021f):** o repositório e o pacote não têm `gluon/`, `web2py.py`, `anyserver.py` nem `routes.py`, e o servidor não cria pastas de runtime (sessão em cookie assinado, erros no log da aplicação). Em HML e PROD:
+* só a aplicação `script_scheduling_service` existe, e `/` responde 303 para ela (§12.2);
+* `applications/script_scheduling_service/controllers/dev.py` não é implantado. Um DEV instalado pelo pacote sobe sem ele, e `/dev/...` responde 404.
 
 ---
 

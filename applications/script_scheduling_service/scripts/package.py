@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
 """Pacote de implantacao (README §12.2; F9.1c; CR-005; CR-003 P10). Biblioteca padrao apenas.
 
-Uso: python scripts/package.py [--source <raiz do web2py>] [--out-dir <pasta>]
+Uso: python scripts/package.py [--source <raiz do repositorio>] [--out-dir <pasta>]
 
 Gera <saida>/sss-<versao>.tar.gz (tudo sob sss-<versao>/, com um SHA256SUMS de cada arquivo) e <saida>/SHA256SUMS
 com o hash do tar.gz. A versao e sss_config.SSS_VERSION. O tar e deterministico (ordem, dono, data e modos fixos).
 
-Entram: web2py.py, anyserver.py, gluon/ (sem os testes do upstream), um routes.py gerado com a aplicacao padrao unica, os launchers de
-producao e o helper do bin/, e a aplicacao sem codigo de DEV, sem testes e sem pastas de runtime (que vao vazias).
+Entram: os launchers de producao e o helper do bin/ e a aplicacao sem codigo de DEV, sem testes e sem pastas de
+runtime. Desde o CR-021f nao ha web2py: o servidor web e o scripts/run_web.py da propria aplicacao.
 Falha (codigo 1, sem gravar nada) se o pacote tiver secrets.cfg real, *.pyc, __pycache__, controllers/dev.py,
-repo_fake, /admin/, pasta de runtime, link simbolico ou credencial que nao seja o CHANGE_ME de
-instance/secrets.cfg.example. A mensagem cita o arquivo e a linha, nunca o valor.
+repo_fake, /admin/, resto do web2py (gluon/, web2py.py, anyserver.py, routes.py ou pasta de runtime dele), link
+simbolico ou credencial que nao seja o CHANGE_ME de instance/secrets.cfg.example. A mensagem cita o arquivo e a
+linha, nunca o valor.
 """
 import argparse
 import gzip
@@ -24,41 +25,31 @@ import tarfile
 _SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 _APP_DIR = os.path.dirname(_SCRIPTS)
 sys.path.insert(0, os.path.join(_APP_DIR, "modules"))
+# Rodando de dentro da copia limpa que vai empacotar, o import abaixo gravaria modules/__pycache__ nela
+# e o proprio pacote seria recusado por bytecode (achado no ensaio do CR-021f3).
+sys.dont_write_bytecode = True
 
 import sss_config  # noqa: E402
 
 APP = "applications/script_scheduling_service"
 DEFAULT_ROOT = os.path.dirname(os.path.dirname(_APP_DIR))
-ROOT_FILES = ("web2py.py", "anyserver.py")
-ROOT_DIRS = ("gluon",)
 BIN = ("sss-web.sh", "sss-scheduler.sh", "sss-stop.sh", "sss-helper")
-# Pastas de runtime do web2py: entram vazias (o web2py as usa), nunca com conteudo.
-EMPTY_RUNTIME_DIRS = ("sessions", "errors", "cache", "databases", "uploads", "private", "cron")
-# Relativos a aplicacao: nunca entram (codigo de DEV, configuracao local, pastas que o web2py cria fora da raiz).
+# Restos do web2py (CR-021f): na raiz, recusados; na aplicacao, as pastas de runtime que ele criava.
+WEB2PY_ROOT_LEFTOVERS = ("gluon", "web2py.py", "anyserver.py", "routes.py")
+WEB2PY_APP_DIRS = ("sessions", "errors", "cache", "databases", "uploads", "private", "cron",
+                   "applications", "deposit", "site-packages", "scripts/applications",
+                   "scripts/deposit", "scripts/site-packages")
+# Relativos a aplicacao: nunca entram (codigo de DEV, configuracao local, dados e pastas de execucao).
 EXCLUDE_APP = (
     "controllers/dev.py", "views/dev", "dev", "modules/repo_fake", "instance/config.ini", "instance/web.env",
-    "log", "logs", "work", "exec", "dist", "applications", "deposit", "site-packages",
-    "scripts/applications", "scripts/deposit", "scripts/logs", "scripts/site-packages",
+    "log", "logs", "work", "exec", "dist", "scripts/logs",
     "scripts/_testenv.py", "scripts/_oracle_test_support.py", "scripts/_output_memory.py",
-) + EMPTY_RUNTIME_DIRS
+) + WEB2PY_APP_DIRS
 _RE_TEST = re.compile(r"^scripts/test_[^/]*\.py$")
-# Do gluon/ (upstream) saem os testes e o ambiente virtual de teste versionado do pydal, em qualquer nivel.
-EXCLUDE_GLUON = ("tests", "test-venv", ".pytest_cache", "ci")
 _RE_CREDENTIAL = re.compile(r"^\s*(password|cookie_key)\s*[=:]\s*(.*?)\s*$", re.IGNORECASE)
 _SECRETS_EXAMPLE = APP + "/instance/secrets.cfg.example"
 _PLACEHOLDER = "CHANGE_ME"
 MTIME = 1767225600  # 2026-01-01 00:00:00 UTC: tar reprodutivel
-
-ROUTES = '''# -*- coding: utf-8 -*-
-# Gerado por scripts/package.py (README §12.2): script_scheduling_service e a aplicacao padrao e unica.
-default_application = "script_scheduling_service"
-default_controller = "default"
-default_function = "index"
-
-routes_onerror = [
-    ("script_scheduling_service/*", "/script_scheduling_service/error/index"),
-]
-'''
 
 
 class PackageError(Exception):
@@ -102,23 +93,16 @@ def _walk(source, base, problems, filter_value=None):
 
 
 def collect(source):
-    """(arquivos relativos a origem, problemas de link/ausencia). O routes.py e gerado, nao coletado."""
-    problems = []
+    """(arquivos relativos a origem, problemas de link/ausencia/resto do web2py na raiz)."""
+    problems = [f"{name}: resto do web2py na raiz (CR-021f)" for name in WEB2PY_ROOT_LEFTOVERS
+                if os.path.lexists(os.path.join(source, name))]
     files = []
-    for name in ROOT_FILES:
-        if os.path.isfile(os.path.join(source, name)):
-            files.append(name)
-        else:
-            problems.append("%s: ausente" % name)
     for name in BIN:
         rel = "bin/" + name
         if os.path.isfile(os.path.join(source, rel)) and not os.path.islink(os.path.join(source, rel)):
             files.append(rel)
         else:
             problems.append("%s: ausente" % rel)
-    for dir_value in ROOT_DIRS:
-        files.extend(_walk(source, dir_value, problems,
-                                  filter_value=lambda rel: any(p in EXCLUDE_GLUON for p in rel.split("/"))))
     prefix = APP + "/"
     files.extend(_walk(source, APP, problems,
                               filter_value=lambda rel: _excluded_from_app(rel[len(prefix):])))
@@ -158,11 +142,11 @@ def check(files, read):
             problems.append("%s: codigo de DEV" % rel)
         if rel.startswith("applications/") and parts[1] != "script_scheduling_service":
             problems.append("%s: aplicacao fora do SSS (/admin/, welcome, examples)" % rel)
+        if parts[0] in WEB2PY_ROOT_LEFTOVERS:
+            problems.append(f"{rel}: resto do web2py (CR-021f)")
         if rel.startswith(APP + "/"):
             rest = rel[len(APP) + 1:]
-            if rest.split("/")[0] in ("applications", "deposit", "logs", "site-packages") or \
-                    rest.split("/")[:2] in (["scripts", "applications"], ["scripts", "deposit"],
-                                             ["scripts", "logs"], ["scripts", "site-packages"]):
+            if any(rest == d or rest.startswith(d + "/") for d in WEB2PY_APP_DIRS):
                 problems.append("%s: pasta de runtime do web2py" % rel)
         problems.extend(_credentials(rel, read(rel)))
     return problems
@@ -190,14 +174,13 @@ def build_package(source, output, version=None):
         raise PackageError(problems)
 
     top = "sss-%s" % version
-    content = [(rel, ler(rel)) for rel in files] + [("routes.py", ROUTES.encode("utf-8"))]
+    content = [(rel, ler(rel)) for rel in files]
     content.sort()
     sums = "".join("%s  %s\n" % (hashlib.sha256(data).hexdigest(), rel) for rel, data in content)
     dirs = set()
     for rel, _d in content:
         parts = rel.split("/")[:-1]
         dirs.update("/".join(parts[:i]) for i in range(1, len(parts) + 1))
-    dirs.update(APP + "/" + p for p in EMPTY_RUNTIME_DIRS)
 
     os.makedirs(output, exist_ok=True)
     destination = os.path.join(output, "%s.tar.gz" % top)
@@ -231,7 +214,7 @@ def build_package(source, output, version=None):
 def main(argv=None, output_text=None):
     output_text = output_text or sys.stdout
     parser = argparse.ArgumentParser(description="Pacote de implantacao do SSS (README §12.2)")
-    parser.add_argument("--source", dest="origem", default=DEFAULT_ROOT, help="raiz do web2py a empacotar (padrao: esta arvore)")
+    parser.add_argument("--source", dest="origem", default=DEFAULT_ROOT, help="raiz do repositorio a empacotar (padrao: esta arvore)")
     parser.add_argument("--out-dir", dest="saida", default=None, help="pasta de saida (padrao: <origem>/dist)")
     args = parser.parse_args(argv)
     try:
