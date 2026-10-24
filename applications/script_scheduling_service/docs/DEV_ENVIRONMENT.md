@@ -107,16 +107,18 @@ O script é somente leitura e exibirá uma tabela detalhada com o status `OK` ou
 
 ---
 
-## 4. Execução do Servidor de Desenvolvimento web2py
+## 4. Execução do Servidor de Desenvolvimento
 
-O servidor de desenvolvimento do web2py deve ser iniciado a partir da raiz do web2py (`/portaloptrib/TESHUVA/SSS/DEV/web2py`):
+O servidor web é o próprio do SSS (`scripts/run_web.py`, CR-021e); o web2py não roda mais a aplicação. Suba a partir da raiz do repositório (`/portaloptrib/TESHUVA/SSS/DEV/web2py`):
 
 ```bash
 cd /portaloptrib/TESHUVA/SSS/DEV/web2py
-~/.pyenv/versions/3.6.15/bin/python web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui
+~/.pyenv/versions/3.6.15/bin/python applications/script_scheduling_service/scripts/run_web.py --port 8000
+# só conferir configuração e segredos, sem abrir a porta:
+~/.pyenv/versions/3.6.15/bin/python applications/script_scheduling_service/scripts/run_web.py --check
 ```
 
-**A aplicação usa sempre o Oracle** do `[oracle]` do `instance/config.ini` (owner e prefixo; F7.3). Por isso, o Python precisa ter o driver Oracle (`oracledb` ou `cx_Oracle`). Nesta máquina, só o 3.6.15 tem; no `bin/start_local.sh`, use `PYTHON=~/.pyenv/versions/3.6.15/bin/python3`. O `-a '<recycle>'` desabilita o painel do web2py sem pôr senha na lista de processos (`docs/DEPLOYMENT.md` §10.1 e Apêndice A).
+**A aplicação usa sempre o Oracle** do `[oracle]` do `instance/config.ini` (owner e prefixo; F7.3). Por isso, o Python precisa ter o driver Oracle (`oracledb` ou `cx_Oracle`). Nesta máquina, o 3.6.0 e o 3.6.15 têm; no `bin/start_local.sh`, use `PYTHON=~/.pyenv/versions/3.6.15/bin/python3` (o launcher só aceita interpretador chamado `python3` ou `python3.X`, não o `python` do pyenv). Para parar, `Ctrl+C` ou `SIGTERM`: o servidor espera as requisições em andamento até `[web] socket_timeout_s`.
 
 Antes da primeira subida, crie `instance/config.ini` a partir do `config.ini.example` (`sss_env = DEV`, o `[oracle]` com owner, prefixo e DSN, `secrets_file`, `log_dir` e `work_dir` apontando para pastas suas) e o `secrets.cfg` com o `cookie_key`, dono você e modo `0600`. O passo a passo está no `docs/DEPLOYMENT.md` §7.2 e §7.1.
 
@@ -129,11 +131,13 @@ cd /portaloptrib/TESHUVA/SSS/DEV/web2py
 bin/start_local.sh               # sobe em background na porta 8000
 # ou: bin/start_local.sh 18000   # porta customizada
 # ou: bin/start_local.sh -f      # em primeiro plano no terminal
-bin/stop_local.sh               # encerra graciosamente o processo e libera a porta
+bin/stop_local.sh               # SIGTERM; SIGKILL só se não parar em 40 s (SSS_STOP_GRACE_S)
 ```
 
+O `start_local.sh` recusa subir se o `run_web.py --check` falhar, se `sss_env` não for `DEV` ou se o Python escolhido não tiver o driver Oracle.
+
 Para subir como nos servidores via launcher oficial:
-`bin/sss-web.sh "$(command -v python3)" web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui` (o launcher só aceita interpretador chamado `python3` ou `python3.X`): ele recusa root, aplica `umask 077`, exporta `TZ` a partir de `SSS_TZ` e `LANG`/`LC_ALL` a partir de `SSS_LOCALE` (padrão `C.UTF-8`) (`docs/DEPLOYMENT.md` §10.1 e Apêndice A).
+`bin/sss-web.sh "$(command -v python3)" --host 127.0.0.1 --port 8000` (o launcher só aceita interpretador chamado `python3` ou `python3.X` e só inicia o `run_web.py`): ele recusa root, aplica `umask 077`, exporta `TZ` a partir de `SSS_TZ` e `LANG`/`LC_ALL` a partir de `SSS_LOCALE` (padrão `C.UTF-8`) (`docs/DEPLOYMENT.md` §10.1 e Apêndice A).
 
 **Codificação (CR-007):** o processo web aborta se a codificação do sistema de arquivos não for UTF-8 (`sys.getfilesystemencoding()`). Subindo sem o launcher, exporte antes `LANG=C.UTF-8` e `LC_ALL=C.UTF-8` (ou outro locale UTF-8 da máquina, `locale -a`).
 

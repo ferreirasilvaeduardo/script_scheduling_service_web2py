@@ -103,10 +103,16 @@ class ParsePathTest(unittest.TestCase):
         with self.assertRaises(routing.InvalidPath):
             routing.decode_path_info(b"/app/\xff".decode("latin-1"))
 
+    def test_application_root_is_default_index(self):
+        """/<app> e /<app>/ sao default/index, como no web2py (D4); a raiz do servidor nao e rota."""
+        for path in ("/%s" % APP, "/%s/" % APP):
+            with self.subTest(path=path):
+                self.assertEqual(routing.parse_path(path, APP), routing.Route("default", "index", "html", []))
+
     def test_rejects_what_is_not_a_route(self):
         """Travessia, funcao privada, formato, extensao e caracteres de controle nao sao rota."""
         bad = (
-            "/outra_app/default/index", "/%s/" % APP, "/%s/default/_private" % APP,
+            "/outra_app/default/index", "/", "/%s//" % APP, "/%sx/" % APP, "/%s/default/_private" % APP,
             "/%s/Default/index" % APP, "/%s/default/index.php" % APP, "/%s/default/in-dex" % APP,
             "/%s/default/index/../x" % APP, "/%s/default/index/." % APP,
             "/%s/default/index/a\x00b" % APP, "/%s/default/index/a\nb" % APP,

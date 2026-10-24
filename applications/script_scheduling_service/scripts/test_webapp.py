@@ -204,5 +204,38 @@ class SecurityHooksTest(unittest.TestCase):
         self.assertIsNone(security.text(None, 3))
 
 
+class RunWebCheckTest(unittest.TestCase):
+    """scripts/run_web.py --check: confere a configuracao sem abrir a porta (CR-021e2)."""
+
+    def setUp(self):
+        import run_web  # pylint: disable=import-outside-toplevel
+        self.run_web = run_web
+        cfg = types.SimpleNamespace(app=types.SimpleNamespace(sss_env="DEV"))
+        for name, value in (("load_config", mock.Mock(return_value=cfg)),
+                            ("make_app", mock.Mock())):
+            patcher = mock.patch.object(run_web.bootstrap, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        patcher = mock.patch.object(run_web, "make_server")
+        self.make_server = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_check_prints_ok_and_never_opens_the_port(self):
+        """Configuracao valida: CONFIG_OK com o ambiente, saida 0, make_server nunca chamado."""
+        with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+            self.assertEqual(self.run_web.main(["--check", "--config", "x.ini"]), 0)
+        self.assertEqual(out.getvalue().strip(), "CONFIG_OK sss_env=DEV")
+        self.run_web.bootstrap.load_config.assert_called_once_with("x.ini")
+        self.make_server.assert_not_called()
+
+    def test_check_with_invalid_config(self):
+        """Configuracao invalida: saida 2, sem CONFIG_OK."""
+        self.run_web.bootstrap.load_config.side_effect = self.run_web.sss_config.ConfigError("x")
+        with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+            self.assertEqual(self.run_web.main(["--check"]), self.run_web.EXIT_CONFIG)
+        self.assertNotIn("CONFIG_OK", out.getvalue())
+        self.make_server.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

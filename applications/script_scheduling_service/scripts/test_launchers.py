@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Testes dos launchers POSIX bin/sss-web.sh, bin/sss-scheduler.sh e bin/sss-stop.sh (README §12.2; F9.1c).
+"""Testes dos launchers POSIX bin/sss-web.sh, bin/sss-scheduler.sh e bin/sss-stop.sh (README §12.2; F9.1c, CR-021e2).
 
 Os launchers sao copiados para uma raiz falsa do web2py; um python3 falso registra argv, diretorio e ambiente, um
 id falso simula root e um ldconfig falso diz se o Instant Client esta registrado. Confere: sintaxe, recusa de root,
-so o processo do SSS (outro comando: codigo 2), exec a partir da raiz, LD_LIBRARY_PATH so sem o Instant Client no
+so o run_web.py do SSS (web2py.py, outro script ou comando: codigo 2), exec a partir da raiz, LD_LIBRARY_PATH so sem o Instant Client no
 ldconfig, umask 077, locale e TZ, e o .stop 0600 no work_dir do config.ini.
 """
 import _testenv  # noqa: F401
@@ -18,6 +18,7 @@ import unittest
 
 BIN = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "bin"))
 LAUNCHERS = ("sss-web.sh", "sss-scheduler.sh", "sss-stop.sh")
+LOCAL_SCRIPTS = ("start_local.sh", "stop_local.sh")
 
 _FAKE_PYTHON = """#!%s
 import json, os, sys
@@ -71,6 +72,20 @@ class TestLaunchers(unittest.TestCase):
                     source = f.read()
                 self.assertNotIn('exec "$@"\n', source.split("case \"$2\" in")[0], "sem exec livre antes das checagens")
 
+    def test_scripts_locais_sem_web2py(self):
+        """start_local/stop_local (so DEV) com sintaxe valida; nenhum script do bin/ sobe o web2py (CR-021e2)."""
+        for name in LAUNCHERS + LOCAL_SCRIPTS:
+            path = os.path.join(BIN, name)
+            if name in LOCAL_SCRIPTS:
+                self.assertEqual(subprocess.run(["bash", "-n", path]).returncode, 0, name)
+            with open(path, encoding="utf-8") as f:
+                source = f.read()
+            for forbidden in ("web2py.py", "anyserver.py", " -S script_scheduling_service", "httpserver.pid"):
+                self.assertNotIn(forbidden, source, "%s: %s" % (name, forbidden))
+        for name in ("sss-web.sh", "start_local.sh", "stop_local.sh"):
+            with open(os.path.join(BIN, name), encoding="utf-8") as f:
+                self.assertIn("run_web.py", f.read(), name)
+
     def test_recusa_root(self):
         self._executable("id", "#!/bin/sh\necho 0\n")
         for name in LAUNCHERS:
@@ -79,16 +94,26 @@ class TestLaunchers(unittest.TestCase):
             self.assertIn("root", error)
 
     def test_web_tres_formas_e_recusa(self):
+        """Sempre o run_web.py (CR-021e2): sem argumentos, so opcoes, ou interpretador e opcoes."""
+        server = "applications/script_scheduling_service/scripts/run_web.py"
         code, reg, _e = self._run_loop("sss-web.sh")
-        self.assertEqual(code, 0)
-        self.assertEqual(reg["argv"], ["anyserver.py", "-s", "wsgiref", "-i", "127.0.0.1", "-p", "8000"])
-        self.assertEqual((reg["cwd"], reg["umask"]), (self.root, "0o77"), "raiz do web2py e umask 077")
-        self.assertEqual(self._run_loop("sss-web.sh", "-p", "9000")[1]["argv"], ["anyserver.py", "-p", "9000"])
-        code, reg, _e = self._run_loop("sss-web.sh", self.python, "web2py.py", "-p", "8001")
-        self.assertEqual((code, reg["argv"]), (0, ["web2py.py", "-p", "8001"]))
-        for args in (("/bin/sh", "-c", "id"), (self.python, "outro.py"), (self.python,)):
-            code, reg, _e = self._run_loop("sss-web.sh", *args)
+        self.assertEqual((code, reg["argv"]), (0, [server]))
+        self.assertEqual((reg["cwd"], reg["umask"]), (self.root, "0o77"), "raiz do repositorio e umask 077")
+        self.assertEqual(self._run_loop("sss-web.sh", "--port", "9000")[1]["argv"], [server, "--port", "9000"])
+        code, reg, _e = self._run_loop("sss-web.sh", self.python, "--port", "8001", "--check")
+        self.assertEqual((code, reg["argv"]), (0, [server, "--port", "8001", "--check"]))
+        code, reg, _e = self._run_loop("sss-web.sh", self.python)
+        self.assertEqual((code, reg["argv"]), (0, [server]))
+        # Opcao do interpretador nunca chega a ele: vem depois do script e o argparse do run_web.py recusa.
+        self.assertEqual(self._run_loop("sss-web.sh", "-c", "import os")[1]["argv"], [server, "-c", "import os"])
+
+    def test_web_recusa_web2py_e_outros_comandos(self):
+        """web2py.py, anyserver.py, outro script ou outro executavel: codigo 2, nada executado."""
+        for args in (("/bin/sh", "-c", "id"), (self.python, "outro.py"), (self.python, "web2py.py", "-p", "8000"),
+                     ("anyserver.py",), ("--port", "8000", "web2py.py")):
+            code, reg, error = self._run_loop("sss-web.sh", *args)
             self.assertEqual((code, reg), (2, None), args)
+            self.assertIn("Erro", error)
 
     def test_scheduler_so_a_linha_do_daemon(self):
         daemon = "applications/script_scheduling_service/scripts/run_scheduler.py"

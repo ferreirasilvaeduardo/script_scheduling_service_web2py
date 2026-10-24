@@ -2,7 +2,7 @@
 # ==============================================================================
 # Script Scheduling Service (SSS) - Parada do Servico Web Local
 # ==============================================================================
-# Encerra graciosamente o processo web2py do SSS local.
+# Encerra graciosamente o servidor web do SSS local (scripts/run_web.py, CR-021e2).
 #
 # Uso:
 #   bin/stop_local.sh
@@ -15,7 +15,7 @@ if [ "$(id -u)" -eq 0 ]; then
     exit 1
 fi
 
-# 2. Diretorio raiz do web2py
+# 2. Diretorio raiz do repositorio
 WEB2PY_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${WEB2PY_ROOT}"
 
@@ -35,24 +35,29 @@ if [ -f "${PID_FILE}" ]; then
     fi
 fi
 
-# Fallback: se nao encontrou no PID_FILE, procura processo web2py deste diretorio
+# Fallback: se nao encontrou no PID_FILE, procura o run_web.py deste repositorio, so entre processos
+# python (o pgrep -f casaria tambem com o proprio shell que tem o padrao na linha de comando).
 if [ -z "${PID}" ]; then
-    CANDIDATE="$(pgrep -f "web2py.py.*script_scheduling_service" || pgrep -f "${WEB2PY_ROOT}/web2py.py" || true)"
-    if [ -n "${CANDIDATE}" ]; then
-        PID="$(echo "${CANDIDATE}" | head -n 1)"
-    fi
+    for CANDIDATE in $(pgrep -f "script_scheduling_service/scripts/run_web.py" || true); do
+        case "$(ps -o comm= -p "${CANDIDATE}" 2>/dev/null || true)" in
+            python*)
+                PID="${CANDIDATE}"
+                break
+                ;;
+        esac
+    done
 fi
 
 if [ -z "${PID}" ]; then
     echo "O SSS nao esta rodando."
-    rm -f "${PID_FILE}" "${WEB2PY_ROOT}/httpserver.pid"
+    rm -f "${PID_FILE}"
     exit 0
 fi
 
-# 4. Validar se o processo realmente e o web2py antes de enviar sinal
+# 4. Validar se o processo realmente e o servidor web do SSS antes de enviar sinal
 CMD_LINE="$(ps -p "${PID}" -o args= 2>/dev/null || true)"
-if ! echo "${CMD_LINE}" | grep -qE "web2py|anyserver"; then
-    echo "Aviso: O processo PID ${PID} nao parece ser o web2py (comando: ${CMD_LINE})." >&2
+if ! echo "${CMD_LINE}" | grep -q "run_web.py"; then
+    echo "Aviso: O processo PID ${PID} nao parece ser o servidor web do SSS (comando: ${CMD_LINE})." >&2
     echo "Por seguranca, o processo nao sera encerrado automaticamente." >&2
     rm -f "${PID_FILE}"
     exit 1
@@ -60,11 +65,13 @@ fi
 
 echo "Encerrando o SSS (PID: ${PID})..."
 
-# 5. Encerramento gracioso com SIGINT (Rocket do web2py trata SIGINT)
-kill -INT "${PID}" 2>/dev/null || true
+# 5. Encerramento gracioso com SIGTERM: o servidor para de aceitar conexoes e espera as requisicoes
+#    em andamento ate [web] socket_timeout_s (padrao 30 s, maximo 300).
+GRACE_S="${SSS_STOP_GRACE_S:-40}"
+kill -TERM "${PID}" 2>/dev/null || true
 
 STOPPED=0
-for i in $(seq 1 10); do
+for i in $(seq 1 "${GRACE_S}"); do
     if ! kill -0 "${PID}" 2>/dev/null; then
         STOPPED=1
         break
@@ -72,27 +79,14 @@ for i in $(seq 1 10); do
     sleep 1
 done
 
-# 6. Escalar para SIGTERM se nao encerrou apos 10s
+# 6. Escalar para SIGKILL se ainda estiver rodando
 if [ "${STOPPED}" -eq 0 ]; then
-    echo "Processo nao encerrou com SIGINT. Enviando SIGTERM..."
-    kill -TERM "${PID}" 2>/dev/null || true
-    for i in $(seq 1 5); do
-        if ! kill -0 "${PID}" 2>/dev/null; then
-            STOPPED=1
-            break
-        fi
-        sleep 1
-    done
-fi
-
-# 7. Escalar para SIGKILL se ainda estiver rodando
-if [ "${STOPPED}" -eq 0 ]; then
-    echo "Processo nao respondeu a SIGTERM. Forcando encerramento (SIGKILL)..."
+    echo "Processo nao encerrou em ${GRACE_S}s apos SIGTERM. Forcando encerramento (SIGKILL)..."
     kill -KILL "${PID}" 2>/dev/null || true
     sleep 1
 fi
 
-rm -f "${PID_FILE}" "${WEB2PY_ROOT}/httpserver.pid"
+rm -f "${PID_FILE}"
 
 if ! kill -0 "${PID}" 2>/dev/null; then
     if [ -f "${APP_DIR}/logs/server.out" ]; then

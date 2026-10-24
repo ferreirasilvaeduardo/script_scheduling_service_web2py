@@ -141,6 +141,16 @@ class AppTest(unittest.TestCase):
         started, body = self.call("/%s/default/index" % APP, method="HEAD")
         self.assertEqual((started.status, body), ("200 OK", b""))
 
+    def test_server_and_application_root(self):
+        """Raiz do servidor: 303 para a aplicacao; raiz da aplicacao: default/index (D4, como no web2py)."""
+        started, _body = self.call("/")
+        self.assertEqual((started.status, started.header("Location")), ("303 See Other", "/%s/" % APP))
+        for path in ("/%s" % APP, "/%s/" % APP):
+            with self.subTest(path=path):
+                started, body = self.call(path)
+                self.assertEqual((started.status, body.decode("utf-8")), ("200 OK", "<p>início</p>"))
+        self.assertEqual(self.call("/outra_app/")[0].status, "404 Not Found")
+
     def test_not_found_and_invalid_paths(self):
         """Sem action, rota invalida e UTF-8 invalido: 404 com a pagina minima."""
         for path, latin1 in (("/%s/default/nada" % APP, False), ("/%s/default/_x" % APP, False),

@@ -18,6 +18,8 @@ from typing import (Any, Iterable, List, Mapping, NamedTuple, Optional, Tuple,
 
 STATIC = "static"
 DEFAULT_EXTENSION = "html"
+DEFAULT_CONTROLLER = "default"
+DEFAULT_FUNCTION = "index"
 EXTENSIONS = ("html", "json", "load")
 
 _RE_NAME = re.compile(r"[a-z][a-z0-9_]*")
@@ -96,20 +98,21 @@ def decode_path_info(path_info: str) -> str:
 def parse_path(path: str, application: str) -> Union[Route, StaticRoute]:
     """Rota (controller, funcao, extensao, args) ou estatico a partir do PATH_INFO decodificado.
 
-    Funcao que comeca com '_' nunca e rota (AGENTS §5.1). Levanta InvalidPath para todo o resto.
+    Funcao que comeca com '_' nunca e rota (AGENTS §5.1). A raiz da aplicacao (``/<app>`` ou
+    ``/<app>/``) e ``default/index``, como no web2py (D4). Levanta InvalidPath para todo o resto.
     """
+    if path in (f"/{application}", f"/{application}/"):
+        return Route(DEFAULT_CONTROLLER, DEFAULT_FUNCTION, DEFAULT_EXTENSION, [])
     prefix = f"/{application}/"
     if not path.startswith(prefix) or "//" in path:
         raise InvalidPath("fora da aplicacao")
     parts = path[len(prefix):].split("/")
     if parts and parts[-1] == "":
         parts.pop()
-    if not parts:
-        raise InvalidPath("sem controller")
     if parts[0] == STATIC:
         return StaticRoute("/".join(_segment(item) for item in parts[1:]))
     controller = parts[0]
-    function, _dot, extension = (parts[1] if len(parts) > 1 else "index").partition(".")
+    function, _dot, extension = (parts[1] if len(parts) > 1 else DEFAULT_FUNCTION).partition(".")
     extension = extension or DEFAULT_EXTENSION
     if not _RE_NAME.fullmatch(controller) or not _RE_NAME.fullmatch(function):
         raise InvalidPath("controller ou funcao fora do formato")

@@ -15,7 +15,7 @@ O README.md é a especificação. Quando este guia e o README divergirem, vale o
 ### 1.1 Componentes
 
 ```text
- usuários ── HTTPS ──> proxy reverso ──> nó web (web2py, bin/sss-web.sh) ──┐
+ usuários ── HTTPS ──> proxy reverso ──> nó web (run_web.py, bin/sss-web.sh) ┐
                                                                            ├──> Oracle (owner do esquema, tabelas tbsss_*)
  cron ──> scripts/purge.py ──┐                                             │
  monitoramento ──> health.py ─┼──> agente (bin/sss-scheduler.sh) ───────────┘
@@ -317,24 +317,23 @@ sss ALL=(ssshml) NOPASSWD: /opt/sss/bin/sss-helper
 
 ## 10. Subida e parada
 
-Os launchers recusam root, aplicam `umask 077`, exportam `TZ` (de `SSS_TZ`), `LANG` e `LC_ALL` (de `SSS_LOCALE`, padrão `C.UTF-8`) e `LD_LIBRARY_PATH` só sem o Instant Client no `ldconfig` (de `SSS_IC_DIR`). Também trocam para a raiz do web2py e fazem `exec` do processo Python. O Python vem de `PYTHON` (padrão `python3`).
+Os launchers recusam root, aplicam `umask 077`, exportam `TZ` (de `SSS_TZ`), `LANG` e `LC_ALL` (de `SSS_LOCALE`, padrão `C.UTF-8`) e `LD_LIBRARY_PATH` só sem o Instant Client no `ldconfig` (de `SSS_IC_DIR`). Também trocam para a raiz do repositório e fazem `exec` do processo Python. O Python vem de `PYTHON` (padrão `python3`).
 
-### 10.1 Nó web [ensaiado]
+### 10.1 Nó web [ensaiado em DEV]
 
 ```bash
 # como sss
 cd /opt/sss/web2py
 export PYTHON=/usr/bin/python3 SSS_TZ=America/Sao_Paulo
-bin/sss-web.sh "$PYTHON" web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui
+bin/sss-web.sh "$PYTHON" --check                              # CONFIG_OK sss_env=<ambiente>; nao abre a porta
+bin/sss-web.sh "$PYTHON" --host 127.0.0.1 --port 8000
 ```
 
-* `web2py.py` usa o servidor Rocket, que atende várias requisições ao mesmo tempo num processo só. É a forma recomendada.
-* `-a '<recycle>'` não grava senha do painel administrativo (que nem vem no pacote) e não expõe senha no `ps`. **Não** use `-a 'senha'`.
-* `-i 127.0.0.1`: só local, atrás do proxy reverso ou do túnel (§10.4). **Nunca** use `0.0.0.0`.
-* Na primeira subida aparece `New installation error: unable to create welcome.w2p file` com um traceback. É **esperado e inofensivo**: o web2py tenta empacotar a aplicação `welcome`, que não vem no pacote.
-* O web2py cria na raiz `httpserver.log`, `httpserver.pid`, `parameters_<porta>.py`, `cron.master`, `deposit/`, `logs/` e `site-packages/`. São do próprio web2py e ficam fora do `log_dir` (§14.4).
-* Para parar: `SIGTERM` ou `SIGINT` (Ctrl+C) ao processo Python. O próprio web2py apaga o `httpserver.pid` e se encerra com `SIGKILL` (`gluon/main.py`, comportamento do web2py): a saída é o código 137 ("killed, status 9"), o que é **normal** [ensaiado]. As requisições em andamento são cortadas.
-* Forma alternativa, de uma thread só (diagnóstico): `bin/sss-web.sh -s wsgiref -i 127.0.0.1 -p 8000` (ou `bin/sss-web.sh` sem argumentos).
+* O servidor é o próprio do SSS (`scripts/run_web.py`, CR-021e), sem web2py: até `[web] max_threads` requisições ao mesmo tempo (padrão 16) e `[web] socket_timeout_s` por conexão (padrão 30 s). O `sss-web.sh` só inicia o `run_web.py`; `web2py.py` e `anyserver.py` são recusados (código 2).
+* `--host 127.0.0.1`: só local, atrás do proxy reverso ou do túnel (§10.4). **Nunca** use `0.0.0.0`.
+* Não cria arquivos na raiz (`httpserver.log`, `httpserver.pid`, `parameters_<porta>.py`, `cron.master` e afins eram do web2py). Requisições, erros e a subida vão para o log da aplicação (`sss_web_<PID>.log`, §14.1); a saída padrão só recebe o que acontecer antes de o log abrir.
+* Saída: 2 com configuração ou segredos inválidos (o motivo vai para o log), 3 com a porta em uso ou sem permissão.
+* Para parar: `SIGTERM` ou `SIGINT` (Ctrl+C) ao processo Python. O servidor para de aceitar conexões, espera as requisições em andamento até `socket_timeout_s` e sai com código 0.
 
 ### 10.2 Agente [ensaiado em DEV]
 
@@ -390,11 +389,10 @@ Group=sss
 WorkingDirectory=/opt/sss/web2py
 Environment=PYTHON=/usr/bin/python3
 Environment=SSS_TZ=America/Sao_Paulo
-ExecStart=/opt/sss/web2py/bin/sss-web.sh /usr/bin/python3 web2py.py -a <recycle> -i 127.0.0.1 -p 8000 --no_gui
-# o web2py se encerra com SIGKILL ao receber SIGTERM (§10.1): parada normal, nao falha
-SuccessExitStatus=SIGKILL 137
+ExecStart=/opt/sss/web2py/bin/sss-web.sh /usr/bin/python3 --host 127.0.0.1 --port 8000
 KillMode=mixed
-TimeoutStopSec=30
+# maior que [web] socket_timeout_s: o servidor espera as requisicoes em andamento (§10.1)
+TimeoutStopSec=40
 Restart=on-failure
 NoNewPrivileges=yes
 ProtectSystem=strict
@@ -435,7 +433,7 @@ PrivateTmp=yes
 WantedBy=multi-user.target
 ```
 
-* No `ExecStart` do web, `<recycle>` vai sem aspas: o `systemd` não passa pelo shell.
+* `TimeoutStopSec` do web precisa ser maior que `[web] socket_timeout_s`; se mudar o timeout, ajuste os dois.
 * `KillMode=mixed` manda o `SIGTERM` só ao processo principal e, se o prazo acabar, o `SIGKILL` a todo o grupo. O agente encerra os próprios scripts antes disso.
 * **Atenção no agente:** `NoNewPrivileges=yes` impede o `sudo` e, com ele, o helper. Por isso fica fora da unit do agente, ao contrário do pedido original do F9.1. Valide com a segurança da empresa.
 * `ReadWritePaths` precisa incluir também `output_dir`, `input_dir` e `script_work_dir` (se usados) e as pastas `exec_work_dir`, que ficam em `/var/lib/sss` neste layout.
@@ -550,7 +548,7 @@ WARNING: nenhum PURGE auditado nos ultimos 2 dias (README §11.3)
 |---|---|---|
 | Aplicação (web, agente, purge, `init_db`) | `log_dir/internal/app/AAAA/MM/DD/HH/MI/<nome>_<PID>.log`, com `<nome>` = `sss_web`, `sss_scheduler`, `purge` ou `init_db` | `0640` |
 | Execução de cada ticket | `log_dir/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log` (ambiente e script em minúsculo, sem acento) | `0600` |
-| Servidor web do web2py | `W/httpserver.log` | do web2py |
+| Saída padrão do nó web | a escolhida por quem sobe (`journald` no `systemd`, `logs/server.out` no `start_local.sh`) | — |
 
 * O arquivo nasce na pasta do minuto em que o processo sobe e troca por tamanho (`app_log_max_bytes`) para a pasta do minuto atual. Com o mesmo nome no mesmo minuto, ganha o sufixo `_<n>`.
 * **Retenção:** o próprio processo apaga as pastas de dia do log da aplicação com mais de `app_log_retention_days` dias. O `purge.py` apaga as pastas de minuto dos logs de execução com mais de `local_log_retention_days` dias, menos as de tickets ainda `RUNNING`.
@@ -573,19 +571,9 @@ grep -h "Subida abortada" $(find /var/log/sss/internal/app -name '*.log')
 
 Toda finalização sem execução (pré-validação, falha ao iniciar, cancelamento antes do início) grava no log do ticket uma linha `[SSS] <evento>: <código> (agente <id>)`, visível na tela do ticket. Exemplo: `[SSS] pre-validacao recusada: GROUP_OTHER_WRITABLE (agente srv-linux-prod-01)`.
 
-### 14.4 `httpserver.log`
+### 14.4 Saída padrão do nó web
 
-Ele cresce sem limite. Coloque no `logrotate`:
-
-```text
-/opt/sss/web2py/httpserver.log {
-    weekly
-    rotate 8
-    compress
-    copytruncate
-    missingok
-}
-```
+Desde o CR-021e o servidor web não grava `httpserver.log`: requisições e erros vão para o log da aplicação, que tem rotação e retenção próprias (§14.1). A saída padrão só recebe o que acontecer antes de o log abrir (ex.: Python sem o pacote da aplicação) e fica pequena. Se a subida não for pelo `systemd`, redirecione-a para um arquivo (como o `start_local.sh` faz com `logs/server.out`). Um `httpserver.log` que tenha sobrado da versão com web2py pode ser apagado.
 
 ---
 
@@ -760,7 +748,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 - [ ] `log_dir` em partição própria, com alerta de uso (§4.3)
 - [ ] Senha inicial do seed trocada (§5.3)
 - [ ] `cron` do purge e `health.py` no monitoramento (§12, §13)
-- [ ] `httpserver.log` no `logrotate` (§14.4)
+- [ ] Saída padrão do nó web redirecionada (`journald` ou arquivo, §14.4)
 - [ ] Backup do esquema e dos arquivos de configuração (§17)
 
 ---
@@ -842,6 +830,7 @@ tail -f /portaloptrib/TESHUVA/SSS/logs/sss_web.log
 ```
 
 * O `start_sss.sh` carrega `~/.sss/web.env` dentro do `screen` e chama `bin/sss-web.sh /usr/local/bin/python3.7 web2py.py -a '<recycle>' -i 127.0.0.1 -p 18000 --no_gui`. A senha não aparece na lista de processos.
+* **A partir do pacote sem web2py (CR-021f)**, a chamada passa a ser `bin/sss-web.sh /usr/local/bin/python3.7 --host 127.0.0.1 --port 18000` (§10.1): o launcher novo recusa `web2py.py`. Troque o `start_sss.sh` junto com o pacote, nunca antes.
 * **Sem início automático:** se o servidor reiniciar, rode o `start_sss.sh` de novo. Reiniciar o SSS restaura os dados de demonstração.
 * Trocar a senha de demonstração: edite `~/.sss/web.env` e reinicie (`stop_sss.sh` + `start_sss.sh`).
 
@@ -1151,6 +1140,7 @@ $PY -c 'import sys; sys.path.insert(0, "applications/script_scheduling_service/m
 grep -n "web2py\|sss_web.log\|LANG\|LC_ALL\|sss-web.sh" $SSS/start_sss.sh $SSS/stop_sss.sh
 # Se o start_sss.sh não passar pelo bin/sss-web.sh nem exportar LANG/LC_ALL UTF-8, a subida é recusada
 # (CR-007, R-17): acrescente "export LANG=C.UTF-8 LC_ALL=C.UTF-8" antes do comando do web2py.
+# Pacote sem web2py (CR-021f): o comando passa a ser "bin/sss-web.sh <python3> --host 127.0.0.1 --port 18000".
 
 # 6. Trocar a versão (parada de ~1 minuto)
 $SSS/stop_sss.sh

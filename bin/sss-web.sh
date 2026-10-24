@@ -1,5 +1,5 @@
 #!/bin/bash
-# Launcher do no web do SSS (README §12.2): inicia somente o processo Python do web2py.
+# Launcher do no web do SSS (README §12.2): inicia somente o servidor web proprio (scripts/run_web.py).
 set -euo pipefail
 
 # 1. Recusar execucao como root
@@ -34,42 +34,40 @@ fi
 export LANG="${SSS_LOCALE:-C.UTF-8}"
 export LC_ALL="${SSS_LOCALE:-C.UTF-8}"
 
-# 4. Sempre a partir da raiz do web2py (README §12.2, "Pastas de runtime do web2py")
+# 4. Sempre a partir da raiz do repositorio (README §12.2)
 WEB2PY_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${WEB2PY_ROOT}"
 
 PYTHON="${PYTHON:-python3}"
+SERVER="applications/script_scheduling_service/scripts/run_web.py"
 
-# 5. Executar SOMENTE o processo Python do SSS (README §12.2): nunca um comando arbitrario.
-#    Formas aceitas:
-#      sss-web.sh                                   -> anyserver.py padrao
-#      sss-web.sh -opcoes...                        -> anyserver.py com as opcoes
-#      sss-web.sh <python3[.x]> web2py.py|anyserver.py [args...]
-if [ "$#" -eq 0 ]; then
-    exec "${PYTHON}" anyserver.py -s wsgiref -i 127.0.0.1 -p 8000
+# 5. Executar SOMENTE o servidor web do SSS (README §12.2): nunca um comando arbitrario.
+#    Formas aceitas (as opcoes sao as do run_web.py: --config, --host, --port, --check):
+#      sss-web.sh                         -> run_web.py em 127.0.0.1:8000
+#      sss-web.sh --opcoes...             -> run_web.py com as opcoes
+#      sss-web.sh <python3[.x]> [--opcoes...]  -> o mesmo, com o interpretador escolhido
+if [ "$#" -gt 0 ]; then
+    case "$1" in
+        -*) ;;
+        *)
+            case "$(basename "$1")" in
+                python3|python3.[0-9]|python3.[0-9][0-9]) ;;
+                *)
+                    echo "Erro: o primeiro argumento deve ser um interpretador python3 ou uma opcao (recebido: $(basename "$1"))." >&2
+                    exit 2
+                    ;;
+            esac
+            PYTHON="$1"
+            shift
+            ;;
+    esac
 fi
-case "$1" in
-    -*)
-        exec "${PYTHON}" anyserver.py "$@"
-        ;;
-esac
-INTERPRETER="$1"
-case "$(basename "${INTERPRETER}")" in
-    python3|python3.[0-9]|python3.[0-9][0-9]) ;;
-    *)
-        echo "Erro: o primeiro argumento deve ser um interpretador python3 (recebido: $(basename "${INTERPRETER}"))." >&2
-        exit 2
-        ;;
-esac
-if [ "$#" -lt 2 ]; then
-    echo "Erro: informe web2py.py ou anyserver.py depois do interpretador." >&2
-    exit 2
-fi
-case "$2" in
-    web2py.py|anyserver.py) ;;
-    *)
-        echo "Erro: so web2py.py ou anyserver.py podem ser iniciados pelo launcher." >&2
-        exit 2
-        ;;
-esac
-exec "$@"
+for arg in "$@"; do
+    case "${arg}" in
+        *.py)
+            echo "Erro: o launcher so inicia o ${SERVER}; ${arg} nao e aceito (CR-021e2)." >&2
+            exit 2
+            ;;
+    esac
+done
+exec "${PYTHON}" "${SERVER}" "$@"

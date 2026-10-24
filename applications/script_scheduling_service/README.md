@@ -296,10 +296,10 @@ Os itens marcados com `[F7.x]`, `[F8.x]` ou `[F9.x]` ainda não existem: são cr
 
 ```text
 bin/
-  sss-web.sh                  # ambiente do Instant Client/TZ e subida do WSGI (§12.2)
+  sss-web.sh                  # ambiente do Instant Client/TZ e subida do servidor web: só run_web.py (§12.2)
   sss-scheduler.sh            # ambiente e subida do daemon: só run_scheduler.py [--config] (§12.2)
   sss-stop.sh                 # [F9.1] parada controlada do daemon pelo arquivo .stop (§8.11, §12.2)
-  start_local.sh, stop_local.sh  # somente DEV; fora do pacote
+  start_local.sh, stop_local.sh  # somente DEV, pelo sss-web.sh; fora do pacote
   sss-helper                  # [F8.0] helper de execução com o usuário de execução (run/term/kill/clean/stop-ticket/pack/clean-output/purge-output), instalado pelo root em /opt/sss/bin (§8.0, CR-007)
 applications/script_scheduling_service/
   controllers/                # default.py (login), tickets.py, logs.py, agendamentos.py, admin_*.py, auditoria.py, dev.py (somente DEV)
@@ -2901,13 +2901,15 @@ Chaves que saíram ou mudaram de nome são recusadas na subida, nunca ignoradas:
 * aplicar `umask 077`;
 * recusar a execução como root;
 * fazer `exec` do processo Python, para que os sinais cheguem diretamente a ele;
-* iniciar **somente** o processo Python do SSS. O `sss-web.sh` aceita três formas: sem argumentos (servidor padrão), só opções (`-...`, repassadas ao `anyserver.py`) ou `<python3[.x]> web2py.py|anyserver.py [args]`. Qualquer outro comando é recusado com código 2; repassar um comando arbitrário (`exec "$@"` sem essas checagens) é proibido.
+* iniciar **somente** o processo Python do SSS. O `sss-web.sh` faz sempre `exec <python> applications/script_scheduling_service/scripts/run_web.py [opções]` (CR-021e2) e aceita três formas: sem argumentos (`127.0.0.1:8000`), só opções (`--config`, `--host`, `--port`, `--check`, repassadas ao `run_web.py`, cujo `argparse` recusa as demais) ou `<python3[.x]> [opções]`. Outro executável, `web2py.py`, `anyserver.py` ou qualquer outro `.py` é recusado com código 2; repassar um comando arbitrário (`exec "$@"` sem essas checagens) é proibido.
 
-* executar a partir da raiz do web2py, qualquer que seja o diretório corrente de quem o chama.
+* executar a partir da raiz do repositório, qualquer que seja o diretório corrente de quem o chama.
 
 O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <arquivo>`, e faz `exec <python> applications/script_scheduling_service/scripts/run_scheduler.py [--config <arquivo>]`. Qualquer outro argumento é recusado com código 2. O Python vem da variável `PYTHON` (padrão `python3`) nos dois launchers.
 
 `bin/sss-stop.sh [--config <config.ini>]` (padrão: `instance/config.ini` da aplicação) cria o arquivo `work_dir/sss-<agent_id>.stop` com `0600`, para a parada controlada sem sinal (§8.11), e imprime o caminho. Recusa root. Lê só `[agent] agent_id` e `work_dir` com a biblioteca padrão (sem importar a aplicação), com a mesma regra de `agent_id` do §12.1 e o `work_dir` absoluto e existente; senão, sai com código 2. O daemon remove o arquivo ao parar.
+
+**Servidor web:** `python scripts/run_web.py [--config <config.ini>] [--host 127.0.0.1] [--port 8000] [--check]` (CR-021e). Atende em `127.0.0.1` (os usuários chegam pelo proxy reverso HTTPS ou por túnel), com até `[web] max_threads` requisições ao mesmo tempo e `[web] socket_timeout_s` por conexão. `SIGTERM` ou `SIGINT` param de aceitar conexões e esperam as requisições em andamento até `socket_timeout_s`. O endereço `/` responde 303 para `/script_scheduling_service/`, que é a tela inicial (sem sessão, o login), como no web2py. `--check` só confere configuração, segredos e montagem da aplicação, sem abrir a porta, e imprime `CONFIG_OK sss_env=<ambiente>`. Saída: 0 na parada normal ou no `--check` bem-sucedido, 2 configuração ou segredos inválidos, 3 endereço indisponível.
 
 **Daemon do agente:** `python scripts/run_scheduler.py [--config <config.ini>]` (F8.3). Sem `--config`, lê `instance/config.ini`, como a aplicação; com ele, o arquivo informado, o que permite **mais de um agente no mesmo servidor**, cada um com o seu `config.ini` (`agent_id`, `work_dir`, `log_dir` e `output_dir` próprios; a trava de instância é `work_dir/sss-<agent_id>.lock`). Os tempos do `critical_config` precisam ser iguais em todos os agentes (§8.12). Saída: 0 na parada normal, 10 a 19 na falha de um passo da subida, 20 em `REGISTRO_PERDIDO`. O teste com dois agentes reais contra o Oracle (`scripts/test_agents_concurrency.py`, F8.3d) usa essa forma.
 
@@ -2939,7 +2941,7 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
   * **Retenção:** o próprio processo apaga as pastas `log_dir/internal/app/AAAA/MM/DD` com data anterior a `app_log_retention_days` dias, na subida e a cada troca de arquivo, e depois as pastas de mês e de ano que ficarem vazias. Só entram pastas com o formato exato de data; o resto é ignorado. O `purge.py` nunca toca em `log_dir/internal/`.
   * **Falhas do próprio log** (remoção na retenção, `chmod` ou fechamento do arquivo anterior) não interrompem o processo: viram uma linha WARN no próprio arquivo, com `[action=RETENCAO]` ou `[action=LOG]`, antes do registro seguinte.
   * O `log_dir` é criado com `0750` se não existir. Pastas criadas com `0750` (todas as que o processo cria: `internal/`, `app/`, ano, mês, dia, hora e minuto) e arquivos com `0640`, com `chmod` explícito, porque o launcher aplica `umask 077`.
-  * O log de acesso do próprio web2py (`httpserver.log`, na raiz do web2py) não segue este padrão; ele é do servidor embutido e fica fora do `log_dir`.
+  * O servidor web próprio (CR-021e) não grava log de acesso fora do `log_dir`: requisições e erros vão para o log da aplicação `sss_web`, neste padrão; o antigo `httpserver.log` do web2py não existe mais.
   * **Logs de execução dos scripts** ficam em `log_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log` (§8.4, passo 3). Nenhum script pode ter a pasta de log `app` (§8.5), regra mantida do CR-005, e nenhum ambiente pode gerar a pasta `internal` (CR-009).
   * Formato: `%(asctime)s %(levelname)s [pid=%(process)d] [agent=<id>] [ticket=<id|->] [action=<CLAIM|SPAWN|HB|...>] %(message)s`, com data ISO local e offset.
 * **Níveis:**

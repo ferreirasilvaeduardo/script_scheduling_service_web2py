@@ -4,7 +4,7 @@
 Uso (da pasta tools/, Python 3 com python-docx):
     SSS_EVIDENCE_DATE=AAAAMMDD [SSS_EVIDENCE_ROUND=n] python3 build_evidence_docx.py [pasta_evidencias] [saida.docx]
 Rodadas conhecidas em RODADAS (20261022: CR-016; 20261023: CR-017; 20261023_r2: CR-018; 20261023_r3: CR-019
-e CR-020). Padrao: a rodada de
+e CR-020; 20261024_r2: CR-021a-c; 20261024_r4: CR-021e). Padrao: a rodada de
 20261023, ../evidence_<data>[_r<n>] -> ../../../docs/homologation/SSS_Homologation_Evidence_<AAAA-MM-DD>[_r<n>].docx
 """
 import io
@@ -318,11 +318,46 @@ RODADAS["20261024_r2"] = {
               u"CT-01 a troca válida repetiu essa senha.",
     "registros": RODADAS["20261023_r3"]["registros"].replace("tela_r3", "tela_r2"),
 }
+RODADAS["20261024_r4"] = {
+    "commit": u"ee3b3a8 (CR-021e1: aplicação no servidor web próprio, sem web2py em execução) mais o CR-021e2 "
+              u"(launchers, start_local/stop_local e a correção da raiz do endereço), no mesmo commit deste documento",
+    "adaptacao": RODADAS["20261024_r2"]["adaptacao"],
+    "ressalva": RODADAS["20261024_r2"]["ressalva"],
+    "defeitos": [
+        (u"Endereço raiz com 404",
+         u"modules/web/routing.py e modules/web/app.py",
+         u"Na rodada 3 deste dia (evidence_20261024_r3), o primeiro passo do CT-01 falhou: o servidor novo devolvia "
+         u"404 em / e em /script_scheduling_service/, onde o web2py levava ao login. A faixa do ambiente também não "
+         u"apareceu, porque a página era a de erro (281 OK, 2 falhas, todas no CT-01).",
+         u"Corrigido: / responde 303 para /script_scheduling_service/, e a raiz da aplicação é default/index, como "
+         u"no web2py (D4); testes novos em test_web_routing e test_web_app. Rodada 4: 283 OK, 0 falha."),
+    ],
+    "observacoes": [
+        u"Quarta rodada do dia, a primeira com o servidor web próprio (scripts/run_web.py, CR-021e): o web2py não "
+        u"roda mais a aplicação. A rodada 3 parou no endereço raiz (ver Defeitos); esta repetiu todos os casos com "
+        u"a marca %s." % STAMP,
+        u"Telas, textos e comportamento iguais aos do web2py: antes desta rodada, o HTML de 37 páginas foi comparado "
+        u"com o do web2py para admin, op.prod e consulta (111 de 111 iguais, a única diferença documentada é a "
+        u"vitrine de DEV).",
+        u"Servidor web subido e parado pelo bin/start_local.sh e bin/stop_local.sh, que agora usam o "
+        u"bin/sss-web.sh com o run_web.py (parada por SIGTERM, esperando as requisições em andamento).",
+        u"Cancelamento no agente real: o log não ganha a linha \"processo encerrado por cancelamento (SIGTERM)\", "
+        u"que só existia na simulação do FAKE; o motivo aparece no Detalhe técnico (CANCELLED / CANCEL_USER).",
+    ],
+    "agente": u"Agente iniciado com bin/sss-scheduler.sh (Python 3.6.15 com o driver Oracle) e o config padrão do DEV "
+              u"(instance/config.ini, agent_id srv-linux-local-01, interpretadores PYTHON3, BASH e SH); servidor web "
+              u"próprio pelo bin/start_local.sh na porta 18000; agente parado pelo bin/sss-stop.sh.",
+    "senhas": RODADAS["20261024_r2"]["senhas"],
+    "servidor_web": u"servidor web próprio (scripts/run_web.py)",
+    "registros": RODADAS["20261023_r3"]["registros"].replace("tela_r3", "tela_r4"),
+}
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]
 DEFEITOS = RODADA["defeitos"]
 OBSERVACOES = RODADA["observacoes"]
+# Servidor web da rodada: web2py ate o CR-021e1; depois, o servidor proprio (scripts/run_web.py).
+SERVIDOR_WEB = RODADA.get("servidor_web", u"web2py")
 
 def local(iso):
     """ISO em UTC (registro do roteiro) -> 'dd/mm/aaaa hh:mm:ss' no horario desta maquina (o mesmo das telas)."""
@@ -446,7 +481,8 @@ def main():
         u"resultado esperado e capturou as telas.")
     kv_table(doc, [
         (u"Data da execução", u"%s a %s (horário de Brasília, o mesmo das telas)" % (local(inicio), local(fim)[11:])),
-        (u"Ambiente", u"DEV — web2py (Python 3.6.15) em http://127.0.0.1:18000, banco Oracle 19c (driver thick)"),
+        (u"Ambiente", u"DEV — %s (Python 3.6.15) em http://127.0.0.1:18000, banco Oracle 19c (driver thick)"
+         % SERVIDOR_WEB),
         (u"Agente", u"srv-linux-local-01 (Linux), ambientes CLONE2, CLONE1, CLONE6, CLONE7 e GFPREPROD; "
                     u"interpretadores PYTHON3, BASH e SH"),
         (u"Base", u"Manual de Homologação — UI Freeze 2.5 (17/10/2026), adaptado aos dados do DEV"),
@@ -613,7 +649,7 @@ def resumo_md(res, ids, inicio, fim, total_ok, total_chk, total_fig):
     linhas = [
         u"# Homologação no DEV real: Registro de Evidências", u"",
         u"**Data:** %s a %s (horário de Brasília)" % (local(inicio), local(fim)[11:]), u"",
-        u"**Ambiente:** DEV, banco Oracle, web2py em `127.0.0.1:18000`, agente `srv-linux-local-01`",
+        u"**Ambiente:** DEV, banco Oracle, %s em `127.0.0.1:18000`, agente `srv-linux-local-01`" % SERVIDOR_WEB,
         u"**Resultado geral:** %d de %d verificações OK; %d figuras." % (total_ok, total_chk, total_fig), u"",
         u"Documento completo, com as telas: `%s` (mesma pasta). "
         u"Gerado por `dev/homologation/tools/capture_evidence.js` e `build_evidence_docx.py`; o resultado bruto "

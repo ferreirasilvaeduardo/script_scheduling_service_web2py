@@ -87,6 +87,9 @@ class Application:  # pylint: disable=too-many-instance-attributes,too-few-publi
         """Ponto de entrada WSGI."""
         try:
             path = decode_path_info(str(environ.get("PATH_INFO") or "/"))
+            if path == "/":
+                # Raiz do servidor: vai para o inicio da aplicacao, como no web2py (D4).
+                return self._plain(303, start_response, {"Location": self._cookie_path})
             route = parse_path(path, self.settings.application)
         except InvalidPath:
             return self._plain(404, start_response)
@@ -111,7 +114,7 @@ class Application:  # pylint: disable=too-many-instance-attributes,too-few-publi
 
     def _plain(self, status: int, start_response: StartResponse,
                headers: Optional[Mapping[str, str]] = None) -> List[bytes]:
-        """Erro fora de uma action (rota invalida, estatico): pagina minima."""
+        """Resposta fora de uma action (rota invalida, estatico ou raiz do servidor)."""
         body = default_error_page(status, None).encode("utf-8")
         response = Response()
         response.headers.update(headers or {})

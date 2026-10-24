@@ -649,7 +649,8 @@ class TestConfig(unittest.TestCase):
     def test_launcher_web_recusa_comando_arbitrario(self):
         """CR-003 P10 (README §12.2): so o processo Python do SSS; nada de exec de comando arbitrario."""
         web_sh = os.path.join(self.web2py_root, "bin", "sss-web.sh")
-        for args in (["/bin/sh", "-c", "id"], ["/usr/bin/python3", "outro.py"], ["python3"]):
+        # CR-021e2: so o run_web.py; web2py.py e qualquer outro script sao recusados.
+        for args in (["/bin/sh", "-c", "id"], ["/usr/bin/python3", "outro.py"], ["python3", "web2py.py"]):
             res = subprocess.run(["bash", web_sh] + args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.assertEqual(res.returncode, 2, args)
 

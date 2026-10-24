@@ -2,7 +2,7 @@
 # ==============================================================================
 # Script Scheduling Service (SSS) - Inicializador de Ambiente Local (DEV)
 # ==============================================================================
-# Inicia o servidor web2py em modo local (DEV) com o Oracle do [oracle] do config.ini
+# Inicia o servidor web do SSS (scripts/run_web.py, CR-021e2) em modo local (DEV) com o Oracle do [oracle] do config.ini
 # (owner e table_prefix). O Python precisa ter o driver Oracle: PYTHON=<python> bin/...
 #
 # Uso:
@@ -22,7 +22,7 @@ fi
 # 2. Mascara restritiva
 umask 077
 
-# 3. Diretorio raiz do web2py
+# 3. Diretorio raiz do repositorio
 WEB2PY_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${WEB2PY_ROOT}"
 
@@ -68,7 +68,7 @@ done
 if [ -f "${PID_FILE}" ]; then
     OLD_PID="$(cat "${PID_FILE}" 2>/dev/null || true)"
     if [ -n "${OLD_PID}" ] && kill -0 "${OLD_PID}" 2>/dev/null; then
-        if ps -p "${OLD_PID}" -o args= 2>/dev/null | grep -q "web2py"; then
+        if ps -p "${OLD_PID}" -o args= 2>/dev/null | grep -q "run_web.py"; then
             echo "O SSS ja esta rodando (PID: ${OLD_PID})."
             echo "URL: http://127.0.0.1:${PORT}/script_scheduling_service"
             exit 0
@@ -99,27 +99,21 @@ if ! command -v "${PYTHON}" >/dev/null 2>&1; then
     exit 1
 fi
 
-# 7. Validacao rapida da configuracao (diagnostico antes de subir)
-DIAG_ERRORS="$("${PYTHON}" web2py.py -S script_scheduling_service -M -R <(echo '
-try:
-    import app_context
-    cfg = app_context.require_config()
-    if cfg.app.sss_env != "DEV":
-        print("ERRO: sss_env deve ser DEV para ambiente local.")
-    else:
+# 7. Validacao rapida da configuracao (diagnostico antes de subir): run_web.py --check confere
+#    config.ini e segredos sem abrir a porta; aqui ainda se exige DEV e o driver Oracle neste Python.
+SERVER="${APP_DIR}/scripts/run_web.py"
+DIAG_ERRORS="$("${PYTHON}" "${SERVER}" --check 2>&1 || true)"
+if echo "${DIAG_ERRORS}" | grep -q "^CONFIG_OK"; then
+    if ! echo "${DIAG_ERRORS}" | grep -q "^CONFIG_OK sss_env=DEV$"; then
+        DIAG_ERRORS="ERRO: sss_env deve ser DEV para ambiente local."
+    elif ! "${PYTHON}" -c "import oracledb" >/dev/null 2>&1 && ! "${PYTHON}" -c "import cx_Oracle" >/dev/null 2>&1; then
         # A aplicacao usa sempre o Oracle: o Python escolhido precisa ter oracledb ou cx_Oracle.
-        try:
-            import oracledb  # noqa: F401
-            print("CONFIG_OK")
-        except ImportError:
-            try:
-                import cx_Oracle  # noqa: F401
-                print("CONFIG_OK")
-            except ImportError:
-                print("ERRO: driver Oracle (oracledb ou cx_Oracle) ausente neste Python; use PYTHON=<python com driver>")
-except Exception as e:
-    print("ERRO: %s" % e)
-') 2>&1 || true)"
+        DIAG_ERRORS="ERRO: driver Oracle (oracledb ou cx_Oracle) ausente neste Python; use PYTHON=<python com driver>"
+    fi
+else
+    DIAG_ERRORS="ERRO: configuracao ou segredos invalidos (detalhes no log do SSS).
+${DIAG_ERRORS}"
+fi
 
 if ! echo "${DIAG_ERRORS}" | grep -q "CONFIG_OK"; then
     echo "Erro ao validar configuracao do SSS:" >&2
@@ -154,11 +148,11 @@ if [ "${FOREGROUND}" -eq 1 ]; then
     echo "Iniciando SSS em primeiro plano na porta ${PORT}..."
     echo "Acesse: http://127.0.0.1:${PORT}/script_scheduling_service"
     echo "Pressione Ctrl+C para parar."
-    exec "${LAUNCHER}" "${PYTHON}" web2py.py -a '<recycle>' -i 127.0.0.1 -p "${PORT}" --no_gui
+    exec "${LAUNCHER}" "${PYTHON}" --host 127.0.0.1 --port "${PORT}"
 else
     echo "Iniciando SSS em segundo plano na porta ${PORT}..."
     echo "=== Servidor iniciado em $(date '+%Y-%m-%d %H:%M:%S') (Porta: ${PORT}) ===" >> "${SERVER_OUT}"
-    nohup "${LAUNCHER}" "${PYTHON}" web2py.py -a '<recycle>' -i 127.0.0.1 -p "${PORT}" --no_gui >> "${SERVER_OUT}" 2>&1 < /dev/null &
+    nohup "${LAUNCHER}" "${PYTHON}" --host 127.0.0.1 --port "${PORT}" >> "${SERVER_OUT}" 2>&1 < /dev/null &
     SRV_PID=$!
     echo "${SRV_PID}" > "${PID_FILE}"
     chmod 600 "${PID_FILE}"
@@ -170,7 +164,7 @@ else
     for i in $(seq 1 20); do
         if ! kill -0 "${SRV_PID}" 2>/dev/null; then
             echo
-            echo "Erro: O servidor web2py parou logo apos a inicializacao." >&2
+            echo "Erro: O servidor web do SSS parou logo apos a inicializacao." >&2
             echo "Ultimas mensagens do log (${SERVER_OUT}):" >&2
             tail -n 25 "${SERVER_OUT}" >&2
             rm -f "${PID_FILE}"
