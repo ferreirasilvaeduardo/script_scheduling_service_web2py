@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Primitivas de seguranca do SSS (README §4.2): hash de senha, CSRF, Origin e cookies.
+"""Primitivas de seguranca do SSS (README §4.2): hash de senha, CSRF, Origin, next e IP do cliente.
 
 Modulo puro: nao importa gluon (AGENTS §7.1).
 """
 import hashlib
 import hmac
-import http.cookies
 import ipaddress
 import re
 import secrets
@@ -21,7 +20,6 @@ _RE_HASH = re.compile(r"pbkdf2_sha256\$([0-9]{1,7})\$([0-9a-f]{32})\$([0-9a-f]{6
 # Host (nome DNS/IPv4 ou IPv6 entre colchetes) e porta opcional; userinfo ('@') e rejeitado.
 _RE_NETLOC = re.compile(r"([a-z0-9.\-]+|\[[0-9a-f:.]+\])(?::([0-9]{1,5}))?")
 _DEFAULT_PORTS = {"http": 80, "https": 443}
-_RE_COOKIE_ASCII = re.compile(r"[\x21-\x7e]*")
 _RE_NEXT = re.compile(r"[\x21-\x7e]{1,512}")
 APP_PREFIX = "/script_scheduling_service/"
 IP_MAX = 45
@@ -159,49 +157,6 @@ def is_session_expired(last_access, now, timeout_s):
     if not isinstance(last_access, (int, float)) or isinstance(last_access, bool):
         return True
     return (now - last_access) > timeout_s
-
-
-class SecureCookies(http.cookies.SimpleCookie):
-    """SimpleCookie que marca HttpOnly (e Secure, se pedido) em todo cookie atribuido.
-
-    SameSite nao e tratado aqui: no Python 3.6 o Morsel rejeita o atributo (README §4.2).
-    """
-
-    def __init__(self, secure=True, input=None):
-        self.secure = secure
-        super(SecureCookies, self).__init__(input)
-
-    def _protect(self, morsel):
-        morsel["httponly"] = True
-        if self.secure:
-            morsel["secure"] = True
-
-    def __setitem__(self, key, value):
-        # secure_dumps do web2py devolve bytes; sem decodificar, o cookie sairia como "b'...'".
-        if isinstance(value, bytes):
-            value = value.decode("ascii")
-        super(SecureCookies, self).__setitem__(key, value)
-        self._protect(dict.__getitem__(self, key))
-
-    def adopt(self, cookies):
-        """Copia os morsels de outro SimpleCookie aplicando as protecoes."""
-        for key, morsel in cookies.items():
-            dict.__setitem__(self, key, morsel)
-            self._protect(morsel)
-
-
-def adapt_session_cookie(cookies, name):
-    """Converte para bytes o valor do cookie de sessao recebido, formato que o secure_loads exige.
-
-    Valor fora de ASCII imprimivel e descartado (sessao vazia) em vez de gerar erro.
-    """
-    morsel = cookies.get(name)
-    if morsel is None or not isinstance(morsel.value, str):
-        return
-    if _RE_COOKIE_ASCII.fullmatch(morsel.value):
-        morsel.set(morsel.key, morsel.value.encode("ascii"), morsel.coded_value)
-    else:
-        del cookies[name]
 
 
 def validate_next(value, prefix=APP_PREFIX):

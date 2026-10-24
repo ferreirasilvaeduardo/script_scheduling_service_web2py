@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Contexto do processo (CR-021c): app_context no lugar do gluon.current.
 
-Confere o comportamento do modulo e a regra de arquitetura: nenhum arquivo de modules/ importa gluon,
-nem dentro de funcao (AGENTS §5.2).
+Confere o comportamento do modulo e as regras de arquitetura: nenhum arquivo de modules/ importa
+gluon, nem dentro de funcao (AGENTS §5.2); desde o CR-021f, nenhum .py da aplicacao (scripts,
+testes e dev/ inclusive) nem dos launchers.
 """
 import ast
 import io
@@ -76,6 +77,24 @@ class ModulesWithoutGluonTest(unittest.TestCase):
                         source = handle.read()
                     if "gluon" in _imported_roots(source):
                         offenders.append(os.path.relpath(path, MODULES_DIR))
+        self.assertEqual(sorted(offenders), [])
+
+    def test_no_python_file_imports_gluon(self):
+        """CR-021f: sem web2py no repositorio; nenhum .py da aplicacao nem do bin/ importa gluon."""
+        offenders = []
+        roots = [(APP_DIR, ("docs",)), (os.path.join(REPO_ROOT, "bin"), ())]
+        for top, skipped in roots:
+            for base, dirs, files in os.walk(top):
+                dirs[:] = [d for d in dirs
+                           if not (base == top and d in skipped) and d != "__pycache__"]
+                for name in files:
+                    path = os.path.join(base, name)
+                    if not (name.endswith(".py") or name == "sss-helper"):
+                        continue
+                    with io.open(path, encoding="utf-8") as handle:
+                        source = handle.read()
+                    if "gluon" in _imported_roots(source):
+                        offenders.append(os.path.relpath(path, REPO_ROOT))
         self.assertEqual(sorted(offenders), [])
 
     def test_detector_finds_import_inside_function(self):

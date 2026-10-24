@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Renderizacao real dos quadros e da paginacao do CR-007 R5."""
+"""Renderizacao real dos quadros e da paginacao do CR-007 R5.
+
+Usa o motor de templates proprio (CR-021f1), no lugar do gluon.template.
+"""
 import _testenv  # noqa: F401
 
 import datetime
@@ -7,10 +10,12 @@ import os
 import unittest
 from urllib.parse import urlencode
 
-from gluon.template import render
 import ui_helpers
+from web.response import Response
+from web.template import Templates
 
 _VIEWS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "views")
+_TEMPLATES = Templates(_VIEWS)
 
 
 def _url(*args, **kwargs):
@@ -18,8 +23,8 @@ def _url(*args, **kwargs):
 
 
 def _render(view, **context):
-    context.update(URL=_url, ui_helpers=ui_helpers)
-    return render(filename=os.path.join(_VIEWS, view), path=_VIEWS, context=context)
+    context.update(URL=_url, ui_helpers=ui_helpers, response=Response())
+    return _TEMPLATES.render(view, context)
 
 
 class TestViewsCR007(unittest.TestCase):

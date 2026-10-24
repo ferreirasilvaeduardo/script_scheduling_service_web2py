@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Testes de security.py (F2.1): hash de senha, politica, CSRF, Origin, sessao e cookies."""
+"""Testes de security.py (F2.1): hash de senha, politica, CSRF, Origin, sessao, next e IP."""
 import _testenv  # noqa: F401
 
 import os
@@ -198,75 +198,6 @@ class TestSessionExpired(unittest.TestCase):
         self.assertTrue(security.is_session_expired(None, 1000.0, 1800))
         self.assertTrue(security.is_session_expired("1000", 1000.0, 1800))
         self.assertTrue(security.is_session_expired(True, 1000.0, 1800))
-
-
-class TestCookiesSeguros(unittest.TestCase):
-
-    def test_httponly_e_secure(self):
-        c = security.SecureCookies(secure=True)
-        c["session_data_x"] = "valor"
-        c["session_data_x"]["path"] = "/"
-        output = c["session_data_x"].OutputString()
-        self.assertIn("HttpOnly", output)
-        self.assertIn("Secure", output)
-
-    def test_sem_secure(self):
-        c = security.SecureCookies(secure=False)
-        c["a"] = "1"
-        output = c["a"].OutputString()
-        self.assertIn("HttpOnly", output)
-        self.assertNotIn("Secure", output)
-
-    def test_reatribuicao_mantem_atributos(self):
-        c = security.SecureCookies(secure=True)
-        c["a"] = "1"
-        c.pop("a")
-        c["a"] = "2"
-        self.assertIn("HttpOnly", c["a"].OutputString())
-
-    def test_valor_bytes_decodificado(self):
-        c = security.SecureCookies(secure=False)
-        c["s"] = b"hmac256:abc:ZGF0YQ=="
-        self.assertEqual(c["s"].value, "hmac256:abc:ZGF0YQ==")
-        self.assertNotIn("b'", c["s"].OutputString())
-
-    def test_adaptar_cookie_sessao(self):
-        import http.cookies
-        r = http.cookies.SimpleCookie()
-        r.load('s="hmac256:abc:ZGF0YQ=="; outro=1')
-        security.adapt_session_cookie(r, "s")
-        self.assertEqual(r["s"].value, b"hmac256:abc:ZGF0YQ==")
-        security.adapt_session_cookie(r, "ausente")
-        self.assertEqual(r["outro"].value, "1")
-
-    def test_adaptar_cookie_sessao_nao_ascii_descartado(self):
-        import http.cookies
-        r = http.cookies.SimpleCookie()
-        r["s"] = u"ção"
-        security.adapt_session_cookie(r, "s")
-        self.assertNotIn("s", r)
-
-    def test_roundtrip_secure_dumps(self):
-        """Regressao: cookie de sessao do web2py precisa sobreviver a ida e volta no Python 3."""
-        import http.cookies
-        from gluon.utils import secure_dumps, secure_loads
-        key = "k" * 32
-        c = security.SecureCookies(secure=True)
-        c["session_data_x"] = secure_dumps({"csrf_token": "t"}, key)
-        r = http.cookies.SimpleCookie()
-        r.load(c["session_data_x"].OutputString().split(";")[0])
-        security.adapt_session_cookie(r, "session_data_x")
-        self.assertEqual(secure_loads(r["session_data_x"].value, key, safe_unpickle=False), {"csrf_token": "t"})
-
-    def test_adotar(self):
-        import http.cookies
-        source = http.cookies.SimpleCookie()
-        source["b"] = "2"
-        c = security.SecureCookies(secure=True)
-        c.adopt(source)
-        output = c["b"].OutputString()
-        self.assertIn("HttpOnly", output)
-        self.assertIn("Secure", output)
 
 
 class TestValidateNext(unittest.TestCase):

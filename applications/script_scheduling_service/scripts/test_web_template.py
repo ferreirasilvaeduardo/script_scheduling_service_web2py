@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Motor de templates (CR-021d2, D2): paridade com o web2py, seguranca, erros e cache.
 
-A paridade usa o gluon enquanto ele existir (sai no CR-021f): o codigo gerado de cada view real e
-comparado com o do yatl, e a saida de templates sinteticos com a do render do web2py.
+O codigo gerado foi conferido view a view contra o yatl do web2py enquanto ele existia (CR-021d2 a
+021e); a saida do template sintetico abaixo e a do render do web2py, gravada antes de o gluon sair do
+repositorio (CR-021f1). Toda view real precisa compilar.
 """
 import glob
 import io
@@ -12,7 +13,7 @@ import tempfile
 import time
 import unittest
 
-import _testenv  # noqa: F401 - ajusta sys.path (modules/ e a raiz do web2py)
+import _testenv  # noqa: F401 - ajusta sys.path (modules/ e a raiz da aplicacao)
 from web import template
 from web.markup import Markup, escape
 from web.response import Response
@@ -20,42 +21,22 @@ from web.response import Response
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VIEWS_DIR = os.path.join(APP_DIR, "views")
 
-# Unica diferenca aceita: o yatl descarta o include de um arquivo que o layout tambem inclui
-# (registra o include como bloco e o trata como sobrescrito). Na vitrine de DEV, os alertas de
-# demonstracao nao apareciam; o motor novo os inclui, como a view pretende.
-KNOWN_DIFFERENCES = {"dev/components.html": "components/alert.html"}
-
-
-def _read(path):
-    with io.open(path, encoding="utf-8") as handle:
-        return handle.read()
-
 
 def _views():
     for path in sorted(glob.glob(os.path.join(VIEWS_DIR, "**", "*.*"), recursive=True)):
-        yield os.path.relpath(path, VIEWS_DIR).replace(os.sep, "/"), _read(path)
+        yield os.path.relpath(path, VIEWS_DIR).replace(os.sep, "/")
 
 
-class GeneratedCodeParityTest(unittest.TestCase):
-    """O codigo gerado de cada view real e igual ao do yatl do web2py."""
+class RealViewsTest(unittest.TestCase):
+    """Toda view real gera codigo que compila (include, extend e pass conferidos)."""
 
-    def test_all_views(self):
-        """Todas as views iguais; a vitrine de DEV so com o include que o yatl descartava."""
-        from gluon.packages.yatl.yatl.template import TemplateParser
+    def test_all_views_compile(self):
+        """Nenhuma view com include/extend invalido, pass faltando ou erro de sintaxe."""
+        templates = template.Templates(VIEWS_DIR)
         checked = 0
-        for name, text in _views():
+        for name in _views():
             with self.subTest(view=name):
-                ours, _deps = template.generate(text, name, VIEWS_DIR)
-                theirs = str(TemplateParser(text, path=VIEWS_DIR + "/"))
-                if name in KNOWN_DIFFERENCES:
-                    included = KNOWN_DIFFERENCES[name]
-                    code = template.reindent(template._flatten(template._parse(  # noqa: SLF001
-                        _read(os.path.join(VIEWS_DIR, included)), repr(included),
-                        template._Loader(VIEWS_DIR))))
-                    block = "\n".join("    " + line for line in code.split("\n")) + "\n"
-                    self.assertIn(block, ours)
-                    ours = ours.replace(block, "", 1)
-                self.assertEqual(ours, theirs)
+                templates._compiled(name)  # noqa: SLF001 pylint: disable=protected-access
                 checked += 1
         self.assertGreaterEqual(checked, 40, "as views foram encontradas")
 
@@ -107,20 +88,45 @@ SYNTHETIC = {
 }
 
 
+# Saida do gluon.template.render do web2py para o SYNTHETIC com o contexto do teste.
+WEB2PY_OUTPUT = (
+    "<html>\n"
+    "<title>A &amp; B &lt;i&gt;</title>\n"
+    "\n"
+    "\n"
+    "<ul>\n"
+    "\n"
+    "  <li>&lt;x&gt;</li>\n"
+    "\n"
+    "\n"
+    "  <li>y&#x27;z</li>\n"
+    "\n"
+    "\n"
+    "</ul>\n"
+    "grande\n"
+    "\n"
+    "<p>- OK 6</p>\n"
+    "<p>|1.5|True|&quot;aspas&quot; &amp; &#x27;apostrofo&#x27;</p>\n"
+    "div\n"
+    "linha 1\n"
+    "linha 2\n"
+    "\n"
+    "<footer>3</footer>\n"
+    "</html>\n"
+)
+
+
 class OutputParityTest(_ViewsCase):
     """Saida igual a do render do web2py, byte a byte, num template que usa cada construcao."""
 
     def test_synthetic_page(self):
         """extend, include em laco, if/elif/else, def/return, for, try/except, escape e texto."""
-        from gluon.template import render
         for name, text in SYNTHETIC.items():
             self.write(name, text)
         context = dict(title="A & B <i>", n=3, items=["<x>", "y'z"], none=None, num=1.5, flag=True,
                        text='"aspas" & \'apostrofo\'', zero=0)
         ours = self.render("page.html", **dict(context))
-        theirs = render(filename=os.path.join(self.views, "page.html"), path=self.views,
-                        context=dict(context))
-        self.assertEqual(ours, theirs)
+        self.assertEqual(ours, WEB2PY_OUTPUT)
         self.assertIn("&lt;x&gt;", ours)
         self.assertIn("<footer>3</footer>", ours)
 

@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """Camada web da aplicacao (CR-021e): URL, registro e rotas expostas, hooks de seguranca e csrf_field.
 
-A paridade do URL usa o gluon enquanto ele existir (sai no CR-021f).
+As saidas esperadas do URL e do campo CSRF sao as do web2py, gravadas antes de o gluon sair do
+repositorio (CR-021f1).
 """
 import io
 import logging
@@ -11,7 +12,7 @@ import types
 import unittest
 from unittest import mock
 
-import _testenv  # noqa: F401 - ajusta sys.path (modules/ e a raiz do web2py)
+import _testenv  # noqa: F401 - ajusta sys.path (modules/ e a raiz da aplicacao)
 
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if APP_DIR not in sys.path:
@@ -38,34 +39,31 @@ def _context(controller="tickets", function="index", extension="html", method="G
     return Context(Request(env, route, 1 << 20), Response(), Session(), route)
 
 
-def _gluon_url(request_extension, *args, **kwargs):
-    from gluon import current
-    from gluon.globals import Request as GluonRequest
-    from gluon.html import URL
-    request = GluonRequest({})
-    request.application, request.controller, request.function = context.APPLICATION, "tickets", "index"
-    request.extension = request_extension
-    current.request = request
-    return str(URL(*args, **kwargs))
-
-
 class UrlTest(unittest.TestCase):
     """URL da aplicacao: mesmas regras do web2py, Markup seguro."""
 
+    # Saida do gluon.html.URL do web2py numa requisicao tickets/index; {ext} e '' em html e '.load'
+    # numa requisicao .load (estatico e extension=False nunca levam extensao).
     CASES = (
-        (("static", "img/icons.svg"), {}), (("dev", "components"), {}), (("detail",), {}),
-        ((), dict(c="default", f="index")), ((), dict(c="tickets", f="detail", args=[17])),
-        ((), dict(c="tickets", f="index", vars={"page": 2, "status": ["A", "B"]}, anchor="x")),
-        ((), dict(c="tickets", f="detail", args=[1], extension=False)),
+        (("static", "img/icons.svg"), {}, "/script_scheduling_service/static/img/icons.svg"),
+        (("dev", "components"), {}, "/script_scheduling_service/dev/components{ext}"),
+        (("detail",), {}, "/script_scheduling_service/tickets/detail{ext}"),
+        ((), dict(c="default", f="index"), "/script_scheduling_service/default/index{ext}"),
+        ((), dict(c="tickets", f="detail", args=[17]), "/script_scheduling_service/tickets/detail{ext}/17"),
+        ((), dict(c="tickets", f="index", vars={"page": 2, "status": ["A", "B"]}, anchor="x"),
+         "/script_scheduling_service/tickets/index{ext}?page=2&status=A&status=B#x"),
+        ((), dict(c="tickets", f="detail", args=[1], extension=False),
+         "/script_scheduling_service/tickets/detail/1"),
     )
 
-    def test_parity_with_gluon(self):
+    def test_parity_with_web2py(self):
         """Posicionais, keywords e extensao herdada da requisicao, iguais ao gluon.html.URL."""
         for extension in ("html", "load"):
             context.bind(_context(extension=extension))
-            for args, kwargs in self.CASES:
+            suffix = "" if extension == "html" else "." + extension
+            for args, kwargs, expected in self.CASES:
                 with self.subTest(extension=extension, args=args, kwargs=kwargs):
-                    self.assertEqual(context.URL(*args, **kwargs), _gluon_url(extension, *args, **kwargs))
+                    self.assertEqual(context.URL(*args, **kwargs), expected.format(ext=suffix))
 
     def test_markup_is_safe_with_hostile_input(self):
         """Markup (como o SafeString do web2py), sem nada que exija escape nas partes variaveis."""
@@ -183,13 +181,13 @@ class SecurityHooksTest(unittest.TestCase):
 
     def test_csrf_field_like_web2py(self):
         """Mesmo HTML do INPUT do web2py, com o token escapado, e como Markup."""
-        from gluon.html import INPUT
         ctx = _context()
         context.bind(ctx)
         ctx.session.csrf_token = 'a"b<c'
         field = security.csrf_field()
         self.assertIsInstance(field, Markup)
-        self.assertEqual(field, INPUT(_type="hidden", _name="_csrf", _value='a"b<c').xml())
+        # Saida do INPUT(_type="hidden", _name="_csrf", _value='a"b<c').xml() do web2py.
+        self.assertEqual(field, '<input name="_csrf" type="hidden" value="a&quot;b&lt;c" />')
 
     def test_guards_without_login(self):
         """Sem usuario: require_login manda ao login (303) com next; text pega o ultimo valor."""
