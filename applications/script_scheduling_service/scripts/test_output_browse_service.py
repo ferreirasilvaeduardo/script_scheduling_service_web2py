@@ -26,7 +26,6 @@ SESSIONS = {
 }
 # Seed FAKE: o ticket 17 (carga_diaria em PRODUCAO, do op.prod) tem a unica saida AVAILABLE.
 TID, SID, ENV = 17, 1, "PRODUCAO"
-DAY = "2026-10-22"
 
 
 class _Base(unittest.TestCase):
@@ -51,6 +50,9 @@ class _Base(unittest.TestCase):
                                         repo_factory.get("catalog"), self.audit, 5, 900, log)
         self.ctx = dict((login, auth.revalidate(session)) for login, session in SESSIONS.items())
         self.svc = OutputBrowseService(self.tickets, repo_factory.get("catalog"), self.audit, log)
+        # O seed monta as datas a partir de store.now(): o dia da saida vem do started_at do ticket (README §5.9).
+        self.day_start = self.tickets.get(TID)["started_at"].replace(hour=0, minute=0, second=0, microsecond=0)
+        self.day = self.day_start.strftime("%Y-%m-%d")
 
     def _audits(self):
         return [a for a in self.audit.list(page=1, size=100)["items"] if a["action"] == browse.AUDIT_ACTION]
@@ -65,13 +67,14 @@ class TestNavegacao(_Base):
         self.assertEqual([(s["script_id"], s["script_name"], s["count"]) for s in scripts], [(SID, "carga_diaria", 1)])
         days = self.svc.days(self.ctx["op.prod"], ENV, str(SID))
         self.assertEqual(days["script_name"], "carga_diaria")
-        self.assertEqual([d["day"] for d in days["days"]], [datetime.datetime(2026, 10, 22)])
-        result = self.svc.tickets(self.ctx["op.prod"], ENV, str(SID), DAY)
+        self.assertEqual([d["day"] for d in days["days"]], [self.day_start])
+        result = self.svc.tickets(self.ctx["op.prod"], ENV, str(SID), self.day)
         self.assertEqual(([t["id"] for t in result["items"]], result["total"]), ([TID], 1))
         self.assertEqual(result["items"][0]["file_count"], 2)
         self.assertEqual(result["items"][0]["requested_by"], u"você", "solicitante mascarado sem VIEW_AUDIT")
-        self.assertEqual(self.svc.tickets(self.ctx["admin"], ENV, SID, DAY)["items"][0]["requested_by"], "op.prod")
-        self.assertEqual(self.svc.tickets(self.ctx["op.prod"], ENV, SID, "2026-10-21")["total"], 0, "outro dia")
+        self.assertEqual(self.svc.tickets(self.ctx["admin"], ENV, SID, self.day)["items"][0]["requested_by"], "op.prod")
+        other_day = (self.day_start - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+        self.assertEqual(self.svc.tickets(self.ctx["op.prod"], ENV, SID, other_day)["total"], 0, "outro dia")
 
     def test_so_saidas_disponiveis(self):
         # Os tickets 29 (EXCEEDED) e 30 (FAILED) do seed nao entram em nenhum nivel.
@@ -83,7 +86,7 @@ class TestNavegacao(_Base):
         self.assertEqual(self.svc.environments(self.ctx["op.hml"]), [])
         for call in (lambda: self.svc.scripts(self.ctx["op.hml"], ENV),
                      lambda: self.svc.days(self.ctx["op.hml"], ENV, SID),
-                     lambda: self.svc.tickets(self.ctx["op.hml"], ENV, SID, DAY),
+                     lambda: self.svc.tickets(self.ctx["op.hml"], ENV, SID, self.day),
                      lambda: self.svc.files(self.ctx["op.hml"], TID),
                      lambda: self.svc.zip_download(self.ctx["op.hml"], IP, TID),
                      lambda: self.svc.file_download(self.ctx["op.hml"], IP, TID, "resumo.txt")):
