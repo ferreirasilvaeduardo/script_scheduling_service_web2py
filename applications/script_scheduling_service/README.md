@@ -315,7 +315,7 @@ applications/script_scheduling_service/
     repo_errors.py            # exceções de contrato (§2.5)
     repo_factory.py           # seleção do backend FAKE/ORACLE (banco real via repo_oracle)
     app_context.py            # [CR-021c] configuração do processo (no lugar do gluon.current)
-    web/                      # [CR-021d1] núcleo web próprio (WSGI, request, multipart, response, sessão assinada, rotas); ligado no CR-021e
+    web/                      # [CR-021d1/d2] núcleo web próprio (WSGI, request, multipart, response, sessão assinada, rotas, templates); ligado no CR-021e
     repo_*.py                 # contratos abstratos por agregado (sem SQL)
     repo_fake/                # implementação em memória + seed (somente DEV)
     repo_oracle/              # implementação SQL Oracle 11gR2 (único local com SQL, §2.7) [F7.3]

@@ -15,7 +15,7 @@ PACKAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 MAX_COLUMNS = 99
 # Biblioteca padrao usada pelo pacote; modulo novo entra aqui de proposito (nunca dependencia de fora).
 STDLIB = {
-    "base64", "binascii", "datetime", "decimal", "email", "errno", "hashlib", "hmac", "html", "http",
+    "ast", "base64", "binascii", "datetime", "decimal", "email", "errno", "hashlib", "hmac", "html", "http",
     "io", "json", "logging", "mimetypes", "os", "posixpath", "re", "select", "signal", "socket",
     "socketserver", "stat", "sys", "tempfile", "threading", "time", "traceback", "typing", "urllib",
     "uuid", "wsgiref",

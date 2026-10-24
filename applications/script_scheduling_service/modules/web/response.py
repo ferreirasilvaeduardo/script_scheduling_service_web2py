@@ -12,6 +12,7 @@ import json
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
+from .markup import escape as escape_html
 from .storage import Storage
 
 _RE_COOKIE_NAME = re.compile(r"[A-Za-z0-9_.-]+")
@@ -75,6 +76,17 @@ class Response(Storage):
         self.status = 200
         self.headers: Dict[str, str] = {}
         self.cookies: Dict[str, str] = {}
+        self.view_parts: List[str] = []
+
+    def write(self, data: Any, escape: bool = True) -> None:
+        """Escrita do codigo gerado das views (``response.write``, como no web2py)."""
+        self.view_parts.append(escape_html(data) if escape else str(data))
+
+    def take_view_output(self) -> str:
+        """O HTML que a view escreveu, esvaziando o buffer."""
+        text = "".join(self.view_parts)
+        self.view_parts = []
+        return text
 
     def json(self, data: Any) -> str:
         """Serializa ``data`` e marca o Content-Type (se a action ainda nao o marcou)."""

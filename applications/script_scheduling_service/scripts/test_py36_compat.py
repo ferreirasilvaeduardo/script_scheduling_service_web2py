@@ -20,6 +20,12 @@ TOKEN_EXCEPTION_FILES = {
     "test_py36_compat.py",
 }
 
+# Excecao por caminho (relativo a aplicacao) e so para o token indicado: o motor de templates e o
+# unico lugar com exec, so para o codigo gerado de arquivos de views/ (CR-021, D2).
+TOKEN_EXCEPTIONS_BY_PATH = {
+    "modules/web/template.py": {"uso de 'exec()' proibido"},
+}
+
 # Tokens e chamadas proibidos em Python 3.6 / SSS (AGENTS §2.1, §3.2, §3.4)
 FORBIDDEN_PATTERNS = [
     # Python 3.7+
@@ -227,12 +233,15 @@ def check_forbidden_tokens_in_file(path):
     name_base = os.path.basename(path)
     if name_base in TOKEN_EXCEPTION_FILES:
         return []
+    app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    relative = os.path.relpath(os.path.abspath(path), app_dir).replace(os.sep, "/")
+    allowed = TOKEN_EXCEPTIONS_BY_PATH.get(relative, set())
 
     violations = []
     with open(path, "r", encoding="utf-8", errors="replace") as f:
         for num_line, line in enumerate(f, start=1):
             for regex, desc in _COMPILED_PATTERNS:
-                if regex.search(line):
+                if regex.search(line) and desc not in allowed:
                     violations.append((path, num_line, desc, line.strip()))
     return violations
 
@@ -374,6 +383,26 @@ class TestPy36Compat(unittest.TestCase):
             0,
             "URLs externas encontradas em ativos frontend hermeticos:\n{}".format(msg),
         )
+
+    def test_exec_and_compile_only_in_template_engine(self):
+        """CR-021 D2: exec() so no modules/web/template.py; compile() tambem, salvo nos testes.
+
+        Teste pode usar compile() so para conferir sintaxe (ex.: test_sss_helper), sem executar.
+        """
+        found = []
+        for path in find_python_files(self.app_dir, self.web2py_root):
+            if os.path.basename(path) in TOKEN_EXCEPTION_FILES:
+                continue
+            relative = os.path.relpath(path, self.app_dir).replace(os.sep, "/")
+            is_test = relative.startswith("scripts/test_")
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                tree = ast.parse(f.read())
+            for node in ast.walk(tree):
+                name = getattr(getattr(node, "func", None), "id", None) if isinstance(node, ast.Call) else None
+                if name == "exec" or (name == "compile" and not is_test):
+                    found.append((relative, name))
+        self.assertEqual(sorted(found), [("modules/web/template.py", "compile"),
+                                         ("modules/web/template.py", "exec")])
 
     def test_negativo_detector_tokens_proibidos(self):
         """Verifica se detector de tokens proibidos identifica casos sinteticos."""

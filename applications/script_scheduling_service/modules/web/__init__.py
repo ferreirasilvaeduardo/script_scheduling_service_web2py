@@ -7,6 +7,7 @@ globais.
 """
 from .app import Application, Context, Settings
 from .errors import HTTP, redirect
+from .markup import Markup, escape
 from .multipart import Limits, UploadedFile
 from .request import Request
 from .response import Response, json_for_html
@@ -15,10 +16,11 @@ from .routing import (InvalidPath, Route, StaticRoute, decode_path_info,
 from .server import make_server, serve
 from .session import Session, SessionCodec, connect
 from .storage import Storage
+from .template import TemplateError, Templates
 
 __all__ = [
-    "Application", "Context", "HTTP", "InvalidPath", "Limits", "Request", "Response", "Route",
-    "Session", "SessionCodec", "Settings", "StaticRoute", "Storage", "UploadedFile", "connect",
-    "decode_path_info", "json_for_html", "make_server", "parse_path", "redirect", "serve",
-    "url",
+    "Application", "Context", "HTTP", "InvalidPath", "Limits", "Markup", "Request", "Response",
+    "Route", "Session", "SessionCodec", "Settings", "StaticRoute", "Storage", "TemplateError",
+    "Templates", "UploadedFile", "connect", "decode_path_info", "escape", "json_for_html",
+    "make_server", "parse_path", "redirect", "serve", "url",
 ]
