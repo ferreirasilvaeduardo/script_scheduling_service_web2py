@@ -16,7 +16,7 @@ _sc = _h['script']
   </div>
 </div>
 
-<form class="sss-card" method="post" action="{{=URL(c='admin_scripts', f='save_homologation')}}" x-data="scriptHomologation" aria-label="Homologação por ambiente">
+<form class="sss-card" method="post" action="{{=URL(c='admin_scripts', f='save_homologation')}}" data-component="scriptHomologation" aria-label="Homologação por ambiente">
   {{=csrf_field()}}
   <input type="hidden" name="id" value="{{=_sc['id']}}">
   <input type="hidden" name="version" value="{{=_h['version']}}">
@@ -25,7 +25,7 @@ _sc = _h['script']
     <div class="sss-matrix-items">
       {{for _a in _h['environments']:}}
       <div class="form-check sss-matrix-item">
-        <input class="form-check-input" type="checkbox" name="environments" value="{{=_a['id']}}" id="env-{{=_a['id']}}" data-name="{{=_a['name']}}" data-initial="{{='Y' if _a['checked'] else 'N'}}" data-schedules="{{=_a['active_schedules']}}"{{if _a['checked']:}} checked{{pass}} @change="refresh">
+        <input class="form-check-input" type="checkbox" name="environments" value="{{=_a['id']}}" id="env-{{=_a['id']}}" data-name="{{=_a['name']}}" data-initial="{{='Y' if _a['checked'] else 'N'}}" data-schedules="{{=_a['active_schedules']}}"{{if _a['checked']:}} checked{{pass}} data-action="refresh">
         <label class="form-check-label" for="env-{{=_a['id']}}">
           <span class="sss-mono">{{=_a['name']}}</span>{{if _a['inactive']:}} <span class="badge text-bg-secondary">inativo</span>{{pass}}
           <span class="sss-matrix-detail">{{=_a['description']}}{{if _a['active_schedules']:}} · {{=_a['active_schedules']}} agendamento(s) ativo(s){{pass}}</span>
@@ -35,30 +35,28 @@ _sc = _h['script']
     </div>
   </div>
   <div class="sss-card-body sss-matrix-footer">
-    <div class="sss-confirmation sss-form-actions" x-data="confirmation" @keydown.escape.window="close">
-      <button type="button" class="btn btn-primary" x-ref="trigger" @click="open">Revisar e salvar</button>
-      <div class="modal sss-modal" :class="modalClass" role="dialog" aria-modal="true" aria-labelledby="modal-homologation-title" tabindex="-1" @click.self="close">
+    <div class="sss-confirmation sss-form-actions">
+      <button type="button" class="btn btn-primary" data-ref="trigger" data-action="open">Revisar e salvar</button>
+      <div class="modal sss-modal" data-ref="modal" role="dialog" aria-modal="true" aria-labelledby="modal-homologation-title" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content">
             <div class="modal-header">
               <h2 class="modal-title fs-5" id="modal-homologation-title">Confirmar homologação de {{=_sc['name']}}</h2>
-              <button type="button" class="btn-close" aria-label="Fechar" @click="close"></button>
+              <button type="button" class="btn-close" aria-label="Fechar" data-action="close"></button>
             </div>
             <div class="modal-body">
-              <p class="mb-2" x-show="noChanges">Nenhuma alteração em relação à homologação atual.</p>
-              <ul class="sss-matrix-summary sss-mono" x-show="hasChanges">
-                <template x-for="row in summary" :key="row"><li x-text="row"></li></template>
-              </ul>
-              <div class="alert alert-warning sss-alert mt-2 mb-0" role="note" x-show="hasAffected"><span x-text="affectedWarning"></span></div>
+              <p class="mb-2" data-ref="noChanges">Nenhuma alteração em relação à homologação atual.</p>
+              <ul class="sss-matrix-summary sss-mono" data-ref="summary" hidden></ul>
+              <div class="alert alert-warning sss-alert mt-2 mb-0" role="note" data-ref="affected" hidden><span data-ref="affectedText"></span></div>
             </div>
             <div class="modal-footer">
-              <button type="button" class="btn btn-sm btn-outline-secondary" x-ref="cancel" @click="close">Cancelar</button>
-              <button type="submit" class="btn btn-sm btn-primary" :disabled="noChanges">Salvar homologação</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-ref="cancel" data-action="close">Cancelar</button>
+              <button type="submit" class="btn btn-sm btn-primary" data-ref="save" disabled>Salvar homologação</button>
             </div>
           </div>
         </div>
       </div>
-      <div class="sss-modal-backdrop" :class="backdropClass"></div>
+      <div class="sss-modal-backdrop" data-ref="backdrop"></div>
     </div>
   </div>
 </form>

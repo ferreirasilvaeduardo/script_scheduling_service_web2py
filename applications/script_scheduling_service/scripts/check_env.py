@@ -6,7 +6,6 @@ Executa fail-fast caso a versao do Python seja anterior a 3.6.0 ou caso algum
 recurso obrigatorio esteja ausente ou invalido (AGENTS §2.1: sintaxe 3.6, execucao em >= 3.6.0).
 """
 import os
-import re
 import sys
 
 # 1. Verificacao de runtime: Python 3.6.0 ou superior
@@ -18,182 +17,6 @@ if sys.version_info[:3] < (3, 6, 0):
     sys.exit(2)
 
 
-# Avaliacao de string como codigo: proibida em qualquer ponto do bundle.
-_RE_DIRECT_EVAL = (
-    (re.compile(r"\bnew\s+Function\b"), "new Function"),
-    (re.compile(r"(?<![\w$.])Function\s*\("), "Function()"),
-    # Classe [e] evita que o proprio padrao seja acusado pelo varredor de test_py36_compat.
-    (re.compile(r"(?<![\w$.])[e]val\s*\("), "eval"),
-)
-# Obtencao do construtor AsyncFunction/GeneratorFunction, equivalente a new Function.
-_RE_DYNAMIC_CONSTRUCTOR = re.compile(
-    r"getPrototypeOf\s*\(\s*(?:async\b|function\s*\*)"
-    r"|\(\s*(?:async\s*(?:function\b[^{]*\{\s*\}|\([^)]*\)\s*=>\s*\{\s*\})|function\s*\*[^{]*\{\s*\})\s*\)\s*\.\s*constructor"
-)
-_RE_SET_EVALUATOR = re.compile(r"\.setEvaluator\s*\(\s*([A-Za-z_$][\w$]*)\s*\)")
-_RE_FUNCTION_DECL = re.compile(r"(?<![\w$.])function\s+([A-Za-z_$][\w$]*)\s*\(")
-_RE_IDENT = re.compile(r"(?<![\w$.])([A-Za-z_$][\w$]*)(?![\w$])")
-_BEFORE_REGEX = set("(,=:[!&|?{};+-*%<>~^")
-_WORDS_BEFORE_REGEX = ("return", "typeof", "case", "in", "of", "void", "delete", "new", "throw")
-_PAIRS = {"(": ")", "[": "]", "{": "}"}
-
-
-class _InvalidJs(Exception):
-    pass
-
-
-def _skip_regex(src, i):
-    """i aponta para a '/' de abertura; retorna o indice apos o literal (incluindo flags)."""
-    i += 1
-    in_cls_name = False
-    while i < len(src):
-        c = src[i]
-        if c == "\\":
-            i += 2
-            continue
-        if c == "\n":
-            raise _InvalidJs("regex sem fechamento")
-        if in_cls_name:
-            in_cls_name = c != "]"
-        elif c == "[":
-            in_cls_name = True
-        elif c == "/":
-            i += 1
-            while i < len(src) and (src[i].isalnum() or src[i] in "_$"):
-                i += 1
-            return i
-        i += 1
-    raise _InvalidJs("regex sem fechamento")
-
-
-def _starts_regex(src, i):
-    j = i - 1
-    while j >= 0 and src[j] in " \t\r\n":
-        j -= 1
-    if j < 0 or src[j] in _BEFORE_REGEX:
-        return True
-    k = j
-    while k >= 0 and (src[k].isalnum() or src[k] in "_$"):
-        k -= 1
-    return src[k + 1:j + 1] in _WORDS_BEFORE_REGEX
-
-
-def _match(src, i):
-    """Indice do delimitador que fecha src[i] ('(', '[' ou '{').
-
-    Ignora strings, templates (com ${} aninhado), comentarios e literais regex.
-    Desbalanceamento levanta _InvalidJs (o chamador reprova: fail-closed).
-    """
-    stack = [_PAIRS[src[i]]]
-    # Cada nivel de template aberto guarda a profundidade da pilha no '${'.
-    templates = []
-    i += 1
-    n = len(src)
-    while i < n:
-        c = src[i]
-        if c in "'\"":
-            i += 1
-            while i < n and src[i] != c:
-                if src[i] == "\\":
-                    i += 1
-                elif src[i] == "\n":
-                    raise _InvalidJs("string sem fechamento")
-                i += 1
-            if i >= n:
-                raise _InvalidJs("string sem fechamento")
-        elif c == "`" or (c == "}" and templates and len(stack) == templates[-1]):
-            if c == "}":
-                templates.pop()
-            i += 1
-            while i < n and src[i] != "`":
-                if src[i] == "\\":
-                    i += 1
-                elif src.startswith("${", i):
-                    templates.append(len(stack))
-                    i += 1
-                    break
-                i += 1
-            else:
-                if i >= n:
-                    raise _InvalidJs("template sem fechamento")
-        elif src.startswith("//", i):
-            end = src.find("\n", i)
-            i = n if end < 0 else end
-        elif src.startswith("/*", i):
-            end = src.find("*/", i + 2)
-            if end < 0:
-                raise _InvalidJs("comentario sem fechamento")
-            i = end + 1
-        elif c == "/" and _starts_regex(src, i):
-            i = _skip_regex(src, i)
-            continue
-        elif c in _PAIRS:
-            stack.append(_PAIRS[c])
-        elif c in ")]}":
-            if c != stack.pop():
-                raise _InvalidJs("delimitadores desbalanceados")
-            if not stack:
-                return i
-        i += 1
-    raise _InvalidJs("delimitadores desbalanceados")
-
-
-def _function_bodies(src):
-    """Mapeia nome -> lista de textos (parametros + corpo) das declaracoes 'function nome(...)'."""
-    bodies = {}
-    for m in _RE_FUNCTION_DECL.finditer(src):
-        end_params = _match(src, m.end() - 1)
-        open_value = src.find("{", end_params)
-        if open_value < 0 or src[end_params + 1:open_value].strip():
-            raise _InvalidJs("declaracao de funcao sem corpo: %s" % m.group(1))
-        bodies.setdefault(m.group(1), []).append(src[m.end() - 1:_match(src, open_value) + 1])
-    return bodies
-
-
-def check_alpine_csp(source):
-    """Retorna (ok, detalhe) indicando se o bundle Alpine e seguro sob script-src 'self'.
-
-    Reprova eval, new Function e Function() em qualquer ponto e reprova o avaliador
-    registrado via setEvaluator() que alcance um construtor dinamico (AsyncFunction).
-    O build CSP oficial ainda embute o avaliador padrao como codigo morto; ele so e
-    aceito se nao for alcancavel a partir do avaliador registrado.
-    """
-    for regex, label in _RE_DIRECT_EVAL:
-        if regex.search(source):
-            return False, "Uso de %s encontrado" % label
-
-    records = _RE_SET_EVALUATOR.findall(source)
-    if len(records) != 1:
-        return False, "Esperado exatamente 1 setEvaluator(), encontrados %d" % len(records)
-    evaluator = records[0]
-
-    try:
-        bodies = _function_bodies(source)
-    except _InvalidJs as e:
-        return False, "Bundle não analisável: %s" % e
-    if evaluator not in bodies:
-        return False, "Avaliador registrado '%s' não declarado como função" % evaluator
-
-    # Sobreaproximacao intencional: todo identificador igual a nome de funcao declarada
-    # conta como alcancavel (inclusive parametros homonimos), errando para o lado da falha.
-    reachable = set()
-    pending = [evaluator]
-    while pending:
-        name = pending.pop()
-        if name in reachable:
-            continue
-        reachable.add(name)
-        for body in bodies[name]:
-            if _RE_DYNAMIC_CONSTRUCTOR.search(body):
-                return False, "Avaliador registrado '%s' alcança construtor dinâmico em '%s' (build não CSP)" % (
-                    evaluator, name)
-            pending.extend(ident for ident in _RE_IDENT.findall(body) if ident in bodies)
-
-    if _RE_DYNAMIC_CONSTRUCTOR.search(source):
-        return True, "Build CSP confirmada: avaliador '%s' não avalia strings (avaliador padrão presente apenas como código morto)" % evaluator
-    return True, "Build CSP confirmada: avaliador '%s' não avalia strings" % evaluator
-
-
 def main():
     # Resolucao dinamica de caminhos a partir de __file__
     scripts_dir = os.path.dirname(os.path.abspath(__file__))
@@ -203,7 +26,6 @@ def main():
     web2py_file = os.path.join(web2py_root, "web2py.py")
     bootstrap_css = os.path.join(app_dir, "static", "bootstrap", "bootstrap.min.css")
     bootstrap_js = os.path.join(app_dir, "static", "bootstrap", "bootstrap.bundle.min.js")
-    alpine_js = os.path.join(app_dir, "static", "js", "alpine.min.js")
 
     results = []
 
@@ -232,24 +54,7 @@ def main():
     else:
         results.append(("bootstrap.bundle.min.js", "FALHA", "Arquivo inexistente ou vazio"))
 
-    # Item 5: alpine.min.js
-    if os.path.isfile(alpine_js) and os.path.getsize(alpine_js) > 0:
-        results.append(("alpine.min.js", "OK", "%d bytes" % os.path.getsize(alpine_js)))
-    else:
-        results.append(("alpine.min.js", "FALHA", "Arquivo inexistente ou vazio"))
-
-    # Item 6: build CSP do Alpine.js
-    if not os.path.isfile(alpine_js):
-        results.append(("Build CSP do Alpine.js", "FALHA", "Arquivo alpine.min.js nao encontrado"))
-    else:
-        try:
-            with open(alpine_js, "r", encoding="utf-8") as f:
-                ok, detail_text = check_alpine_csp(f.read())
-            results.append(("Build CSP do Alpine.js", "OK" if ok else "FALHA", detail_text))
-        except Exception as e:
-            results.append(("Build CSP do Alpine.js", "FALHA", "Erro ao ler arquivo: %s" % str(e)))
-
-    # Item 7: Driver Oracle (driver_mode e cadeia adaptativa)
+    # Item 5: Driver Oracle (driver_mode e cadeia adaptativa)
     try:
         modules_dir = os.path.join(app_dir, "modules")
         if modules_dir not in sys.path:

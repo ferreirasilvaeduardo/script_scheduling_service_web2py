@@ -116,7 +116,7 @@ class TestEnvSkeleton(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, "check_env.py falhou: %s" % err.decode("utf-8", "replace"))
         out_str = out.decode("utf-8", "replace")
         self.assertIn("Versao do Python (>= 3.6.0)", out_str)
-        self.assertIn("Build CSP do Alpine.js", out_str)
+        self.assertIn("bootstrap.bundle.min.js", out_str)
         self.assertNotIn("FALHA", out_str)
 
 

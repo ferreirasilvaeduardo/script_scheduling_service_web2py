@@ -60,6 +60,17 @@
     return template.content.firstElementChild.cloneNode(true);
   }
 
+  // Lista simples: um <li> por texto, no lugar dos itens anteriores.
+  function fillList(list, texts) {
+    var fragment = document.createDocumentFragment();
+    texts.forEach(function (text) {
+      var item = document.createElement('li');
+      setText(item, text);
+      fragment.appendChild(item);
+    });
+    list.replaceChildren(fragment);
+  }
+
   /* Troca o elemento `selector` de `root` pelo de mesmo seletor no HTML que o servidor renderizou e
    * escapou (fragmento .load, com os mesmos guardas da pagina). `prepare(novo, atual)` roda antes da
    * troca. Sem o marcador (ex.: sessao expirada redirecionou ao login) lanca erro e nada muda.
@@ -91,6 +102,7 @@
     show: show,
     setText: setText,
     clone: clone,
+    fillList: fillList,
     replaceFragment: replaceFragment,
     clockTime: clockTime
   };

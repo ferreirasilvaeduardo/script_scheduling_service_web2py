@@ -683,10 +683,6 @@
   opacity: 0;
 }
 
-[x-cloak] {
-  display: none !important;
-}
-
 /* Disparo de script (tickets/novo) */
 .sss-stages {
   display: flex;

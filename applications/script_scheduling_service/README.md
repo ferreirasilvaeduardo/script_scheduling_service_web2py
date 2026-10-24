@@ -81,7 +81,7 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 
 ### 2.4 Frontend
 
-* HTML5, **Bootstrap 5.3.8** e JavaScript próprio, servidos exclusivamente de `static/` com fontes locais. O **Alpine.js (build CSP)** está em retirada pelo CR-021 (`docs/architecture/CR-021-no-web2py-no-alpine.md`) e ainda atende as telas que o 021b converte.
+* HTML5, **Bootstrap 5.3.8** e JavaScript próprio, sem framework (o Alpine.js saiu no CR-021, `docs/architecture/CR-021-no-web2py-no-alpine.md`), servidos exclusivamente de `static/` com fontes locais.
 * **Identidade visual**, aplicada pelos tokens de `static/css/sss.css`:
   * **Cores:** Roxo Vivo `#5f0684` (ações primárias, links, cabeçalho), Azul Esverdeado `#4daf9a` (destaques, item ativo, faixa do cabeçalho) e Amarelo `#faba00` (avisos e faixa de ambiente). As variações claras e escuras do manual são usadas no modo escuro e nos estados de passar o mouse e de clique.
   * **Contraste:** todo par texto/fundo atende WCAG AA (≥ 4,5:1, verificado por `scripts/test_color_contrast.py`). Por isso o Azul Esverdeado nunca é cor de texto sobre fundo claro (contraste de 2,6:1).
@@ -89,7 +89,7 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
   * **Formas:** cantos levemente arredondados (`--sss-radius: 8px`) e ícones com traço arredondado.
   * **Logo:** a logo oficial não é desenhada nem aproximada (o manual proíbe distorção). Ela só entra quando houver os arquivos oficiais.
 * Não há CDN, Google Fonts nem `@import` remoto.
-* **Componentes (CR-021, D7):** um componente é um elemento com `data-component="<nome>"`, montado uma vez no `DOMContentLoaded` pela fábrica registrada com `SSS.component(nome, fábrica)` em `static/js/app/` (base em `static/js/app/dom.js`). Os eventos chegam por delegação (`data-action`), os elementos por `data-ref` e o texto só por `textContent`. Não há expressão no HTML, estado reativo nem `innerHTML`. Enquanto o Alpine não sai, o build CSP dele continua obrigatório, porque a política `script-src 'self'` proíbe `unsafe-eval`, e os componentes Alpine restantes ficam registrados via `Alpine.data()`.
+* **Componentes (CR-021, D7):** um componente é um elemento com `data-component="<nome>"`, montado uma vez no `DOMContentLoaded` pela fábrica registrada com `SSS.component(nome, fábrica)` em `static/js/app/` (base em `static/js/app/dom.js`). Os eventos chegam por delegação (`data-action`), os elementos por `data-ref` (e, dentro de um item copiado de um `<template>`, por `data-part`) e o texto só por `textContent`. Não há expressão no HTML, estado reativo nem `innerHTML`. Os modais são do Bootstrap, abertos e fechados por classe pelo `SSS.modal`, sem o JavaScript do Bootstrap. Campo que aparece conforme uma escolha declara em `data-types` os valores em que aparece (regra de agendamento).
 
 #### 2.4.1 Contrato de responsividade
 
@@ -345,7 +345,7 @@ applications/script_scheduling_service/
     run_scheduler.py          # [F8.3] entrypoint do daemon
     purge.py                  # [F9.1] retenção (§11.3)
     test_*.py                 # testes unittest (AGENTS.md §7)
-  static/bootstrap/  static/js/alpine.min.js (build CSP; sai no CR-021b)  static/js/app/ (dom.js primeiro)  static/css/  static/img/  static/fonts/
+  static/bootstrap/  static/js/app/ (dom.js primeiro)  static/css/  static/img/  static/fonts/
   views/                      # layout.html, components/*.html, <controller>/*.html
   instance/config.ini         # configuração sem segredos (§12)
   dev/scripts/                # árvore de scripts de exemplo para DEV/testes (nunca implantada)
@@ -487,7 +487,7 @@ password = ...
 * **XSS:**
   * Saída sempre escapada (`{{=valor}}`).
   * É proibido `XML()` com dado de usuário.
-  * No navegador, texto só por `textContent` (componentes) ou `x-text` (Alpine, até o CR-021b); são proibidos `x-html`, `innerHTML`, `outerHTML`, `insertAdjacentHTML` e `document.write`.
+  * No navegador, texto só por `textContent`; são proibidos `innerHTML`, `outerHTML`, `insertAdjacentHTML` e `document.write`.
 
 ### 4.3 RBAC
 
@@ -1941,7 +1941,7 @@ END;
   * O cliente envia o offset já recebido, e o servidor lê pelo locator (`lob.read(offset, amount)`).
     * O offset da API web conta **caracteres a partir de 0**. O repositório Oracle converte para a posição 1 do LOB (`offset + 1`).
     * Cada leitura devolve até 65.536 caracteres.
-  * O texto é exibido com `x-text`.
+  * O texto é exibido só por `textContent`.
   * A latência esperada é de cerca de `heartbeat_interval_s`.
   * A tela mantém no máximo cerca de 5 milhões de caracteres. Ao passar desse limite, descarta o início e mantém os últimos 4 milhões, com um aviso. O log completo fica disponível no **download**, que é feito em streaming.
   * Em erro transitório, o polling continua com intervalo três vezes maior. Sessão expirada interrompe o polling e pede um novo login.

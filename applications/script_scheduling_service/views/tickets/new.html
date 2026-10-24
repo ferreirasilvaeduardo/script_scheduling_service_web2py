@@ -63,7 +63,7 @@ _steps = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
 
 <section class="sss-card" aria-labelledby="title-questionnaire">
   <h2 class="sss-card-title" id="title-questionnaire">3. Responda às perguntas.</h2>
-  <form class="sss-card-body" id="form-ticket" method="post" action="{{=URL(c='tickets', f='create')}}" autocomplete="off">
+  <form class="sss-card-body" id="form-ticket" method="post" action="{{=URL(c='tickets', f='create')}}" autocomplete="off" data-component="ticketTrigger" data-url-preview="{{=URL(c='tickets', f='preview')}}">
     {{=csrf_field()}}
     <input type="hidden" name="script_id" value="{{=form['script']['id']}}">
     <input type="hidden" name="environment" value="{{=form['environment']['name']}}">
@@ -114,17 +114,17 @@ _steps = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
       </div>
     </div>
 
-    <div class="sss-confirmation sss-form-actions" x-data="confirmation" @keydown.escape.window="close">
-      <button type="button" class="btn btn-primary" x-ref="trigger" data-summary-trigger @click="open">
+    <div class="sss-confirmation sss-form-actions">
+      <button type="button" class="btn btn-primary" data-ref="trigger" data-action="open">
         <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#icon-play"></use></svg>
         <span>Criar ticket</span>
       </button>
-      <div class="modal sss-modal" :class="modalClass" role="dialog" aria-modal="true" aria-labelledby="confirm-ticket-title" aria-describedby="confirm-ticket-text" tabindex="-1" @click.self="close">
+      <div class="modal sss-modal" data-ref="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-ticket-title" aria-describedby="confirm-ticket-text" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content">
             <div class="modal-header">
               <h2 class="modal-title fs-5" id="confirm-ticket-title">Confirmar disparo</h2>
-              <button type="button" class="btn-close" aria-label="Fechar" @click="close"></button>
+              <button type="button" class="btn-close" aria-label="Fechar" data-action="close"></button>
             </div>
             <div class="modal-body" id="confirm-ticket-text">
               {{if form['environment']['production']:}}
@@ -133,33 +133,28 @@ _steps = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
                 <strong>Ambiente de produção</strong>
               </div>
               {{pass}}
-              <div x-data="triggerSummary" data-url="{{=URL(c='tickets', f='preview')}}">
-                <p class="mb-2" x-show="loading">Montando o resumo…</p>
-                <div x-show="hasSummary" x-cloak>
-                  <p class="mb-2">Vamos rodar <strong class="sss-mono" x-text="script"></strong> no ambiente <strong x-text="environment"></strong> <span x-text="when"></span>, com prioridade <span x-text="priority"></span>.</p>
-                  <ul class="mb-2 sss-summary-answers" x-show="hasAnswers">
-                    <template x-for="r in answers" :key="r.id">
-                      <li><span x-text="r.label"></span> = <span class="sss-mono" x-text="r.value"></span></li>
-                    </template>
-                  </ul>
-                  <p class="mb-1"><strong>Comando que será executado</strong></p>
-                  <pre class="sss-argv" tabindex="0"><code x-text="command"></code></pre>
-                </div>
-                <ul class="sss-preview-errors mb-0" x-show="hasErrors" x-cloak>
-                  <template x-for="e in errors" :key="e.id">
-                    <li x-text="e.text"></li>
+              <div>
+                <p class="mb-2" data-ref="loading" hidden>Montando o resumo…</p>
+                <div data-ref="summary" hidden>
+                  <p class="mb-2">Vamos rodar <strong class="sss-mono" data-ref="script"></strong> no ambiente <strong data-ref="environment"></strong> <span data-ref="when"></span>, com prioridade <span data-ref="priority"></span>.</p>
+                  <template data-ref="answerTemplate">
+                    <li><span data-part="label"></span> = <span class="sss-mono" data-part="value"></span></li>
                   </template>
-                </ul>
+                  <ul class="mb-2 sss-summary-answers" data-ref="answers" hidden></ul>
+                  <p class="mb-1"><strong>Comando que será executado</strong></p>
+                  <pre class="sss-argv" tabindex="0"><code data-ref="command"></code></pre>
+                </div>
+                <ul class="sss-preview-errors mb-0" data-ref="errors" hidden></ul>
               </div>
             </div>
             <div class="modal-footer">
-              <button type="button" class="btn btn-sm btn-outline-secondary" x-ref="cancel" @click="close">Cancelar</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-ref="cancel" data-action="close">Cancelar</button>
               <button type="submit" class="btn btn-sm {{='btn-danger' if form['environment']['production'] else 'btn-primary'}}">Criar ticket</button>
             </div>
           </div>
         </div>
       </div>
-      <div class="sss-modal-backdrop" :class="backdropClass"></div>
+      <div class="sss-modal-backdrop" data-ref="backdrop"></div>
     </div>
   </form>
 </section>

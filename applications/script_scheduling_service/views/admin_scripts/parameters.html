@@ -20,64 +20,62 @@ _kind_label = {'NAMED': u'por flag (NOMEADO)', 'POSITIONAL': u'posicional (SEQUE
 </div>
 
 <form class="sss-card" method="post" action="{{=URL(c='admin_scripts', f='save_parameters')}}" autocomplete="off"
-      x-data="scriptLinks" data-url-preview="{{=URL(c='admin_scripts', f='preview')}}"
+      data-component="scriptLinks" data-url-preview="{{=URL(c='admin_scripts', f='preview')}}"
       data-links="{{=json.dumps(_v['links'])}}" data-available="{{=json.dumps(_v['available'])}}">
   {{=csrf_field()}}
   <input type="hidden" name="id" value="{{=_sc['id']}}">
   <input type="hidden" name="version" value="{{=_v['version']}}">
-  <input type="hidden" name="links_json" :value="linksJson">
+  <input type="hidden" name="links_json" data-ref="linksJson">
   <div class="sss-card-body">
     {{if _sc['param_type'] == 'NONE':}}
     <div class="alert alert-info sss-alert" role="note"><span>Este script não recebe argumentos: não é possível vincular parâmetros.</span></div>
     {{pass}}
-    <p class="sss-text-muted" x-show="noLinks">Nenhum parâmetro vinculado.</p>
-    <ol class="sss-links">
-      <template x-for="(row, i) in rows" :key="row.id">
-        <li class="sss-link">
-          <div class="sss-link-title">
-            <span class="sss-mono" x-text="row.code"></span>
-            <span class="sss-text-muted" x-text="row.label"></span>
-            <span class="badge text-bg-secondary sss-mono" x-show="row.flag" x-text="row.flag"></span>
-            <span class="badge text-bg-warning" x-show="row.sensitive">sigiloso</span>
+    <p class="sss-text-muted" data-ref="noLinks" hidden>Nenhum parâmetro vinculado.</p>
+    <template data-ref="rowTemplate">
+      <li class="sss-link">
+        <div class="sss-link-title">
+          <span class="sss-mono" data-part="code"></span>
+          <span class="sss-text-muted" data-part="label"></span>
+          <span class="badge text-bg-secondary sss-mono" data-part="flag"></span>
+          <span class="badge text-bg-warning" data-part="sensitive">sigiloso</span>
+        </div>
+        <div class="sss-link-fields">
+          <div class="form-check mb-0">
+            <input class="form-check-input" type="checkbox" data-part="required" data-action="toggleRequired">
+            <label class="form-check-label" data-part="requiredLabel">Obrigatório</label>
           </div>
-          <div class="sss-link-fields">
-            <div class="form-check mb-0">
-              <input class="form-check-input" type="checkbox" :id="row.idReq" :data-i="i" :checked="row.required" @change="toggleRequired">
-              <label class="form-check-label" :for="row.idReq">Obrigatório</label>
-            </div>
-            <input class="form-control form-control-sm" maxlength="100" aria-label="Valor padrão específico" :data-i="i" :type="row.typeSub" :value="row.sub" :placeholder="row.hintSub" @input="editSub">
-            <button type="button" class="btn btn-sm btn-outline-secondary" x-show="row.canClear" :data-i="i" @click="clearSecret">Remover valor</button>
-          </div>
-          <div class="sss-link-actions">
-            <button type="button" class="btn btn-sm btn-outline-secondary" :data-i="i" data-delta="-1" @click="move" :aria-label="row.upLabel">Subir</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" :data-i="i" data-delta="1" @click="move" :aria-label="row.downLabel">Descer</button>
-            <button type="button" class="btn btn-sm btn-outline-danger" :data-i="i" @click="remove" :aria-label="row.removeLabel">Remover</button>
-          </div>
-        </li>
-      </template>
-    </ol>
+          <input class="form-control form-control-sm" maxlength="100" aria-label="Valor padrão específico" data-part="sub" data-action="editSub">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-part="clear" data-action="clearSecret">Remover valor</button>
+        </div>
+        <div class="sss-link-actions">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-part="up" data-delta="-1" data-action="move">Subir</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-part="down" data-delta="1" data-action="move">Descer</button>
+          <button type="button" class="btn btn-sm btn-outline-danger" data-part="remove" data-action="remove">Remover</button>
+        </div>
+      </li>
+    </template>
+    <ol class="sss-links" data-ref="rows"></ol>
 
     {{if _sc['param_type'] != 'NONE':}}
     <fieldset class="sss-test mb-3">
       <legend class="form-label fs-6">Adicionar parâmetro do dicionário</legend>
-      <input type="search" class="form-control form-control-sm mb-2" id="search-parameter" maxlength="60" placeholder="Código ou rótulo" aria-label="Buscar parâmetro" @input="search">
-      <p class="sss-text-muted mb-0" x-show="noResults">Nenhum parâmetro ativo disponível para a busca.</p>
-      <ul class="sss-search-parameters">
-        <template x-for="p in results" :key="p.id">
-          <li>
-            <button type="button" class="btn btn-sm btn-link" :data-id="p.id" @click="add"><span class="sss-mono" x-text="p.code"></span> — <span x-text="p.label"></span></button>
-          </li>
-        </template>
-      </ul>
+      <input type="search" class="form-control form-control-sm mb-2" id="search-parameter" maxlength="60" placeholder="Código ou rótulo" aria-label="Buscar parâmetro" data-ref="search" data-action="search">
+      <p class="sss-text-muted mb-0" data-ref="noResults" hidden>Nenhum parâmetro ativo disponível para a busca.</p>
+      <template data-ref="resultTemplate">
+        <li>
+          <button type="button" class="btn btn-sm btn-link" data-part="add" data-action="add"><span class="sss-mono" data-part="code"></span> — <span data-part="label"></span></button>
+        </li>
+      </template>
+      <ul class="sss-search-parameters" data-ref="results"></ul>
     </fieldset>
     {{pass}}
 
     <fieldset class="sss-test mb-3">
       <legend class="form-label fs-6">Prévia do comando (valores padrão, sem salvar)</legend>
-      <button type="button" class="btn btn-sm btn-outline-primary" @click="preview" :disabled="loading">Gerar prévia</button>
-      <pre class="sss-argv mt-2" x-show="hasPreview" x-text="previewText"></pre>
-      <ul class="sss-test-error mt-2 mb-0" x-show="hasErrorsPreview"><template x-for="e in previewErrors" :key="e"><li x-text="e"></li></template></ul>
-      <p class="sss-text-muted mt-2 mb-0" x-show="hasWarningPreview" x-text="previewWarning"></p>
+      <button type="button" class="btn btn-sm btn-outline-primary" data-ref="previewButton" data-action="preview">Gerar prévia</button>
+      <pre class="sss-argv mt-2" data-ref="previewText" hidden></pre>
+      <ul class="sss-test-error mt-2 mb-0" data-ref="previewErrors" hidden></ul>
+      <p class="sss-text-muted mt-2 mb-0" data-ref="previewWarning" hidden></p>
     </fieldset>
 
     <div class="sss-form-actions">

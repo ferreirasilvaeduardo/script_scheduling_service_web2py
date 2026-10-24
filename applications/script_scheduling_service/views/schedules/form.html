@@ -2,7 +2,7 @@
 {{
 # Inclusão e edição de regra de agendamento (README §7). A inclusão escolhe script e ambiente em
 # etapas, com os mesmos filtros de autorização do disparo (F3.2); na edição, ambos são fixos.
-# O servidor revalida tudo; a prévia e os campos condicionais (Alpine) só ajudam o preenchimento.
+# O servidor revalida tudo; a prévia e os campos condicionais (componente scheduleRule) só ajudam o preenchimento.
 icons = URL('static', 'img/icons.svg')
 _rule = rule or {}
 _kind = _rule.get('recurrence_type')
@@ -89,7 +89,7 @@ _help_end = u'Opcional. A última execução acontece até esta data e hora (inc
 {{pass}}
 
 {{if form:}}
-<form id="form-schedule" method="post" action="{{=URL(c='schedules', f='save')}}" autocomplete="off" x-data="scheduleRule" data-url-preview="{{=URL(c='schedules', f='preview')}}">
+<form id="form-schedule" method="post" action="{{=URL(c='schedules', f='save')}}" autocomplete="off" data-component="scheduleRule" data-url-preview="{{=URL(c='schedules', f='preview')}}">
   {{=csrf_field()}}
   {{if editing:}}
   <input type="hidden" name="id" value="{{=_rule['id']}}">
@@ -122,14 +122,14 @@ _help_end = u'Opcional. A última execução acontece até esta data e hora (inc
 
   <section class="sss-card" aria-labelledby="title-recurrence">
     <h2 class="sss-card-title" id="title-recurrence">{{='Recorrência' if editing else '3. Recorrência'}}</h2>
-    <div class="sss-card-body" @input="schedulePreview" @change="schedulePreview">
+    <div class="sss-card-body" data-ref="fields">
       {{field = {'name': 'name', 'label': 'Nome da regra', 'value': _rule.get('name'), 'error': errors.get('name'), 'required': True, 'maxlength': 60} }}
       {{include 'components/form_field.html'}}
 
       <div class="sss-form-row">
         <div class="sss-form-field mb-3">
           <label class="form-label" for="field-recurrence_type">Tipo de recorrência <span class="sss-required" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span></label>
-          <select class="form-select{{=' is-invalid' if errors.get('recurrence_type') else ''}}" id="field-recurrence_type" name="recurrence_type" required x-ref="type" @change="changeType"{{if errors.get('recurrence_type'):}} aria-invalid="true" aria-describedby="field-recurrence_type-error"{{pass}}{{if focus_field == 'recurrence_type':}} autofocus{{pass}}>
+          <select class="form-select{{=' is-invalid' if errors.get('recurrence_type') else ''}}" id="field-recurrence_type" name="recurrence_type" required data-ref="type" data-action="changeType"{{if errors.get('recurrence_type'):}} aria-invalid="true" aria-describedby="field-recurrence_type-error"{{pass}}{{if focus_field == 'recurrence_type':}} autofocus{{pass}}>
             {{for _tv, _tr in type_labels.items():}}<option value="{{=_tv}}"{{if _tv == _kind:}} selected{{pass}}>{{=_tr}}</option>{{pass}}
           </select>
           {{if errors.get('recurrence_type'):}}<div class="invalid-feedback" id="field-recurrence_type-error">{{=errors['recurrence_type']}}</div>{{pass}}
@@ -146,12 +146,12 @@ _help_end = u'Opcional. A última execução acontece até esta data e hora (inc
 
       <div class="sss-form-row">
         <div class="sss-form-field mb-3">
-          <label class="form-label" for="field-start_date"><span x-show="isOnce">Data e hora da execução</span><span x-show="notOnce">Início</span></label>
+          <label class="form-label" for="field-start_date"><span data-types="ONCE">Data e hora da execução</span><span data-types="DAILY WEEKLY MONTHLY CRON">Início</span></label>
           <input class="form-control{{=' is-invalid' if errors.get('start_date') else ''}}" type="datetime-local" id="field-start_date" name="start_date" value="{{=_rule.get('start_date') or ''}}" aria-describedby="field-start_date-help{{=' field-start_date-error' if errors.get('start_date') else ''}}"{{if errors.get('start_date'):}} aria-invalid="true"{{pass}}{{if focus_field == 'start_date':}} autofocus{{pass}}>
-          <div class="form-text" id="field-start_date-help"><span x-show="isOnce">Obrigatória: a regra executa uma única vez neste momento.</span><span x-show="notOnce">Opcional: em branco, a regra vale a partir de agora.</span></div>
+          <div class="form-text" id="field-start_date-help"><span data-types="ONCE">Obrigatória: a regra executa uma única vez neste momento.</span><span data-types="DAILY WEEKLY MONTHLY CRON">Opcional: em branco, a regra vale a partir de agora.</span></div>
           {{if errors.get('start_date'):}}<div class="invalid-feedback" id="field-start_date-error">{{=errors['start_date']}}</div>{{pass}}
         </div>
-        <div class="sss-form-field mb-3" x-show="notOnce">
+        <div class="sss-form-field mb-3" data-types="DAILY WEEKLY MONTHLY CRON">
           <label class="form-label" for="field-end_date">Fim</label>
           <input class="form-control{{=' is-invalid' if errors.get('end_date') else ''}}" type="datetime-local" id="field-end_date" name="end_date" value="{{=_rule.get('end_date') or ''}}" aria-describedby="field-end_date-help{{=' field-end_date-error' if errors.get('end_date') else ''}}"{{if errors.get('end_date'):}} aria-invalid="true"{{pass}}{{if focus_field == 'end_date':}} autofocus{{pass}}>
           <div class="form-text" id="field-end_date-help">{{=_help_end}}</div>
@@ -160,13 +160,13 @@ _help_end = u'Opcional. A última execução acontece até esta data e hora (inc
       </div>
 
       <div class="sss-form-row">
-        <div class="sss-form-field mb-3" x-show="hasHour">
+        <div class="sss-form-field mb-3" data-types="DAILY WEEKLY MONTHLY">
           <label class="form-label" for="field-run_time">Horário <span class="sss-required" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span></label>
           <input class="form-control{{=' is-invalid' if errors.get('run_time') else ''}}" type="time" id="field-run_time" name="run_time" value="{{=_rule.get('run_time') or ''}}" aria-describedby="field-run_time-help{{=' field-run_time-error' if errors.get('run_time') else ''}}"{{if errors.get('run_time'):}} aria-invalid="true"{{pass}}{{if focus_field == 'run_time':}} autofocus{{pass}}>
           <div class="form-text" id="field-run_time-help">Horário do servidor de banco (HH:MM).</div>
           {{if errors.get('run_time'):}}<div class="invalid-feedback" id="field-run_time-error">{{=errors['run_time']}}</div>{{pass}}
         </div>
-        <div class="sss-form-field mb-3" x-show="isMonthly">
+        <div class="sss-form-field mb-3" data-types="MONTHLY">
           <label class="form-label" for="field-month_day">Dia do mês <span class="sss-required" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span></label>
           <input class="form-control{{=' is-invalid' if errors.get('month_day') else ''}}" type="number" min="1" max="31" step="1" inputmode="numeric" id="field-month_day" name="month_day" value="{{=_rule.get('month_day') or ''}}" aria-describedby="field-month_day-help{{=' field-month_day-error' if errors.get('month_day') else ''}}"{{if errors.get('month_day'):}} aria-invalid="true"{{pass}}{{if focus_field == 'month_day':}} autofocus{{pass}}>
           <div class="form-text" id="field-month_day-help">Se o mês não tiver o dia, executa no último dia do mês.</div>
@@ -174,7 +174,7 @@ _help_end = u'Opcional. A última execução acontece até esta data e hora (inc
         </div>
       </div>
 
-      <fieldset class="sss-form-field mb-3" x-show="isWeekly"{{if errors.get('week_days'):}} aria-describedby="field-week_days-error"{{pass}}>
+      <fieldset class="sss-form-field mb-3" data-types="WEEKLY"{{if errors.get('week_days'):}} aria-describedby="field-week_days-error"{{pass}}>
         <legend class="form-label fs-6">Dias da semana <span class="sss-required" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span></legend>
         {{for _dn, _dabbr, _dname in weekdays:}}
         <div class="form-check form-check-inline">
@@ -185,7 +185,7 @@ _help_end = u'Opcional. A última execução acontece até esta data e hora (inc
         {{if errors.get('week_days'):}}<div class="invalid-feedback d-block" id="field-week_days-error">{{=errors['week_days']}}</div>{{pass}}
       </fieldset>
 
-      <div class="sss-form-field mb-3" x-show="isCron">
+      <div class="sss-form-field mb-3" data-types="CRON">
         <label class="form-label" for="field-cron_expression">Expressão CRON <span class="sss-required" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span></label>
         <input class="form-control sss-mono{{=' is-invalid' if errors.get('cron_expression') else ''}}" type="text" id="field-cron_expression" name="cron_expression" maxlength="60" spellcheck="false" placeholder="*/15 8-18 * * 1-5" value="{{=_rule.get('cron_expression') or ''}}" aria-describedby="field-cron_expression-help{{=' field-cron_expression-error' if errors.get('cron_expression') else ''}}"{{if errors.get('cron_expression'):}} aria-invalid="true"{{pass}}{{if focus_field == 'cron_expression':}} autofocus{{pass}}>
         <div class="form-text" id="field-cron_expression-help">Cinco campos: minuto, hora, dia do mês, mês e dia da semana.</div>
@@ -207,18 +207,10 @@ _help_end = u'Opcional. A última execução acontece até esta data e hora (inc
   <section class="sss-card" aria-labelledby="title-preview-sch">
     <h2 class="sss-card-title" id="title-preview-sch">Próximas execuções</h2>
     <div class="sss-card-body sss-preview-sch" aria-live="polite">
-      <p class="sss-text-muted mb-2" x-show="loading" x-cloak>Calculando…</p>
-      <p class="mb-2" x-show="hasDescription" x-cloak><strong x-text="description"></strong></p>
-      <ol class="sss-preview-dates mb-0" x-show="hasDates" x-cloak>
-        <template x-for="d in dates" :key="d.id">
-          <li x-text="d.text"></li>
-        </template>
-      </ol>
-      <ul class="sss-preview-errors" x-show="hasErrors" x-cloak>
-        <template x-for="e in errors" :key="e.id">
-          <li x-text="e.text"></li>
-        </template>
-      </ul>
+      <p class="sss-text-muted mb-2" data-ref="loading" hidden>Calculando…</p>
+      <p class="mb-2" data-ref="description" hidden><strong data-ref="descriptionText"></strong></p>
+      <ol class="sss-preview-dates mb-0" data-ref="dates" hidden></ol>
+      <ul class="sss-preview-errors" data-ref="errors" hidden></ul>
       <noscript><p class="mb-0">A prévia exige JavaScript; as datas são validadas ao salvar.</p></noscript>
     </div>
   </section>

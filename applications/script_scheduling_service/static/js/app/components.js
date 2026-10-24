@@ -1,7 +1,5 @@
-/* SSS - componentes reutilizados pelos partials de views/components/ e por mais de uma tela.
- * Carregado com defer depois do dom.js (CR-021). O 'confirmation' do Alpine, ao fim do arquivo, atende
- * so as telas em que o modal usa o estado de outro componente Alpine (matriz de permissoes,
- * homologacao do script e disparo) e sai com elas no CR-021b.
+/* SSS - componentes reutilizados pelos partials de views/components/ e por mais de uma tela, e o
+ * SSS.modal dos componentes que tem modal proprio. Carregado com defer depois do dom.js (CR-021).
  */
 (function () {
   'use strict';
@@ -171,34 +169,6 @@
       } else {
         failure();
       }
-    });
-  });
-
-  document.addEventListener('alpine:init', function () {
-    window.Alpine.data('confirmation', function () {
-      return {
-        isOpen: false,
-        get modalClass() {
-          return this.isOpen ? 'show d-block' : '';
-        },
-        get backdropClass() {
-          return this.isOpen ? 'modal-backdrop fade show' : '';
-        },
-        open: function () {
-          var self = this;
-          this.isOpen = true;
-          document.body.classList.add('modal-open');
-          this.$nextTick(function () { self.$refs.cancel.focus(); });
-        },
-        close: function () {
-          if (!this.isOpen) {
-            return;
-          }
-          this.isOpen = false;
-          document.body.classList.remove('modal-open');
-          this.$refs.trigger.focus();
-        }
-      };
     });
   });
 }());

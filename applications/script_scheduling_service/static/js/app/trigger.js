@@ -1,10 +1,12 @@
 /* SSS - tela de disparo de script (tickets/new).
- * Carregado com defer ANTES do alpine.min.js. Nenhuma regra decisoria fica aqui: o servidor
- * revalida tudo; o cliente apenas filtra a lista e exibe a previa devolvida pelo servidor.
+ * Nenhuma regra decisoria fica aqui: o servidor revalida tudo; o cliente apenas exibe, no modal de
+ * confirmacao, o resumo que o servidor monta ao abrir o modal (README §5.4).
  */
 (function () {
   'use strict';
 
+  var SSS = window.SSS;
+  var dom = SSS.dom;
   var PARAM_PREFIX = 'p_';
   var RE_SIMPLE_TOKEN = /^[A-Za-z0-9_@%+=:,.\/-]+$/;
 
@@ -40,76 +42,98 @@
     return answers;
   }
 
-  document.addEventListener('alpine:init', function () {
-    // Resumo em frase do modal de confirmacao (README §5.4): montado pelo servidor ao abrir o modal.
-    window.Alpine.data('triggerSummary', function () {
-      return {
-        loading: false,
-        script: '',
-        environment: '',
-        when: '',
-        priority: '',
-        command: '',
-        answers: [],
-        errors: [],
-        get hasSummary() { return this.script !== ''; },
-        get hasAnswers() { return this.answers.length > 0; },
-        get hasErrors() { return this.errors.length > 0; },
-        init: function () {
-          var self = this;
-          var form = this.$root.closest('form');
-          var trigger = form.querySelector('[data-summary-trigger]');
-          if (trigger) {
-            trigger.addEventListener('click', function () { self.load(); });
-          }
-        },
-        load: function () {
-          var self = this;
-          var form = this.$root.closest('form');
-          var body = {
-            script_id: form.elements.script_id.value,
-            environment: form.elements.environment.value,
-            priority: form.elements.priority ? form.elements.priority.value : '',
-            scheduled_at: form.elements.scheduled_at ? form.elements.scheduled_at.value : '',
-            answers: collectAnswers(form)
-          };
-          this.loading = true;
-          this.script = '';
-          this.errors = [];
-          window.sssFetch(this.$root.getAttribute('data-url'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify(body)
-          }).then(function (response) {
-            return response.json();
-          }).then(function (data) {
-            var key;
-            if (data && data.summary) {
-              self.script = data.summary.script;
-              self.environment = data.summary.environment;
-              self.when = data.summary.when;
-              self.priority = String(data.summary.priority);
-              self.answers = data.summary.answers.map(function (r, i) {
-                return { id: i, label: r.label, value: String(r.value) };
-              });
-              self.command = (data.argv || []).map(displayToken).join(' ');
-            } else {
-              for (key in (data && data.errors) || {}) {
-                if (Object.prototype.hasOwnProperty.call(data.errors, key)) {
-                  self.errors.push({ id: self.errors.length, text: String(data.errors[key]) });
-                }
-              }
-              if (!self.errors.length) {
-                self.errors.push({ id: 0, text: (data && data.error) || 'Não foi possível montar o resumo.' });
-              }
-            }
-          }).catch(function () {
-            self.errors = [{ id: 0, text: 'Não foi possível montar o resumo. Tente novamente.' }];
-          }).then(function () {
-            self.loading = false;
-          });
-        }
-      };
+  function errorTexts(data) {
+    var texts = [];
+    var key;
+    for (key in (data && data.errors) || {}) {
+      if (Object.prototype.hasOwnProperty.call(data.errors, key)) {
+        texts.push(String(data.errors[key]));
+      }
+    }
+    if (!texts.length) {
+      texts.push((data && data.error) || 'Não foi possível montar o resumo.');
+    }
+    return texts;
+  }
+
+  SSS.component('ticketTrigger', function (form) {
+    var el = {
+      loading: dom.ref(form, 'loading'),
+      summary: dom.ref(form, 'summary'),
+      script: dom.ref(form, 'script'),
+      environment: dom.ref(form, 'environment'),
+      when: dom.ref(form, 'when'),
+      priority: dom.ref(form, 'priority'),
+      answers: dom.ref(form, 'answers'),
+      answerTemplate: dom.ref(form, 'answerTemplate'),
+      command: dom.ref(form, 'command'),
+      errors: dom.ref(form, 'errors')
+    };
+    var modal = SSS.modal({
+      modal: dom.ref(form, 'modal'),
+      backdrop: dom.ref(form, 'backdrop'),
+      initialFocus: dom.ref(form, 'cancel'),
+      returnFocus: dom.ref(form, 'trigger')
     });
+
+    function renderAnswers(answers) {
+      var fragment = document.createDocumentFragment();
+      answers.forEach(function (r) {
+        var item = dom.clone(el.answerTemplate);
+        dom.setText(item.querySelector('[data-part="label"]'), r.label);
+        dom.setText(item.querySelector('[data-part="value"]'), r.value);
+        fragment.appendChild(item);
+      });
+      el.answers.replaceChildren(fragment);
+      dom.show(el.answers, answers.length > 0);
+    }
+
+    function showErrors(texts) {
+      dom.fillList(el.errors, texts);
+      dom.show(el.errors, texts.length > 0);
+    }
+
+    function load() {
+      var body = {
+        script_id: form.elements.script_id.value,
+        environment: form.elements.environment.value,
+        priority: form.elements.priority ? form.elements.priority.value : '',
+        scheduled_at: form.elements.scheduled_at ? form.elements.scheduled_at.value : '',
+        answers: collectAnswers(form)
+      };
+      dom.show(el.loading, true);
+      dom.show(el.summary, false);
+      showErrors([]);
+      SSS.fetch(form.getAttribute('data-url-preview'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(body)
+      }).then(function (response) {
+        return response.json();
+      }).then(function (data) {
+        var summary = data && data.summary;
+        if (!summary) {
+          showErrors(errorTexts(data));
+          return;
+        }
+        dom.setText(el.script, summary.script);
+        dom.setText(el.environment, summary.environment);
+        dom.setText(el.when, summary.when);
+        dom.setText(el.priority, summary.priority);
+        renderAnswers(summary.answers.map(function (r) { return { label: r.label, value: String(r.value) }; }));
+        dom.setText(el.command, (data.argv || []).map(displayToken).join(' '));
+        dom.show(el.summary, true);
+      }).catch(function () {
+        showErrors(['Não foi possível montar o resumo. Tente novamente.']);
+      }).then(function () {
+        dom.show(el.loading, false);
+      });
+    }
+
+    dom.on(form, 'click', 'open', function () {
+      modal.open();
+      load();
+    });
+    dom.on(form, 'click', 'close', function () { modal.close(); });
   });
 }());

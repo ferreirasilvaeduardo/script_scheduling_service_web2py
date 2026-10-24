@@ -3,7 +3,7 @@
 
 Verifica conformidade com AGENTS.md §2.1, §2.3, §3.2 e §7.4:
 1. Compila todos os arquivos .py de APP (exceto dev/scripts/) e bin/ sob Python 3.6;
-2. Procura tokens proibidos por regex (recursos >= 3.7, chamadas inseguras de processo, XML e x-html);
+2. Procura tokens proibidos por regex (recursos >= 3.7, chamadas inseguras de processo, XML e diretiva do Alpine);
 3. Procura URLs externas (http:// e https://) nos ativos frontend em static/js/app/, static/css/ e views/.
 """
 import ast
@@ -68,7 +68,8 @@ FORBIDDEN_PATTERNS = [
     (r"\bmsvcrt\b", "modulo 'msvcrt' proibido"),
     # Web / Frontend (AGENTS §2.3, §3.4)
     (r"\bXML\s*\(", "escape 'XML()' inseguro com dados proibido"),
-    (r"x-html", "diretiva 'x-html' proibida (use x-text)"),
+    # HTML montado em Python sem Alpine (CR-021b2); as views sao conferidas por test_frontend_components.
+    (r"(?<![\w-])x-[a-z]+(?:[:.][\w.-]+)?=\"", "diretiva do Alpine proibida (CR-021: texto so por textContent)"),
 ]
 
 _COMPILED_PATTERNS = [
@@ -384,6 +385,8 @@ class TestPy36Compat(unittest.TestCase):
             ("eval('1+1')", "eval"),
             ("XML(variavel)", "XML()"),
             ('<div x-html="msg"></div>', "x-html"),
+            ('<span x-text="label"></span>', "x-text"),
+            ('<div x-on:click.prevent="go"></div>', "x-on"),
         ]
 
         for line, desc in cases:

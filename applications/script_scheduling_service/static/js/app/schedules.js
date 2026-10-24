@@ -1,10 +1,13 @@
 /* SSS - formulario de regra de agendamento (schedules/form).
- * Carregado com defer ANTES do alpine.min.js. Nenhuma regra decisoria fica aqui: os campos
- * condicionais so ajudam o preenchimento e a previa e calculada pelo servidor (recurrence.py).
+ * Nenhuma regra decisoria fica aqui: os campos condicionais so ajudam o preenchimento e a previa e
+ * calculada pelo servidor (recurrence.py). Cada bloco condicional declara em data-types os tipos de
+ * recorrencia em que aparece.
  */
 (function () {
   'use strict';
 
+  var SSS = window.SSS;
+  var dom = SSS.dom;
   var DEBOUNCE_MS = 500;
   var FIELDS = ['recurrence_type', 'start_date', 'end_date', 'run_time', 'month_day', 'cron_expression'];
 
@@ -24,107 +27,106 @@
     return days.join(',');
   }
 
-  function list(items) {
-    var listItems = [];
-    var i;
-    for (i = 0; i < items.length; i++) {
-      listItems.push({ id: i, text: String(items[i]) });
-    }
-    return listItems;
-  }
-
   function mapValues(map) {
-    var listItems = [];
+    var values = [];
     var key;
     for (key in map) {
       if (Object.prototype.hasOwnProperty.call(map, key)) {
-        listItems.push(map[key]);
+        values.push(String(map[key]));
       }
     }
-    return listItems;
+    return values;
   }
 
-  document.addEventListener('alpine:init', function () {
-    window.Alpine.data('scheduleRule', function () {
-      return {
-        type: '',
-        loading: false,
-        description: '',
-        dates: [],
-        errors: [],
-        timer: null,
-        sequence: 0,
-        init: function () {
-          this.type = this.$refs.type.value;
-          this.load();
-        },
-        get isOnce() { return this.type === 'ONCE'; },
-        get notOnce() { return this.type !== 'ONCE'; },
-        get hasHour() { return this.type === 'DAILY' || this.type === 'WEEKLY' || this.type === 'MONTHLY'; },
-        get isWeekly() { return this.type === 'WEEKLY'; },
-        get isMonthly() { return this.type === 'MONTHLY'; },
-        get isCron() { return this.type === 'CRON'; },
-        get hasDescription() { return this.description !== ''; },
-        get hasDates() { return this.dates.length > 0; },
-        get hasErrors() { return this.errors.length > 0; },
-        changeType: function () {
-          this.type = this.$refs.type.value;
-          if (this.type === 'ONCE') {
-            // data_fim nao se aplica a UNICA (README §7.2): o campo escondido e limpo.
-            var end = this.$root.querySelector('#field-end_date');
-            if (end) {
-              end.value = '';
-            }
-          }
-        },
-        schedulePreview: function () {
-          var self = this;
-          if (this.timer) {
-            window.clearTimeout(this.timer);
-          }
-          this.timer = window.setTimeout(function () {
-            self.timer = null;
-            self.load();
-          }, DEBOUNCE_MS);
-        },
-        load: function () {
-          var self = this;
-          var form = this.$root;
-          var body = { week_days: weekDays(form) };
-          var i;
-          // Respostas fora de ordem sao descartadas: so a ultima requisicao atualiza a tela.
-          var number = ++this.sequence;
-          for (i = 0; i < FIELDS.length; i++) {
-            body[FIELDS[i]] = value(form, FIELDS[i]);
-          }
-          this.loading = true;
-          window.sssFetch(form.getAttribute('data-url-preview'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify(body)
-          }).then(function (response) {
-            if (response.status === 403) {
-              return null;
-            }
-            return response.json();
-          }).then(function (data) {
-            if (!data || number !== self.sequence) {
-              return;
-            }
-            self.description = data.description || '';
-            self.dates = list(data.dates || []);
-            self.errors = list(mapValues(data.errors || {}));
-          }).catch(function () {
-            if (number === self.sequence) {
-              window.SSS.toast('error', 'Não foi possível calcular a prévia. Tente novamente.');
-            }
-          }).then(function () {
-            if (number === self.sequence) {
-              self.loading = false;
-            }
-          });
+  SSS.component('scheduleRule', function (root) {
+    var el = {
+      type: dom.ref(root, 'type'),
+      fields: dom.ref(root, 'fields'),
+      loading: dom.ref(root, 'loading'),
+      description: dom.ref(root, 'description'),
+      descriptionText: dom.ref(root, 'descriptionText'),
+      dates: dom.ref(root, 'dates'),
+      errors: dom.ref(root, 'errors')
+    };
+    var conditional = Array.prototype.slice.call(root.querySelectorAll('[data-types]'));
+    var timer = null;
+    var sequence = 0;
+
+    function renderType() {
+      var type = el.type.value;
+      conditional.forEach(function (block) {
+        dom.show(block, block.getAttribute('data-types').split(' ').indexOf(type) !== -1);
+      });
+    }
+
+    function renderPreview(description, dates, errors) {
+      dom.setText(el.descriptionText, description);
+      dom.show(el.description, description !== '');
+      dom.fillList(el.dates, dates);
+      dom.show(el.dates, dates.length > 0);
+      dom.fillList(el.errors, errors);
+      dom.show(el.errors, errors.length > 0);
+    }
+
+    function load() {
+      var body = { week_days: weekDays(root) };
+      var i;
+      // Respostas fora de ordem sao descartadas: so a ultima requisicao atualiza a tela.
+      var number = ++sequence;
+      for (i = 0; i < FIELDS.length; i++) {
+        body[FIELDS[i]] = value(root, FIELDS[i]);
+      }
+      dom.show(el.loading, true);
+      SSS.fetch(root.getAttribute('data-url-preview'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(body)
+      }).then(function (response) {
+        if (response.status === 403) {
+          return null;
         }
-      };
+        return response.json();
+      }).then(function (data) {
+        if (!data || number !== sequence) {
+          return;
+        }
+        renderPreview(data.description || '', (data.dates || []).map(String), mapValues(data.errors || {}));
+      }).catch(function () {
+        if (number === sequence) {
+          SSS.toast('error', 'Não foi possível calcular a prévia. Tente novamente.');
+        }
+      }).then(function () {
+        if (number === sequence) {
+          dom.show(el.loading, false);
+        }
+      });
+    }
+
+    function schedulePreview() {
+      if (timer) {
+        window.clearTimeout(timer);
+      }
+      timer = window.setTimeout(function () {
+        timer = null;
+        load();
+      }, DEBOUNCE_MS);
+    }
+
+    dom.on(root, 'change', 'changeType', function () {
+      var end;
+      renderType();
+      if (el.type.value === 'ONCE') {
+        // data_fim nao se aplica a UNICA (README §7.2): o campo escondido e limpo.
+        end = root.querySelector('#field-end_date');
+        if (end) {
+          end.value = '';
+        }
+      }
     });
+    el.fields.addEventListener('input', schedulePreview);
+    el.fields.addEventListener('change', schedulePreview);
+
+    renderType();
+    load();
   });
 }());
