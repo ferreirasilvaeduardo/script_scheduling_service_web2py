@@ -665,7 +665,7 @@
   font-size: var(--sss-fs-sm);
 }
 
-/* Modal aberto/fechado so por classe: sem Alpine, permanece oculto. */
+/* Modal aberto/fechado so por classe: sem JavaScript, permanece oculto. */
 .sss-modal-backdrop:not(.modal-backdrop) {
   display: none;
 }

@@ -1,12 +1,16 @@
-/* SSS - componentes Alpine reutilizados pelos partials de views/components/.
- * Carregado com defer ANTES do alpine.min.js (mesmo motivo de sss.js).
- * Build CSP: as views so referenciam nomes de propriedade/metodo; classes condicionais
- * saem de getters porque objetos literais em :class nao sao avaliados.
+/* SSS - componentes reutilizados pelos partials de views/components/ e por mais de uma tela.
+ * Carregado com defer depois do dom.js (CR-021). O 'confirmation' do Alpine, ao fim do arquivo, atende
+ * so as telas em que o modal usa o estado de outro componente Alpine (matriz de permissoes,
+ * homologacao do script e disparo) e sai com elas no CR-021b.
  */
 (function () {
   'use strict';
 
+  var SSS = window.SSS;
+  var dom = SSS.dom;
   var COPY_FEEDBACK_MS = 2000;
+  var COPY_LABEL = 'Copiar';
+  var COPIED_LABEL = 'Copiado!';
 
   function copyFallback(text) {
     var area = document.createElement('textarea');
@@ -29,38 +33,133 @@
     return String(text || '').toLowerCase().replace(/^\s+|\s+$/g, '');
   }
 
-  document.addEventListener('alpine:init', function () {
-    // Busca por grupo de [data-search] (Rodar um script e nova regra de agendamento, CR-017c).
-    window.Alpine.data('scriptSearch', function () {
-      return {
-        noResult: false,
-        filter: function () {
-          var term = normalize(this.$refs.searchTerm.value);
-          var groups = this.$root.querySelectorAll('[data-group]');
-          var visibleTotal = 0;
-          var g;
-          var items;
-          var i;
-          var visible;
-          var show;
-          for (g = 0; g < groups.length; g++) {
-            items = groups[g].querySelectorAll('[data-search]');
-            visible = 0;
-            for (i = 0; i < items.length; i++) {
-              show = term === '' || items[i].getAttribute('data-search').indexOf(term) !== -1;
-              items[i].hidden = !show;
-              if (show) {
-                visible++;
-              }
-            }
-            groups[g].hidden = visible === 0;
-            visibleTotal += visible;
-          }
-          this.noResult = visibleTotal === 0;
-        }
-      };
-    });
+  function isEscape(evt) {
+    return evt.key === 'Escape' || evt.key === 'Esc';
+  }
 
+  // Busca por grupo de [data-search] (Rodar um script e nova regra de agendamento, CR-017c).
+  SSS.component('scriptSearch', function (root) {
+    var term = dom.ref(root, 'searchTerm');
+    var noResult = dom.ref(root, 'noResult');
+
+    dom.on(root, 'input', 'filter', function () {
+      var value = normalize(term.value);
+      var groups = root.querySelectorAll('[data-group]');
+      var visibleTotal = 0;
+      var g;
+      var items;
+      var i;
+      var visible;
+      var show;
+      for (g = 0; g < groups.length; g++) {
+        items = groups[g].querySelectorAll('[data-search]');
+        visible = 0;
+        for (i = 0; i < items.length; i++) {
+          show = value === '' || items[i].getAttribute('data-search').indexOf(value) !== -1;
+          items[i].hidden = !show;
+          if (show) {
+            visible++;
+          }
+        }
+        groups[g].hidden = visible === 0;
+        visibleTotal += visible;
+      }
+      dom.show(noResult, visibleTotal === 0);
+    });
+  });
+
+  // Modal de confirmacao com POST real (components/confirm_modal.html e Redefinir senha).
+  SSS.component('confirmation', function (root) {
+    var trigger = dom.ref(root, 'trigger');
+    var modal = dom.ref(root, 'modal');
+    var backdrop = dom.ref(root, 'backdrop');
+    var cancel = dom.ref(root, 'cancel');
+    var isOpen = false;
+
+    function open() {
+      isOpen = true;
+      modal.classList.add('show', 'd-block');
+      backdrop.classList.add('modal-backdrop', 'fade', 'show');
+      document.body.classList.add('modal-open');
+      cancel.focus();
+    }
+
+    function close() {
+      if (!isOpen) {
+        return;
+      }
+      isOpen = false;
+      modal.classList.remove('show', 'd-block');
+      backdrop.classList.remove('modal-backdrop', 'fade', 'show');
+      document.body.classList.remove('modal-open');
+      trigger.focus();
+    }
+
+    dom.on(root, 'click', 'open', open);
+    dom.on(root, 'click', 'close', close);
+    // Clique no fundo escuro: o alvo e o proprio .modal, fora do .modal-dialog.
+    modal.addEventListener('click', function (evt) {
+      if (evt.target === modal) {
+        close();
+      }
+    });
+    document.addEventListener('keydown', function (evt) {
+      if (isOpen && isEscape(evt)) {
+        close();
+      }
+    });
+  });
+
+  SSS.component('filters', function (root) {
+    // Limpa os campos visiveis e submete; hidden (tamanho etc.) e preservado.
+    dom.on(root, 'click', 'clear', function (evt) {
+      var fields = root.querySelectorAll('input:not([type="hidden"]), select');
+      var i;
+      evt.preventDefault();
+      for (i = 0; i < fields.length; i++) {
+        if (fields[i].tagName === 'SELECT') {
+          fields[i].selectedIndex = 0;
+        } else if (fields[i].type === 'checkbox') {
+          fields[i].checked = false;
+        } else {
+          fields[i].value = '';
+        }
+      }
+      if (root.requestSubmit) {
+        root.requestSubmit();
+      } else {
+        root.submit();
+      }
+    });
+  });
+
+  SSS.component('copy', function (root) {
+    var label = dom.ref(root, 'label');
+
+    dom.on(root, 'click', 'copy', function (evt, el) {
+      var text = el.getAttribute('data-text') || '';
+      function success() {
+        dom.setText(label, COPIED_LABEL);
+        SSS.toast('success', 'Texto copiado para a área de transferência.');
+        window.setTimeout(function () { dom.setText(label, COPY_LABEL); }, COPY_FEEDBACK_MS);
+      }
+      function failure() {
+        SSS.toast('error', 'Não foi possível copiar. Selecione o texto e copie manualmente.');
+      }
+      // navigator.clipboard so existe em contexto seguro (HTTPS ou localhost).
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(success, function () {
+          if (copyFallback(text)) { success(); } else { failure(); }
+        });
+      } else if (copyFallback(text)) {
+        success();
+      } else {
+        failure();
+      }
+    });
+  });
+
+  document.addEventListener('alpine:init', function () {
     window.Alpine.data('confirmation', function () {
       return {
         isOpen: false,
@@ -83,63 +182,6 @@
           this.isOpen = false;
           document.body.classList.remove('modal-open');
           this.$refs.trigger.focus();
-        }
-      };
-    });
-
-    window.Alpine.data('filters', function () {
-      return {
-        // Limpa os campos visiveis e submete; hidden (tamanho etc.) e preservado.
-        clear: function (evt) {
-          var form = this.$root;
-          var fields = form.querySelectorAll('input:not([type="hidden"]), select');
-          var i;
-          evt.preventDefault();
-          for (i = 0; i < fields.length; i++) {
-            if (fields[i].tagName === 'SELECT') {
-              fields[i].selectedIndex = 0;
-            } else if (fields[i].type === 'checkbox') {
-              fields[i].checked = false;
-            } else {
-              fields[i].value = '';
-            }
-          }
-          if (form.requestSubmit) {
-            form.requestSubmit();
-          } else {
-            form.submit();
-          }
-        }
-      };
-    });
-
-    window.Alpine.data('copy', function () {
-      return {
-        copied: false,
-        get label() {
-          return this.copied ? 'Copiado!' : 'Copiar';
-        },
-        copy: function (evt) {
-          var self = this;
-          var text = evt.currentTarget.getAttribute('data-text') || '';
-          function success() {
-            self.copied = true;
-            window.SSS.toast('success', 'Texto copiado para a área de transferência.');
-            window.setTimeout(function () { self.copied = false; }, COPY_FEEDBACK_MS);
-          }
-          function failure() {
-            window.SSS.toast('error', 'Não foi possível copiar. Selecione o texto e copie manualmente.');
-          }
-          // navigator.clipboard so existe em contexto seguro (HTTPS ou localhost).
-          if (navigator.clipboard && window.isSecureContext) {
-            navigator.clipboard.writeText(text).then(success, function () {
-              if (copyFallback(text)) { success(); } else { failure(); }
-            });
-          } else if (copyFallback(text)) {
-            success();
-          } else {
-            failure();
-          }
         }
       };
     });

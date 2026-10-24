@@ -85,6 +85,6 @@ page_count = None}}
   <h2 class="sss-card-title" id="sec-copy">copiar</h2>
   <div class="sss-card-body sss-copy-value">
     <code id="text-copy">{{=copy_text}}</code>
-    <button type="button" class="btn btn-sm btn-outline-secondary" x-data="copy" data-text="{{=copy_text}}" aria-describedby="text-copy" @click="copy"><span x-text="label">Copiar</span></button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-component="copy" data-action="copy" data-text="{{=copy_text}}" aria-describedby="text-copy"><span data-ref="label">Copiar</span></button>
   </div>
 </section>

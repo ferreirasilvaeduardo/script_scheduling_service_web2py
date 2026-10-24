@@ -73,11 +73,11 @@
   {{include}}
 </main>
 
-<div class="sss-toasts" x-data="toast" aria-live="polite">
-  <template x-for="t in items" :key="t.id">
-    <div class="sss-toast" :class="t.classValue" role="status">
-      <span class="sss-toast-msg" x-text="t.message"></span>
-      <button type="button" class="sss-toast-close" aria-label="Fechar notificação" @click="close">
+<div class="sss-toasts" data-component="toast" aria-live="polite">
+  <template data-ref="item">
+    <div class="sss-toast" role="status">
+      <span class="sss-toast-msg" data-ref="message"></span>
+      <button type="button" class="sss-toast-close" aria-label="Fechar notificação" data-action="close">
         <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#icon-close"></use></svg>
       </button>
     </div>
@@ -89,6 +89,7 @@
   <span>Ambiente <strong>{{=response.sss_env}}</strong> · Versão {{=response.sss_version}}</span>
 </footer>
 
+<script defer src="{{=URL('static', 'js/app/dom.js')}}"></script>
 <script defer src="{{=URL('static', 'js/app/sss.js')}}"></script>
 <script defer src="{{=URL('static', 'js/app/components.js')}}"></script>
 {{for _sss_js in response.sss_scripts or []:}}

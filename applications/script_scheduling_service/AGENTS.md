@@ -72,8 +72,8 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 * Proibido CDN, Google Fonts, `@import` remoto e qualquer URL externa em HTML, CSS ou JS.
 * **Ativos permitidos:**
   * `static/bootstrap/` (5.3.8)
-  * `static/js/alpine.min.js` (**build CSP** do Alpine)
-  * `static/js/app/*.js`
+  * `static/js/alpine.min.js` (**build CSP** do Alpine; em retirada pelo CR-021, sai no 021b)
+  * `static/js/app/*.js`, com o `dom.js` carregado antes dos demais
   * `static/css/*.css` (estilos próprios, sobre o Bootstrap)
   * `static/img/` (inclui sprite SVG local de ícones)
   * `static/fonts/`
@@ -82,7 +82,13 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
   * `style=` inline com dado dinâmico;
   * `eval` e `new Function`;
   * `x-html` (use `x-text`);
+  * `innerHTML`, `outerHTML`, `insertAdjacentHTML` e `document.write` em `static/js/app/` (texto só por `textContent`; marcação repetida vem de um `<template>` do servidor, copiado por `SSS.dom.clone`);
   * expressões Alpine com lógica complexa no HTML (registre com `Alpine.data()` em `static/js/app/`).
+* **Componentes sem framework (CR-021, D7):** componente novo ou convertido **não usa Alpine**:
+  * a raiz tem `data-component="<nome>"` e a fábrica é registrada uma vez com `SSS.component('<nome>', function (root) { ... })` em `static/js/app/`; o `dom.js` monta cada raiz uma vez no `DOMContentLoaded`;
+  * eventos só por delegação, `SSS.dom.on(root, '<evento>', '<ação>', fn)` com `data-action="<ação>"` no elemento; elementos por `data-ref` (`SSS.dom.ref`), que não enxerga os de um componente aninhado;
+  * o estado fica no JavaScript; mostrar e esconder é o atributo `hidden` (`SSS.dom.show`), e o estado inicial escondido sai do servidor com `hidden` (sem `x-cloak`);
+  * todo `data-component` das views tem registro, e todo registro é usado (`scripts/test_frontend_components.py`).
 * Toda requisição `fetch` que altera estado envia o cabeçalho `X-CSRF-Token`.
 * **Gráficos** (README §5.8):
   * SVG gerado no servidor (ex.: `ui_helpers.stacked_bars`), sem biblioteca de gráficos e sem `style=` inline;
@@ -403,6 +409,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 | CR-017 em `test_admin_environments_service.py`, `test_ticket_service.py`, `test_ui_helpers.py`, `test_permissions_service.py`, `test_schedules_service.py`, `test_admin_scripts_service.py` e `test_catalog_service.py` | `is_production` marcado e desmarcado no cadastro, com auditoria; o destaque de produção do disparo segue o cadastro e não o nome; item "Tickets" do menu com `EXEC_SCRIPT` ou `VIEW_LOGS`; um só item para rodar ("Rodar um script", `tickets/catalog`), sem "Disparar Scripts" no menu, e "O que eu posso fazer" levando `EXEC_SCRIPT` aos cartões (017b); a prévia do comando pelo `trigger_summary`, o mesmo do modal; em `test_schedules_service.py`, a nova regra com a escolha em lista e o salto com um ambiente só, e no menu os itens Agenda e Agentes na Operação (017c); em `test_admin_scripts_service.py`, o quadro "Quem pode rodar" (pronto, só administradores, sem homologação, script desativado, sem cálculo injetado), e em `test_catalog_service.py`, o atalho Agendar só com `MANAGE_SCHEDULES` (017d) |
 | CR-018 em `test_rbac.py`, `test_ticket_service.py`, `test_schedules_service.py`, `test_admin_parameters_service.py`, `test_admin_scripts_service.py`, `test_seed_fake.py`, `test_permissions_service.py`, `test_audit_service.py`, `test_catalog_service.py` e `test_repo_contract.py` | Cancelar ticket de terceiro só com `CANCEL_TICKET` e `VIEW_LOGS`; filtro por solicitante ignorado para quem não vê logins (o próprio login continua); regras em risco depois de tirar uma opção do parâmetro (`rules_at_risk`, `impact_warning`); aviso do formulário de parâmetro e depois de salvar os vínculos; tickets na fila avisados ao trocar o arquivo do script (018a); nomes "Rodar Scripts" e "Consultar Tickets" no seed e lidos do cadastro nos motivos (`test_seed_fake`, `test_permissions_service`), "O que eu posso fazer" só com a contagem de scripts, motivo em nome simples na lista de tickets, ambientes do filtro das regras e nomes simples da Auditoria (`test_audit_service`) (018b); em `test_catalog_service.py`, as telas de execução sem leitura do catálogo por script (cartões: uma leitura de ambientes, de scripts e dos executáveis; disparo: três leituras), e em `test_repo_contract.py`, `RepoAudit.count` igual ao `iterate`, com filtro e teto, no FAKE e no Oracle (018c); em `test_admin_environments_service.py`, o DSN Easy Connect com a porta opcional e todo DSN do seed aceito pela tela (correção do DSN, antes do 018f3) |
 | `test_catalog_service.py` | Rodar um script (cartões) e histórico: mesmo escopo da lista de tickets (com e sem `VIEW_LOGS`), script fora das rotinas dá 404, contrato sem LOB e limitado, números do resumo iguais aos do gráfico e geometria do gráfico |
+| `test_frontend_components.py` `[CR-021a]` | Views convertidas sem sintaxe do Alpine e os componentes Alpine retirados ausentes de todas as views; o `confirmation` do Alpine só nas três telas acopladas (até o 021b); todo `data-component` com registro `SSS.component` e todo registro usado, sem duplicata; `static/js/app/` sem `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`, `eval` e `new Function`; `dom.js` como primeiro script do layout; tipos do toast iguais aos modificadores `.sss-toast-*` do CSS |
 | `test_color_contrast.py` | Todo par texto/fundo dos tokens de `sss.css` com contraste WCAG AA (≥ 4,5:1), nos modos claro e escuro |
 | `test_db_conn.py` `[F7.0]` | Com módulos falsos de driver: cadeia `auto` Thin → Thick → cx_Oracle, parada em erro de autenticação, valores forçados, senha fora de argv/ambiente/log, mapa de erros por driver e modo, inclusive *call timeout* e erros de failover (CR-007, R-12), reconexão sem `sleep`; cálculo do orçamento de abertura do DSN descritor (CR-008, R-17); sondagem com a conta do papel que conecta (`--user` no argv, senha só no stdin; o `connect` do papel `monitor` sonda com a conta do monitor, F9.1d); primeira conexão em INFO (`Conectando`/`Conexao estabelecida`) e o WARN `Tentando reconexao` só nas reconexões (F9.1d) |
 
@@ -419,7 +426,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 - [ ] Toda transação com `COMMIT`/`ROLLBACK` explícitos; lock de linha com `FOR UPDATE WAIT n` (n ≤ 5).
 - [ ] Nenhum identificador novo acima de 30 caracteres; registro de identificadores atualizado.
 - [ ] Processos: primitivas de SO só em `modules/os_platform/` (somente POSIX), exceto `resource.setrlimit` em `run`, `os.killpg` em `term`/`kill`, leitura de `/proc/<pid>/stat` em `_identity` e `/proc/<pid>/cwd`/`pwdx` em `stop-ticket` no helper; pasta de saída só pelo helper e por `log_paths.output_dir`, pasta de trabalho só pelo helper e por `log_paths.script_work_dir` (CR-019), sem zip parcial e sem alterar o resultado do ticket (CR-012); allowlist lógica, `path_guard`, `env_builder`, sem PIPE e encerramento escalonado; caminhos de log só por `log_paths`.
-- [ ] Web: guarda de login/RBAC, CSRF em POST, saída escapada, sem `XML()` com dado.
+- [ ] Web: guarda de login/RBAC, CSRF em POST, saída escapada, sem `XML()` com dado; no navegador, texto só por `textContent` e componente novo sem Alpine (§2.3).
 - [ ] Entrada recusada (nunca truncada) acima do limite; nenhum valor sensível, nem derivado, no HTML.
 - [ ] Mensagens ao usuário pelo catálogo de `ui_helpers`, em duas partes; telas de consulta só com `GET`, sem gravação nem auditoria.
 - [ ] Auditoria gravada pelo repositório na mesma operação da ação (`audit=`).

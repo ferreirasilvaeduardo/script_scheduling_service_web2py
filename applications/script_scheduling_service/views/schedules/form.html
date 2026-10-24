@@ -23,7 +23,7 @@ _help_end = u'Opcional. A última execução acontece até esta data e hora (inc
 </div>
 
 {{if not editing and step == 1:}}
-<section class="sss-card" aria-labelledby="title-script" x-data="scriptSearch">
+<section class="sss-card" aria-labelledby="title-script" data-component="scriptSearch">
   <h2 class="sss-card-title" id="title-script">1. Escolha o script que a regra vai rodar.</h2>
   <div class="sss-card-body">
     {{if not groups:}}
@@ -31,9 +31,9 @@ _help_end = u'Opcional. A última execução acontece até esta data e hora (inc
     {{else:}}
     <div class="sss-search mb-3">
       <label class="form-label" for="search-script">Buscar script</label>
-      <input class="form-control form-control-sm" type="search" id="search-script" maxlength="60" autocomplete="off" placeholder="Nome, descrição, grupo ou categoria" x-ref="searchTerm" @input="filter">
+      <input class="form-control form-control-sm" type="search" id="search-script" maxlength="60" autocomplete="off" placeholder="Nome, descrição, grupo ou categoria" data-ref="searchTerm" data-action="filter">
     </div>
-    <p class="sss-search-empty" x-show="noResult" x-cloak role="status">Nenhum script corresponde à busca.</p>
+    <p class="sss-search-empty" data-ref="noResult" hidden role="status">Nenhum script corresponde à busca.</p>
     {{for _g in groups:}}
     <section class="sss-group-scripts" data-group>
       <h3 class="sss-group-title">{{=_g['script_group']}} <span class="sss-group-category">/ {{=_g['category']}}</span></h3>

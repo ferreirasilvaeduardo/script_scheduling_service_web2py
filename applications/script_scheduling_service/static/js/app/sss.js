@@ -1,15 +1,13 @@
-/* SSS - namespace e componentes Alpine.
- * Carregado com defer ANTES do alpine.min.js: o listener de alpine:init precisa existir
- * quando o Alpine iniciar. Expressoes nas views sao apenas nomes de propriedade/metodo,
- * unico formato aceito pelo build CSP (sem eval/new Function).
+/* SSS - namespace, tema, fetch com CSRF e notificacoes (toast).
+ * Carregado com defer depois do dom.js, que monta os componentes registrados aqui (CR-021).
  */
 (function () {
   'use strict';
 
   var SSS = window.SSS = window.SSS || {};
-  var TOAST_TYPES = { success: 1, error: 1, alert: 1, info: 1 };
+  // Os mesmos modificadores de .sss-toast-* em sss.css.
+  var TOAST_TYPES = { success: 1, error: 1, warning: 1, info: 1 };
   var TOAST_DURATION_MS = 6000;
-  var nextId = 1;
 
   // Bootstrap 5.3 nao segue prefers-color-scheme sozinho; o tema vem do sistema.
   var darkScheme = window.matchMedia('(prefers-color-scheme: dark)');
@@ -62,42 +60,37 @@
     });
   };
 
-  document.addEventListener('alpine:init', function () {
-    window.Alpine.data('toast', function () {
-      return {
-        items: [],
-        init: function () {
-          var self = this;
-          window.addEventListener('sss:toast', function (evt) {
-            self.add(evt.detail.type, evt.detail.message);
-          });
-        },
-        add: function (type, message) {
-          var id = nextId++;
-          var self = this;
-          if (!TOAST_TYPES[type]) {
-            type = 'info';
-          }
-          this.items.push({ id: id, message: message, classValue: 'sss-toast-' + type });
-          window.setTimeout(function () { self.remove(id); }, TOAST_DURATION_MS);
-        },
-        remove: function (id) {
-          this.items = this.items.filter(function (t) { return t.id !== id; });
-        },
-        // Chamado dentro do x-for: o escopo mesclado expoe o item corrente como this.t.
-        close: function () {
-          this.remove(this.t.id);
-        }
-      };
-    });
+  SSS.component('toast', function (root) {
+    var template = SSS.dom.ref(root, 'item');
 
-    window.Alpine.data('toastDemo', function () {
-      return {
-        trigger: function (evt) {
-          var button = evt.currentTarget;
-          SSS.toast(button.getAttribute('data-type'), button.getAttribute('data-message'));
-        }
-      };
+    function add(type, message) {
+      var item = SSS.dom.clone(template);
+      if (!TOAST_TYPES[type]) {
+        type = 'info';
+      }
+      item.classList.add('sss-toast-' + type);
+      SSS.dom.setText(item.querySelector('[data-ref="message"]'), message);
+      root.appendChild(item);
+      window.setTimeout(function () { remove(item); }, TOAST_DURATION_MS);
+    }
+
+    function remove(item) {
+      if (item.parentNode === root) {
+        root.removeChild(item);
+      }
+    }
+
+    window.addEventListener('sss:toast', function (evt) {
+      add(evt.detail.type, evt.detail.message);
+    });
+    SSS.dom.on(root, 'click', 'close', function (evt, el) {
+      remove(el.closest('.sss-toast'));
+    });
+  });
+
+  SSS.component('toastDemo', function (root) {
+    SSS.dom.on(root, 'click', 'trigger', function (evt, el) {
+      SSS.toast(el.getAttribute('data-type'), el.getAttribute('data-message'));
     });
   });
 }());

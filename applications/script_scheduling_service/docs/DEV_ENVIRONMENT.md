@@ -93,6 +93,7 @@ O SSS adota arquitetura de frontend **100% hermética**, em conformidade com pol
 * **Alpine.js (build CSP):** Fornecido localmente em:
   * `applications/script_scheduling_service/static/js/alpine.min.js`
   * O build CSP (`@alpinejs/csp`) não utiliza `new Function` ou `eval`, permitindo o cumprimento da política CSP `script-src 'self'`.
+  * Em retirada pelo CR-021: os componentes novos e os já convertidos usam só `static/js/app/dom.js` (AGENTS §2.3), e o arquivo sai no 021b.
 
 ---
 

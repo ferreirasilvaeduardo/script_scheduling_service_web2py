@@ -113,26 +113,26 @@ pass
     {{for field in _password_fields:}}
     {{include 'components/form_field.html'}}
     {{pass}}
-    <div class="sss-confirmation sss-form-actions" x-data="confirmation" @keydown.escape.window="close">
-      <button type="button" class="btn btn-outline-primary" x-ref="trigger" @click="open">Redefinir senha</button>
-      <div class="modal sss-modal" :class="modalClass" role="dialog" aria-modal="true" aria-labelledby="modal-password-title" aria-describedby="modal-password-text" tabindex="-1" @click.self="close">
+    <div class="sss-confirmation sss-form-actions" data-component="confirmation">
+      <button type="button" class="btn btn-outline-primary" data-ref="trigger" data-action="open">Redefinir senha</button>
+      <div class="modal sss-modal" data-ref="modal" role="dialog" aria-modal="true" aria-labelledby="modal-password-title" aria-describedby="modal-password-text" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content">
             <div class="modal-header">
               <h2 class="modal-title fs-5" id="modal-password-title">Redefinir a senha de {{=_u['login']}}</h2>
-              <button type="button" class="btn-close" aria-label="Fechar" @click="close"></button>
+              <button type="button" class="btn-close" aria-label="Fechar" data-action="close"></button>
             </div>
             <div class="modal-body">
               <p class="mb-0" id="modal-password-text">A senha atual deixa de valer, e as tentativas com falha e o bloqueio são zerados. Informe a nova senha ao usuário por um canal seguro.</p>
             </div>
             <div class="modal-footer">
-              <button type="button" class="btn btn-sm btn-outline-secondary" x-ref="cancel" @click="close">Cancelar</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-ref="cancel" data-action="close">Cancelar</button>
               <button type="submit" class="btn btn-sm btn-primary">Confirmar redefinição</button>
             </div>
           </div>
         </div>
       </div>
-      <div class="sss-modal-backdrop" :class="backdropClass"></div>
+      <div class="sss-modal-backdrop" data-ref="backdrop"></div>
     </div>
   </form>
   {{pass}}

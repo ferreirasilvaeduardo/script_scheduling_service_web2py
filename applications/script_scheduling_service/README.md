@@ -81,7 +81,7 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 
 ### 2.4 Frontend
 
-* HTML5, **Bootstrap 5.3.8** e **Alpine.js (build CSP)**, servidos exclusivamente de `static/` com fontes locais.
+* HTML5, **Bootstrap 5.3.8** e JavaScript próprio, servidos exclusivamente de `static/` com fontes locais. O **Alpine.js (build CSP)** está em retirada pelo CR-021 (`docs/architecture/CR-021-no-web2py-no-alpine.md`) e ainda atende as telas que o 021b converte.
 * **Identidade visual**, aplicada pelos tokens de `static/css/sss.css`:
   * **Cores:** Roxo Vivo `#5f0684` (ações primárias, links, cabeçalho), Azul Esverdeado `#4daf9a` (destaques, item ativo, faixa do cabeçalho) e Amarelo `#faba00` (avisos e faixa de ambiente). As variações claras e escuras do manual são usadas no modo escuro e nos estados de passar o mouse e de clique.
   * **Contraste:** todo par texto/fundo atende WCAG AA (≥ 4,5:1, verificado por `scripts/test_color_contrast.py`). Por isso o Azul Esverdeado nunca é cor de texto sobre fundo claro (contraste de 2,6:1).
@@ -89,7 +89,7 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
   * **Formas:** cantos levemente arredondados (`--sss-radius: 8px`) e ícones com traço arredondado.
   * **Logo:** a logo oficial não é desenhada nem aproximada (o manual proíbe distorção). Ela só entra quando houver os arquivos oficiais.
 * Não há CDN, Google Fonts nem `@import` remoto.
-* O build CSP do Alpine é obrigatório porque a política `script-src 'self'` proíbe `unsafe-eval`. Toda lógica de componente fica registrada via `Alpine.data()` em arquivos `.js` de `static/js/app/`, sem expressões complexas inline.
+* **Componentes (CR-021, D7):** um componente é um elemento com `data-component="<nome>"`, montado uma vez no `DOMContentLoaded` pela fábrica registrada com `SSS.component(nome, fábrica)` em `static/js/app/` (base em `static/js/app/dom.js`). Os eventos chegam por delegação (`data-action`), os elementos por `data-ref` e o texto só por `textContent`. Não há expressão no HTML, estado reativo nem `innerHTML`. Enquanto o Alpine não sai, o build CSP dele continua obrigatório, porque a política `script-src 'self'` proíbe `unsafe-eval`, e os componentes Alpine restantes ficam registrados via `Alpine.data()`.
 
 #### 2.4.1 Contrato de responsividade
 
@@ -345,7 +345,7 @@ applications/script_scheduling_service/
     run_scheduler.py          # [F8.3] entrypoint do daemon
     purge.py                  # [F9.1] retenção (§11.3)
     test_*.py                 # testes unittest (AGENTS.md §7)
-  static/bootstrap/  static/js/alpine.min.js (build CSP)  static/js/app/  static/css/  static/img/  static/fonts/
+  static/bootstrap/  static/js/alpine.min.js (build CSP; sai no CR-021b)  static/js/app/ (dom.js primeiro)  static/css/  static/img/  static/fonts/
   views/                      # layout.html, components/*.html, <controller>/*.html
   instance/config.ini         # configuração sem segredos (§12)
   dev/scripts/                # árvore de scripts de exemplo para DEV/testes (nunca implantada)
@@ -458,7 +458,7 @@ password = ...
   * A revalidação **não** considera `locked_until`: o bloqueio só impede novos logins. Uma sessão aberta continua válida até expirar (inatividade ou vida máxima), até a revogação por `session_epoch` (logout, troca ou redefinição de senha, desativação ou troca de perfil) ou até o perfil ser desativado.
 * **CSRF:** token sincronizador por sessão.
   * Formulários enviam o campo oculto `_csrf`.
-  * Chamadas `fetch` do Alpine enviam o cabeçalho `X-CSRF-Token`.
+  * Chamadas `fetch` do JavaScript (`SSS.fetch`) enviam o cabeçalho `X-CSRF-Token`.
   * Todo `POST` valida o token com `hmac.compare_digest`.
   * `GET` nunca altera estado.
 * **Cabeçalhos HTTP obrigatórios:**
@@ -487,7 +487,7 @@ password = ...
 * **XSS:**
   * Saída sempre escapada (`{{=valor}}`).
   * É proibido `XML()` com dado de usuário.
-  * No Alpine, apenas `x-text`; é proibido `x-html`.
+  * No navegador, texto só por `textContent` (componentes) ou `x-text` (Alpine, até o CR-021b); são proibidos `x-html`, `innerHTML`, `outerHTML`, `insertAdjacentHTML` e `document.write`.
 
 ### 4.3 RBAC
 
@@ -965,7 +965,7 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
   * a **última execução** que o usuário pode ver: o nome simples da situação, "há {tempo}" e o link para o ticket. Sem nenhuma: "Ainda não rodou";
   * o link "Ver histórico".
 * **Leitura do catálogo (CR-018c):** os cartões, o disparo, "O que eu posso fazer" e a nova regra montam os ambientes de cada script a partir de um retrato único do catálogo por tela (`ticket_service._catalog_view`: a lista de ambientes e a de scripts, que traz a homologação em lote), sem ler a homologação e os ambientes script a script. A decisão continua em `rbac.can_execute`, ambiente a ambiente. Um script além do teto da listagem (1.000, o mesmo limite da matriz, §4.3.B.1) tem a homologação lida só para ele. Os vínculos de parâmetros (as perguntas de cada cartão) continuam lidos por script.
-* Uma busca no topo filtra os cartões por nome, descrição, grupo e categoria, no navegador (Alpine, `static/js/app/`). A lista completa já vem do servidor. Os cartões ficam agrupados por grupo, como no disparo.
+* Uma busca no topo filtra os cartões por nome, descrição, grupo e categoria, no navegador (componente `scriptSearch`, `static/js/app/components.js`). A lista completa já vem do servidor. Os cartões ficam agrupados por grupo, como no disparo.
 * O **escopo da última execução** é o mesmo da lista de tickets (§4.3.C): com `VIEW_LOGS`, os tickets dos ambientes autorizados (admin: todos); sem `VIEW_LOGS`, só os próprios.
 * **Contrato (leitura nova):** `RepoTickets.last_runs(script_ids, environment_scope=None, requested_by=None)` devolve `{script_id: {id, status, status_reason, created_at, finished_at}}` com o ticket mais recente (`created_at DESC, id DESC`) de cada script no escopo. No Oracle, a consulta usa `ix_tbsss_tck_scr` e um `ROW_NUMBER()` por script, que é sintaxe 11gR2 e não carrega `log_output`.
 * O menu Operação tem um único item para rodar, "Rodar um script" (`EXEC_SCRIPT`), que abre esta tela (CR-017b). A funcionalidade correspondente se chama "Rodar Scripts" (CR-018b), e o disparo abre pelos cartões.

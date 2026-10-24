@@ -85,8 +85,8 @@ _info = ui_helpers.status_info(_t['status'])
   <div class="sss-card-body">
     {{if _t['display_command']:}}
     <pre class="sss-argv" tabindex="0" aria-label="Comando do ticket (valores sigilosos mascarados)"><code>{{=_t['display_command']}}</code></pre>
-    <div x-data="copy">
-      <button type="button" class="btn btn-sm btn-outline-secondary" data-text="{{=_t['display_command']}}" @click="copy"><span x-text="label">Copiar</span></button>
+    <div data-component="copy">
+      <button type="button" class="btn btn-sm btn-outline-secondary" data-action="copy" data-text="{{=_t['display_command']}}"><span data-ref="label">Copiar</span></button>
     </div>
     {{if _t['snapshot']:}}
     <dl class="sss-summary mt-3">

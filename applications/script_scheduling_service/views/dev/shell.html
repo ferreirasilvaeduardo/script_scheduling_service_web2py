@@ -59,10 +59,10 @@
 
 <section class="sss-card" aria-labelledby="sec-toast">
   <h2 class="sss-card-title" id="sec-toast">Notificações</h2>
-  <div class="sss-card-body sss-actions" x-data="toastDemo">
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-type="success" data-message="Ticket 1023 concluído com sucesso." @click="trigger">Sucesso</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-type="error" data-message="Ticket 1022 falhou: tempo limite excedido." @click="trigger">Erro</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-type="warning" data-message="Agendamento pausado após falhas consecutivas." @click="trigger">Alerta</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-type="info" data-message="Agente srv-linux-prod-01 ativo." @click="trigger">Informação</button>
+  <div class="sss-card-body sss-actions" data-component="toastDemo">
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-type="success" data-message="Ticket 1023 concluído com sucesso." data-action="trigger">Sucesso</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-type="error" data-message="Ticket 1022 falhou: tempo limite excedido." data-action="trigger">Erro</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-type="warning" data-message="Agendamento pausado após falhas consecutivas." data-action="trigger">Alerta</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-type="info" data-message="Agente srv-linux-prod-01 ativo." data-action="trigger">Informação</button>
   </div>
 </section>

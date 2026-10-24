@@ -11,7 +11,7 @@
 # 'page' nunca é preservada: filtrar ou limpar volta para a página 1.
 _flt_keep = dict((k, v) for k, v in (filters.get('keep') or {}).items() if k != 'page')
 _flt_url = URL(c=filters['url_base'][0], f=filters['url_base'][1])
-}}<form class="sss-filters" method="get" action="{{=_flt_url}}" role="search" x-data="filters">
+}}<form class="sss-filters" method="get" action="{{=_flt_url}}" role="search" data-component="filters">
   {{for _flt_k, _flt_v in sorted(_flt_keep.items()):}}
   <input type="hidden" name="{{=_flt_k}}" value="{{=_flt_v}}">
   {{pass}}
@@ -48,6 +48,6 @@ _flt_url = URL(c=filters['url_base'][0], f=filters['url_base'][1])
   {{pass}}
   <div class="sss-filters-actions">
     <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
-    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c=filters['url_base'][0], f=filters['url_base'][1], vars=_flt_keep)}}" @click="clear">Limpar</a>
+    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c=filters['url_base'][0], f=filters['url_base'][1], vars=_flt_keep)}}" data-action="clear">Limpar</a>
   </div>
 </form>
