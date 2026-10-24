@@ -35,8 +35,8 @@ export LANG="${SSS_LOCALE:-C.UTF-8}"
 export LC_ALL="${SSS_LOCALE:-C.UTF-8}"
 
 # 4. Sempre a partir da raiz do repositorio (README §12.2)
-WEB2PY_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "${WEB2PY_ROOT}"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "${REPO_ROOT}"
 
 PYTHON="${PYTHON:-python3}"
 SERVER="applications/script_scheduling_service/scripts/run_web.py"

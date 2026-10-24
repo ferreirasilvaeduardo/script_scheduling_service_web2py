@@ -21,9 +21,8 @@ def main():
     # Resolucao dinamica de caminhos a partir de __file__
     scripts_dir = os.path.dirname(os.path.abspath(__file__))
     app_dir = os.path.dirname(scripts_dir)
-    web2py_root = os.path.dirname(os.path.dirname(app_dir))
-
-    web2py_file = os.path.join(web2py_root, "web2py.py")
+    # Servidor web proprio (CR-021e); o web2py saiu do repositorio no CR-021f.
+    web_server = os.path.join(scripts_dir, "run_web.py")
     bootstrap_css = os.path.join(app_dir, "static", "bootstrap", "bootstrap.min.css")
     bootstrap_js = os.path.join(app_dir, "static", "bootstrap", "bootstrap.bundle.min.js")
 
@@ -36,11 +35,11 @@ def main():
         "%d.%d.%d" % sys.version_info[:3],
     ))
 
-    # Item 2: web2py.py na raiz
-    if os.path.isfile(web2py_file):
-        results.append(("web2py.py na raiz", "OK", "Presente"))
+    # Item 2: servidor web (scripts/run_web.py)
+    if os.path.isfile(web_server):
+        results.append(("scripts/run_web.py", "OK", "Presente"))
     else:
-        results.append(("web2py.py na raiz", "FALHA", "Arquivo nao encontrado na raiz do web2py"))
+        results.append(("scripts/run_web.py", "FALHA", "Arquivo nao encontrado"))
 
     # Item 3: bootstrap.min.css
     if os.path.isfile(bootstrap_css) and os.path.getsize(bootstrap_css) > 0:

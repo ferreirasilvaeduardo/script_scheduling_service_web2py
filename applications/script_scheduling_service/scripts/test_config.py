@@ -29,7 +29,7 @@ class TestConfig(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp(prefix="sss_test_")
         self.app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.web2py_root = os.path.dirname(os.path.dirname(self.app_dir))
+        self.repo_root = os.path.dirname(os.path.dirname(self.app_dir))
         self.example_ini = os.path.join(self.app_dir, "instance", "config.ini.example")
 
         # masking.py ainda nao existe; o substituto registra o que load_secrets entrega.
@@ -633,8 +633,8 @@ class TestConfig(unittest.TestCase):
 
     def test_launchers_syntax_bash_n(self):
         """Verifica a sintaxe dos launchers bin/sss-web.sh e bin/sss-scheduler.sh."""
-        web_sh = os.path.join(self.web2py_root, "bin", "sss-web.sh")
-        scheduler_sh = os.path.join(self.web2py_root, "bin", "sss-scheduler.sh")
+        web_sh = os.path.join(self.repo_root, "bin", "sss-web.sh")
+        scheduler_sh = os.path.join(self.repo_root, "bin", "sss-scheduler.sh")
 
         self.assertTrue(os.path.isfile(web_sh), "Arquivo ausente: %s" % web_sh)
         self.assertTrue(os.path.isfile(scheduler_sh), "Arquivo ausente: %s" % scheduler_sh)
@@ -648,7 +648,7 @@ class TestConfig(unittest.TestCase):
     @unittest.skipIf(os.geteuid() == 0, "o launcher recusa root antes de checar os argumentos")
     def test_launcher_web_recusa_comando_arbitrario(self):
         """CR-003 P10 (README §12.2): so o processo Python do SSS; nada de exec de comando arbitrario."""
-        web_sh = os.path.join(self.web2py_root, "bin", "sss-web.sh")
+        web_sh = os.path.join(self.repo_root, "bin", "sss-web.sh")
         # CR-021e2: so o run_web.py; web2py.py e qualquer outro script sao recusados.
         for args in (["/bin/sh", "-c", "id"], ["/usr/bin/python3", "outro.py"], ["python3", "web2py.py"]):
             res = subprocess.run(["bash", web_sh] + args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

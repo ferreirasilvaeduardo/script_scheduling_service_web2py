@@ -87,7 +87,7 @@ def _send(name, size, parts, content_type):
     response.headers["Content-Length"] = str(size)
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    # Iteravel: o web2py o devolve ao WSGI como corpo em streaming, fatia a fatia.
+    # Iteravel: o nucleo web (web/app.py) o devolve ao WSGI como corpo em streaming, fatia a fatia.
     return parts
 
 

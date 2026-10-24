@@ -89,7 +89,7 @@ def export():
     response.headers["Content-Type"] = "text/csv; charset=utf-8"
     response.headers["Content-Disposition"] = 'attachment; filename="%s"' % name
     response.headers["Cache-Control"] = "no-store"
-    # Iteravel: o web2py o devolve ao WSGI como corpo em streaming, bloco a bloco.
+    # Iteravel: o nucleo web (web/app.py) o devolve ao WSGI como corpo em streaming, bloco a bloco.
     return blocks
 
 

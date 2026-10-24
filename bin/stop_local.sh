@@ -16,10 +16,10 @@ if [ "$(id -u)" -eq 0 ]; then
 fi
 
 # 2. Diretorio raiz do repositorio
-WEB2PY_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "${WEB2PY_ROOT}"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "${REPO_ROOT}"
 
-APP_DIR="${WEB2PY_ROOT}/applications/script_scheduling_service"
+APP_DIR="${REPO_ROOT}/applications/script_scheduling_service"
 WORK_DIR="${APP_DIR}/work"
 PID_FILE="${WORK_DIR}/sss_web.pid"
 

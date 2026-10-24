@@ -14,17 +14,17 @@ class TestEnvSkeleton(unittest.TestCase):
     def setUp(self):
         self.scripts_dir = os.path.dirname(os.path.abspath(__file__))
         self.app_dir = os.path.dirname(self.scripts_dir)
-        self.web2py_root = os.path.dirname(os.path.dirname(self.app_dir))
+        self.repo_root = os.path.dirname(os.path.dirname(self.app_dir))
 
     def test_sys_path_configured(self):
-        """Verifica se _testenv configurou app_dir e web2py_root em sys.path."""
+        """_testenv poe app_dir e modules/ em sys.path (a raiz do repositorio saiu no CR-021f)."""
         self.assertIn(self.app_dir, sys.path)
-        self.assertIn(self.web2py_root, sys.path)
+        self.assertIn(os.path.join(self.app_dir, "modules"), sys.path)
 
     def test_directory_skeleton_exists(self):
         """Verifica presenca de todos os diretorios requeridos pelo README §3.2."""
         expected_dirs = [
-            os.path.join(self.web2py_root, "bin"),
+            os.path.join(self.repo_root, "bin"),
             os.path.join(self.app_dir, "controllers"),
             os.path.join(self.app_dir, "webapp"),
             os.path.join(self.app_dir, "modules"),
@@ -56,7 +56,7 @@ class TestEnvSkeleton(unittest.TestCase):
     def test_gitkeep_in_empty_dirs(self):
         """Verifica presenca de .gitkeep nos diretorios vazios requeridos."""
         expected_gitkeeps = [
-            os.path.join(self.web2py_root, "bin", ".gitkeep"),
+            os.path.join(self.repo_root, "bin", ".gitkeep"),
             os.path.join(self.app_dir, "controllers", ".gitkeep"),
             os.path.join(self.app_dir, "views", "components", ".gitkeep"),
             os.path.join(self.app_dir, "static", "css", ".gitkeep"),
@@ -71,7 +71,7 @@ class TestEnvSkeleton(unittest.TestCase):
 
     def test_gitignore_contains_required_rules(self):
         """Verifica regras obrigatorias no .gitignore da raiz."""
-        gitignore_path = os.path.join(self.web2py_root, ".gitignore")
+        gitignore_path = os.path.join(self.repo_root, ".gitignore")
         self.assertTrue(os.path.isfile(gitignore_path), ".gitignore nao encontrado na raiz")
         with open(gitignore_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -79,12 +79,12 @@ class TestEnvSkeleton(unittest.TestCase):
         required_patterns = [
             "*.pyc",
             "__pycache__/",
-            "applications/script_scheduling_service/sessions/",
-            "applications/script_scheduling_service/errors/",
-            "applications/script_scheduling_service/cache/",
-            "applications/script_scheduling_service/databases/",
-            "applications/script_scheduling_service/log/",
             "applications/script_scheduling_service/instance/config.ini",
+            "applications/script_scheduling_service/instance/web.env",
+            "applications/script_scheduling_service/logs/",
+            "applications/script_scheduling_service/work/",
+            # Sobras do web2py numa copia antiga (CR-021f): o hash da senha do painel dele
+            "/parameters_*.py",
             "*.log",
             "secrets.cfg",
             ".env",

@@ -1,4 +1,0 @@
-[
-  "tests/test_http.py::SimpleTest::test_server",
-  "tests/test_https.py::SimpleSSLTest::test_server"
-]

@@ -88,7 +88,7 @@ _COMPILED_PATTERNS = [
 _RE_URL_EXTERNA = re.compile(r"https?://", re.IGNORECASE)
 
 
-def find_python_files(app_dir, web2py_root):
+def find_python_files(app_dir, repo_root):
     """Localiza fontes Python de APP e bin/, incluindo o helper sem extensao."""
     files_py = []
     dev_scripts_dir = os.path.normpath(os.path.join(app_dir, "dev", "scripts"))
@@ -108,7 +108,7 @@ def find_python_files(app_dir, web2py_root):
                 files_py.append(os.path.join(root, f))
 
     # Varre diretorios bin/
-    for bin_cand in [os.path.join(app_dir, "bin"), os.path.join(web2py_root, "bin")]:
+    for bin_cand in [os.path.join(app_dir, "bin"), os.path.join(repo_root, "bin")]:
         if os.path.isdir(bin_cand):
             for root, dirs, files in os.walk(bin_cand):
                 if "__pycache__" in dirs:
@@ -119,17 +119,17 @@ def find_python_files(app_dir, web2py_root):
                         if p not in files_py:
                             files_py.append(p)
 
-    helper = os.path.join(web2py_root, "bin", "sss-helper")
+    helper = os.path.join(repo_root, "bin", "sss-helper")
     if os.path.isfile(helper) and helper not in files_py:
         files_py.append(helper)
 
     return sorted(files_py)
 
 
-def check_os_primitives(path, app_dir, web2py_root):
+def check_os_primitives(path, app_dir, repo_root):
     """Rejeita primitivas POSIX fora da plataforma e da allowlist estrita do helper."""
     platform_dir = os.path.normpath(os.path.join(app_dir, "modules", "os_platform"))
-    helper = os.path.normpath(os.path.join(web2py_root, "bin", "sss-helper"))
+    helper = os.path.normpath(os.path.join(repo_root, "bin", "sss-helper"))
     path = os.path.normpath(path)
     if os.path.commonpath([path, platform_dir]) == platform_dir:
         return []
@@ -301,11 +301,11 @@ class TestPy36Compat(unittest.TestCase):
     def setUp(self):
         scripts_dir = os.path.dirname(os.path.abspath(__file__))
         self.app_dir = os.path.dirname(scripts_dir)
-        self.web2py_root = os.path.dirname(os.path.dirname(self.app_dir))
+        self.repo_root = os.path.dirname(os.path.dirname(self.app_dir))
 
     def test_compilacao_python_36(self):
         """Compila todos os .py de APP e bin/ sob gramatica do Python 3.6."""
-        files = find_python_files(self.app_dir, self.web2py_root)
+        files = find_python_files(self.app_dir, self.repo_root)
         self.assertGreater(len(files), 0, "Deve encontrar arquivos .py para testar")
 
         failures = []
@@ -325,10 +325,10 @@ class TestPy36Compat(unittest.TestCase):
 
     def test_primitivas_so_fora_da_plataforma(self):
         """Permite apenas a allowlist de primitivas POSIX do helper isolado."""
-        files = find_python_files(self.app_dir, self.web2py_root)
+        files = find_python_files(self.app_dir, self.repo_root)
         violations = []
         for path in files:
-            violations.extend(check_os_primitives(path, self.app_dir, self.web2py_root))
+            violations.extend(check_os_primitives(path, self.app_dir, self.repo_root))
 
         message = "\n".join(
             ["{}:{}: {}".format(p, n, line) for p, n, line in violations]
@@ -340,7 +340,7 @@ class TestPy36Compat(unittest.TestCase):
 
     def test_tokens_proibidos_arquivos_reais(self):
         """Verifica ausencia de tokens proibidos de Python >= 3.7 e recursos restritos."""
-        files = find_python_files(self.app_dir, self.web2py_root)
+        files = find_python_files(self.app_dir, self.repo_root)
         all_violations = []
 
         for path in files:
@@ -393,7 +393,7 @@ class TestPy36Compat(unittest.TestCase):
         Teste pode usar compile() so para conferir sintaxe (ex.: test_sss_helper), sem executar.
         """
         found = []
-        for path in find_python_files(self.app_dir, self.web2py_root):
+        for path in find_python_files(self.app_dir, self.repo_root):
             if os.path.basename(path) in TOKEN_EXCEPTION_FILES:
                 continue
             relative = os.path.relpath(path, self.app_dir).replace(os.sep, "/")
@@ -440,9 +440,9 @@ class TestPy36Compat(unittest.TestCase):
         """Detecta primitivas POSIX fora da plataforma e limita a excecao ao helper."""
         with tempfile.TemporaryDirectory() as root:
             app_dir = os.path.join(root, "app")
-            web2py_root = os.path.join(root, "web2py")
+            repo_root = os.path.join(root, "web2py")
             path_bad = os.path.join(app_dir, "modules", "outro", "bad_source.py")
-            helper = os.path.join(web2py_root, "bin", "sss-helper")
+            helper = os.path.join(repo_root, "bin", "sss-helper")
             platform_value = os.path.join(app_dir, "modules", "os_platform", "posix.py")
             for path, content in (
                 (path_bad, "os.killpg(1, 15)\nos.setsid()\nimport resource\nimport fcntl\nproc = '/proc/1/cwd'\nsubprocess.Popen(['pwdx', '1'])\nvalor = sys.platform\n"),
@@ -454,21 +454,21 @@ class TestPy36Compat(unittest.TestCase):
                     f.write(content)
 
             self.assertEqual(
-                len(check_os_primitives(path_bad, app_dir, web2py_root)), 7
+                len(check_os_primitives(path_bad, app_dir, repo_root)), 7
             )
-            self.assertEqual(check_os_primitives(helper, app_dir, web2py_root), [])
+            self.assertEqual(check_os_primitives(helper, app_dir, repo_root), [])
             helper_bad = "import os\nimport resource\nimport subprocess\ndef _run():\n    os.killpg(1, 15)\ndef _term():\n    resource.setrlimit(1, (2, 3))\ndef _stop_ticket():\n    pass\ndef _clean():\n    proc = '/proc/1/cwd'\n    subprocess.Popen(['/usr/bin/pwdx', '1'])\n"
             with open(helper, "w") as f:
                 f.write(helper_bad)
             self.assertEqual(
-                len(check_os_primitives(helper, app_dir, web2py_root)), 4,
-                repr(check_os_primitives(helper, app_dir, web2py_root)),
+                len(check_os_primitives(helper, app_dir, repo_root)), 4,
+                repr(check_os_primitives(helper, app_dir, repo_root)),
             )
-            self.assertEqual(check_os_primitives(platform_value, app_dir, web2py_root), [])
+            self.assertEqual(check_os_primitives(platform_value, app_dir, repo_root), [])
 
     def test_imports_driver_oracle_apenas_em_db_conn_e_sondar(self):
         """Garante que oracledb e cx_Oracle so sejam importados em db_conn.py, probe_driver.py e testes."""
-        files = find_python_files(self.app_dir, self.web2py_root)
+        files = find_python_files(self.app_dir, self.repo_root)
         violations = []
         for path in files:
             violations.extend(check_oracle_driver_imports(path, self.app_dir))

@@ -55,5 +55,5 @@ def download():
     response.headers["Content-Type"] = "text/plain; charset=utf-8"
     response.headers["Content-Disposition"] = 'attachment; filename="ticket_%d.log"' % ticket_id
     response.headers["Cache-Control"] = "no-store"
-    # Iteravel: o web2py o devolve ao WSGI como corpo em streaming, bloco a bloco.
+    # Iteravel: o nucleo web (web/app.py) o devolve ao WSGI como corpo em streaming, bloco a bloco.
     return (block.encode("utf-8") for block in blocks)

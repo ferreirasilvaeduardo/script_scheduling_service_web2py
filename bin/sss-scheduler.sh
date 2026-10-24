@@ -34,9 +34,9 @@ fi
 export LANG="${SSS_LOCALE:-C.UTF-8}"
 export LC_ALL="${SSS_LOCALE:-C.UTF-8}"
 
-# 4. Sempre a partir da raiz do web2py (README §12.2, "Pastas de runtime do web2py")
-WEB2PY_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "${WEB2PY_ROOT}"
+# 4. Sempre a partir da raiz do repositorio (README §12.2)
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "${REPO_ROOT}"
 
 PYTHON="${PYTHON:-python3}"
 

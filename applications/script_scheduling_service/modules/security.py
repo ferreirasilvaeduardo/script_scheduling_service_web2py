@@ -90,7 +90,8 @@ def validate_password_policy(password_value):
 def strip_passwords(sources, fields):
     """Remove os campos de senha de todos os dicts de variaveis da requisicao e devolve seus valores.
 
-    O ticket de erro do web2py grava request.vars/post_vars: as senhas saem deles assim que lidas.
+    Defesa em profundidade: as senhas saem de request.vars/post_vars assim que lidas, para nenhum
+    registro de erro ou depuracao as encontrar (era o ticket de erro do web2py ate o CR-021e).
     origens: dicts na ordem de prioridade (ex.: post_vars, vars); valor nao str (ou lista) vira None.
     """
     passwords = {}

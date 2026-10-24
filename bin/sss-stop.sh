@@ -9,8 +9,8 @@ if [ "$(id -u)" -eq 0 ]; then
 fi
 umask 077
 
-WEB2PY_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "${WEB2PY_ROOT}"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "${REPO_ROOT}"
 PYTHON="${PYTHON:-python3}"
 
 CONFIG="applications/script_scheduling_service/instance/config.ini"

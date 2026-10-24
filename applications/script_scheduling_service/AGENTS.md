@@ -368,7 +368,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 ## 7. Testes
 
 1. Framework **exclusivamente** `unittest`, executado a partir do diretório da aplicação: `python -m unittest discover -s scripts -p "test_*.py"`. O `pytest` é proibido.
-   * `scripts/_testenv.py` ajusta o `sys.path` para a aplicação (`modules/`) e para a raiz do web2py (`gluon`). Todo teste o importa primeiro.
+   * `scripts/_testenv.py` ajusta o `sys.path` para a raiz da aplicação e para `modules/` (a raiz do repositório saiu com o web2py, CR-021f2). Todo teste o importa primeiro.
    * Nenhum arquivo de `modules/` importa `gluon` (CR-021c, §5.2). Isso permite testá-los sem o framework.
 2. Testes que dependem de banco real devem usar mocks da interface de `db_conn` **ou** ser ligados só por `SSS_TEST_ORACLE=1` (`_oracle_test_support.real_db_configured()`), com owner, prefixo, DSN e conta lidos do `instance/config.ini` e a guarda de `scripts/_oracle_test_support.py` antes de qualquer escrita (README §2.5). Sem a chave, o veredito do relatório é `NÃO TESTADO` para a parte de banco. A partir do F7, aplicação e validações usam as tabelas reais; o FAKE fica só como dublê dos testes automáticos sem banco.
    * **Plataforma:** a implementação POSIX é testada de verdade, no Linux (CR-005).

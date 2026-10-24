@@ -1,8 +1,8 @@
 PYTHON := python3
 
 # Nome base dos pacotes de deploy com timestamp
-DEPLOY_PKG = ./.bkp/deploy_web2py_$(shell date +%Y%m%d_%H%M%S).tar.gz
-ZIP_FILE   = ./.bkp/deploy_web2py_$(shell date +%Y%m%d_%H%M%S).zip
+DEPLOY_PKG = ./.bkp/deploy_sss_$(shell date +%Y%m%d_%H%M%S).tar.gz
+ZIP_FILE   = ./.bkp/deploy_sss_$(shell date +%Y%m%d_%H%M%S).zip
 REQ_FILE   = ./.bkp/python_env_requirements_$(shell date +%Y%m%d_%H%M%S).txt
 
 # Lista de módulos de desenvolvimento no Python local
@@ -184,7 +184,7 @@ zip-deploy-zip: freeze-req ## Gera arquivo .zip nativo após gerar o snapshot de
 
 # Inspeciona o pacote gerado mais recente em ./.bkp
 list-deploy: ## Lista os arquivos contidos no pacote mais recente gerado
-	@LATEST=$$(ls -t ./.bkp/deploy_web2py_* 2>/dev/null | head -n 1); \
+	@LATEST=$$(ls -t ./.bkp/deploy_sss_* 2>/dev/null | head -n 1); \
 	if [ -z "$$LATEST" ]; then \
 		echo "[-] Nenhum pacote encontrado em ./.bkp"; \
 		exit 1; \

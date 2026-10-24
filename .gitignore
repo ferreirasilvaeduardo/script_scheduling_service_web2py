@@ -4,29 +4,9 @@
 *.pyc
 __pycache__/
 
-# Ignorar aplicações padrão do web2py
+# Somente a aplicacao do SSS fica em applications/
 applications/*
 !applications/script_scheduling_service/
-
-# Ignora todas as outras aplicações padrão do web2py
-applications/admin/
-applications/examples/
-applications/welcome/
-
-# web2py runtime directories
-applications/script_scheduling_service/sessions/
-applications/script_scheduling_service/errors/
-applications/script_scheduling_service/cache/
-applications/script_scheduling_service/databases/
-applications/script_scheduling_service/log/
-# Pastas que o web2py cria no diretorio corrente quando roda fora da raiz (README §12.2)
-applications/script_scheduling_service/applications/
-applications/script_scheduling_service/deposit/
-applications/script_scheduling_service/site-packages/
-applications/script_scheduling_service/scripts/applications/
-applications/script_scheduling_service/scripts/deposit/
-applications/script_scheduling_service/scripts/logs/
-applications/script_scheduling_service/scripts/site-packages/
 
 # SSS instance configuration (only .example is tracked)
 applications/script_scheduling_service/instance/config.ini
@@ -41,11 +21,13 @@ secrets.cfg
 *.env
 # Launchers locais de desenvolvimento (podem conter dados da maquina do desenvolvedor)
 bin/sss-web-*_v*.sh
-# Artefatos de execucao do servidor web2py (parameters_<porta>.py guarda o hash da senha do admin)
+# Sobras do web2py (removido no CR-021f) numa copia antiga: parameters_<porta>.py guarda o hash da
+# senha do painel dele e nunca pode ir para o git
 /parameters_*.py
 /httpserver.pid
 /cron.master
 /welcome.w2p
+/gluon/
 
 # Pacotes de implantacao gerados (binarios)
 /applications/script_scheduling_service/docs/sss_packages/*.tar.gz

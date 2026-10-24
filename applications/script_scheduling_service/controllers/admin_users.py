@@ -2,8 +2,8 @@
 """Cadastro de usuarios (README §4.2, §4.3.B, MANAGE_USERS). Padrao em docs/ADMIN_CRUD_PATTERN.md.
 
 Regras ficam em modules/admin_users_service.py; CSRF e Origin de todo POST sao validados em
-webapp/security.py. Senhas sao retiradas de request.vars assim que lidas: o ticket de erro do
-web2py grava as variaveis da requisicao.
+webapp/security.py. Senhas sao retiradas de request.vars assim que lidas
+(security.strip_passwords), para nenhum registro de erro as encontrar.
 """
 import admin_crud
 import admin_users_service as service

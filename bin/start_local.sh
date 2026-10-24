@@ -23,10 +23,10 @@ fi
 umask 077
 
 # 3. Diretorio raiz do repositorio
-WEB2PY_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "${WEB2PY_ROOT}"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "${REPO_ROOT}"
 
-APP_DIR="${WEB2PY_ROOT}/applications/script_scheduling_service"
+APP_DIR="${REPO_ROOT}/applications/script_scheduling_service"
 WORK_DIR="${APP_DIR}/work"
 LOG_DIR="${APP_DIR}/logs"
 PID_FILE="${WORK_DIR}/sss_web.pid"
@@ -139,7 +139,7 @@ if [ "${PORT_OCCUPIED}" -eq 1 ]; then
 fi
 
 # 9. Execucao
-LAUNCHER="${WEB2PY_ROOT}/bin/sss-web.sh"
+LAUNCHER="${REPO_ROOT}/bin/sss-web.sh"
 if [ ! -x "${LAUNCHER}" ]; then
     chmod +x "${LAUNCHER}"
 fi
@@ -189,7 +189,7 @@ else
         echo " URL:         http://127.0.0.1:${PORT}/script_scheduling_service"
         echo " Log c/ data: ${SERVER_OUT}"
         echo " Log atual:   ${SERVER_LINK}"
-        echo " Para parar:  ${WEB2PY_ROOT}/bin/stop_local.sh"
+        echo " Para parar:  ${REPO_ROOT}/bin/stop_local.sh"
         echo "================================================================="
     else
         echo "Aviso: O processo esta rodando (PID: ${SRV_PID}), mas a pagina de login nao respondeu 200 dentro de 20s."
