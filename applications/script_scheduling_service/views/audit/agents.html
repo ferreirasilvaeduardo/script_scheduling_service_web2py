@@ -9,10 +9,10 @@ icons = URL('static', 'img/icons.svg')
   <p class="sss-page-sub">Agentes são os servidores que rodam os scripts. Aqui você vê se cada um está bem, pelo relógio do banco. Painel somente leitura.</p>
 </div>
 
-<section class="sss-card" aria-labelledby="title-agents" x-data="agentsRefresh" data-url="{{=fragment_url}}" data-interval="{{=interval_s}}">
+<section class="sss-card" aria-labelledby="title-agents" data-component="agentsRefresh" data-url="{{=fragment_url}}" data-interval="{{=interval_s}}">
   <div class="sss-card-title sss-title-row">
     <h2 class="sss-card-title-text" id="title-agents">Agentes</h2>
-    <span class="sss-text-muted sss-auto-status-text" aria-live="polite" x-text="statusText">Atualização automática a cada {{=interval_s}} segundos.</span>
+    <span class="sss-text-muted sss-auto-status-text" aria-live="polite" data-ref="status">Atualização automática a cada {{=interval_s}} segundos.</span>
   </div>
   <div class="sss-card-body">
     {{include 'audit/agents.load'}}

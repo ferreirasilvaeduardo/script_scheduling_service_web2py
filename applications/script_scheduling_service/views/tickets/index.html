@@ -27,14 +27,14 @@ filters = {'id': 'filter-tickets', 'url_base': ('tickets', 'index'), 'keep': {'s
   {{include 'components/filters.html'}}
 </section>
 
-<section class="sss-card" aria-labelledby="title-tickets" x-data="ticketsRefresh" data-url="{{=fragment_url}}">
+<section class="sss-card" aria-labelledby="title-tickets" data-component="ticketsRefresh" data-url="{{=fragment_url}}">
   <div class="sss-card-title sss-title-row">
     <h2 class="sss-card-title-text" id="title-tickets">Fila de tickets</h2>
     <div class="form-check form-switch mb-0">
-      <input class="form-check-input" type="checkbox" role="switch" id="auto-refresh" :checked="active" @change="toggle">
+      <input class="form-check-input" type="checkbox" role="switch" id="auto-refresh" data-ref="toggle" data-action="toggle">
       <label class="form-check-label" for="auto-refresh">Atualizar automaticamente</label>
     </div>
-    <span class="sss-text-muted sss-auto-status-text" aria-live="polite" x-text="statusText"></span>
+    <span class="sss-text-muted sss-auto-status-text" aria-live="polite" data-ref="status">Atualização automática desligada.</span>
   </div>
   {{include 'tickets/index.load'}}
 </section>

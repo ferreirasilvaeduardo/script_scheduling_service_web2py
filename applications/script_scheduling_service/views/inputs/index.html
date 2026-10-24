@@ -85,9 +85,9 @@ _v = view
   {{pass}}
 </section>
 
-<section class="sss-card" aria-labelledby="title-upload" x-data="inputUpload" @keydown.escape.window="close">
+<section class="sss-card" aria-labelledby="title-upload" data-component="inputUpload">
   <h2 class="sss-card-title" id="title-upload">Enviar arquivo</h2>
-  <form class="sss-card-body" method="post" enctype="multipart/form-data" action="{{=URL(c='inputs', f='upload')}}" x-ref="form" @submit="submit">
+  <form class="sss-card-body" method="post" enctype="multipart/form-data" action="{{=URL(c='inputs', f='upload')}}" data-ref="form">
     {{=csrf_field()}}
     <input type="hidden" name="environment" value="{{=environment}}">
     <input type="hidden" name="script_id" value="{{=_v['script']['id']}}">
@@ -103,29 +103,29 @@ _v = view
       <div class="form-text" id="field-relative_dir-help">Dentro da pasta do script, com os níveis separados por /. Em branco, a própria pasta do script. As subpastas que não existirem são criadas.</div>
     </div>
     <div class="form-check mb-3">
-      <input class="form-check-input" type="checkbox" id="field-replace" name="replace" value="Y" x-ref="replace">
+      <input class="form-check-input" type="checkbox" id="field-replace" name="replace" value="Y" data-ref="replace">
       <label class="form-check-label" for="field-replace">Substituir se já existir</label>
     </div>
-    <button type="submit" class="btn btn-primary" x-ref="submit">Enviar</button>
+    <button type="submit" class="btn btn-primary" data-ref="submit">Enviar</button>
   </form>
-  <div class="modal sss-modal" :class="modalClass" role="dialog" aria-modal="true" aria-labelledby="replace-titulo" aria-describedby="replace-texto" tabindex="-1" @click.self="close">
+  <div class="modal sss-modal" data-ref="modal" role="dialog" aria-modal="true" aria-labelledby="replace-titulo" aria-describedby="replace-texto" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
         <div class="modal-header">
           <h2 class="modal-title fs-5" id="replace-titulo">Substituir o arquivo?</h2>
-          <button type="button" class="btn-close" aria-label="Fechar" @click="close"></button>
+          <button type="button" class="btn-close" aria-label="Fechar" data-action="close"></button>
         </div>
         <div class="modal-body">
           <p class="mb-0" id="replace-texto">Se já existir um arquivo com esse nome nessa pasta, ele será trocado pelo novo em todos os servidores do ambiente. O arquivo antigo não pode ser recuperado pela tela.</p>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-sm btn-outline-secondary" x-ref="cancel" @click="close">Cancelar</button>
-          <button type="button" class="btn btn-sm btn-danger" @click="confirm">Substituir e enviar</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-ref="cancel" data-action="close">Cancelar</button>
+          <button type="button" class="btn btn-sm btn-danger" data-action="confirm">Substituir e enviar</button>
         </div>
       </div>
     </div>
   </div>
-  <div class="sss-modal-backdrop" :class="backdropClass"></div>
+  <div class="sss-modal-backdrop" data-ref="backdrop"></div>
 </section>
 
 <section class="sss-card" aria-labelledby="title-uploads">

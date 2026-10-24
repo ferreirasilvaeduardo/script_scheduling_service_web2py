@@ -1,45 +1,35 @@
 /* SSS - tela de Entrada (CR-020d): confirmacao antes de enviar com "Substituir se ja existir".
- * Carregado com defer ANTES do alpine.min.js. Sem JavaScript o formulario e enviado direto: a caixa
- * de substituir ja e a escolha explicita do usuario.
+ * Sem JavaScript o formulario e enviado direto: a caixa de substituir ja e a escolha explicita do usuario.
  */
 (function () {
   'use strict';
 
-  document.addEventListener('alpine:init', function () {
-    window.Alpine.data('inputUpload', function () {
-      return {
-        isOpen: false,
-        confirmed: false,
-        get modalClass() {
-          return this.isOpen ? 'show d-block' : '';
-        },
-        get backdropClass() {
-          return this.isOpen ? 'modal-backdrop fade show' : '';
-        },
-        submit: function (evt) {
-          if (this.$refs.replace.checked && !this.confirmed) {
-            evt.preventDefault();
-            var self = this;
-            this.isOpen = true;
-            document.body.classList.add('modal-open');
-            this.$nextTick(function () { self.$refs.cancel.focus(); });
-          }
-        },
-        confirm: function () {
-          this.confirmed = true;
-          this.isOpen = false;
-          document.body.classList.remove('modal-open');
-          this.$refs.form.submit();
-        },
-        close: function () {
-          if (!this.isOpen) {
-            return;
-          }
-          this.isOpen = false;
-          document.body.classList.remove('modal-open');
-          this.$refs.submit.focus();
-        }
-      };
+  var SSS = window.SSS;
+  var dom = SSS.dom;
+
+  SSS.component('inputUpload', function (root) {
+    var form = dom.ref(root, 'form');
+    var replace = dom.ref(root, 'replace');
+    var modal = SSS.modal({
+      modal: dom.ref(root, 'modal'),
+      backdrop: dom.ref(root, 'backdrop'),
+      initialFocus: dom.ref(root, 'cancel'),
+      returnFocus: dom.ref(root, 'submit')
     });
+    var confirmed = false;
+
+    form.addEventListener('submit', function (evt) {
+      if (replace.checked && !confirmed) {
+        evt.preventDefault();
+        modal.open();
+      }
+    });
+    dom.on(root, 'click', 'confirm', function () {
+      confirmed = true;
+      modal.close(false);
+      // form.submit() nao dispara o evento submit: o envio confirmado nao reabre o modal.
+      form.submit();
+    });
+    dom.on(root, 'click', 'close', function () { modal.close(); });
   });
 }());

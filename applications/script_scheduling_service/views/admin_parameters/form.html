@@ -1,6 +1,6 @@
 {{extend 'layout.html'}}
 {{
-# Inclusão e edição de parâmetro. Campos condicionais por tipo (Alpine 'parameterForm'); o editor de
+# Inclusão e edição de parâmetro. Campos condicionais por tipo (componente 'parameterForm'); o editor de
 # opções só monta o JSON por conveniência e o servidor revalida tudo. A regex nunca roda no cliente.
 import ui_helpers
 _p = prm
@@ -74,7 +74,7 @@ pass
 <section class="sss-card" aria-labelledby="title-form">
   <h2 class="sss-card-title" id="title-form">Dados do parâmetro</h2>
   <form class="sss-card-body" method="post" action="{{=URL(c='admin_parameters', f='save')}}" autocomplete="off"
-        x-data="parameterForm" data-url-test="{{=URL(c='admin_parameters', f='test_regex')}}">
+        data-component="parameterForm" data-url-test="{{=URL(c='admin_parameters', f='test_regex')}}">
     {{=csrf_field()}}
     {{if not _new:}}
     <input type="hidden" name="id" value="{{=_p['id']}}">
@@ -115,7 +115,7 @@ pass
 
     <div class="sss-form-field mb-3">
       <label class="form-label" for="field-component_type">Tipo do componente <span class="sss-required" aria-hidden="true">*</span></label>
-      <select class="form-select{{=' is-invalid' if errors.get('component_type') else ''}}" id="field-component_type" name="component_type" x-ref="type" @change="switchType" aria-describedby="{{=_desc('component_type', False)}}"{{if focus_field == 'component_type':}} autofocus{{pass}}>
+      <select class="form-select{{=' is-invalid' if errors.get('component_type') else ''}}" id="field-component_type" name="component_type" data-ref="type" data-action="switchType" aria-describedby="{{=_desc('component_type', False)}}"{{if focus_field == 'component_type':}} autofocus{{pass}}>
         {{for _tv, _tr in types:}}
         <option value="{{=_tv}}"{{if _tv == _p['component_type']:}} selected{{pass}}>{{=_tr}}</option>
         {{pass}}
@@ -123,22 +123,23 @@ pass
       {{if errors.get('component_type'):}}<div class="invalid-feedback" id="field-component_type-error">{{=errors['component_type']}}</div>{{pass}}
     </div>
 
-    <fieldset class="sss-form-field mb-3 sss-options" x-show="isSelect">
+    <fieldset class="sss-form-field mb-3 sss-options" data-ref="optionsBox"{{if _p['component_type'] != 'SELECT':}} hidden{{pass}}>
       <legend class="form-label fs-6">Opções da lista <span class="sss-required" aria-hidden="true">*</span></legend>
-      <input type="hidden" name="options_json" x-ref="options" value="{{=_p['options_json']}}" data-pairs="{{=json.dumps(_pairs) if _pairs is not None else ''}}" :value="optionsJson">
-      <template x-for="(row, index) in rows" :key="index">
+      <input type="hidden" name="options_json" data-ref="options" value="{{=_p['options_json']}}" data-pairs="{{=json.dumps(_pairs) if _pairs is not None else ''}}">
+      <template data-ref="optionRow">
         <div class="sss-options-row">
-          <input type="text" class="form-control form-control-sm sss-mono" maxlength="100" aria-label="Valor da opção" placeholder="Valor enviado" :value="row.value" :data-i="index" data-field="value" @input="editRow">
-          <input type="text" class="form-control form-control-sm" maxlength="100" aria-label="Rótulo da opção" placeholder="Rótulo exibido" :value="row.label" :data-i="index" data-field="label" @input="editRow">
-          <button type="button" class="btn btn-sm btn-outline-secondary" :data-i="index" @click="removeRow" aria-label="Remover opção">Remover</button>
+          <input type="text" class="form-control form-control-sm sss-mono" maxlength="100" aria-label="Valor da opção" placeholder="Valor enviado" data-field="value" data-action="editRow">
+          <input type="text" class="form-control form-control-sm" maxlength="100" aria-label="Rótulo da opção" placeholder="Rótulo exibido" data-field="label" data-action="editRow">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-action="removeRow" aria-label="Remover opção">Remover</button>
         </div>
       </template>
-      <button type="button" class="btn btn-sm btn-outline-primary mt-1" @click="addRow">Adicionar opção</button>
+      <div data-ref="optionRows"></div>
+      <button type="button" class="btn btn-sm btn-outline-primary mt-1" data-ref="addOption" data-action="addRow">Adicionar opção</button>
       <p class="form-text mb-0">Até 500 caracteres no total. O servidor valida as opções ao salvar.</p>
       {{if errors.get('options_json'):}}<div class="invalid-feedback d-block" id="field-options_json-error">{{=errors['options_json']}}</div>{{pass}}
     </fieldset>
 
-    <div class="sss-form-field mb-3" x-show="isText">
+    <div class="sss-form-field mb-3" data-ref="regexBox"{{if _p['component_type'] != 'TEXT':}} hidden{{pass}}>
       <label class="form-label" for="field-validation_regex">Validação por expressão regular (opcional)</label>
       <input type="text" class="{{=_classe('validation_regex')}} sss-mono" id="field-validation_regex" name="validation_regex" value="{{=_p['validation_regex']}}" maxlength="150" aria-describedby="{{=_desc('validation_regex')}}"{{if not _p['can_regex']:}} readonly aria-readonly="true"{{pass}}{{if focus_field == 'validation_regex':}} autofocus{{pass}}>
       <div class="form-text" id="field-validation_regex-help">Aplicada com fullmatch. Quantificador aninhado, como (a+)+, é rejeitado por risco de desempenho.{{if not _p['can_regex']:}} Somente administradores alteram este campo.{{pass}}</div>
@@ -146,18 +147,18 @@ pass
     </div>
 
     <div class="form-check mb-2">
-      <input class="form-check-input" type="checkbox" id="field-sensitive" name="sensitive" value="Y" x-ref="sensitive" @change="switchSensitive"{{if _sensitive:}} checked{{pass}}>
+      <input class="form-check-input" type="checkbox" id="field-sensitive" name="sensitive" value="Y" data-ref="sensitive" data-action="switchSensitive"{{if _sensitive:}} checked{{pass}}>
       <label class="form-check-label" for="field-sensitive">Valor sigiloso (mascarado na tela e nos logs)</label>
       {{if errors.get('sensitive'):}}<div class="invalid-feedback d-block" id="field-sensitive-error">{{=errors['sensitive']}}</div>{{pass}}
     </div>
-    <div class="alert alert-warning sss-alert" role="note" x-show="sensitive"{{if not _sensitive:}} x-cloak{{pass}}>
+    <div class="alert alert-warning sss-alert" role="note" data-ref="sensitiveWarning"{{if not _sensitive:}} hidden{{pass}}>
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_icons}}#icon-alert"></use></svg>
       <span>{{=sensitive_warning}}</span>
     </div>
 
     <div class="sss-form-field mb-3">
       <label class="form-label" for="field-default_value">Valor padrão (opcional)</label>
-      <input class="{{=_classe('default_value')}}" id="field-default_value" name="default_value" maxlength="100" :type="defaultType" type="{{='password' if _sensitive else 'text'}}" value="{{='' if _sensitive else _p['default_value']}}" autocomplete="off" aria-describedby="{{=_desc('default_value')}}"{{if focus_field == 'default_value':}} autofocus{{pass}}>
+      <input class="{{=_classe('default_value')}}" id="field-default_value" name="default_value" maxlength="100" data-ref="defaultValue" type="{{='password' if _sensitive else 'text'}}" value="{{='' if _sensitive else _p['default_value']}}" autocomplete="off" aria-describedby="{{=_desc('default_value')}}"{{if focus_field == 'default_value':}} autofocus{{pass}}>
       <div class="form-text" id="field-default_value-help">Validado pelas mesmas regras do tipo.{{if _sensitive and _p.get('has_default'):}} Há um padrão sigiloso gravado: deixe em branco para mantê-lo.{{pass}}</div>
       {{if errors.get('default_value'):}}<div class="invalid-feedback" id="field-default_value-error">{{=errors['default_value']}}</div>{{pass}}
       {{if _sensitive and _p.get('has_default'):}}
@@ -171,10 +172,10 @@ pass
     <fieldset class="sss-test mb-3">
       <legend class="form-label fs-6">Testar valor com a configuração acima (sem salvar)</legend>
       <div class="sss-test-row">
-        <input type="text" class="form-control form-control-sm" id="field-test_value" maxlength="500" aria-label="Valor de teste" x-ref="testValue">
-        <button type="button" class="btn btn-sm btn-outline-primary" @click="test" :disabled="testing">Testar</button>
+        <input type="text" class="form-control form-control-sm" id="field-test_value" maxlength="500" aria-label="Valor de teste" data-ref="testValue">
+        <button type="button" class="btn btn-sm btn-outline-primary" data-ref="testButton" data-action="test">Testar</button>
       </div>
-      <p class="mt-2 mb-0" :class="testClass" role="status" aria-live="polite" x-text="testResult"></p>
+      <p class="mt-2 mb-0" data-ref="testResult" role="status" aria-live="polite"></p>
     </fieldset>
 
     <div class="sss-form-actions">

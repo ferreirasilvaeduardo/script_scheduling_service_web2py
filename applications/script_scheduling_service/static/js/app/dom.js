@@ -60,13 +60,39 @@
     return template.content.firstElementChild.cloneNode(true);
   }
 
+  /* Troca o elemento `selector` de `root` pelo de mesmo seletor no HTML que o servidor renderizou e
+   * escapou (fragmento .load, com os mesmos guardas da pagina). `prepare(novo, atual)` roda antes da
+   * troca. Sem o marcador (ex.: sessao expirada redirecionou ao login) lanca erro e nada muda.
+   */
+  function replaceFragment(root, selector, html, prepare) {
+    var fresh = new DOMParser().parseFromString(html, 'text/html').querySelector(selector);
+    var current = root.querySelector(selector);
+    if (!fresh || !current) {
+      throw new Error('fragmento ausente');
+    }
+    fresh = document.importNode(fresh, true);
+    if (prepare) {
+      prepare(fresh, current);
+    }
+    current.replaceWith(fresh);
+    return fresh;
+  }
+
+  function clockTime() {
+    var d = new Date();
+    function two(n) { return (n < 10 ? '0' : '') + n; }
+    return two(d.getHours()) + ':' + two(d.getMinutes()) + ':' + two(d.getSeconds());
+  }
+
   SSS.dom = {
     ref: ref,
     refs: refs,
     on: on,
     show: show,
     setText: setText,
-    clone: clone
+    clone: clone,
+    replaceFragment: replaceFragment,
+    clockTime: clockTime
   };
 
   SSS.component = function (name, factory) {

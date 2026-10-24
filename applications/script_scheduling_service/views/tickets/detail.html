@@ -150,31 +150,31 @@ _info = ui_helpers.status_info(_t['status'])
 </section>
 
 {{
-# Visor de log (README §8.10): o texto chega por logs/chunk e só é exibido via x-text.
+# Visor de log (README §8.10): o texto chega por logs/chunk e só é exibido por textContent (componente logViewer).
 import json
 import ticket_service
 _vl = log_viewer
 _viewer_status = dict((_s, ui_helpers.status_info(_s)) for _s in ticket_service.STATUS_TICKET)
 _viewer_status = dict((_s, {'label': _i['label'], 'css_class': _i['css_class']}) for _s, _i in _viewer_status.items())
 }}
-<section class="sss-card" aria-labelledby="title-log" x-data="logViewer" data-url-chunk="{{=_vl['url_chunk']}}" data-interval-s="{{=_vl['interval_s']}}" data-max-chars="{{=_vl['max_chars']}}" data-status="{{=_t['status']}}" data-truncated="{{='Y' if _t['log_truncated'] else 'N'}}" data-status-info="{{=json.dumps(_viewer_status, sort_keys=True)}}">
+<section class="sss-card" aria-labelledby="title-log" data-component="logViewer" data-url-chunk="{{=_vl['url_chunk']}}" data-interval-s="{{=_vl['interval_s']}}" data-max-chars="{{=_vl['max_chars']}}" data-status="{{=_t['status']}}" data-truncated="{{='Y' if _t['log_truncated'] else 'N'}}" data-status-info="{{=json.dumps(_viewer_status, sort_keys=True)}}">
   <h2 class="sss-card-title sss-log-title" id="title-log">
     <span>Log de execução</span>
-    <span class="sss-status" :class="statusClass" role="status" aria-live="polite"><span x-text="statusLabel">{{=ui_helpers.status_info(_t['status'])['label']}}</span></span>
+    <span class="sss-status {{=ui_helpers.status_info(_t['status'])['css_class']}}" data-ref="badge" role="status" aria-live="polite"><span data-ref="badgeLabel">{{=ui_helpers.status_info(_t['status'])['label']}}</span></span>
   </h2>
   <div class="sss-card-body">
     <div class="sss-log-bar">
       <div class="form-check form-check-inline mb-0">
-        <input class="form-check-input" type="checkbox" id="log-follow" :checked="follow" @change="toggleFollow">
+        <input class="form-check-input" type="checkbox" id="log-follow" checked data-ref="follow" data-action="toggleFollow">
         <label class="form-check-label" for="log-follow">Seguir o final</label>
       </div>
-      <button type="button" class="btn btn-sm btn-outline-secondary" @click="togglePause" :disabled="finished"><span x-text="pauseLabel">Pausar</span></button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" data-ref="pause" data-action="togglePause"><span data-ref="pauseLabel">Pausar</span></button>
       <a class="btn btn-sm btn-outline-secondary" href="{{=_vl['download_url']}}" download="ticket_{{=_t['id']}}.log">Baixar log</a>
-      <span class="sss-text-muted sss-log-status-text" x-text="statusText" aria-live="polite"></span>
+      <span class="sss-text-muted sss-log-status-text" data-ref="statusText" aria-live="polite"></span>
     </div>
-    <p class="alert alert-warning sss-alert sss-log-warning" role="status" x-show="truncated" x-cloak>O log foi truncado no banco por exceder o limite; o arquivo integral permanece no agente.</p>
-    <p class="alert alert-info sss-alert sss-log-warning" role="status" x-show="discarded" x-cloak>Exibindo apenas o final do log. Use 'Baixar log' para o conteúdo integral.</p>
-    <pre class="sss-log" tabindex="0" aria-label="Log de execução do ticket #{{=_t['id']}}" x-ref="area" @scroll="onScroll" x-text="text"></pre>
+    <p class="alert alert-warning sss-alert sss-log-warning" role="status" data-ref="truncated"{{if not _t['log_truncated']:}} hidden{{pass}}>O log foi truncado no banco por exceder o limite; o arquivo integral permanece no agente.</p>
+    <p class="alert alert-info sss-alert sss-log-warning" role="status" data-ref="discarded" hidden>Exibindo apenas o final do log. Use 'Baixar log' para o conteúdo integral.</p>
+    <pre class="sss-log" tabindex="0" aria-label="Log de execução do ticket #{{=_t['id']}}" data-ref="area"></pre>
   </div>
 </section>
 

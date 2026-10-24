@@ -68,12 +68,13 @@
     });
   });
 
-  // Modal de confirmacao com POST real (components/confirm_modal.html e Redefinir senha).
-  SSS.component('confirmation', function (root) {
-    var trigger = dom.ref(root, 'trigger');
-    var modal = dom.ref(root, 'modal');
-    var backdrop = dom.ref(root, 'backdrop');
-    var cancel = dom.ref(root, 'cancel');
+  /* Modal do Bootstrap aberto e fechado so por classe, sem o JS do Bootstrap. O componente dono passa
+   * os elementos dele (data-ref modal, backdrop, cancel) e o elemento que recebe o foco ao fechar.
+   * Fecha por Esc e por clique no fundo; os botoes de fechar o componente liga em close().
+   */
+  SSS.modal = function (options) {
+    var modal = options.modal;
+    var backdrop = options.backdrop;
     var isOpen = false;
 
     function open() {
@@ -81,10 +82,11 @@
       modal.classList.add('show', 'd-block');
       backdrop.classList.add('modal-backdrop', 'fade', 'show');
       document.body.classList.add('modal-open');
-      cancel.focus();
+      options.initialFocus.focus();
     }
 
-    function close() {
+    // restoreFocus = false quando o fechamento segue de um envio (a pagina vai mudar).
+    function close(restoreFocus) {
       if (!isOpen) {
         return;
       }
@@ -92,11 +94,11 @@
       modal.classList.remove('show', 'd-block');
       backdrop.classList.remove('modal-backdrop', 'fade', 'show');
       document.body.classList.remove('modal-open');
-      trigger.focus();
+      if (restoreFocus !== false) {
+        options.returnFocus.focus();
+      }
     }
 
-    dom.on(root, 'click', 'open', open);
-    dom.on(root, 'click', 'close', close);
     // Clique no fundo escuro: o alvo e o proprio .modal, fora do .modal-dialog.
     modal.addEventListener('click', function (evt) {
       if (evt.target === modal) {
@@ -108,6 +110,19 @@
         close();
       }
     });
+    return { open: open, close: close };
+  };
+
+  // Modal de confirmacao com POST real (components/confirm_modal.html e Redefinir senha).
+  SSS.component('confirmation', function (root) {
+    var modal = SSS.modal({
+      modal: dom.ref(root, 'modal'),
+      backdrop: dom.ref(root, 'backdrop'),
+      initialFocus: dom.ref(root, 'cancel'),
+      returnFocus: dom.ref(root, 'trigger')
+    });
+    dom.on(root, 'click', 'open', modal.open);
+    dom.on(root, 'click', 'close', function () { modal.close(); });
   });
 
   SSS.component('filters', function (root) {

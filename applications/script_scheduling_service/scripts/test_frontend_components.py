@@ -2,7 +2,7 @@
 """Contrato dos componentes em JavaScript puro (CR-021, D7; AGENTS §2.3).
 
 Confere, sem navegador, que:
-1. as views convertidas no CR-021a nao usam mais a sintaxe do Alpine, e os componentes Alpine retirados
+1. as views convertidas no CR-021a e no CR-021b1 nao usam mais a sintaxe do Alpine, e os componentes Alpine retirados
    nao aparecem em nenhuma view;
 2. todo ``data-component`` das views tem registro em ``static/js/app/`` e todo registro e usado;
 3. ``static/js/app/`` nao monta HTML a partir de texto nem avalia codigo;
@@ -21,18 +21,26 @@ VIEWS_DIR = os.path.join(APP_DIR, "views")
 JS_DIR = os.path.join(APP_DIR, "static", "js", "app")
 CSS_FILE = os.path.join(APP_DIR, "static", "css", "sss.css")
 
-# Views sem nenhum Alpine depois do CR-021a.
+# Views sem nenhum Alpine depois do CR-021a e do CR-021b1.
 CONVERTED_VIEWS = (
     "layout.html",
+    "admin_parameters/form.html",
     "admin_users/form.html",
+    "audit/agents.html",
     "components/confirm_modal.html",
     "components/filters.html",
     "dev/components.html",
     "dev/shell.html",
+    "inputs/index.html",
     "tickets/catalog.html",
+    "tickets/detail.html",
+    "tickets/index.html",
 )
-# Componentes Alpine retirados no CR-021a (o x-data deles nao pode reaparecer).
-RETIRED_ALPINE_COMPONENTS = ("copy", "filters", "scriptSearch", "toast", "toastDemo")
+# Componentes Alpine ja convertidos (o x-data deles nao pode reaparecer).
+RETIRED_ALPINE_COMPONENTS = (
+    "agentsRefresh", "copy", "filters", "inputUpload", "logViewer", "parameterForm", "scriptSearch",
+    "ticketsRefresh", "toast", "toastDemo",
+)
 # O 'confirmation' do Alpine so sobrevive onde o modal usa o estado de outro componente Alpine (CR-021b).
 ALPINE_CONFIRMATION_VIEWS = (
     "admin_profiles/matrix.html",

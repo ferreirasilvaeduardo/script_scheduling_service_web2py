@@ -199,7 +199,7 @@ class TestReadLogContent(_BaseLog):
         self.assertNotIn(SEED_SECRET, self._full_log(TCK_RUNNING))
 
     def test_html_preservado_como_texto(self):
-        # O servidor entrega o texto cru; o escape e responsabilidade do x-text no cliente.
+        # O servidor entrega o texto cru; o cliente o exibe so por textContent (logViewer).
         text, _ = self._read_all("admin", TCK_RUNNING)
         self.assertIn("<script>alert(1)</script>", text)
 
