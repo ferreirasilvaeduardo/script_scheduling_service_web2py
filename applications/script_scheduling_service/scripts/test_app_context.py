@@ -7,12 +7,19 @@ nem dentro de funcao (AGENTS §5.2).
 import ast
 import io
 import os
+import re
 import unittest
 
 import _testenv  # noqa: F401 - ajusta sys.path sem importar gluon
 import app_context
 
-MODULES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "modules")
+APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODULES_DIR = os.path.join(APP_DIR, "modules")
+REPO_ROOT = os.path.dirname(os.path.dirname(APP_DIR))
+# Codigo que roda: a aplicacao (sem docs/, que guarda o historico) e os launchers da raiz.
+CODE_DIRS = (os.path.join(REPO_ROOT, "bin"),) + tuple(
+    os.path.join(APP_DIR, name) for name in ("controllers", "models", "modules", "scripts", "views"))
+_RE_OLD_CONTEXT = re.compile(r"\bcurrent\.(?:sss_cfg|repo_factory)\b")
 
 
 def _imported_roots(source):
@@ -77,6 +84,21 @@ class ModulesWithoutGluonTest(unittest.TestCase):
         self.assertIn("gluon", _imported_roots(source))
         self.assertIn("gluon", _imported_roots("import gluon.utils\n"))
         self.assertNotIn("gluon", _imported_roots("from . import gluon_like\nimport app_context\n"))
+
+    def test_no_code_reads_the_old_context(self):
+        """Regressao: o bin/start_local.sh ainda lia current.sss_cfg depois do CR-021c e nao subia."""
+        offenders = []
+        this_file = os.path.abspath(__file__)
+        for top in CODE_DIRS:
+            for base, _dirs, files in os.walk(top):
+                for name in files:
+                    path = os.path.join(base, name)
+                    if path == this_file or not name.endswith((".py", ".sh", ".html", ".load")):
+                        continue
+                    with io.open(path, encoding="utf-8", errors="replace") as handle:
+                        if _RE_OLD_CONTEXT.search(handle.read()):
+                            offenders.append(os.path.relpath(path, REPO_ROOT))
+        self.assertEqual(sorted(offenders), [])
 
 
 if __name__ == "__main__":

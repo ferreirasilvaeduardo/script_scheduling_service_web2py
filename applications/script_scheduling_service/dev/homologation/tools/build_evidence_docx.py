@@ -275,6 +275,49 @@ RODADAS["20261023_r3"] = {
                  u"e diag_pasta_trabalho (inativos), os envios da tela de Entrada e a subpasta tela_r3 na pasta de "
                  u"entrada do contar_linhas_arquivo no GFPREPROD." % STAMP,
 }
+RODADAS["20261024_r2"] = {
+    "commit": u"479f54b (CR-021a a 021c: sem Alpine.js e sem gluon.current em modules/; correção da parada antes do "
+              u"claim no scheduler) mais o roteiro ajustado e o bin/start_local.sh corrigido, no mesmo commit deste "
+              u"documento",
+    "adaptacao": dict(_ADAPTACAO_1023R3, **{
+        "CT-01": ADAPTACAO["CT-01"] + u" O banco não foi recriado desde a rodada 3 de 23/10: o admin já estava com a "
+                                      u"senha escolhida (SSS_ADMIN_START=new).",
+    }),
+    "ressalva": dict((k, v) for k, v in _RESSALVA_1022.items() if k != "CT-05"),
+    "defeitos": [
+        (u"Roteiro sem o botão Criar ticket",
+         u"dev/homologation/tools/capture_evidence.js",
+         u"O roteiro clicava em button[data-summary-trigger], gancho do JavaScript antigo que saiu com o Alpine "
+         u"(CR-021b2). Na rodada 1 deste dia o modal de disparo não abriu, nenhum ticket foi criado e 48 verificações "
+         u"falharam em cascata (227 OK).",
+         u"Corrigido: o roteiro usa o contrato novo ([data-component=\"ticketTrigger\"] [data-action=\"open\"]) e o "
+         u"test_frontend_components confere que todo [data-*] dos seletores do roteiro existe no HTML ou no JS. "
+         u"Rodada 2: 283 OK, 0 falha."),
+        (u"Servidor local do DEV não subia",
+         u"bin/start_local.sh",
+         u"O diagnóstico antes de subir ainda lia current.sss_cfg, que deixou de existir no CR-021c.",
+         u"Corrigido: lê app_context.require_config(); o test_app_context confere que nenhum código lê o contexto "
+         u"antigo."),
+    ],
+    "observacoes": [
+        u"Segunda rodada do dia. A primeira (evidence_20261024) parou no botão Criar ticket do roteiro (ver "
+        u"Defeitos); esta rodada repetiu todos os casos com a marca %s." % STAMP,
+        u"Telas sem Alpine.js desde o CR-021b: os componentes são JavaScript próprio (static/js/app/dom.js), sem "
+        u"expressão no HTML. Os textos, as classes e o comportamento das telas não mudaram; os casos de matriz, "
+        u"homologação, parâmetros, regra de agendamento, disparo, log, Entrada e listas passaram sem ajuste de "
+        u"resultado esperado.",
+        u"O agente desta rodada já tem a correção da parada (479f54b): com o .stop ou o sinal, não faz claim nem "
+        u"desdobro na volta seguinte.",
+        u"Cancelamento no agente real: o log não ganha a linha \"processo encerrado por cancelamento (SIGTERM)\", "
+        u"que só existia na simulação do FAKE; o motivo aparece no Detalhe técnico (CANCELLED / CANCEL_USER).",
+    ],
+    "agente": u"Agente iniciado com scripts/run_scheduler.py (Python 3.6.15 com o driver Oracle, modo thick) e o "
+              u"config padrão do DEV (instance/config.ini, agent_id srv-linux-local-01, interpretadores PYTHON3, BASH "
+              u"e SH); servidor web pelo bin/start_local.sh na porta 18000.",
+    "senhas": u"O admin já estava com a senha escolhida pelo responsável pela homologação (rodada 3 de 23/10); no "
+              u"CT-01 a troca válida repetiu essa senha.",
+    "registros": RODADAS["20261023_r3"]["registros"].replace("tela_r3", "tela_r2"),
+}
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]

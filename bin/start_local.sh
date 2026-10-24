@@ -102,7 +102,8 @@ fi
 # 7. Validacao rapida da configuracao (diagnostico antes de subir)
 DIAG_ERRORS="$("${PYTHON}" web2py.py -S script_scheduling_service -M -R <(echo '
 try:
-    cfg = current.sss_cfg
+    import app_context
+    cfg = app_context.require_config()
     if cfg.app.sss_env != "DEV":
         print("ERRO: sss_env deve ser DEV para ambiente local.")
     else:

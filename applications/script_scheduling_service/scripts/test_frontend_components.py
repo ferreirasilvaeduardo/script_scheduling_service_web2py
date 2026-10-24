@@ -7,7 +7,8 @@ Confere, sem navegador, que:
 3. ``static/js/app/`` nao monta HTML a partir de texto nem avalia codigo;
 4. o layout carrega o ``dom.js`` antes de qualquer outro script da aplicacao;
 5. os tipos de notificacao aceitos pelo ``sss.js`` sao os modificadores ``.sss-toast-*`` do ``sss.css``;
-6. os blocos condicionais da regra de agendamento (``data-types``) citam so tipos de recorrencia do servico.
+6. os blocos condicionais da regra de agendamento (``data-types``) citam so tipos de recorrencia do servico;
+7. todo atributo ``data-*`` dos seletores do roteiro de homologacao existe nas views, nos JS ou nos helpers.
 """
 import io
 import os
@@ -21,6 +22,8 @@ APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VIEWS_DIR = os.path.join(APP_DIR, "views")
 JS_DIR = os.path.join(APP_DIR, "static", "js", "app")
 CSS_FILE = os.path.join(APP_DIR, "static", "css", "sss.css")
+EVIDENCE_SCRIPT = os.path.join(APP_DIR, "dev", "homologation", "tools", "capture_evidence.js")
+MODULES_DIR = os.path.join(APP_DIR, "modules")
 
 _RE_TEMPLATE_CODE = re.compile(r"\{\{.*?\}\}", re.S)
 _RE_ALPINE_SYNTAX = re.compile(r"(?<![\w-])(?:x-[a-z]+(?:[:.][\w.-]+)?|@[a-z][\w.-]*=|:[a-z][\w-]*=)")
@@ -39,6 +42,7 @@ _RE_SCRIPT_SRC = re.compile(r"<script\b[^>]*\bsrc=\"\{\{=URL\('static',\s*'?([^'
 _RE_TOAST_TYPES = re.compile(r"var TOAST_TYPES = \{([^}]*)\}")
 _RE_TOAST_MODIFIER = re.compile(r"\.sss-toast-([a-z]+)\b")
 _RE_DATA_TYPES = re.compile(r"\bdata-types=\"([^\"]*)\"")
+_RE_SELECTOR_DATA_ATTR = re.compile(r"\[(data-[a-z0-9-]+)")
 # Partes estruturais do toast, nao tipos de notificacao.
 _TOAST_PARTS = {"msg", "close"}
 
@@ -150,6 +154,21 @@ class ScheduleRuleTypesTest(unittest.TestCase):
             self.assertTrue(set(types) <= set(schedules_service.TYPE_LABELS), "tipo desconhecido em %r" % block)
             mentioned.update(types)
         self.assertEqual(mentioned, set(schedules_service.TYPE_LABELS))
+
+
+class EvidenceScriptContractTest(unittest.TestCase):
+    """Regressao do CR-021b2: o roteiro clicava em button[data-summary-trigger], que saiu com o Alpine, e a
+    homologacao real nao criava nenhum ticket."""
+
+    def test_selector_data_attributes_exist(self):
+        """Todo [data-*] dos seletores do capture_evidence.js aparece no HTML ou no JS da aplicacao."""
+        markup = "".join(_views().values()) + "".join(_scripts().values())
+        for name in sorted(os.listdir(MODULES_DIR)):
+            if name.startswith("ui_") and name.endswith(".py"):
+                markup += _read(os.path.join(MODULES_DIR, name))
+        used = set(_RE_SELECTOR_DATA_ATTR.findall(_read(EVIDENCE_SCRIPT)))
+        self.assertTrue(used, "nenhum seletor data-* no roteiro")
+        self.assertEqual(sorted(a for a in used if a not in markup), [])
 
 
 if __name__ == "__main__":

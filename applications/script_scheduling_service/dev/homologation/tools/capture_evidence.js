@@ -268,7 +268,7 @@ async function createTicket(scriptName, env, answers, opts = {}) {
     }
     if (opts.priority) await fill('#field-priority', String(opts.priority));
     if (opts.scheduledAt) await fill('#field-scheduled_at', opts.scheduledAt);
-    await clickText('button[data-summary-trigger]', 'Criar ticket', { wait: 1500 });
+    await clickText('[data-component="ticketTrigger"] [data-action="open"]', 'Criar ticket', { wait: 1500 });
     if (opts.beforeConfirm) await opts.beforeConfirm();
     await confirmModal();
     return ticketFromUrl();
@@ -517,7 +517,7 @@ CTS['CT-05'] = async () => {
     await expectText('Ajuda da prioridade com o envelhecimento da fila', 'quem espera mais sobe de prioridade');
     await expectNoText('Sem o botão Pré-visualizar comando: o comando fica no modal (CR-017b)', 'Pré-visualizar comando');
     await snap('Etapa 3: questionário', { full: true });
-    await clickText('button[data-summary-trigger]', 'Criar ticket', { wait: 1500 });
+    await clickText('[data-component="ticketTrigger"] [data-action="open"]', 'Criar ticket', { wait: 1500 });
     await expectText('Confirmação com a frase-resumo e o comando que será executado, com o caminho completo do script',
         'Vamos rodar', 'gerar_hash_arquivo', 'CLONE2', 'Comando que será executado',
         '/opt/automacoes/scripts/utilitarios/gerar_hash_arquivo.py');
@@ -1656,7 +1656,7 @@ async function runDirect(sid, env, answers) {
     for (const [code, value] of Object.entries(answers || {})) {
         await fill(`[name="p_${code}"]`, value);
     }
-    await clickText('button[data-summary-trigger]', 'Criar ticket', { wait: 1500 });
+    await clickText('[data-component="ticketTrigger"] [data-action="open"]', 'Criar ticket', { wait: 1500 });
     await confirmModal();
     return ticketFromUrl();
 }
