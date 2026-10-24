@@ -26,12 +26,10 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 
 ### 2.1 Linguagem e framework
 
-* **Python 3.6.0 ou superior** com o framework **web2py**.
+* **Python 3.6.0 ou superior**, só com a biblioteca padrão e o driver Oracle; **sem framework web** desde o CR-021 (`docs/architecture/CR-021-no-web2py-no-alpine.md`).
   * A sintaxe e a biblioteca padrão usadas são as da 3.6.0.
   * As versões validadas vão da 3.6.0 à 3.13, e a 3.6.8 é a referência de produção (AGENTS §2.1).
-  * A versão do web2py é homologada e fixada no repositório. Patches locais no framework, todos marcados com `SSS:` no código:
-    * `gluon/contrib/multipart.py`: proteção de import para rodar na 3.6.0 (`typing.AsyncGenerator` só existe a partir da 3.6.1);
-    * `gluon/contenttype.py`: tipo `font/woff2` para as fontes locais (§2.4).
+  * O núcleo web é próprio (`modules/web/`: roteador, requisição e multipart em fluxo, resposta, sessão em cookie assinado, estáticos, motor de templates e servidor `wsgiref` com limite de threads), ligado à aplicação por `webapp/` e iniciado por `scripts/run_web.py`. As views mantêm a sintaxe de template do web2py (`{{=x}}`, `if`/`for`/`pass`, `extend`/`include`) e as URLs continuam `/script_scheduling_service/<controller>/<função>/<args>`.
 * É proibido usar recursos de Python 3.7+. A lista normativa completa está no `AGENTS.md` §2.1.
 
 ### 2.2 Banco de dados
@@ -278,8 +276,8 @@ Um nome legado só muda junto com uma alteração funcional do mesmo trecho. Nes
 
 | Processo | Execução | Responsabilidade |
 |---|---|---|
-| **Web** (1..N nós) | web2py sob WSGI corporativo | UI, autenticação, RBAC, criação e cancelamento de tickets, cadastros |
-| **Scheduler/Agente** (1 por servidor executor) | `bin/sss-scheduler.sh [--config <config.ini>]`, que faz `exec python applications/script_scheduling_service/scripts/run_scheduler.py` da raiz do web2py (Python puro, sem o ambiente do web2py: thread única, §12.2) | Desdobro de agendamentos, claim, execução, heartbeat, cancelamento, coleta de log |
+| **Web** (1..N nós) | servidor web próprio (`bin/sss-web.sh` → `scripts/run_web.py`, WSGI da biblioteca padrão) atrás do proxy reverso HTTPS | UI, autenticação, RBAC, criação e cancelamento de tickets, cadastros |
+| **Scheduler/Agente** (1 por servidor executor) | `bin/sss-scheduler.sh [--config <config.ini>]`, que faz `exec python applications/script_scheduling_service/scripts/run_scheduler.py` da raiz do repositório (Python puro, processo separado do web: thread única, §12.2) | Desdobro de agendamentos, claim, execução, heartbeat, cancelamento, coleta de log |
 
 Regras de topologia:
 
@@ -447,7 +445,7 @@ password = ...
   * **Revogação (CR-008, E2/R-23):** `tbsss_users.session_epoch` é gravado na sessão no login e comparado na revalidação. Incrementam o valor, na mesma transação da operação: sair (`LOGOUT`), trocar a própria senha, ter a senha redefinida, ser desativado e ter o perfil trocado. Uma sessão com `session_epoch` diferente do banco é encerrada pela revalidação e volta ao login, com log INFO `sessão revogada`; não há nova auditoria, porque a operação que revogou já foi auditada na origem (`LOGOUT`, `UPDATE` ou `DEACTIVATE`). Consequência declarada: sair em um navegador encerra **todas** as sessões daquele usuário, inclusive um cookie copiado.
   * Cookies com `HttpOnly` e `Secure`.
     * **Exceção de DEV:** com `sss_env = DEV` sobre HTTP (servidor de desenvolvimento), o atributo `Secure` é omitido, porque o navegador descartaria o cookie. Em HML e PROD, `Secure` é sempre enviado.
-  * **`SameSite` no Python 3.6:** `http.cookies.Morsel` só aceita o atributo `samesite` a partir do 3.8. No 3.6, a proteção cross-site se apoia em duas camadas:
+  * **`SameSite=Lax`:** o `http.cookies.Morsel` do 3.6 não aceita o atributo, então o núcleo web escreve o `Set-Cookie` sozinho (`web/response.py`, CR-021d1), sempre com `HttpOnly` e `SameSite`. A proteção cross-site continua com duas camadas além dele:
     * o token CSRF;
     * a checagem obrigatória de `Origin`, ou de `Referer` quando `Origin` estiver ausente, contra `[web] allowed_origins` em todo `POST`.
 
@@ -483,7 +481,7 @@ password = ...
     * trocar o próprio perfil administrativo por um não administrativo;
     * sem ser administrador, trocar o próprio perfil por qualquer outro (mudaria as próprias permissões; CR-008 E1, revisão de 2026-10-20). A recusa usa a mensagem "Só um administrador pode … mudar o seu próprio perfil";
     * redefinir a própria senha (para isso existe "Minha senha", que exige a senha atual).
-  * **Senhas não aparecem em lugar nenhum:** campos `type="password"`, nunca reapresentados. A listagem e o formulário recebem os registros sem `password_hash`. Os controllers retiram as senhas de `request.vars` logo após a leitura, porque o ticket de erro do web2py grava as variáveis da requisição.
+  * **Senhas não aparecem em lugar nenhum:** campos `type="password"`, nunca reapresentados. A listagem e o formulário recebem os registros sem `password_hash`. Os controllers retiram as senhas de `request.vars` logo após a leitura (`security.strip_passwords`), para nenhum registro de erro ou depuração encontrá-las.
 * **IP de origem:** usa `request.env.remote_addr`. O `X-Forwarded-For` só é aceito se o `remote_addr` constar em `trusted_proxies`. Nesse caso, a lista é lida da direita para a esquerda, e o IP de origem é o primeiro endereço que não é um proxy confiável.
 * **Retorno após o login (`next`):** só caminhos locais da aplicação são aceitos; URL externa é ignorada. O `next` só é gerado quando a requisição sem sessão é um GET ou HEAD. Um POST sem sessão redireciona ao login sem `next`.
 * **XSS:**
@@ -1279,7 +1277,7 @@ Nos dois casos, `next_run_at` recebe a **primeira ocorrência futura** maior que
 * **Conclusão sem ticket:** sempre que `create_ticket = False` e `complete = True`. Exemplos: `ONCE` com `SKIP` fora da tolerância, ou `end_date` vencida durante uma parada com `SKIP` (CR-007, R-32).
 * **Sem próxima ocorrência no horizonte (CR-008, R-19):** a expressão é válida, mas a próxima ocorrência depois de `agora` não existe em `cron_horizon_days` (e `end_date` não explica). A função **não** lança exceção: devolve a decisão normal (`create_ticket`, `missed` e `occurrence` calculados pelas vencidas, como em qualquer regra) com `next_date = None`, `complete = False` e `cron_error = True`. O daemon aplica os passos 4 e 5 do §7.5 normalmente e grava a pausa `INVALID_CRON` (§7.5, passo 6, variante `cron_error`).
 * **Expressão CRON sintaticamente inválida** (gravada por fora da validação): lança `CronError`, sem decisão. O daemon pausa com `INVALID_CRON` **sem** ticket (passo 7), porque não há como calcular as vencidas.
-* Os módulos `cron_parser.py` e `recurrence.py` são puros: não importam `gluon`, nunca chamam `datetime.now()` e recebem o "agora" por parâmetro.
+* Os módulos `cron_parser.py` e `recurrence.py` são puros: não importam nada da camada web, nunca chamam `datetime.now()` e recebem o "agora" por parâmetro.
 
 ### 7.5 Algoritmo de desdobro (ciclo 1 do daemon)
 
@@ -2044,7 +2042,7 @@ Pasta permanente onde o script encontra os arquivos de que precisa (lotes, plani
 * **Concorrência:** dois tickets do mesmo script no mesmo ambiente (com `max_parallel_env` maior que 1) usam a mesma pasta ao mesmo tempo. A coordenação (por exemplo, mover o arquivo para uma subpasta antes de processar) é do script.
 * **Scripts e interpretadores** não podem ficar dentro de `input_dir` (`SSS_DIR`, §8.5).
 * Web e agentes podem estar em servidores diferentes: a pasta existe só no servidor de cada agente. Com mais de um agente atendendo o mesmo ambiente, cada um tem a sua `input_dir` (ou um compartilhamento de rede comum, montado pela infraestrutura).
-* **Envio pela tela (CR-020):** o arquivo chega pelo banco (§10, tabelas 19 a 21) e cada agente vivo do ambiente o grava na sua pasta (`modules/input_phase.py`, máquina de estados do laço, sem espera, uma entrega por vez; persistência do agente por `repo_oracle/scheduler_input`, sem o web2py, com a conexão do daemon):
+* **Envio pela tela (CR-020):** o arquivo chega pelo banco (§10, tabelas 19 a 21) e cada agente vivo do ambiente o grava na sua pasta (`modules/input_phase.py`, máquina de estados do laço, sem espera, uma entrega por vez; persistência do agente por `repo_oracle/scheduler_input`, fora da camada web, com a conexão do daemon):
   1. **baixar:** no ciclo rápido, o agente pega a próxima entrega `PENDING` dele e, a cada volta do laço, lê até 4 partes de 1 MiB do banco para `work_dir/input/delivery_<id>.part` (do agente, `0600`). No fim, tamanho e SHA-256 são conferidos; divergência é `FAILED`/`HASH` sem chamar o helper;
   2. **gravar:** o helper `put-input` (como o usuário de execução, com o temporário na entrada padrão, prazo de 120 s) grava `.sss_upload_<pid>.tmp` no destino com `O_EXCL`, confere tamanho e hash enquanto grava e publica de forma atômica: **sem substituir**, `link` + `unlink`, e um item já existente é `EXISTS`; **substituindo**, `replace`, recusado se o destino não for arquivo regular (`NAME`). Disco cheio é `SPACE`; outro erro, `ERROR`;
   3. **marcar:** `DELIVERED` ou `FAILED` com o motivo, só pelo próprio agente, com `INPUT_DELIVERY` na mesma transação; o temporário é apagado e o retrato daquela pasta é refeito.
@@ -2974,7 +2972,7 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
   * Backend FAKE (DEV): o seed mostra os três quadros. O `agt-host02` tem `kill=10` (configuração divergente); o ticket 16 está `RUNNING` sem PID desde a carga; o ticket 4 (SH em `HOMOLOGACAO`, vencido 3 min antes da carga) só é atendido pelo `agt-host02` (o `agt-host01` mapeia `PYTHON3,BASH`) e entra na fila sem atendente quando ele passa a `AT_RISK`, cerca de 1 min depois da carga.
   * `critical_config` do nó web: `sss_config.critical_config(cfg)`, com `call` em segundos (`call_timeout_s`, arredondado para cima), igual ao texto do agente (§8.12).
 * **Monitoração externa (CR-007, R-18):** `scripts/health.py` (F9.1) roda, com a conta só de leitura do papel **monitor** (`[monitor]` no `secrets.cfg`, §4.1 e §11.1, CR-008 E3; a conta do agente não lê `tbsss_audit`), as consultas de saúde e devolve o código no padrão Nagios (0 OK, 1 WARN, 2 CRITICAL, 3 desconhecido), com uma linha por problema. Verifica: agente `ACTIVE` sem heartbeat além de `node_offline_timeout_s`; ambiente ativo sem nenhum agente saudável; os três quadros acima; fila `PENDING` vencida acima de um limite; ausência de `PURGE` auditado em 2 dias; versão do esquema (§11.1). Os limites são argumentos com padrão, e o `DEPLOYMENT.md` traz o exemplo de agendamento no monitoramento corporativo.
-  * **Uso (F9.1):** `python scripts/health.py [--config <config.ini>] [--no-pid-min 2] [--queue-warn 500] [--queue-crit 5000] [--wait-warn-min 30] [--wait-crit-min 120] [--purge-days 2]`. Todas as verificações usam um único `db_now()`. As consultas ficam em `repo_oracle/health.py` (sem gluon), que também fornece à tela de agentes o SQL da fila sem atendente e do rodando sem PID: a tela e o monitoramento não divergem. Nenhum LOB é lido, e o plano não varre `tbsss_tickets` nem `tbsss_audit` (`ix_tbsss_tck_queue`, `ix_tbsss_tck_run`, `ix_tbsss_aud_actor`).
+  * **Uso (F9.1):** `python scripts/health.py [--config <config.ini>] [--no-pid-min 2] [--queue-warn 500] [--queue-crit 5000] [--wait-warn-min 30] [--wait-crit-min 120] [--purge-days 2]`. Todas as verificações usam um único `db_now()`. As consultas ficam em `repo_oracle/health.py` (fora da camada web), que também fornece à tela de agentes o SQL da fila sem atendente e do rodando sem PID: a tela e o monitoramento não divergem. Nenhum LOB é lido, e o plano não varre `tbsss_tickets` nem `tbsss_audit` (`ix_tbsss_tck_queue`, `ix_tbsss_tck_run`, `ix_tbsss_aud_actor`).
 
     | Verificação | Nível |
     |---|---|
@@ -3034,7 +3032,7 @@ flowchart LR
     browser["Navegador"]
 
     subgraph web["Nós Web (1..N)"]
-        wsgi["web2py / WSGI"]
+        wsgi["Servidor web próprio / WSGI"]
         controllers["Controllers"]
         services["Services e regras de negócio<br/>RBAC, validação e compilação"]
         factory["repo_factory"]

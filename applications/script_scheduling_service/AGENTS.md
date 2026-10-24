@@ -8,7 +8,7 @@ Regras **obrigatórias e inegociáveis** para qualquer agente de IA ou desenvolv
 
 ## 1. Postura do Agente
 
-* Atue como **Engenheiro de Software Sênior e DBA Oracle**, com foco em Python 3.6+, web2py, Oracle 11gR2+ e agente **somente POSIX** (Linux e Unix — `docs/architecture/CR-005-posix-free-path-and-logs.md`, que revoga a parte Windows do CR-001). Banco **somente Oracle**, com SQL 11gR2 e driver adaptativo (`docs/architecture/CR-002-single-oracle-and-adaptive-driver.md`).
+* Atue como **Engenheiro de Software Sênior e DBA Oracle**, com foco em Python 3.6+ (biblioteca padrão, sem framework web desde o CR-021), Oracle 11gR2+ e agente **somente POSIX** (Linux e Unix — `docs/architecture/CR-005-posix-free-path-and-logs.md`, que revoga a parte Windows do CR-001). Banco **somente Oracle**, com SQL 11gR2 e driver adaptativo (`docs/architecture/CR-002-single-oracle-and-adaptive-driver.md`).
 * **Escopo:**
   * Implemente **somente** o subitem solicitado.
   * Não refatore, renomeie nem "melhore" código fora do escopo.
@@ -42,7 +42,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 
 **Compatibilidade nas duas pontas:**
 
-* **Mínimo (3.6.0):** não use nada que tenha surgido em versões de correção posteriores (3.6.1 em diante). Por exemplo, `typing.AsyncGenerator` só existe a partir da 3.6.1; o web2py do repositório recebeu uma proteção de import para isso em `gluon/contrib/multipart.py`.
+* **Mínimo (3.6.0):** não use nada que tenha surgido em versões de correção posteriores (3.6.1 em diante). Por exemplo, `typing.AsyncGenerator` só existe a partir da 3.6.1 e `typing.NoReturn` a partir da 3.6.2 (os dois são recusados pelo `test_py36_compat`).
 * **Máximo (3.13):** é proibido depender de módulos removidos ou depreciados nas versões novas (`cgi`, `cgitb`, `imp`, `asyncore`, `asynchat`, `distutils`, `smtpd`, `telnetlib`, `pipes`, `crypt`).
 
 **Atenção a comportamentos:**
@@ -53,7 +53,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 ### 2.2 Bibliotecas
 
 * Proibido `pip install` e qualquer dependência nova.
-* **Proibidos:** Celery, Redis, APScheduler, croniter, Flask, FastAPI, Django, Bottle, SQLAlchemy, Peewee, requests, o **DAL do web2py** (inclusive para auth e sessão) e `gluon.scheduler`.
+* **Proibidos:** Celery, Redis, APScheduler, croniter, Flask, FastAPI, Django, Bottle, SQLAlchemy, Peewee, requests, web2py (removido no CR-021f, inclusive DAL, auth, sessão e `gluon.scheduler`) e qualquer outro framework web.
 * **Exceção homologada (pré-instalada na infraestrutura):** o driver Oracle, conforme a versão do Python (CR-002):
 
   | Python | Driver principal (Thick) | Contingência (Thick) |
@@ -156,7 +156,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
   * `DOWNLOAD_OUTPUT` e o ambiente no perfil; fora do escopo, sem saída `AVAILABLE` ou parâmetro inválido é 404;
   * todo download grava `OUTPUT_DOWNLOAD` por `RepoAudit.register` antes do envio (leitura auditada, como `AUDIT_EXPORT`); navegar não audita.
 * **Entrada pela tela (CR-020b, README §10 tabelas 19 a 21):**
-  * o banco é o único canal entre web e agentes: o arquivo vai em `tbsss_input_upload` (BLOB) e cada agente vivo do ambiente recebe uma linha em `tbsss_input_delivery`; persistência só pelo repositório `inputs` (`repo_inputs`, `repo_oracle/inputs`, `repo_fake/inputs`); no daemon, só por `repo_oracle/scheduler_input`, que nunca importa o web2py (o teste confere);
+  * o banco é o único canal entre web e agentes: o arquivo vai em `tbsss_input_upload` (BLOB) e cada agente vivo do ambiente recebe uma linha em `tbsss_input_delivery`; persistência só pelo repositório `inputs` (`repo_inputs`, `repo_oracle/inputs`, `repo_fake/inputs`); no daemon, só por `repo_oracle/scheduler_input`, que nunca importa a camada web (o teste confere);
   * o conteúdo nunca entra em listagem e sai só em partes de até 1 MiB (`read_content`); as entregas pendentes são lidas pela expressão de `ix_tbsss_idl_pend` (`sql_ident.FBI_IDL_PEND_CASE`);
   * sem agente vivo, o envio é recusado (`NoLiveAgent`), nunca fica parado na fila; a entrega só é marcada pelo próprio agente (`agent_id = :agent_id`), com `INPUT_DELIVERY` na mesma transação;
   * a lista `ddl_builder.ROLLBACK_ENTITY_ORDER` é fixa: toda tabela nova entra nela (o teste confere);
@@ -322,7 +322,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
    * `modules/repo_fake/` implementa o mesmo contrato em memória, com paridade de semântica (README §2.5). É proibido adicionar ao FAKE um método que não exista no contrato.
    * Controllers e services obtêm repositórios **somente** via `repo_factory`. É proibido importar `repo_fake` ou `repo_oracle` diretamente.
    * O `repo_factory` importa o `repo_fake` **só dentro do ramo FAKE**, nunca no nível do módulo: o pacote de implantação não leva o `repo_fake` (README §12.2), e um import de topo derruba a aplicação implantada (F9.1d; `test_package.py` confere que nada que vai no pacote importa no topo o que fica fora dele).
-   * **Exceção — repositórios internos de processos batch:** `modules/repo_oracle/scheduler_*.py` (fila, agenda e log), `modules/repo_oracle/purge.py` e `modules/repo_oracle/health.py` não fazem parte do contrato da UI e não têm versão FAKE. Eles são importados diretamente **apenas** por `scheduler_loop.py`, `log_pump.py`, `scripts/purge.py` e `scripts/health.py`, todos processos que exigem banco real (README §2.5), e não importam gluon. Única exceção: `repo_oracle/agents.py` importa do `repo_oracle/health.py` o SQL da fila sem atendente e do rodando sem PID e o cálculo dos pares atendidos, para a tela de agentes e o monitoramento não divergirem (F9.1b).
+   * **Exceção — repositórios internos de processos batch:** `modules/repo_oracle/scheduler_*.py` (fila, agenda e log), `modules/repo_oracle/purge.py` e `modules/repo_oracle/health.py` não fazem parte do contrato da UI e não têm versão FAKE. Eles são importados diretamente **apenas** por `scheduler_loop.py`, `log_pump.py`, `scripts/purge.py` e `scripts/health.py`, todos processos que exigem banco real (README §2.5), e não importam a camada web. Única exceção: `repo_oracle/agents.py` importa do `repo_oracle/health.py` o SQL da fila sem atendente e do rodando sem PID e o cálculo dos pares atendidos, para a tela de agentes e o monitoramento não divergirem (F9.1b).
    * Regras de negócio residem em `modules/` (rbac, params_compiler, recurrence, executor, *_service).
    * **Backend:** a aplicação usa sempre o Oracle do `[oracle]` (owner e prefixo); `[app] data_backend` foi removida no F7.3 e é recusada se aparecer. O FAKE só existe injetado por teste (`repo_factory.configure`) e só com `sss_env = DEV`. DEV e PROD se separam pelo owner e pelo prefixo; `sss_env` continua como trava de segurança.
 6. **Núcleo web próprio (`modules/web/`, CR-021d1):** pacote só com a biblioteca padrão, no padrão D8: linhas de até 99 colunas, funções e métodos públicos com anotações de tipo e docstring, imports relativos entre os módulos do pacote e nenhum `gluon` (`scripts/test_web_package.py`). Não conhece regra de negócio (CSRF, guardas e cabeçalhos de segurança entram por hooks no CR-021e). Regras dele:
@@ -369,7 +369,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 
 1. Framework **exclusivamente** `unittest`, executado a partir do diretório da aplicação: `python -m unittest discover -s scripts -p "test_*.py"`. O `pytest` é proibido.
    * `scripts/_testenv.py` ajusta o `sys.path` para a raiz da aplicação e para `modules/` (a raiz do repositório saiu com o web2py, CR-021f2). Todo teste o importa primeiro.
-   * Nenhum arquivo de `modules/` importa `gluon` (CR-021c, §5.2). Isso permite testá-los sem o framework.
+   * Nenhum arquivo de `modules/` importa a camada web da aplicação nem `gluon` (CR-021c, §5.2); desde o CR-021f, nenhum `.py` do repositório importa `gluon`.
 2. Testes que dependem de banco real devem usar mocks da interface de `db_conn` **ou** ser ligados só por `SSS_TEST_ORACLE=1` (`_oracle_test_support.real_db_configured()`), com owner, prefixo, DSN e conta lidos do `instance/config.ini` e a guarda de `scripts/_oracle_test_support.py` antes de qualquer escrita (README §2.5). Sem a chave, o veredito do relatório é `NÃO TESTADO` para a parte de banco. A partir do F7, aplicação e validações usam as tabelas reais; o FAKE fica só como dublê dos testes automáticos sem banco.
    * **Plataforma:** a implementação POSIX é testada de verdade, no Linux (CR-005).
 3. Os testes rodam em Python real, no mínimo na **3.6.0** (mínima suportada) e na **3.6.8** (referência de produção). Recomenda-se rodar também na mais nova disponível (3.13). Sem nenhum Python 3.6.x no ambiente, o veredito máximo é `NÃO TESTADO`, e o motivo deve constar nas observações.

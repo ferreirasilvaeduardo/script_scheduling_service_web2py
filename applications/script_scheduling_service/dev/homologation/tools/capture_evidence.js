@@ -279,12 +279,20 @@ async function ticketStatus(id) {
     return text();
 }
 
+// Situacao do ticket lida so do selo do visualizador de log ([data-ref="badgeLabel"]). O texto da
+// pagina inteira nao serve: a barra de etapas sempre tem "Rodando" (Pedido criado > Na fila > Rodando >
+// Terminou), e um ticket ainda na fila passava por rodando (achado na rodada 5 de 24/10).
+async function ticketState(id) {
+    await go(`/tickets/detail/${id}`);
+    return page.$eval('[data-ref="badgeLabel"]', (e) => e.textContent.trim()).catch(() => '');
+}
+
 async function waitStatus(id, labels, timeoutS) {
     const end = Date.now() + timeoutS * 1000;
     let t = '';
     while (Date.now() < end) {
-        t = await ticketStatus(id);
-        if (labels.some((l) => t.includes(l))) return t;
+        t = await ticketState(id);
+        if (labels.includes(t)) return t;
         await sleep(3000);
     }
     return t;
@@ -582,7 +590,7 @@ CTS['CT-06'] = async () => {
 CTS['CT-07'] = async () => {
     begin('CT-07', 'Detalhe do ticket e visualizador de log');
     let longo = state.tickets.longo1;
-    if (!longo || !(await (async () => { await login('admin'); return ticketStatus(longo); })()).includes('Rodando')) {
+    if (!longo || (await (async () => { await login('admin'); return ticketState(longo); })()) !== 'Rodando') {
         longo = await startLongTicket('longo1');
     }
     await login('admin');

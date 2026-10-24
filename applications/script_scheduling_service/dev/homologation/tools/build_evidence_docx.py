@@ -4,7 +4,7 @@
 Uso (da pasta tools/, Python 3 com python-docx):
     SSS_EVIDENCE_DATE=AAAAMMDD [SSS_EVIDENCE_ROUND=n] python3 build_evidence_docx.py [pasta_evidencias] [saida.docx]
 Rodadas conhecidas em RODADAS (20261022: CR-016; 20261023: CR-017; 20261023_r2: CR-018; 20261023_r3: CR-019
-e CR-020; 20261024_r2: CR-021a-c; 20261024_r4: CR-021e). Padrao: a rodada de
+e CR-020; 20261024_r2: CR-021a-c; 20261024_r4: CR-021e; 20261024_r6: CR-021f). Padrao: a rodada de
 20261023, ../evidence_<data>[_r<n>] -> ../../../docs/homologation/SSS_Homologation_Evidence_<AAAA-MM-DD>[_r<n>].docx
 """
 import io
@@ -350,6 +350,36 @@ RODADAS["20261024_r4"] = {
     "senhas": RODADAS["20261024_r2"]["senhas"],
     "servidor_web": u"servidor web próprio (scripts/run_web.py)",
     "registros": RODADAS["20261023_r3"]["registros"].replace("tela_r3", "tela_r4"),
+}
+RODADAS["20261024_r6"] = {
+    "commit": u"2377a5c (CR-021f1 a 021f3: web2py fora do repositório e do pacote) mais o CR-021f4 (documentação e o "
+              u"roteiro corrigido), no mesmo commit deste documento",
+    "adaptacao": RODADAS["20261024_r2"]["adaptacao"],
+    "ressalva": RODADAS["20261024_r2"]["ressalva"],
+    "defeitos": [
+        (u"Roteiro lia a situação do ticket na página inteira",
+         u"dev/homologation/tools/capture_evidence.js",
+         u"Na rodada 5 deste dia (evidence_20261024_r5), o filtro pela situação Rodando do CT-06 saiu vazio (282 OK, "
+         u"1 falha). O roteiro esperava o ticket longo \"rodando\" procurando a palavra na página inteira do detalhe, "
+         u"mas a barra de etapas sempre tem \"Rodando\": o ticket ainda estava na fila quando o filtro rodou (o "
+         u"agente o pegou 10 s depois). Defeito antigo do roteiro, que passava porque o agente costumava pegar o "
+         u"ticket antes.",
+         u"Corrigido: a situação é lida só do selo do visualizador de log ([data-ref=\"badgeLabel\"]). Rodada 6: "
+         u"283 OK, 0 falha."),
+    ],
+    "observacoes": [
+        u"Rodada final do CR-021, com o repositório já sem web2py (sem gluon/, web2py.py, anyserver.py e "
+        u"routes.py): servidor web próprio (scripts/run_web.py) subido pelo bin/start_local.sh, agente real e Oracle. "
+        u"Marca %s." % STAMP,
+        u"Antes desta rodada, o pacote sem web2py foi gerado de uma cópia limpa e ensaiado em DEV (CR-021f3): "
+        u"subida pelo bin/sss-web.sh, raiz, login, estáticos, cabeçalhos de segurança, origem estranha e parada.",
+        u"Cancelamento no agente real: o log não ganha a linha \"processo encerrado por cancelamento (SIGTERM)\", "
+        u"que só existia na simulação do FAKE; o motivo aparece no Detalhe técnico (CANCELLED / CANCEL_USER).",
+    ],
+    "agente": RODADAS["20261024_r4"]["agente"],
+    "senhas": RODADAS["20261024_r2"]["senhas"],
+    "servidor_web": u"servidor web próprio (scripts/run_web.py), sem web2py no repositório",
+    "registros": RODADAS["20261023_r3"]["registros"].replace("tela_r3", "tela_r6"),
 }
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])

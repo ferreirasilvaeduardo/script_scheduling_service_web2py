@@ -53,12 +53,12 @@ Fora de DEV, a conta da aplicação igual à dona do esquema é recusada (CR-008
 
 **Convenções:**
 * Comandos com `sudo` ou "como root" são do administrador do servidor. Os demais rodam como o usuário de serviço `sss` (`sudo -u sss -H bash`).
-* `W` = `/opt/sss/web2py` (raiz do web2py, onde o pacote é extraído) e `APP` = `$W/applications/script_scheduling_service`.
+* `W` = `/opt/sss/web2py` (raiz do pacote extraído; o nome da pasta ficou da época do web2py, removido no CR-021f, e só muda no CR-022) e `APP` = `$W/applications/script_scheduling_service`.
 * Caminhos padrão (podem ser trocados, desde que no `config.ini` também):
 
 | Caminho | Conteúdo | Dono | Modo | Chave do `config.ini` |
 |---|---|---|---|---|
-| `/opt/sss/web2py` | Pacote extraído (web2py + aplicação) | `sss` | `0750` | — |
+| `/opt/sss/web2py` | Pacote extraído (`bin/` + aplicação) | `sss` | `0750` | — |
 | `APP/instance/config.ini` | Configuração (sem segredos) | `sss` | `0640` | — |
 | `/etc/sss/secrets.cfg` | Segredos do papel do servidor | `sss` | `0600` (pasta `0700`) | `[secrets] secrets_file` |
 | `/var/log/sss` | Logs da aplicação e dos scripts, **em partição própria** (§4.3) | `sss` | `0750` | `[logging] log_dir` |
@@ -92,12 +92,12 @@ O pacote é gerado na máquina de desenvolvimento, a partir de uma cópia **limp
 
 ```bash
 # na máquina de desenvolvimento, no commit a implantar
-git archive HEAD | tar -x -C /tmp/sss-limpo
+mkdir -p /tmp/sss-limpo && git archive HEAD | tar -x -C /tmp/sss-limpo
 python3 /tmp/sss-limpo/applications/script_scheduling_service/scripts/package.py --source /tmp/sss-limpo --out-dir /tmp/sss-dist
 # esperado: "Pacote: .../sss-<versao>.tar.gz" e "SHA256SUMS: .../SHA256SUMS"; código 0
 ```
 
-Com código 1, a saída diz o que foi recusado ("Pacote recusado:" e uma linha por problema, com arquivo e linha, nunca o valor). O caso comum é um `password` ou `cookie_key` que não é `CHANGE_ME` no `instance/secrets.cfg.example`.
+Ensaiado de novo no CR-021f3, já sem web2py: o `package.py` não grava `__pycache__` na cópia que empacota (antes, o próprio `__pycache__` recusava o pacote). Com código 1, a saída diz o que foi recusado ("Pacote recusado:" e uma linha por problema, com arquivo e linha, nunca o valor). O caso comum é um `password` ou `cookie_key` que não é `CHANGE_ME` no `instance/secrets.cfg.example`.
 
 Leve os dois arquivos (`sss-<version>.tar.gz` e `SHA256SUMS`) ao servidor e confira:
 
@@ -110,7 +110,7 @@ cd /opt/sss/web2py && sha256sum -c --quiet SHA256SUMS && echo "conteúdo confere
 ls applications/                              # esperado: só script_scheduling_service
 ```
 
-O pacote já vem sem as aplicações de exemplo do web2py, sem `controllers/dev.py`, sem `repo_fake`, sem testes e com um `routes.py` que torna o SSS a aplicação padrão: a raiz `/` leva ao login.
+O pacote só tem o `bin/` e a aplicação: sem web2py (CR-021f), sem `controllers/dev.py`, sem `repo_fake` e sem testes. O servidor web é o `scripts/run_web.py` da própria aplicação, e a raiz `/` leva ao login.
 
 ---
 
@@ -601,7 +601,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | 16 | `config_criticos diverge do agente X: local=... remoto=...` e `configuracao critica diferente da dos outros agentes (CR-007, R-23)` | Tempos diferentes entre agentes | §7.1: copie do arquivo de referência |
 | 17 | `ambientes atendidos inexistentes: X` | Nome em `environments` não cadastrado | Corrija o nome ou cadastre o ambiente. Ambiente inativo só gera `WARNING ambiente atendido X inativo: ignorado ate ser reativado` |
 | 18 | `startup check: <erro>` | Falha ao conferir o que ficou da execução anterior | Veja as linhas `TALVEZ_INICIADO`, `ORPHAN_PROCESS` e `pasta do ticket nao removida` logo antes |
-| 19 | `o processo tem N threads antes do primeiro spawn (...)` | Algo criou uma thread antes do primeiro script | Suba só pelo `bin/sss-scheduler.sh` (Python puro); não use `web2py.py -S ... -R` |
+| 19 | `o processo tem N threads antes do primeiro spawn (...)` | Algo criou uma thread antes do primeiro script | Suba só pelo `bin/sss-scheduler.sh` (Python puro), nunca de dentro de outro processo |
 | 20 | `REGISTRO_PERDIDO: <motivo>; encerramento TERMINATE` (com o agente já no ar) | A linha do agente em `tbsss_agents` sumiu ou mudou de dono | Veja se alguém apagou a linha ou subiu outro agente com o mesmo `agent_id`; reinicie |
 
 ### 15.2 Cadeia de driver Oracle (`[action=SELECAO_DRIVER]`)
@@ -725,6 +725,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 4. Copie o `sss-helper` novo para `/opt/sss/bin` (§8).
    * **Entrada pela tela (CR-020c):** o helper anterior não tem `put-input` nem `list-input`, e as entregas terminariam em `FAILED`/`ERROR`. Instale o helper novo em todos os agentes junto com a versão.
    * **Pasta de trabalho (CR-019):** o helper anterior ignora o campo `work` da especificação: a pasta não é criada e o script recebe em `SSS_WORK_DIR` um caminho que não existe. Antes de ligar `[agent] script_work_dir`, instale o helper novo e crie `script_work_dir/<ambiente>/` de cada ambiente atendido (§8); com a chave vazia, nada muda.
+   * **Sem web2py (CR-021f):** o `bin/sss-web.sh` novo só aceita as opções do `scripts/run_web.py` e recusa `web2py.py`/`anyserver.py` (código 2). Troque, junto com a versão, a linha que sobe o web na unit do `systemd` ou no script de operação: `bin/sss-web.sh <python3> --host 127.0.0.1 --port <porta>` (§10.1). Confira antes com `bin/sss-web.sh <python3> --check`. A sessão passa a ser o cookie assinado `sss_session` (CR-021e, D1): quem estiver logado na hora da atualização entra de novo. O `httpserver.log`, os `parameters_<porta>.py` e o painel `/admin` do web2py deixam de existir: tire o `httpserver.log` do `logrotate` (§14.4) e não copie nada disso para a pasta nova.
 5. Pare os agentes (`sss-stop.sh` ou `SIGTERM`) e o web, troque as pastas (`mv /opt/sss/web2py /opt/sss/web2py-<anterior> && mv /opt/sss/web2py-<versao> /opt/sss/web2py`) e suba de novo.
 6. Valide (§11). **Retorno:** pare, troque as pastas de volta e suba. Com migração de esquema, o retorno precisa do backup do banco (§17).
 
@@ -778,7 +779,7 @@ Para demonstração ou homologação interna, web e agente podem ficar no mesmo 
 * `purge_user` vazio desliga o purge (código 2, §12).
 * Siga o §3 (pacote), o §7 (configuração), o §10.1 e o §10.2 (subida), o §10.4 (túnel SSH) e o §11 (validação). **Esse é o cenário ensaiado em 2026-10-21.**
 
-Os scripts `bin/start_local.sh` e `bin/stop_local.sh` do repositório são só da máquina de desenvolvimento e não vêm no pacote.
+Os scripts `bin/start_local.sh` e `bin/stop_local.sh` do repositório são só da máquina de desenvolvimento e não vêm no pacote. Um DEV instalado pelo pacote não tem a vitrine `/dev/...` (o `controllers/dev.py` não vai no pacote): ela responde 404, e o resto sobe normalmente (CR-021f3).
 
 ---
 

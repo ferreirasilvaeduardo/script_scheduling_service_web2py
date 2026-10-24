@@ -2,13 +2,13 @@
 
 > Para instalar o SSS em **outro servidor** (usuário de serviço, diretórios, segredos, subida, acesso por túnel, systemd, atualização e troubleshooting), siga o `docs/DEPLOYMENT.md`.
 
-Este documento descreve como configurar o ambiente de desenvolvimento local para o **Script Scheduling Service (SSS)**, executar o verificador de ambiente, iniciar o servidor web2py em modo de desenvolvimento e rodar a suíte de testes.
+Este documento descreve como configurar o ambiente de desenvolvimento local para o **Script Scheduling Service (SSS)**, executar o verificador de ambiente, iniciar o servidor web em modo de desenvolvimento e rodar a suíte de testes.
 
 ---
 
 ## 1. Pré-requisitos de Runtime
 
-O projeto utiliza **Python 3.6 estrito** e o framework **web2py**. Conforme especificado em `AGENTS.md`, o código deve compilar e rodar em CPython 3.6 sem dependências externas adicionais e sem recursos de Python 3.7+.
+O projeto utiliza **Python 3.6 estrito**, só com a biblioteca padrão e o driver Oracle; não há framework web (o web2py saiu no CR-021f). Conforme especificado em `AGENTS.md`, o código deve compilar e rodar em CPython 3.6 sem dependências externas adicionais e sem recursos de Python 3.7+.
 
 ### 1.1 Instalação do Python 3.6 via pyenv (Linux)
 
@@ -175,7 +175,7 @@ Resultado esperado hoje: `Ran ... tests ... OK (skipped=23)` (794 testes no fech
 for v in 3.6.0 3.6.8 3.13.2; do PYENV_VERSION=$v python -m unittest discover -s scripts -p "test_*.py"; done
 ```
 
-O módulo `scripts/_testenv.py` é responsável por configurar o `sys.path` dinamicamente para permitir a importação dos módulos da aplicação (`modules/`) e do web2py (`gluon`) sem caminhos fixos.
+O módulo `scripts/_testenv.py` é responsável por configurar o `sys.path` dinamicamente para permitir a importação da aplicação (raiz da aplicação e `modules/`) sem caminhos fixos.
 
 ---
 
