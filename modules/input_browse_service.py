@@ -13,8 +13,8 @@ import threading
 
 import admin_crud
 import ui_helpers
-from repo_errors import RepoNotFound
-from repo_inputs import NoLiveAgent
+from sss.persistence.repo_errors import RepoNotFound
+from sss.persistence.contracts.repo_inputs import NoLiveAgent
 
 FEATURE = "UPLOAD_INPUT"
 UPLOADS_PAGE = 20
@@ -207,7 +207,7 @@ def _service():
     with _default_lock:
         if _default is None:
             from sss.config import app_context
-            import repo_factory
+            from sss.persistence import repo_factory
             from sss.config import sss_logging
             factory = repo_factory
             cfg = app_context.require_config()

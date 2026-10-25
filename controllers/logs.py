@@ -4,7 +4,7 @@
 Regras de escopo ficam em modules/ticket_service.py; aqui so se valida a requisicao e se responde.
 """
 import ticket_service
-from repo_errors import RepoError, RepoNotFound
+from sss.persistence.repo_errors import RepoError, RepoNotFound
 from ticket_service import InvalidOffset
 
 from webapp import security as _security

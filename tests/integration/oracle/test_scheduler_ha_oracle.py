@@ -33,8 +33,8 @@ class TestExpansionOracle(unittest.TestCase):
         return self.contrato._clean_fixtures(self)
 
     def setUp(self):
-        from repo_oracle.scheduler_schedules import RepoSchedulerSchedules
-        from repo_oracle.scheduler_queue import RepoSchedulerQueue
+        from sss.persistence.oracle.scheduler_schedules import RepoSchedulerSchedules
+        from sss.persistence.oracle.scheduler_queue import RepoSchedulerQueue
         self.contrato.setUp(self)
         self._fixtures = self.trc._Fixtures(self.obter_repo)
         self.c = self._fixtures.scenario()

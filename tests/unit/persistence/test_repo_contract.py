@@ -30,16 +30,16 @@ from unittest import mock
 from tests.support import _testenv  # noqa: F401
 
 from sss.config import app_context
-import repo_factory
+from sss.persistence import repo_factory
 from sss.core import sql_ident
-from repo_schedules import RepoSchedules
-from repo_agents import RepoAgents
-from repo_audit import RepoAudit
-from repo_catalog import RepoCatalog
-from repo_errors import RepoConflict, RepoNotFound, RepoViolation
-from repo_rbac import RepoRbac
-from repo_tickets import RepoTickets
-from repo_users import RepoUsers
+from sss.persistence.contracts.repo_schedules import RepoSchedules
+from sss.persistence.contracts.repo_agents import RepoAgents
+from sss.persistence.contracts.repo_audit import RepoAudit
+from sss.persistence.contracts.repo_catalog import RepoCatalog
+from sss.persistence.repo_errors import RepoConflict, RepoNotFound, RepoViolation
+from sss.persistence.contracts.repo_rbac import RepoRbac
+from sss.persistence.contracts.repo_tickets import RepoTickets
+from sss.persistence.contracts.repo_users import RepoUsers
 
 
 class _Fixtures(object):
@@ -883,7 +883,7 @@ class _OracleContract(object):
         repo_factory.configure(None)
         repo_factory.reset_singletons()
         # O pool Thin do papel web mantem uma thread viva; os testes do agente exigem thread unica.
-        from repo_oracle import base as base_oracle
+        from sss.persistence.oracle import base as base_oracle
         base_oracle.discard_pools()
         app_context.set_config(cls._previous_sss_cfg)
 
@@ -989,7 +989,7 @@ class TestRepoFactoryAndIntegrity(unittest.TestCase):
         def preparar(env):
             with mock.patch.dict(os.environ, env, clear=True):
                 # "from sss.config import sss_config" le o atributo do pacote antes de sys.modules (CR-022b3)
-                with mock.patch.dict("sys.modules", {"db_conn": db_conn_mock, "sss.config.sss_config": sss_config_mock}), \
+                with mock.patch("sss.persistence.db_conn", db_conn_mock), \
                         mock.patch("sss.config.sss_config", sss_config_mock):
                     return prepare_disposable_schema("web")
 
@@ -1024,15 +1024,16 @@ class TestRepoFactoryAndIntegrity(unittest.TestCase):
         self.assertIn("Backend ORACLE ainda nao implementado", str(ctx.exception))
 
     def test_nenhum_import_repo_fake_fora_de_repo_factory(self):
-        """Verifica que nenhum modulo ou script fora de repo_factory importa repo_fake."""
+        """Verifica que nenhum modulo ou script fora de repo_factory importa o FAKE (sss.persistence.fake desde o CR-022b4)."""
         app_dir = _testenv.APP_DIR
-        pattern = re.compile(r"^\s*(from|import)\s+.*repo_fake.*", re.MULTILINE)
+        pattern = re.compile(r"^\s*(from|import)\s+.*(repo_fake|sss\.persistence\.fake|sss\.persistence import fake).*",
+                             re.MULTILINE)
 
         files_violators = []
         for root, dirs, files in os.walk(app_dir):
-            # Ignora o proprio diretorio modules/repo_fake e cache
+            # Ignora o proprio pacote do FAKE e cache
             norm_root = os.path.normpath(root)
-            if norm_root.endswith("modules/repo_fake") or "modules/repo_fake/" in norm_root:
+            if norm_root.endswith("src/sss/persistence/fake") or "src/sss/persistence/fake/" in norm_root:
                 continue
             if "__pycache__" in dirs:
                 dirs.remove("__pycache__")
@@ -1044,7 +1045,7 @@ class TestRepoFactoryAndIntegrity(unittest.TestCase):
                     continue
                 path = os.path.join(root, f)
                 rel_path = os.path.relpath(path, app_dir)
-                if rel_path == "modules/repo_factory.py":
+                if rel_path == "src/sss/persistence/repo_factory.py":
                     continue
 
                 with open(path, "r", encoding="utf-8") as file:

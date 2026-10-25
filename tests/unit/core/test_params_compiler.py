@@ -13,7 +13,7 @@ import unittest
 from unittest import mock
 
 from sss.core import params_compiler as pc
-import path_guard
+from sss.platform import path_guard
 from sss.core.params_compiler import ParamError, SnapshotError
 
 # UID fictício do agente: o dono dos arquivos de teste é o usuário do teste (CR-007, R-15).
@@ -326,7 +326,7 @@ class TestBuildAgentArgv(unittest.TestCase):
         self.assertEqual(pc.build_agent_argv("SH", "/bin/sh", "/b/s.sh", []), ["/bin/sh", "/b/s.sh"])
 
     def test_fora_da_allowlist(self):
-        import path_guard
+        from sss.platform import path_guard
         for interp in ("/usr/bin/python3", "PERL", "CMD", "cmd.exe", ""):
             with self.assertRaises(path_guard.PathGuardError, msg=interp):
                 pc.build_agent_argv(interp, "/x", "/b/s", [])
@@ -497,7 +497,7 @@ class TestSeedFake(unittest.TestCase):
     """compile_snapshot com o seed do FAKE (script 1, carga_diaria) gera o formato da §6.5."""
 
     def setUp(self):
-        import repo_factory
+        from sss.persistence import repo_factory
         self.repo_factory = repo_factory
         repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
         repo_factory.reset_singletons()

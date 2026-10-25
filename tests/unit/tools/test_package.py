@@ -37,7 +37,7 @@ class TestPack(unittest.TestCase):
             "controllers/default.py": "# default\n", "controllers/dev.py": "# dev\n",
             "scripts/run_web.py": "# servidor\n", "webapp/bootstrap.py": "# web\n",
             "views/dev/index.html": "x", "dev/scripts/a.py": "x",
-            "modules/repo_fake/__init__.py": "x", "src/sss/__init__.py": "", "src/sss/config/__init__.py": "",
+            "src/sss/persistence/fake/__init__.py": "x", "modules/repo_fake/__init__.py": "x", "src/sss/__init__.py": "", "src/sss/config/__init__.py": "",
             "src/sss/config/sss_config.py": "x",
             "instance/config.ini": "[oracle]\nuser = sss_web\n",
             "instance/config.ini.example": "[retention]\npurge_user =                 ; vazio em DEV\n",
@@ -107,7 +107,7 @@ class TestPack(unittest.TestCase):
             self.assertIn(rel, files)
         forbidden = [n for n in members if any(n == p or n.startswith(p + "/") for p in (
             "applications", "deposit", "logs", "site-packages", "scripts/logs", "work", "dev", "views/dev",
-            "modules/repo_fake", "controllers/dev.py", "instance/config.ini", "scripts/test_purge.py",
+            "src/sss/persistence/fake", "modules/repo_fake", "controllers/dev.py", "instance/config.ini", "scripts/test_purge.py",
             "tests", "tools", "sessions", "errors"))]
         self.assertEqual(forbidden, [])
         # CR-021f: nada do web2py, nem pasta de runtime vazia
@@ -168,7 +168,7 @@ class TestPack(unittest.TestCase):
         self.assertEqual(self._main()[0], 0, "sem os restos, o pacote sai")
 
     def test_verificar_codigo_de_dev_e_admin(self):
-        problems = empacotar.check(["controllers/dev.py", "modules/repo_fake/a.py",
+        problems = empacotar.check(["controllers/dev.py", "src/sss/persistence/fake/a.py",
                                         "applications/admin/x.py", "deposit/x", "sessions/s",
                                         "gluon/main.py", "web2py.py"], lambda rel: b"")
         self.assertEqual(len(problems), 7, problems)
@@ -193,9 +193,9 @@ class TestPack(unittest.TestCase):
     def test_pacote_da_arvore_real_sem_segredo_nem_dev(self):
         # Coleta da propria arvore: as regras de inclusao nunca puxam DEV, testes nem runtime.
         files, _problems = empacotar.collect(empacotar.DEFAULT_ROOT)
-        self.assertFalse([a for a in files if "/repo_fake/" in a or a.endswith("controllers/dev.py")
+        self.assertFalse([a for a in files if a.startswith("src/sss/persistence/fake/") or a.endswith("controllers/dev.py")
                           or a.startswith(("tests/", "tools/", "scripts/test_")) or a.endswith("instance/config.ini")])
-        self.assertIn("modules/repo_oracle/purge.py", files)
+        self.assertIn("src/sss/persistence/oracle/purge.py", files)
         self.assertIn("scripts/run_web.py", files)
         self.assertEqual(_problems, [], "a arvore real nao tem resto do web2py nem link (CR-021f)")
 
@@ -208,6 +208,7 @@ class TestPackageStartsWithoutDev(unittest.TestCase):
         import ast
         files, _p = empacotar.collect(empacotar.DEFAULT_ROOT)
         excluded = ("repo_fake", "dev", "tests", "_testenv", "_oracle_test_support", "_output_memory")
+        excluded_packages = ("sss.persistence.fake",)  # CR-022b4: o FAKE e um subpacote de src/sss/
         violations = []
         for rel in files:
             if rel.startswith("bin/") or not rel.endswith(".py"):
@@ -219,9 +220,11 @@ class TestPackageStartsWithoutDev(unittest.TestCase):
                 if isinstance(no, ast.Import):
                     names = [a.name for a in no.names]
                 elif isinstance(no, ast.ImportFrom) and no.module:
-                    names = [no.module]
+                    # "from sss.persistence import fake" importa o subpacote pelo nome do pai
+                    names = [no.module] + ["%s.%s" % (no.module, a.name) for a in no.names]
                 violations.extend("%s: %s" % (rel, n) for n in names
-                                 if n.split(".")[0] in excluded or n.startswith("test_"))
+                                  if n.split(".")[0] in excluded or n.startswith("test_")
+                                  or any(n == p or n.startswith(p + ".") for p in excluded_packages))
         self.assertEqual(violations, [])
 
 

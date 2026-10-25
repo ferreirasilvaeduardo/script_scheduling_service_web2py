@@ -23,7 +23,7 @@ import types
 import unittest
 from unittest import mock
 
-import os_platform
+from sss.platform import os_platform
 import purge as purge_cli  # scripts/purge.py (o repositorio e repo_oracle.purge)
 
 NOW = datetime.datetime(2026, 10, 21, 3, 0, 0)

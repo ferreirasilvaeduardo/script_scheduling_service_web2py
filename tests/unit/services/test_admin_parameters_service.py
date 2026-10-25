@@ -10,11 +10,11 @@ from unittest import mock
 import admin_crud
 import admin_parameters_service as prm_mod
 import auth_service
-import repo_factory
+from sss.persistence import repo_factory
 from sss.core import security
 from admin_crud import GENERAL_FIELD, AccessDenied, OperationDenied
 from admin_parameters_service import AdminParametersService
-from repo_errors import RepoConflict, RepoNotFound, RepoViolation
+from sss.persistence.repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 IP = "10.3.3.3"
 SESSIONS = {

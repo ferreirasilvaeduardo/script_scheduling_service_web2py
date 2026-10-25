@@ -10,7 +10,7 @@ import schedules_service
 from sss.core import security
 import ticket_service
 import ui_helpers
-from repo_errors import RepoError
+from sss.persistence.repo_errors import RepoError
 
 from webapp import context as _context
 from webapp import security as _security

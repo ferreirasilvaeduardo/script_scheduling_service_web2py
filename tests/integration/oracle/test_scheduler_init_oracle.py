@@ -23,7 +23,7 @@ class TestStartupOracle(_Base):
         self.addCleanup(self._clean_registration)
 
     def _clean_registration(self):
-        import db_conn
+        from sss.persistence import db_conn
         from sss.core import sql_ident
         seg = sss_config.load_secrets(self.cfg_real.secrets.secrets_file, cfg=self.cfg_real, role="agent")
         conn = db_conn.connect(self.cfg_real, seg, "agent")
@@ -41,13 +41,13 @@ class TestStartupOracle(_Base):
             conn.close()
 
     def test_subida_real_e_parada(self):
-        import db_conn
-        from repo_oracle.scheduler_queue import RepoSchedulerQueue
+        from sss.persistence import db_conn
+        from sss.persistence.oracle.scheduler_queue import RepoSchedulerQueue
         cfg = self.cfg_real
         seg = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role="agent")
         conn = db_conn.connect(cfg, seg, "agent")
         try:
-            import ddl_builder
+            from sss.persistence import ddl_builder
             active, _ = RepoSchedulerQueue.from_config(cfg).active_environments(
                 conn, [a[0] for a in ddl_builder.DEFAULT_ENVIRONMENTS])
         finally:

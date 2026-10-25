@@ -8,8 +8,8 @@ import shutil
 import tempfile
 import unittest
 
-import path_guard
-from path_guard import Code, PathGuardError
+from sss.platform import path_guard
+from sss.platform.path_guard import Code, PathGuardError
 
 
 

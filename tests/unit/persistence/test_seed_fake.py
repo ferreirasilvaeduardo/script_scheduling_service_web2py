@@ -9,7 +9,7 @@ from unittest import mock
 
 from sss.core import params_compiler
 from sss.core import recurrence
-import repo_factory
+from sss.persistence import repo_factory
 
 # README §4.3.D, texto exato.
 CATALOG = {

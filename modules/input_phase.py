@@ -14,8 +14,8 @@ import logging
 import os
 import signal
 
-import repo_inputs
-from repo_errors import RepoNotFound
+from sss.persistence.contracts import repo_inputs
+from sss.persistence.repo_errors import RepoNotFound
 
 _log = logging.getLogger("sss_scheduler")
 

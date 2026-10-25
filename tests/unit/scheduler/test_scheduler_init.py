@@ -21,11 +21,11 @@ import unittest
 from unittest import mock
 
 import executor
-import os_platform
+from sss.platform import os_platform
 import scheduler_loop as sl
 from sss.core import sql_ident
 from sss.config import sss_config
-from repo_oracle.scheduler_queue import DuplicateAgent
+from sss.persistence.oracle.scheduler_queue import DuplicateAgent
 from tests.support._output_memory import RepoOutputMemory
 
 _Agent = collections.namedtuple("_Agent", (
@@ -319,9 +319,9 @@ class TestSteps(_Base):
             self.agent().initialize()
         self.assertFalse(os.path.exists(stop))
         self.assertTrue(any(".stop antigo" in x for x in logs.output))
-        code = ("import sys\nsys.path.insert(0, %r)\nimport os_platform\n"
+        code = ("import sys\nsys.path.insert(0, %r)\nfrom sss.platform import os_platform\n"
                   "try:\n    os_platform.lock_instance(%r)\nexcept os_platform.InstanceAlreadyRunning:\n"
-                  "    sys.exit(7)\n" % (os.path.dirname(os.path.abspath(os_platform.__file__)) + "/..",
+                  "    sys.exit(7)\n" % (os.path.join(_testenv.APP_DIR, "src"),
                                         os.path.join(self.work, "sss-srv-t.lock")))
         self.assertEqual(subprocess.call([sys.executable, "-c", code]), 7, "segunda instancia recusada")
 

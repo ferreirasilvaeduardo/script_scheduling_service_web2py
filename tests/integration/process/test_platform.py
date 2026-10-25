@@ -15,9 +15,9 @@ import time
 import unittest
 from unittest import mock
 
-import path_guard
-import os_platform
-from os_platform import posix
+from sss.platform import path_guard
+from sss.platform import os_platform
+from sss.platform.os_platform import posix
 
 NONEXISTENT_PID = 2 ** 31 - 2
 
@@ -403,9 +403,9 @@ class TestLockStopPrivilege(unittest.TestCase):
         lock = os_platform.lock_instance(path)
         try:
             # Outro processo (flock e por descricao de arquivo aberto).
-            code = ("import sys\nsys.path.insert(0, %r)\nfrom os_platform import posix\n"
+            code = ("import sys\nsys.path.insert(0, %r)\nfrom sss.platform.os_platform import posix\n"
                       "try:\n    posix.lock_instance(%r)\nexcept posix.InstanceAlreadyRunning:\n    sys.exit(7)\n"
-                      % (os.path.dirname(os.path.dirname(posix.__file__)), path))
+                      % (os.path.join(_testenv.APP_DIR, "src"), path))
             self.assertEqual(subprocess.call([sys.executable, "-c", code]), 7)
             with self.assertRaises(os_platform.InstanceAlreadyRunning):
                 os_platform.lock_instance(path)

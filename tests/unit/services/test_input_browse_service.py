@@ -11,10 +11,10 @@ from unittest import mock
 import admin_crud
 import auth_service
 import input_browse_service as browse
-import repo_factory
+from sss.persistence import repo_factory
 from sss.core import security
 from input_browse_service import InputBrowseService, InvalidRequest
-from repo_errors import RepoNotFound
+from sss.persistence.repo_errors import RepoNotFound
 
 IP = "10.1.2.3"
 SESSIONS = {

@@ -15,7 +15,7 @@ from unittest import mock
 
 import output_phase
 from tests.support._output_memory import RepoOutputMemory
-from repo_oracle import scheduler_output
+from sss.persistence.oracle import scheduler_output
 
 AGENT = "srv-t"
 

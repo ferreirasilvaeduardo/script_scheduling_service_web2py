@@ -19,16 +19,23 @@ SKIP_DIRS = {".git", "__pycache__", "docs", "node_modules"}
 _RE_TEMPLATE_IMPORT = re.compile(r"\{\{\s*(?:import|from)\s+([A-Za-z_]\w*)")
 
 
+# Pastas que so agrupam modulos (as camadas e os contratos dos repositorios); qualquer outra pasta e um pacote
+# que era importado pelo proprio nome (os_platform) ou pelo nome antigo (repo_oracle, repo_fake), e o que esta
+# dentro dele nunca foi importavel pelo nome curto (oracle/health.py era repo_oracle.health).
+GROUPING_DIRS = {"config", "core", "platform", "persistence", "contracts", "ui", "services", "scheduler", "web", "cli"}
+OLD_PACKAGE_NAMES = {"oracle": "repo_oracle", "fake": "repo_fake"}
+
+
 def _moved_modules():
-    """Nome curto de todo modulo e subpacote dentro de src/sss/."""
+    """Nome curto (de antes do CR-022b) de todo modulo e pacote que ja esta em src/sss/."""
     names = set()
     for base, dirs, files in os.walk(SRC):
-        dirs[:] = [d for d in dirs if d != "__pycache__"]
+        packages = [d for d in dirs if d != "__pycache__" and d not in GROUPING_DIRS]
+        names.update(OLD_PACKAGE_NAMES.get(d, d) for d in packages)
+        dirs[:] = [d for d in dirs if d in GROUPING_DIRS]
         if base != SRC:
-            names.add(os.path.basename(base))
-        names.update(os.path.splitext(f)[0] for f in files if f.endswith(".py") and f != "__init__.py")
-    # Os subpacotes de src/sss/ tem nomes genericos que tambem sao pastas fora dele (ex.: web/ em modules/)
-    return names - {"config", "core", "platform", "persistence", "ui", "services", "scheduler", "web", "cli"}
+            names.update(os.path.splitext(f)[0] for f in files if f.endswith(".py") and f != "__init__.py")
+    return names
 
 
 def _code_files():

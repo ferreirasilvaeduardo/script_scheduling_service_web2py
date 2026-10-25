@@ -20,7 +20,7 @@ import socket
 import threading
 import time
 
-import db_conn
+from sss.persistence import db_conn
 import schedule_expansion
 import env_builder
 import executor
@@ -29,15 +29,15 @@ import output_phase
 import log_pump
 from sss.core import params_compiler
 from sss.config import log_paths
-import os_platform
+from sss.platform import os_platform
 from sss.core import rbac
-import repo_inputs
+from sss.persistence.contracts import repo_inputs
 from sss.config import sss_config
-from repo_oracle.scheduler_schedules import RepoSchedulerSchedules
-from repo_oracle.scheduler_queue import DuplicateAgent, RegistrationLost, RepoSchedulerQueue
-from repo_oracle.scheduler_log import RepoSchedulerLog
-from repo_oracle.scheduler_input import RepoSchedulerInput
-from repo_oracle.scheduler_output import RepoSchedulerOutput
+from sss.persistence.oracle.scheduler_schedules import RepoSchedulerSchedules
+from sss.persistence.oracle.scheduler_queue import DuplicateAgent, RegistrationLost, RepoSchedulerQueue
+from sss.persistence.oracle.scheduler_log import RepoSchedulerLog
+from sss.persistence.oracle.scheduler_input import RepoSchedulerInput
+from sss.persistence.oracle.scheduler_output import RepoSchedulerOutput
 
 _log = logging.getLogger("sss_scheduler")
 

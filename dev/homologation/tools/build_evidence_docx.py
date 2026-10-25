@@ -409,6 +409,29 @@ RODADAS["20261025_r2"] = {
     "servidor_web": u"servidor web próprio (scripts/run_web.py), aplicação na raiz do repositório",
     "registros": RODADAS["20261023_r3"]["registros"].replace("tela_r3", "tela_r2"),
 }
+RODADAS["20261025_r3"] = {
+    "commit": u"c8874e9 (CR-022b3: pacote src/sss com as camadas config e core) mais o CR-022b4 (camadas platform e "
+              u"persistence em src/sss), no mesmo commit deste documento",
+    "adaptacao": RODADAS["20261024_r2"]["adaptacao"],
+    "ressalva": RODADAS["20261024_r2"]["ressalva"],
+    "defeitos": [],
+    "observacoes": [
+        u"Rodada do CR-022b4, depois de mover para o pacote src/sss as camadas config, core, platform e "
+        u"persistence (conexão Oracle, repositórios Oracle e FAKE, primitivas de sistema operacional e o helper). "
+        u"Servidor web pelo bin/start_local.sh, agente pelo bin/sss-scheduler.sh, Oracle. Marca %s." % STAMP,
+        u"Antes desta rodada: suíte nas versões 3.6.0, 3.6.8 e 3.13.2 e bateria contra o Oracle real nos três "
+        u"drivers; pacote gerado de cópia limpa, sem o FAKE.",
+        u"Na primeira passada o navegador de captura (Chrome do Puppeteer) caiu no meio do CT-13 (\"Navigating "
+        u"frame was detached\") e os casos seguintes não rodaram (\"Connection closed\"); falha da ferramenta, "
+        u"não da aplicação. A execução foi retomada do CT-13 ao encerramento sobre o mesmo state.json, e os "
+        u"resultados abaixo são os da retomada.",
+        RODADAS["20261024_r6"]["observacoes"][2],
+    ],
+    "agente": RODADAS["20261024_r4"]["agente"],
+    "senhas": RODADAS["20261024_r2"]["senhas"],
+    "servidor_web": u"servidor web próprio (scripts/run_web.py), código em src/sss (CR-022b)",
+    "registros": RODADAS["20261023_r3"]["registros"],
+}
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]

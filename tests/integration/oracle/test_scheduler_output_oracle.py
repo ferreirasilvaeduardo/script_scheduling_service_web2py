@@ -8,8 +8,8 @@ import os
 import subprocess
 import sys
 import unittest
-from repo_oracle import scheduler_output
-from repo_oracle.scheduler_output import RepoSchedulerOutput, OutputOffsetMismatch
+from sss.persistence.oracle import scheduler_output
+from sss.persistence.oracle.scheduler_output import RepoSchedulerOutput, OutputOffsetMismatch
 from tests.unit.persistence.test_scheduler_output import _CHILD  # noqa: F401
 
 
@@ -35,7 +35,7 @@ class TestSchedulerOutputOracle(unittest.TestCase):
         return self.contrato._clean_fixtures(self)
 
     def setUp(self):
-        from repo_oracle.scheduler_queue import RepoSchedulerQueue
+        from sss.persistence.oracle.scheduler_queue import RepoSchedulerQueue
         self.contrato.setUp(self)
         self._fixtures = self.trc._Fixtures(self.obter_repo)
         self.c = self._fixtures.scenario()
@@ -100,8 +100,8 @@ class TestSchedulerOutputOracle(unittest.TestCase):
         self.conn.rollback()
 
     def test_combinacoes_de_driver(self):
-        modules = os.path.dirname(os.path.abspath(scheduler_output.__file__))
-        modules = os.path.dirname(modules)
+        # O filho poe modules/ e src/ (irmao de modules/) no caminho (_CHILD)
+        modules = os.path.join(_testenv.APP_DIR, "modules")
         part = bytes(bytearray(range(256))) * 1200
         results = {}
         for mode in ("thin", "thick", "cx_oracle"):

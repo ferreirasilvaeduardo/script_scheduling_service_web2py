@@ -13,11 +13,11 @@ import json
 import unittest
 from unittest import mock
 
-import db_conn
+from sss.persistence import db_conn
 import schedule_expansion
 from sss.core import rbac
 from sss.core import sql_ident
-from repo_oracle.scheduler_schedules import DuplicateOccurrence
+from sss.persistence.oracle.scheduler_schedules import DuplicateOccurrence
 from tests.unit.persistence.test_scheduler_queue import _Error
 
 AGENT = "srv-ha"
@@ -649,7 +649,7 @@ class TestNodeOffline(tsc._Base):
 import signal as _signal  # noqa: E402
 import threading as _threading  # noqa: E402
 
-import os_platform as _plataforma  # noqa: E402
+from sss.platform import os_platform as _plataforma  # noqa: E402
 
 
 class TestShutdown(tsc._Base):

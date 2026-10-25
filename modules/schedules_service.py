@@ -23,7 +23,7 @@ from sss.core import recurrence
 import ui_helpers
 from admin_crud import GENERAL_FIELD, OperationDenied
 from sss.core.cron_parser import CronError
-from repo_errors import RepoConflict, RepoNotFound, RepoViolation
+from sss.persistence.repo_errors import RepoConflict, RepoNotFound, RepoViolation
 from ticket_service import AccessDenied as DisparoNegado
 
 FEATURE = "MANAGE_SCHEDULES"
@@ -282,7 +282,7 @@ class SchedulesService(object):
         self._misfire_policy = (misfire_policy or "RUN_ONCE").upper()
         self._misfire_tolerance_s = int(misfire_tolerance_s if misfire_tolerance_s is not None else 300)
         if tickets is None or rbac_repo is None:
-            import repo_factory
+            from sss.persistence import repo_factory
             if tickets is None:
                 tickets = repo_factory.get("tickets")
             if rbac_repo is None:
@@ -950,7 +950,7 @@ def _service():
     with _default_lock:
         if _default is None:
             from sss.config import app_context
-            import repo_factory
+            from sss.persistence import repo_factory
             from sss.config import sss_logging
             import ticket_service
             factory = repo_factory

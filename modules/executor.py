@@ -12,7 +12,7 @@ import signal
 import time
 
 from sss.config import log_paths
-import os_platform
+from sss.platform import os_platform
 
 _log = logging.getLogger("sss_scheduler")
 

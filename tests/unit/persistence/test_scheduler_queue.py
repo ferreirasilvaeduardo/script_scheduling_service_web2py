@@ -12,10 +12,10 @@ import datetime
 import unittest
 from unittest import mock
 
-import db_conn
+from sss.persistence import db_conn
 from sss.core import sql_ident
-from repo_oracle import scheduler_queue
-from repo_oracle.scheduler_queue import DuplicateAgent, RegistrationLost, RepoSchedulerQueue
+from sss.persistence.oracle import scheduler_queue
+from sss.persistence.oracle.scheduler_queue import DuplicateAgent, RegistrationLost, RepoSchedulerQueue
 
 AGENT = "srv-01"
 ACTOR = "SYSTEM:srv-01"

@@ -17,7 +17,7 @@ for _path in (os.path.join(_APP_DIR, "modules"), os.path.join(_APP_DIR, "src"), 
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
-import repo_factory  # noqa: E402
+from sss.persistence import repo_factory  # noqa: E402
 import run_web  # noqa: E402
 
 

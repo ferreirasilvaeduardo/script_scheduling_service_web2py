@@ -589,7 +589,7 @@ class TestSssHelper(unittest.TestCase):
             source = f.read()
         compile(source, HELPER, "exec")
         self.assertTrue(source.startswith("#!/usr/bin/env python3\n"))
-        for forbidden in ("import gluon", "import sss_", "import os_platform", "config.ini\""):
+        for forbidden in ("import gluon", "import sss_", "from sss", "import sss", "import os_platform", "config.ini\""):
             self.assertNotIn(forbidden, source)
         self.assertTrue(os.stat(HELPER).st_mode & 0o111, "helper executavel")
 

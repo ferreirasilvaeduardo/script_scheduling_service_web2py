@@ -17,7 +17,7 @@ from sss.core import rbac
 import schedules_service
 from admin_crud import GENERAL_FIELD, OperationDenied
 from sss.core.params_compiler import ParamError, COMPONENT_TYPES
-from repo_errors import RepoConflict, RepoNotFound, RepoViolation
+from sss.persistence.repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 FEATURE = "MANAGE_PARAMETERS"
 EDITABLE_FIELDS = ("param_flag", "label", "description", "component_type", "options_json", "default_value",
@@ -477,7 +477,7 @@ def _service():
     with _default_lock:
         if _default is None:
             from sss.config import app_context
-            import repo_factory
+            from sss.persistence import repo_factory
             from sss.config import sss_logging
             _default = AdminParametersService(
                 catalog=repo_factory.get("catalog"),

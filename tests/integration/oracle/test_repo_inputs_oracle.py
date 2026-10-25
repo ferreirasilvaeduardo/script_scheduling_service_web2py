@@ -5,7 +5,7 @@ Parte que precisa do Oracle real (SSS_TEST_ORACLE=1), separada de tests.unit.per
 from tests.support import _testenv  # noqa: F401
 import os
 import unittest
-import repo_factory
+from sss.persistence import repo_factory
 from tests.unit.persistence.test_repo_contract import _OracleContract
 from tests.unit.persistence.test_repo_inputs import BaseInputsContract  # noqa: F401
 
@@ -24,7 +24,7 @@ class TestRepoInputsOracle(_OracleContract, unittest.TestCase, BaseInputsContrac
         return repo_factory.get(name)
 
     def agent(self, code, environments, stale=False):
-        from repo_oracle.scheduler_queue import RepoSchedulerQueue
+        from sss.persistence.oracle.scheduler_queue import RepoSchedulerQueue
         catalog = self.obter_repo("catalog")
         queue = RepoSchedulerQueue(catalog._owner, catalog._prefixo)
         conn = catalog._obter_conexao()

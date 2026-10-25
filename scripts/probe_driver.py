@@ -19,7 +19,7 @@ for _p in (_app_dir, _modules_dir, os.path.join(_app_dir, "src")):
         sys.path.insert(0, _p)
 
 from sss.config import sss_config  # noqa: E402
-import os_platform  # noqa: E402
+from sss.platform import os_platform  # noqa: E402
 
 
 _RE_ERROR_CODE = re.compile(r"\b([A-Z]{3,4}-\d{4,5})\b")

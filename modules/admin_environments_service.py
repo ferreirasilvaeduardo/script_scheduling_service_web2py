@@ -11,7 +11,7 @@ import admin_crud
 from sss.config import log_paths
 import ui_helpers
 from admin_crud import GENERAL_FIELD
-from repo_errors import RepoConflict, RepoNotFound, RepoViolation
+from sss.persistence.repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 FEATURE = "MANAGE_ENVIRONMENTS"
 EDITABLE_FIELDS = ("description", "connection", "is_production", "active")
@@ -252,7 +252,7 @@ def _service():
     with _default_lock:
         if _default is None:
             from sss.config import app_context
-            import repo_factory
+            from sss.persistence import repo_factory
             from sss.config import sss_logging
             factory = repo_factory
             _default = AdminEnvironmentsService(

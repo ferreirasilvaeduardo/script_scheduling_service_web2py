@@ -9,7 +9,7 @@ import threading
 
 from sss.core import rbac
 import ui_menu
-from repo_errors import RepoNotFound
+from sss.persistence.repo_errors import RepoNotFound
 
 ADMIN_PHRASE = (u"Seu perfil é de administrador: você pode usar todas as telas e rodar qualquer script ativo, "
                u"nos ambientes ativos onde ele foi liberado.")
@@ -122,7 +122,7 @@ def _service():
     with _default_lock:
         if _default is None:
             from sss.config import app_context
-            import repo_factory
+            from sss.persistence import repo_factory
             from sss.config import sss_logging
             import ticket_service
             factory = repo_factory

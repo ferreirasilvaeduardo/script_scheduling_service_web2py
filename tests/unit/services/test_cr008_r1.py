@@ -14,7 +14,7 @@ import admin_profiles_service as perfis_mod
 import admin_users_service as usr_mod
 import auth_service
 from sss.core import params_compiler
-import repo_factory
+from sss.persistence import repo_factory
 from sss.core import security
 from admin_crud import GENERAL_FIELD, OperationDenied
 from admin_profiles_service import AdminProfilesService

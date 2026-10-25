@@ -6,10 +6,10 @@ import hashlib
 import json
 import unittest
 
-import repo_factory
-import repo_inputs
-from repo_errors import RepoNotFound, RepoViolation
-from repo_inputs import NoLiveAgent
+from sss.persistence import repo_factory
+from sss.persistence.contracts import repo_inputs
+from sss.persistence.repo_errors import RepoNotFound, RepoViolation
+from sss.persistence.contracts.repo_inputs import NoLiveAgent
 from tests.unit.persistence.test_repo_contract import _Fixtures
 
 LIVE_S = 300

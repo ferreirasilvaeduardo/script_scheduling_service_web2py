@@ -12,7 +12,7 @@ import tempfile
 import types
 import unittest
 import purge as purge_cli  # scripts/purge.py (o repositorio e repo_oracle.purge)
-from repo_oracle.purge import RepoPurge
+from sss.persistence.oracle.purge import RepoPurge
 
 
 @unittest.skipUnless(os.environ.get("SSS_TEST_ORACLE") == "1", "Testes Oracle reais desligados (SSS_TEST_ORACLE=1)")

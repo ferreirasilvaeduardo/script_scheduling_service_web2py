@@ -9,7 +9,7 @@ import datetime
 import json
 import re
 
-import path_guard
+from sss.platform import path_guard
 
 SNAPSHOT_VERSION = 5
 MAX_LENGTH = 500

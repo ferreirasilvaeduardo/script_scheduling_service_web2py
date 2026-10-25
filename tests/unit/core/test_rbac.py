@@ -12,12 +12,12 @@ import admin_crud
 import admin_profiles_service as perfis_mod
 import auth_service
 from sss.core import rbac
-import repo_factory
+from sss.persistence import repo_factory
 from sss.core import security
 from admin_crud import GENERAL_FIELD, AccessDenied, OperationDenied
 from admin_profiles_service import AdminProfilesService
 from sss.core.rbac import Reason
-from repo_errors import RepoConflict, RepoNotFound, RepoViolation
+from sss.persistence.repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 
 def _ctx(is_admin=False, active_user="Y", active_profile="Y", features_ids=("EXEC_SCRIPT",),

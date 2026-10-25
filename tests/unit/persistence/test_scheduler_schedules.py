@@ -12,10 +12,10 @@ import datetime
 import unittest
 from unittest import mock
 
-import db_conn
-from repo_oracle import scheduler_schedules
-from repo_oracle.scheduler_schedules import DuplicateOccurrence, RepoSchedulerSchedules
-from repo_oracle.scheduler_queue import RepoSchedulerQueue
+from sss.persistence import db_conn
+from sss.persistence.oracle import scheduler_schedules
+from sss.persistence.oracle.scheduler_schedules import DuplicateOccurrence, RepoSchedulerSchedules
+from sss.persistence.oracle.scheduler_queue import RepoSchedulerQueue
 from tests.unit.persistence.test_scheduler_queue import _Conn, _Error
 
 AGENT = "srv-01"

@@ -21,7 +21,7 @@ from unittest import mock
 import health as saude_cli  # scripts/health.py (o repositorio e repo_oracle.health)
 from sss.core import sql_ident
 from sss.config import sss_config
-from repo_oracle import health as saude_sql
+from sss.persistence.oracle import health as saude_sql
 
 NOW = datetime.datetime(2026, 10, 21, 10, 0, 0)
 NS = types.SimpleNamespace
@@ -282,7 +282,7 @@ class TestSqlRepoHealth(unittest.TestCase):
             self.assertNotIn("*", sql.replace("COUNT(*)", ""), name)
 
     def test_tela_de_agentes_usa_o_mesmo_sql(self):
-        import repo_oracle.agents as agentes_oracle
+        from sss.persistence.oracle import agents as agentes_oracle
         self.assertIs(agentes_oracle._SQL_QUEUE, saude_sql.SQL_QUEUE)
         self.assertIs(agentes_oracle._SQL_RUNNING_NO_PID, saude_sql.SQL_RUNNING_NO_PID)
 

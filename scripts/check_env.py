@@ -67,7 +67,7 @@ def main():
         # Sondagem real do driver so com os testes Oracle ligados (SSS_TEST_ORACLE=1, README §2.5).
         if os.environ.get("SSS_TEST_ORACLE") == "1":
             try:
-                import db_conn
+                from sss.persistence import db_conn
                 secrets_value = sss_config.get_secrets()
                 sel = db_conn.select_driver(cfg, secrets_value)
                 sel_desc = "modo=%s (servidor=%s driver=%s cliente=%s)" % (

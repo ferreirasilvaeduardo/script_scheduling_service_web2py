@@ -14,12 +14,12 @@ from unittest import mock
 
 import auth_service
 from sss.core import params_compiler
-import path_guard
-import repo_factory
+from sss.platform import path_guard
+from sss.persistence import repo_factory
 from sss.core import security
 import ticket_service
 import ui_helpers
-from repo_errors import RepoNotFound
+from sss.persistence.repo_errors import RepoNotFound
 from ticket_service import AccessDenied, RerunError, TicketService
 
 # UID fictício do agente: o dono dos arquivos de teste é o usuário do teste (CR-007, R-15).
@@ -698,7 +698,7 @@ class TestTicketOutput(_BaseTicket):
                 self.svc.output_chunks(self.ctx[login], target)
 
     def test_falha_no_meio_do_download_encerra_sem_completar(self):
-        from repo_errors import RepoError
+        from sss.persistence.repo_errors import RepoError
         with mock.patch.object(ticket_service, "OUTPUT_SLICE_BYTES", 100):
             _tid, size, parts = self.svc.output_chunks(self.ctx["admin"], 17)
             first = next(parts)

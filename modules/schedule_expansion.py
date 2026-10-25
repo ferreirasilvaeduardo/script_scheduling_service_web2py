@@ -11,11 +11,11 @@ Python puro, sem gluon; o log permite reconstruir cada decisao sem o banco.
 import json
 import logging
 
-import db_conn
+from sss.persistence import db_conn
 from sss.core import params_compiler
 from sss.core import rbac
 from sss.core import recurrence
-from repo_oracle.scheduler_schedules import DuplicateOccurrence
+from sss.persistence.oracle.scheduler_schedules import DuplicateOccurrence
 
 _log = logging.getLogger("sss_scheduler")
 

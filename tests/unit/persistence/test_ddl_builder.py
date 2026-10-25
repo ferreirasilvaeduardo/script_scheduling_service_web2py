@@ -12,7 +12,7 @@ import unittest
 from unittest import mock
 
 from tests.support import _testenv  # noqa: F401
-import ddl_builder
+from sss.persistence import ddl_builder
 import init_db
 from sss.core import sql_ident
 

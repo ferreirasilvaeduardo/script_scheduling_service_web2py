@@ -10,11 +10,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
-import db_conn
+from sss.persistence import db_conn
 import log_pump
 from log_pump import Pump
-from repo_oracle.scheduler_log import (WRITTEN, ALREADY_WRITTEN, OWNERSHIP_LOST, LogOffsetMismatch,
-                                       RepoSchedulerLog)
+from sss.persistence.oracle.scheduler_log import (WRITTEN, ALREADY_WRITTEN, OWNERSHIP_LOST, LogOffsetMismatch,
+                                                  RepoSchedulerLog)
 from tests.unit.scheduler.test_log_pump import MB, _CHILD  # noqa: F401
 
 
@@ -147,7 +147,8 @@ class TestSchedulerLogOracle(unittest.TestCase):
         self.assertGreater(len(expected), 8000, "mais de um bloco")
 
     def test_combinacoes_de_driver(self):
-        modules = os.path.dirname(os.path.abspath(log_pump.__file__))
+        # O filho poe modules/ e src/ (irmao de modules/) no caminho (_CHILD)
+        modules = os.path.join(_testenv.APP_DIR, "modules")
         offset = 0
         results = {}
         for mode in ("thin", "thick", "cx_oracle"):

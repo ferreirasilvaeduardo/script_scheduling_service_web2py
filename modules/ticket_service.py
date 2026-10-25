@@ -13,10 +13,10 @@ import shlex
 import threading
 
 from sss.core import params_compiler
-import path_guard
+from sss.platform import path_guard
 from sss.core import rbac
 import ui_helpers
-from repo_errors import RepoError, RepoNotFound
+from sss.persistence.repo_errors import RepoError, RepoNotFound
 
 GENERAL_FIELD = params_compiler.GENERAL_KEY
 PRIORITY_FIELD = "priority"
@@ -1183,7 +1183,7 @@ def _service():
     with _default_lock:
         if _default is None:
             from sss.config import app_context
-            import repo_factory
+            from sss.persistence import repo_factory
             from sss.config import sss_logging
             factory = repo_factory
             cfg = app_context.require_config()

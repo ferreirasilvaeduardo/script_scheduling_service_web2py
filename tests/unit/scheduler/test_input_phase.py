@@ -10,8 +10,8 @@ import time
 import unittest
 
 import input_phase
-import os_platform
-from repo_errors import RepoNotFound
+from sss.platform import os_platform
+from sss.persistence.repo_errors import RepoNotFound
 
 DATA = b"cliente;valor\n" + b"1;10\n" * 300000  # ~1,5 MiB: mais de uma parte
 
@@ -114,7 +114,7 @@ class TestDaemonSemWeb2py(unittest.TestCase):
         import subprocess
         import sys
         paths = [os.path.join(_testenv.APP_DIR, "modules"), os.path.join(_testenv.APP_DIR, "src")]
-        code = ("import sys; sys.path[:0] = %r; import scheduler_loop, repo_oracle.scheduler_input; "
+        code = ("import sys; sys.path[:0] = %r; import scheduler_loop, sss.persistence.oracle.scheduler_input; "
                 "sys.exit(1 if 'gluon' in sys.modules else 0)" % paths)
         p = subprocess.run([sys.executable, "-I", "-c", code], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                            timeout=60)

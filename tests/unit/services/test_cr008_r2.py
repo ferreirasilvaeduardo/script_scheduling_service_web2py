@@ -9,7 +9,7 @@ from unittest import mock
 
 import auth_service
 from sss.core import rbac
-import repo_factory
+from sss.persistence import repo_factory
 from sss.core import security
 from sss.core import sql_ident
 import ui_helpers

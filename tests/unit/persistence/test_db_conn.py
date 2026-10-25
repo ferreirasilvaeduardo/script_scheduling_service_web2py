@@ -14,7 +14,7 @@ from unittest import mock
 
 from tests.support import _testenv  # noqa: F401
 from tests.support import _oracle_test_support
-import db_conn
+from sss.persistence import db_conn
 import probe_driver as sondar_driver
 from sss.core import sql_ident
 
@@ -642,7 +642,7 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
 
     def test_traduzir_erro(self):
         """translate_error mapeia corretamente para RepoViolation, RepoConflict, RepoUnavailable e RepoError."""
-        import repo_errors
+        from sss.persistence import repo_errors
         # Violacao
         e1 = db_conn.translate_error(Exception("ORA-00001: unique constraint violated"))
         self.assertIsInstance(e1, repo_errors.RepoViolation)
@@ -782,7 +782,7 @@ class TestOracleTestSupportMocks(unittest.TestCase):
         with mock.patch.dict(os.environ, self._ENABLED, clear=True):
             with mock.patch("sss.config.sss_config.get_config", return_value=cfg) as get:
                 with mock.patch("sss.config.sss_config.load_secrets", return_value=mock.MagicMock()):
-                    with mock.patch("db_conn.connect", return_value=mock_conn):
+                    with mock.patch("sss.persistence.db_conn.connect", return_value=mock_conn):
                         self.assertIs(_oracle_test_support.prepare_disposable_schema("web"), cfg)
         get.assert_called_once_with()
         mock_conn.close.assert_called_once()
@@ -791,14 +791,14 @@ class TestOracleTestSupportMocks(unittest.TestCase):
     def test_preparar_descartavel_recusa_conta_do_owner_sem_conectar(self):
         cfg = self._cfg(owner="SSS_TEST_APP", user="SSS_TEST_APP")
         with mock.patch.dict(os.environ, self._ENABLED, clear=True):
-            with mock.patch("db_conn.connect") as connect:
+            with mock.patch("sss.persistence.db_conn.connect") as connect:
                 with self.assertRaises(_oracle_test_support.SchemaPreconditionError):
                     _oracle_test_support.prepare_disposable_schema("web", cfg=cfg)
         connect.assert_not_called()
 
     def test_preparar_desligado_nao_le_config_nem_conecta(self):
         with mock.patch.dict(os.environ, {}, clear=True):
-            with mock.patch("sss.config.sss_config.get_config") as get, mock.patch("db_conn.connect") as connect:
+            with mock.patch("sss.config.sss_config.get_config") as get, mock.patch("sss.persistence.db_conn.connect") as connect:
                 with self.assertRaises(_oracle_test_support.SchemaPreconditionError):
                     _oracle_test_support.prepare_disposable_schema("web")
         get.assert_not_called()

@@ -10,10 +10,10 @@ from tests.support import _testenv  # noqa: F401
 import unittest
 from unittest import mock
 
-import db_conn
+from sss.persistence import db_conn
 
-from repo_oracle import scheduler_output
-from repo_oracle.scheduler_output import RepoSchedulerOutput, OutputOffsetMismatch
+from sss.persistence.oracle import scheduler_output
+from sss.persistence.oracle.scheduler_output import RepoSchedulerOutput, OutputOffsetMismatch
 from tests.unit.persistence.test_scheduler_queue import _Conn, _Error
 
 AGENT = "srv-01"
@@ -105,9 +105,9 @@ _CHILD = r'''
 import json, os, sys, warnings
 warnings.simplefilter("ignore")
 sys.path[:0] = [sys.argv[1], os.path.join(os.path.dirname(sys.argv[1]), "src")]
-import db_conn
+from sss.persistence import db_conn
 from sss.config import sss_config
-from repo_oracle.scheduler_output import RepoSchedulerOutput
+from sss.persistence.oracle.scheduler_output import RepoSchedulerOutput
 cfg = sss_config.get_config()
 cfg = cfg._replace(oracle=cfg.oracle._replace(driver_mode=sys.argv[2]))
 seg = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role="web")

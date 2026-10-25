@@ -6,7 +6,7 @@ import datetime
 import unittest
 from tests.support import _testenv  # noqa: F401
 from tests.support import _oracle_test_support
-import db_conn
+from sss.persistence import db_conn
 
 
 class TestDbConnReal(unittest.TestCase):

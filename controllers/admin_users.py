@@ -10,7 +10,7 @@ import admin_users_service as service
 from sss.core import security
 import ui_helpers
 from admin_crud import AccessDenied, OperationDenied
-from repo_errors import RepoConflict, RepoError, RepoNotFound
+from sss.persistence.repo_errors import RepoConflict, RepoError, RepoNotFound
 
 from webapp import security as _security
 from webapp.context import URL, redirect, request, response, session

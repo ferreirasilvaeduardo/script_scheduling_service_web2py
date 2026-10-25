@@ -23,12 +23,12 @@ from unittest import mock
 
 import executor
 import log_pump
-import path_guard
-import os_platform
+from sss.platform import path_guard
+from sss.platform import os_platform
 from sss.core import rbac
 import scheduler_loop as sl
 from sss.core import sql_ident
-from repo_oracle.scheduler_queue import RegistrationLost
+from sss.persistence.oracle.scheduler_queue import RegistrationLost
 from sss.config.sss_config import EnvironmentSecret, Secrets
 from tests.support._output_memory import RepoOutputMemory
 

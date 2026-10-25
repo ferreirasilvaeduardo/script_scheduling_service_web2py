@@ -8,7 +8,7 @@ import admin_crud
 import schedules_service as service
 import ui_helpers
 from admin_crud import AccessDenied, OperationDenied
-from repo_errors import RepoConflict, RepoError, RepoNotFound
+from sss.persistence.repo_errors import RepoConflict, RepoError, RepoNotFound
 from ticket_service import AccessDenied as TriggerDenied
 
 from webapp import security as _security

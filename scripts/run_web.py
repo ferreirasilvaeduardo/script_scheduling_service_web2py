@@ -26,7 +26,7 @@ for _path in (os.path.join(_APP_DIR, "modules"), os.path.join(_APP_DIR, "src"), 
 
 # Imports depois do sys.path (como no run_scheduler.py): os pacotes da aplicacao vem dele.
 # pylint: disable=wrong-import-position
-import os_platform  # noqa: E402
+from sss.platform import os_platform  # noqa: E402
 from sss.config import sss_config  # noqa: E402
 from web import make_server, serve  # noqa: E402
 

@@ -12,7 +12,7 @@ import auth_service
 from sss.core import security
 import ui_helpers
 from admin_crud import GENERAL_FIELD, OperationDenied
-from repo_errors import RepoConflict, RepoNotFound, RepoViolation
+from sss.persistence.repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 FEATURE = "MANAGE_USERS"
 EDITABLE_FIELDS = ("name", "profile_id", "active")
@@ -341,7 +341,7 @@ def _service():
     with _default_lock:
         if _default is None:
             from sss.config import app_context
-            import repo_factory
+            from sss.persistence import repo_factory
             from sss.config import sss_logging
             factory = repo_factory
             _default = AdminUsersService(

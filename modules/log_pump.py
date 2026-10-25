@@ -14,7 +14,7 @@ import logging
 import os
 
 from sss.core import masking
-from repo_oracle.scheduler_log import WRITTEN, ALREADY_WRITTEN, OWNERSHIP_LOST, LogOffsetMismatch
+from sss.persistence.oracle.scheduler_log import WRITTEN, ALREADY_WRITTEN, OWNERSHIP_LOST, LogOffsetMismatch
 
 _log = logging.getLogger("sss_scheduler")
 

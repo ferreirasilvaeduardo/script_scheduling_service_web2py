@@ -15,7 +15,7 @@ import os
 import signal
 import zipfile
 
-from repo_oracle import scheduler_output
+from sss.persistence.oracle import scheduler_output
 
 _log = logging.getLogger("sss_scheduler")
 

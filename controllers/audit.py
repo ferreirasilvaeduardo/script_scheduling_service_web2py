@@ -11,7 +11,7 @@ import ticket_service
 import ui_helpers
 from admin_crud import AccessDenied
 from audit_service import InvalidFilters
-from repo_errors import RepoError
+from sss.persistence.repo_errors import RepoError
 
 from webapp import security as _security
 from webapp.context import HTTP, URL, redirect, request, response, session

@@ -12,7 +12,7 @@ import threading
 from sss.core import rbac
 from sss.core import security
 import ui_helpers
-from repo_errors import RepoNotFound
+from sss.persistence.repo_errors import RepoNotFound
 
 # Mensagens-padrao em duas partes (README §2.4.2); o bloqueio informa os minutos configurados.
 MSG_GENERIC = ui_helpers.message("login_failed")
@@ -295,7 +295,7 @@ def _service():
     with _default_lock:
         if _default is None:
             from sss.config import app_context
-            import repo_factory
+            from sss.persistence import repo_factory
             from sss.config import sss_logging
             factory = repo_factory
             cfg = app_context.require_config()

@@ -21,7 +21,7 @@ for _p in (_app_dir, _modules_dir, os.path.join(_app_dir, "src")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-import ddl_builder  # noqa: E402
+from sss.persistence import ddl_builder  # noqa: E402
 from sss.core import security  # noqa: E402
 from sss.core import sql_ident  # noqa: E402
 from sss.config import sss_config  # noqa: E402
@@ -47,7 +47,7 @@ def _log_critical_config(msg, cfg=None):
 
 def _connect(cfg, user, password_value):
     """Estabelece conexao Oracle com a conta informada usando db_conn.connect (F7.2)."""
-    import db_conn
+    from sss.persistence import db_conn
     secrets_dummy = collections.namedtuple("SegredosDummy", ["oracle"])(
         oracle=collections.namedtuple("OracleDummy", ["password"])(password=password_value)
     )

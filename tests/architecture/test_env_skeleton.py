@@ -34,8 +34,8 @@ class TestEnvSkeleton(unittest.TestCase):
             os.path.join(self.app_dir, "controllers"),
             os.path.join(self.app_dir, "webapp"),
             os.path.join(self.app_dir, "modules"),
-            os.path.join(self.app_dir, "modules", "repo_fake"),
-            os.path.join(self.app_dir, "modules", "repo_oracle"),
+            os.path.join(self.app_dir, "src", "sss", "persistence", "fake"),
+            os.path.join(self.app_dir, "src", "sss", "persistence", "oracle"),
             os.path.join(self.app_dir, "scripts"),
             os.path.join(self.app_dir, "tests"),
             os.path.join(self.app_dir, "tools"),
@@ -55,8 +55,8 @@ class TestEnvSkeleton(unittest.TestCase):
         """Verifica se pacotes python possuem __init__.py."""
         expected_inits = [
             os.path.join(self.app_dir, "modules", "__init__.py"),
-            os.path.join(self.app_dir, "modules", "repo_fake", "__init__.py"),
-            os.path.join(self.app_dir, "modules", "repo_oracle", "__init__.py"),
+            os.path.join(self.app_dir, "src", "sss", "persistence", "fake", "__init__.py"),
+            os.path.join(self.app_dir, "src", "sss", "persistence", "oracle", "__init__.py"),
         ]
         # CR-022b1: no Python 3.6 o unittest so descobre testes em subpastas que sao pacotes
         expected_inits += [os.path.join(self.app_dir, "tests", d, "__init__.py") for d in TEST_PACKAGES]

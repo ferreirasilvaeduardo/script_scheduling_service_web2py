@@ -232,6 +232,7 @@ class TestEnvBuilder(unittest.TestCase):
             source = f.read()
         self.assertNotIn("os.environ", source)
         self.assertNotIn("import os_platform", source)
+        self.assertNotIn("sss.platform", source)
 
 
 if __name__ == "__main__":

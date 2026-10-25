@@ -16,10 +16,7 @@ import re
 
 from tests.support import _testenv  # noqa: F401
 
-try:
-    import db_conn
-except ImportError:
-    from modules import db_conn
+from sss.persistence import db_conn
 
 KEY = "SSS_TEST_ORACLE"
 RESERVED_OWNER_PREFIX = "SSS_TEST_"
@@ -169,14 +166,9 @@ def prepare_disposable_schema(role="web", cfg=None, secrets=None):
     if secrets is None:
         secrets = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role=role)
 
-    import sys
-    try:
-        import db_conn
-    except ImportError:
-        from modules import db_conn
-    conn_mod = sys.modules.get("db_conn", db_conn)
-
-    conn = conn_mod.connect(cfg, secrets, role)
+    # Import tardio: o dublê dos testes vai no atributo do pacote (mock.patch("sss.persistence.db_conn", ...))
+    from sss.persistence import db_conn
+    conn = db_conn.connect(cfg, secrets, role)
     try:
         prefix = _cfg_oracle(cfg, "table_prefix") or "tbsss_"
         validate_disposable_schema(conn, cfg_owner, user_expected, prefix=prefix)

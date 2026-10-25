@@ -13,16 +13,16 @@ import unittest
 from unittest import mock
 
 import admin_crud
-import path_guard
+from sss.platform import path_guard
 import admin_scripts_service as scr_mod
 import auth_service
-import repo_factory
+from sss.persistence import repo_factory
 from sss.core import security
 from admin_crud import GENERAL_FIELD, AccessDenied, OperationDenied
 from admin_profiles_service import AdminProfilesService
 from admin_scripts_service import AdminScriptsService
-from path_guard import Code
-from repo_errors import RepoConflict, RepoNotFound, RepoViolation
+from sss.platform.path_guard import Code
+from sss.persistence.repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 # UID fictício do agente: o dono dos arquivos de teste é o usuário do teste (CR-007, R-15).
 FAKE_AGENT = 2 ** 31 - 3

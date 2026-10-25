@@ -9,7 +9,7 @@ import unittest
 import health as saude_cli  # scripts/health.py (o repositorio e repo_oracle.health)
 from sss.core import sql_ident
 from sss.config import sss_config
-from repo_oracle import health as saude_sql
+from sss.persistence.oracle import health as saude_sql
 from tests.unit.cli.test_health import _args  # noqa: F401
 
 
@@ -20,7 +20,7 @@ class TestHealthOracle(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         from tests.support._oracle_test_support import prepare_disposable_schema
-        import db_conn
+        from sss.persistence import db_conn
         cls.cfg = prepare_disposable_schema("agent")
         secrets_value = sss_config.load_secrets(cls.cfg.secrets.secrets_file, cfg=cls.cfg, role="agent")
         cls.conn = db_conn.connect(cls.cfg, secrets_value, role="agent")
@@ -32,7 +32,7 @@ class TestHealthOracle(unittest.TestCase):
         cls.conn.close()
 
     def test_consultas_e_verificacao_completa(self):
-        import db_conn
+        from sss.persistence import db_conn
         now = db_conn.db_now(self.conn)
         self.assertEqual(self.repo.schema_version(self.conn), sql_ident.SCHEMA_VERSION)
         self.assertIsInstance(self.repo.agents(self.conn), list)

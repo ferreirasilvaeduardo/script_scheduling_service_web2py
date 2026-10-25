@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.join(_BASE, "modules"))
 sys.path.insert(0, os.path.join(_BASE, "src"))
 
 from sss.core import masking  # noqa: E402
-import os_platform  # noqa: E402
+from sss.platform import os_platform  # noqa: E402
 import scheduler_loop  # noqa: E402
 from sss.config import sss_config  # noqa: E402
 from sss.config import sss_logging  # noqa: E402

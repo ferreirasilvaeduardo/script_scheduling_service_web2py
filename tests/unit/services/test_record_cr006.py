@@ -8,7 +8,7 @@ import unittest
 from unittest import mock
 
 import auth_service
-import repo_factory
+from sss.persistence import repo_factory
 from sss.core import security
 import ui_helpers
 from admin_environments_service import AdminEnvironmentsService

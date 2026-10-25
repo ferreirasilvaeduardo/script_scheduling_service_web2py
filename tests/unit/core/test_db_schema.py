@@ -21,17 +21,17 @@ from tests.support import _testenv  # noqa: F401 - ajusta sys.path sem importar 
 
 from sss.core import sql_ident
 from sss.core.sql_ident import (
-    TABLES,
-    FBI_TCK_QUEUE_EXPR,
-    FBI_TCK_RUN_EXPR,
-    names,
-    qualify,
-    all_identifiers,
-    validate_name,
-    validate_owner,
-    validate_prefix,
-    validate_registry,
-)
+                                TABLES,
+                                FBI_TCK_QUEUE_EXPR,
+                                FBI_TCK_RUN_EXPR,
+                                names,
+                                qualify,
+                                all_identifiers,
+                                validate_name,
+                                validate_owner,
+                                validate_prefix,
+                                validate_registry,
+                                )
 
 
 class TestDbSchema(unittest.TestCase):

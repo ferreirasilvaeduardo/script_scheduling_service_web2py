@@ -11,7 +11,7 @@ com o hash do tar.gz. A versao e sss_config.SSS_VERSION. O tar e deterministico 
 Entram: os launchers de producao e o helper do bin/ e a aplicacao (APP_DIRS e APP_FILES da raiz, que e a propria
 aplicacao desde o CR-022a) sem codigo de DEV, sem testes e sem pastas de runtime. Desde o CR-021f nao ha web2py: o servidor web e o scripts/run_web.py da propria aplicacao.
 Falha (codigo 1, sem gravar nada) se o pacote tiver secrets.cfg real, *.pyc, __pycache__, controllers/dev.py,
-repo_fake, /admin/, resto do web2py (gluon/, web2py.py, anyserver.py, routes.py ou pasta de runtime dele), link
+o FAKE (src/sss/persistence/fake), /admin/, resto do web2py (gluon/, web2py.py, anyserver.py, routes.py ou pasta de runtime dele), link
 simbolico ou credencial que nao seja o CHANGE_ME de instance/secrets.cfg.example. A mensagem cita o arquivo e a
 linha, nunca o valor.
 """
@@ -46,7 +46,7 @@ WEB2PY_APP_DIRS = ("sessions", "errors", "cache", "databases", "uploads", "priva
                    "scripts/deposit", "scripts/site-packages")
 # Relativos a aplicacao: nunca entram (codigo de DEV, configuracao local, dados e pastas de execucao).
 EXCLUDE_APP = (
-    "controllers/dev.py", "views/dev", "dev", "modules/repo_fake", "instance/config.ini", "instance/web.env",
+    "controllers/dev.py", "views/dev", "dev", "src/sss/persistence/fake", "modules/repo_fake", "instance/config.ini", "instance/web.env",
     "log", "logs", "work", "exec", "dist", "scripts/logs",
 ) + WEB2PY_APP_DIRS
 # Os testes ficam em tests/, fora da lista de permissao (CR-022b1); um test_*.py perdido em scripts/ tambem fica fora.
@@ -147,7 +147,7 @@ def check(files, read):
             problems.append("%s: arquivo de segredos real" % rel)
         if name.endswith(".pyc") or "__pycache__" in parts:
             problems.append("%s: bytecode" % rel)
-        if rel.endswith("controllers/dev.py") or "repo_fake" in parts:
+        if rel.endswith("controllers/dev.py") or "repo_fake" in parts or rel.startswith("src/sss/persistence/fake/"):
             problems.append("%s: codigo de DEV" % rel)
         if parts[0] in WEB2PY_ROOT_LEFTOVERS:
             problems.append(f"{rel}: resto do web2py (CR-021f)")

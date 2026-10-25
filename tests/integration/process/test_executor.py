@@ -23,8 +23,8 @@ from unittest import mock
 import env_builder
 import executor
 from sss.core import params_compiler as pc
-import path_guard
-import os_platform
+from sss.platform import path_guard
+from sss.platform import os_platform
 from sss.config.sss_config import Secrets
 
 FAKE_AGENT = 2 ** 31 - 3

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Duble em memoria do repo_oracle.scheduler_output (CR-012) para os testes do agente."""
 from tests.support import _testenv  # noqa: F401
-from repo_oracle import scheduler_output
+from sss.persistence.oracle import scheduler_output
 
 
 class RepoOutputMemory(object):

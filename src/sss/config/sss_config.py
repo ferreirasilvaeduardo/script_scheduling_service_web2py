@@ -835,7 +835,7 @@ def load_secrets(path, cfg=None, sss_env=None, data_backend=None, role="web"):
     if not os.path.exists(path):
         raise ConfigError(reason="Arquivo de segredos nao encontrado: %s" % path)
 
-    import os_platform
+    from sss.platform import os_platform
     try:
         code, st = os_platform.validate_restricted_file(path)
     except OSError as e:

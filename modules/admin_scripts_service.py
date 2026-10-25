@@ -14,14 +14,14 @@ import threading
 import admin_crud
 from sss.core import params_compiler
 from sss.config import log_paths
-import path_guard
+from sss.platform import path_guard
 from sss.core import rbac
 import schedules_service
 import ui_helpers
 from admin_crud import GENERAL_FIELD, OperationDenied
 from sss.core.params_compiler import ParamError, PARAM_TYPES
-from path_guard import Code, PathGuardError
-from repo_errors import RepoConflict, RepoNotFound, RepoViolation
+from sss.platform.path_guard import Code, PathGuardError
+from sss.persistence.repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 FEATURE = "MANAGE_SCRIPTS"
 EDITABLE_FIELDS = ("name", "description", "script_group", "category", "stage", "interpreter", "path_file",
@@ -645,7 +645,7 @@ def _service():
     with _default_lock:
         if _default is None:
             from sss.config import app_context
-            import repo_factory
+            from sss.persistence import repo_factory
             from sss.config import sss_logging
             factory = repo_factory
             cfg = app_context.require_config()

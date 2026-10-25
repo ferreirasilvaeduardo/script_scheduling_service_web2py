@@ -34,13 +34,13 @@ sys.path.insert(0, os.path.join(_BASE, "modules"))
 sys.path.insert(0, os.path.join(_BASE, "src"))
 
 import audit_service  # noqa: E402
-import db_conn  # noqa: E402
+from sss.persistence import db_conn  # noqa: E402
 from sss.core import masking  # noqa: E402
 from sss.config import log_paths  # noqa: E402
-import os_platform  # noqa: E402
+from sss.platform import os_platform  # noqa: E402
 from sss.config import sss_config  # noqa: E402
 from sss.config import sss_logging  # noqa: E402
-from repo_oracle.purge import RepoPurge  # noqa: E402
+from sss.persistence.oracle.purge import RepoPurge  # noqa: E402
 
 EXIT_OK = 0
 EXIT_DATABASE = 1

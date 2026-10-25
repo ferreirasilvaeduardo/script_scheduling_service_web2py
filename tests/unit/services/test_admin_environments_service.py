@@ -11,11 +11,11 @@ import admin_environments_service as svc_mod
 import admin_crud
 import auth_service
 from sss.core import masking
-import repo_factory
+from sss.persistence import repo_factory
 from sss.core import security
 from admin_environments_service import AdminEnvironmentsService
 from admin_crud import GENERAL_FIELD, AccessDenied
-from repo_errors import RepoConflict, RepoNotFound
+from sss.persistence.repo_errors import RepoConflict, RepoNotFound
 
 IP = "10.9.8.7"
 SESSIONS = {
@@ -151,7 +151,7 @@ class TestInsert(_Base):
 
     def test_dsn_do_seed_aceito_pela_tela(self):
         # CR-018: um DSN que o seed grava precisa poder ser salvo de volta pela tela (editar o ambiente).
-        import ddl_builder
+        from sss.persistence import ddl_builder
         for name, _desc, connection, _prod in ddl_builder.DEFAULT_ENVIRONMENTS:
             self.assertIsNone(svc_mod.validate_connection(connection), name)
 

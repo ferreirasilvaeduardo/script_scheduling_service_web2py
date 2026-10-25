@@ -15,13 +15,13 @@ import tempfile
 import unittest
 from unittest import mock
 
-import db_conn
+from sss.persistence import db_conn
 import log_pump
 from sss.core import masking
 from log_pump import MARKER, Pump, Round
-from repo_oracle import scheduler_log
-from repo_oracle.scheduler_log import (WRITTEN, ALREADY_WRITTEN, OWNERSHIP_LOST, LogOffsetMismatch,
-                                       RepoSchedulerLog)
+from sss.persistence.oracle import scheduler_log
+from sss.persistence.oracle.scheduler_log import (WRITTEN, ALREADY_WRITTEN, OWNERSHIP_LOST, LogOffsetMismatch,
+                                                  RepoSchedulerLog)
 
 MB_TEXT = "Ação concluída: café ☕ e emoji \U0001F600 \U0001F4A9 ok; ñ ü ß ç ã é\n" * 3
 MB = 1024 * 1024
@@ -550,9 +550,9 @@ _CHILD = r'''
 import json, os, sys, warnings
 warnings.simplefilter("ignore")
 sys.path[:0] = [sys.argv[1], os.path.join(os.path.dirname(sys.argv[1]), "src")]
-import db_conn
+from sss.persistence import db_conn
 from sss.config import sss_config
-from repo_oracle.scheduler_log import RepoSchedulerLog
+from sss.persistence.oracle.scheduler_log import RepoSchedulerLog
 cfg = sss_config.get_config()
 cfg = cfg._replace(oracle=cfg.oracle._replace(driver_mode=sys.argv[2]))
 seg = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role="web")

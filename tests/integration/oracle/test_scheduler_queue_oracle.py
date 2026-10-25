@@ -6,7 +6,7 @@ from tests.support import _testenv  # noqa: F401
 import datetime
 import os
 import unittest
-from repo_oracle.scheduler_queue import DuplicateAgent, RegistrationLost, RepoSchedulerQueue
+from sss.persistence.oracle.scheduler_queue import DuplicateAgent, RegistrationLost, RepoSchedulerQueue
 
 
 @unittest.skipUnless(os.environ.get("SSS_TEST_ORACLE") == "1", "Testes Oracle reais desligados (SSS_TEST_ORACLE=1)")

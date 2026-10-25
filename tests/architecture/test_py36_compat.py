@@ -128,7 +128,7 @@ def find_python_files(app_dir, repo_root):
 
 def check_os_primitives(path, app_dir, repo_root):
     """Rejeita primitivas POSIX fora da plataforma e da allowlist estrita do helper."""
-    platform_dir = os.path.normpath(os.path.join(app_dir, "modules", "os_platform"))
+    platform_dir = os.path.normpath(os.path.join(app_dir, "src", "sss", "platform", "os_platform"))
     helper = os.path.normpath(os.path.join(repo_root, "bin", "sss-helper"))
     path = os.path.normpath(path)
     if os.path.commonpath([path, platform_dir]) == platform_dir:
@@ -442,7 +442,7 @@ class TestPy36Compat(unittest.TestCase):
             repo_root = os.path.join(root, "web2py")
             path_bad = os.path.join(app_dir, "modules", "outro", "bad_source.py")
             helper = os.path.join(repo_root, "bin", "sss-helper")
-            platform_value = os.path.join(app_dir, "modules", "os_platform", "posix.py")
+            platform_value = os.path.join(app_dir, "src", "sss", "platform", "os_platform", "posix.py")
             for path, content in (
                 (path_bad, "os.killpg(1, 15)\nos.setsid()\nimport resource\nimport fcntl\nproc = '/proc/1/cwd'\nsubprocess.Popen(['pwdx', '1'])\nvalor = sys.platform\n"),
                 (helper, "import os\nimport resource\nimport subprocess\ndef _run():\n    resource.setrlimit(1, (2, 3))\ndef _term():\n    os.killpg(1, 15)\ndef _kill():\n    os.killpg(1, 9)\ndef _stop_ticket():\n    proc = '/proc/1/cwd'\n    subprocess.Popen(['/usr/bin/pwdx', '1'])\n"),

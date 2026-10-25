@@ -62,7 +62,7 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 * `thin`, `thick` ou `cx_oracle`: força um único candidato, sem sondagem; falha é fatal.
 * **Carregamento do Instant Client no Linux/Unix** (Thick e cx_Oracle): o IC deve estar no caminho de bibliotecas **antes** de o processo Python iniciar, via `ldconfig` (preferencial) ou `LD_LIBRARY_PATH` exportado pelos launchers `bin/sss-web.sh` e `bin/sss-scheduler.sh`. Nessas plataformas, `init_oracle_client(lib_dir=...)` não tem efeito e deve ser chamado sem `lib_dir`.
 * **Desenvolvimento em macOS:** `oracle_client_lib_dir` só é usado em macOS. O IC 19 para macOS existe apenas para Intel (x86_64). Em Apple Silicon, use Python x86_64 sob Rosetta ou um container/VM Linux x86_64 (o modo Thin exigiria a `cryptography`, que o projeto não usa).
-* `modules/db_conn.py` é a **única** porta de acesso ao banco. Ele contém a seleção do driver, o adaptador das diferenças de API entre `oracledb` (Thin/Thick) e `cx_Oracle` (exceções mapeadas por driver e modo para os erros do contrato, tipos de bind, conversão do estilo `:name` para o `paramstyle` do driver, pool e `init_oracle_client`).
+* `src/sss/persistence/db_conn.py` é a **única** porta de acesso ao banco. Ele contém a seleção do driver, o adaptador das diferenças de API entre `oracledb` (Thin/Thick) e `cx_Oracle` (exceções mapeadas por driver e modo para os erros do contrato, tipos de bind, conversão do estilo `:name` para o `paramstyle` do driver, pool e `init_oracle_client`).
 * **Toda conexão deve:**
   * usar `autocommit = False`;
   * definir `call_timeout` (`call_timeout_ms` no config);
@@ -164,13 +164,13 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
 
 ### 2.5 Backend de dados (estratégia UI-first)
 
-* Toda persistência passa por **contratos de repositório** em `modules/repo_*.py`: classes abstratas por agregado, sem SQL.
-* O contrato tem duas implementações, escolhidas pela `modules/repo_factory.py`. **A aplicação usa sempre o Oracle** do `[oracle]` do config (owner e prefixo). A chave `[app] data_backend` foi removida no F7.3, e um config que ainda a tenha é recusado com a instrução de apagar a linha. O FAKE só existe quando um **teste** o injeta pelo gancho `repo_factory.configure(...)`, e só com `sss_env = DEV`:
+* Toda persistência passa por **contratos de repositório** em `src/sss/persistence/contracts/repo_*.py`: classes abstratas por agregado, sem SQL.
+* O contrato tem duas implementações, escolhidas pela `src/sss/persistence/repo_factory.py`. **A aplicação usa sempre o Oracle** do `[oracle]` do config (owner e prefixo). A chave `[app] data_backend` foi removida no F7.3, e um config que ainda a tenha é recusado com a instrução de apagar a linha. O FAKE só existe quando um **teste** o injeta pelo gancho `repo_factory.configure(...)`, e só com `sss_env = DEV`:
 
 | Backend | Uso | Implementação |
 |---|---|---|
-| `FAKE` | Só testes automáticos sem banco, por injeção (`repo_factory.configure`) | `modules/repo_fake/`: memória do processo, seed determinístico e `threading.Lock` por agregado. O `repo_factory` só o importa quando o FAKE é ligado, porque o pacote de implantação não o leva (§12.2; F9.1d) |
-| `ORACLE` | A aplicação, em DEV, HML e PROD | `modules/repo_oracle/` (§2.7): único local com SQL; conexões pelo pool do processo (`db_conn.pool`, fechado no `atexit`) |
+| `FAKE` | Só testes automáticos sem banco, por injeção (`repo_factory.configure`) | `src/sss/persistence/fake/`: memória do processo, seed determinístico e `threading.Lock` por agregado. O `repo_factory` só o importa quando o FAKE é ligado, porque o pacote de implantação não o leva (§12.2; F9.1d) |
+| `ORACLE` | A aplicação, em DEV, HML e PROD | `src/sss/persistence/oracle/` (§2.7): único local com SQL; conexões pelo pool do processo (`db_conn.pool`, fechado no `atexit`) |
 
 * Os controllers e services **não sabem** qual backend está ativo.
 * **Paridade obrigatória:** o FAKE emula a semântica do Oracle que o código consome. Isso inclui `UPDATE` condicional com `rowcount` (transição perdida gera `RepoConflict`), unicidade (`RepoViolation`), `ON DELETE CASCADE`, triggers de imutabilidade, paginação e ordenação idênticas. Também inclui:
@@ -197,7 +197,7 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
   * `RepoTickets.get` devolve o `submitted_params` (o snapshot que o detalhe mostra), mas nunca o `log_output`. O log só sai em fatias por `log_read` (AGENTS §4.13, §8.10).
 * **Exceção documentada (F7.3, AGENDAMENTOS):** `RepoSchedules.list` traz o `params_json` (CLOB pequeno com as respostas da regra), porque o service avalia cada regra com ele (tela de regras e Agenda). Ler por `get` faria uma consulta por regra ativa. Nenhuma listagem traz `log_output`.
 * **Concorrência das transições no FAKE:** as transições web de ticket rodam sob o lock do agregado, então o FAKE nunca chega a perder uma corrida. O tratamento de `rowcount = 0` (`RepoConflict`) nessas transições só é exercitado pelo `test_repo_contract.py` contra o Oracle (F7.3).
-* **Exceções de contrato** (`modules/repo_errors.py`): `RepoError`, `RepoNotFound`, `RepoConflict`, `RepoViolation` e `RepoUnavailable`.
+* **Exceções de contrato** (`src/sss/persistence/repo_errors.py`): `RepoError`, `RepoNotFound`, `RepoConflict`, `RepoViolation` e `RepoUnavailable`.
 * A suíte `tests/unit/persistence/test_repo_contract.py` roda **a mesma bateria** contra os dois backends. Contra ORACLE, ela só executa se `SSS_TEST_DSN` estiver definido.
 * **Testes Oracle reais: uma chave só, `SSS_TEST_ORACLE=1`** (`tests/support/_oracle_test_support.py`).
   * **Origem dos parâmetros:** owner, prefixo, DSN e conta vêm só do `instance/config.ini`, os mesmos da aplicação. Nada é repetido em variáveis de ambiente.
@@ -230,15 +230,15 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
 | **2** | Demais Unix (AIX, Solaris, HP-UX, macOS, BSD) | Mesma camada POSIX; homologação pela infraestrutura sob demanda |
 
 * **Windows não é suportado** (CR-005, que revoga a parte Windows do CR-001): nem nó web nem agente.
-* Toda primitiva de sistema operacional fica em `modules/os_platform/` (§8.0), só com a implementação POSIX. A camada continua para isolar essas primitivas e permitir os testes.
+* Toda primitiva de sistema operacional fica em `src/sss/platform/os_platform/` (§8.0), só com a implementação POSIX. A camada continua para isolar essas primitivas e permitir os testes.
 * O banco e a UI não dependem do sabor de Unix do nó.
 * Um mesmo ambiente pode ter agentes com interpretadores diferentes: o claim respeita os interpretadores de cada agente (§8.2).
 
 ### 2.7 SQL Oracle 11gR2 (CR-002)
 
-* O SQL é escrito diretamente na sintaxe aceita pelo **Oracle 11gR2**, em `modules/repo_oracle/`. O CR-002 revogou a camada de dialeto e o SQL ANSI do CR-001.
+* O SQL é escrito diretamente na sintaxe aceita pelo **Oracle 11gR2**, em `src/sss/persistence/oracle/`. O CR-002 revogou a camada de dialeto e o SQL ANSI do CR-001.
 * **Permitido:** `ROWNUM`, `SYSDATE`, `seq.NEXTVAL FROM DUAL`, `FOR UPDATE WAIT n` (n ≤ 5), `DBMS_LOB.WRITEAPPEND`, `DBMS_LOB.SUBSTR`, `EMPTY_CLOB()`, `MERGE`, `CASE`, `NVL` e `DECODE`. A comparação nula-segura continua `(c = :v OR (c IS NULL AND :v IS NULL))`.
-* **Proibido (12c+):** ver AGENTS §4.3. A varredura `test_sql_oracle11g.py` rejeita essa sintaxe em `repo_oracle/` e em `scripts/init_db.py`.
+* **Proibido (12c+):** ver AGENTS §4.3. A varredura `test_sql_oracle11g.py` rejeita essa sintaxe em `src/sss/persistence/oracle/` e em `scripts/init_db.py`.
 * A aplicação **sempre informa o `id`** na inclusão (`seq.NEXTVAL` lido antes do `INSERT`). A trigger condicional do §10 continua existindo como defesa.
 * Os blocos SQL deste README estão na forma que vai para o código.
 
@@ -318,22 +318,25 @@ bin/
       rbac.py                 # decisões de autorização (§4.3)
       security.py             # hash de senha, CSRF, comparação em tempo constante
       sql_ident.py            # registro de identificadores, validação de owner/prefixo, nomes qualificados
+    platform/                 # [CR-022b4] base: primitivas de SO (só POSIX) e validação de caminho; só biblioteca padrão
+      os_platform/            # [F8.0] primitivas de SO, só POSIX (Linux/Unix) (§8.0, CR-005)
+      path_guard.py           # validação de interpretador e script (§8.5)
+    persistence/              # [CR-022b4] conexão Oracle, DDL, contratos e as implementações Oracle e FAKE
+      db_conn.py              # [F7.0/F7.2] seleção do driver (Thin → Thick → cx_Oracle), adaptador, binds, mapa de erros, pool, conexão dedicada do daemon
+      ddl_builder.py          # [F7.1] DDL e seed Oracle 11gR2 a partir do registro de sql_ident
+      repo_errors.py          # exceções de contrato (§2.5)
+      repo_factory.py         # seleção do backend FAKE/ORACLE (banco real via oracle/)
+      contracts/              # contratos abstratos por agregado, sem SQL: repo_users.py, repo_tickets.py...
+      oracle/                 # implementação SQL Oracle 11gR2 (único local com SQL, §2.7) [F7.3]
+      fake/                   # implementação em memória + seed (somente DEV)
   modules/
-    db_conn.py                # [F7.0/F7.2] seleção do driver (Thin → Thick → cx_Oracle), adaptador, binds, mapa de erros, pool, conexão dedicada do daemon
-    os_platform/              # [F8.0] primitivas de SO, só POSIX (Linux/Unix) (§8.0, CR-005)
-    repo_errors.py            # exceções de contrato (§2.5)
-    repo_factory.py           # seleção do backend FAKE/ORACLE (banco real via repo_oracle)
     web/                      # [CR-021d1/d2] núcleo web próprio (WSGI, request, multipart, response, sessão assinada, rotas, templates); ligado no CR-021e
-    repo_*.py                 # contratos abstratos por agregado (sem SQL)
-    repo_fake/                # implementação em memória + seed (somente DEV)
-    repo_oracle/              # implementação SQL Oracle 11gR2 (único local com SQL, §2.7) [F7.3]
     auth_service.py           # autenticação, bloqueio, revalidação de sessão
     ticket_service.py         # criação, cancelamento e reexecução de ticket (§5); rotinas disponíveis e histórico (CR-004)
     admin_*_service.py        # cadastros (ADMIN_CRUD_PATTERN.md); admin_crud.py: validação comum
     schedules_service.py, agents_service.py, permissions_service.py  # regras, painel de agentes, O que eu posso fazer
     ui_menu.py                # menu por permissão
     ui_helpers.py             # formatação de status, datas e paginação para as views
-    path_guard.py             # validação de interpretador e script (§8.5)
     env_builder.py            # [F8.1] montagem do ambiente limpo (§8.6)
     executor.py               # [F8.1] spawn, timeout, kill, finalização
     log_pump.py               # [F8.2] arquivo local -> CLOB com mascaramento (§8.10)
@@ -343,7 +346,7 @@ bin/
   scripts/
     init_db.py                # [F7.1] bootstrap idempotente de DDL e seed, versão do esquema e migrações (§11)
     migrations/               # [F7.1] migrações numeradas m<NNNN>_<descricao>.py (§11.1, CR-007)
-    health.py                  # [F9.1] verificação de saúde no padrão Nagios (§13, CR-007); consultas em repo_oracle/health.py
+    health.py                  # [F9.1] verificação de saúde no padrão Nagios (§13, CR-007); consultas em src/sss/persistence/oracle/health.py
     probe_driver.py          # [F7.0] sondagem isolada de um candidato de driver (Thin, Thick, cx_Oracle) (§2.3, CR-002)
     run_scheduler.py          # [F8.3] entrypoint do daemon
     run_web.py                # [CR-021e] entrypoint do servidor web (núcleo próprio, sem web2py)
@@ -1295,7 +1298,7 @@ Nos dois casos, `next_run_at` recebe a **primeira ocorrência futura** maior que
 
 ### 7.5 Algoritmo de desdobro (ciclo 1 do daemon)
 
-Implementado em `modules/schedule_expansion.py` (F8.4b), chamado pelo ciclo do orquestrador do agente e suspenso na parada; o SQL fica em `repo_oracle/scheduler_schedules.py`. O log de cada regra (`agendamento <id>: ...`, ação `DESDOBRO`) permite reconstruir a decisão sem o banco: ticket gerado (com a ocorrência e a prioridade), avanço, conclusão, pausa (com o motivo e o detalhe), `SKIP_OVERLAP`, `MISFIRE` e `DESDOBRO_ERRO_BANCO`; o ciclo fecha com o resumo (regras, tickets, pausas e as que estavam com outro agente).
+Implementado em `modules/schedule_expansion.py` (F8.4b), chamado pelo ciclo do orquestrador do agente e suspenso na parada; o SQL fica em `src/sss/persistence/oracle/scheduler_schedules.py`. O log de cada regra (`agendamento <id>: ...`, ação `DESDOBRO`) permite reconstruir a decisão sem o banco: ticket gerado (com a ocorrência e a prioridade), avanço, conclusão, pausa (com o motivo e o detalhe), `SKIP_OVERLAP`, `MISFIRE` e `DESDOBRO_ERRO_BANCO`; o ciclo fecha com o resumo (regras, tickets, pausas e as que estavam com outro agente).
 
 **Leitura paginada (CR-007, R-08).** A cada ciclo do orquestrador, o agente lê páginas de regras vencidas (usa `ix_tbsss_sch_next (active, next_run_at, id)`), começando do início e continuando depois da última regra lida:
 
@@ -1424,7 +1427,7 @@ UPDATE {owner}.tbsss_schedules
 * `:old_date` é usada **exatamente como retornada pelo banco** (passo 1), nunca recalculada nem convertida por fuso. `:new_date` sai do `recurrence.py` já sem segundos nem microssegundos (§7.2).
 * **Teste obrigatório (F7.3/F8.4):** um desdobro com `old_date`/`new_date` contendo microssegundos não pode resultar em `rowcount = 0`. O tipo `DATE` declarado no bind descarta a fração.
 
-**Contrato do repositório para o desdobro (F8.4):** `repo_oracle/scheduler_schedules.py` (processo batch, sem FAKE, §2.5) expõe operações distintas:
+**Contrato do repositório para o desdobro (F8.4):** `src/sss/persistence/oracle/scheduler_schedules.py` (processo batch, sem FAKE, §2.5) expõe operações distintas:
 * a leitura paginada das regras vencidas e o lock de cada uma com `SKIP LOCKED` (SQL acima);
 * a leitura completa da regra;
 * a reserva otimista com a inclusão do ticket e do `ticket_answer` (passo 6), numa única operação;
@@ -1432,7 +1435,7 @@ UPDATE {owner}.tbsss_schedules
 * o avanço sem ticket;
 * a pausa (passo 7), inclusive a pausa por `INTERNAL_ERROR` numa transação separada.
 
-Todas recebem a conexão da transação do ciclo e nunca fazem `COMMIT` sozinhas; o `COMMIT` único é do passo 8. Para montar a decisão, o repositório também lê o login do responsável, o script com os vínculos de parâmetros (para o snapshot v5) e a situação do `last_ticket_id`. A violação de `ix_tbsss_tck_occur` no `INSERT` do ticket chega a quem chama como `DuplicateOccurrence` (passo 6). As operações do §8.8 e do §8.9 (`mark_node_offline`, `finalize_fenced`) ficam em `repo_oracle/scheduler_queue.py` (F8.4a).
+Todas recebem a conexão da transação do ciclo e nunca fazem `COMMIT` sozinhas; o `COMMIT` único é do passo 8. Para montar a decisão, o repositório também lê o login do responsável, o script com os vínculos de parâmetros (para o snapshot v5) e a situação do `last_ticket_id`. A violação de `ix_tbsss_tck_occur` no `INSERT` do ticket chega a quem chama como `DuplicateOccurrence` (passo 6). As operações do §8.8 e do §8.9 (`mark_node_offline`, `finalize_fenced`) ficam em `src/sss/persistence/oracle/scheduler_queue.py` (F8.4a).
 
 ### 7.6 Cadastro de regras na UI (decisões do F5.2)
 
@@ -1504,7 +1507,7 @@ Responde "o que vai rodar hoje e nos próximos dias?". Exige `MANAGE_SCHEDULES` 
 
 ## 8. Motor de Execução (ciclo 2 do daemon)
 
-### 8.0 Camada de plataforma (`modules/os_platform/`, CR-001 e CR-005)
+### 8.0 Camada de plataforma (`src/sss/platform/os_platform/`, CR-001 e CR-005)
 
 O daemon chama apenas a interface abaixo, implementada em `posix.py` (Linux e demais Unix; CR-005: somente POSIX). O restante do motor não conhece o sistema operacional.
 
@@ -2056,7 +2059,7 @@ Pasta permanente onde o script encontra os arquivos de que precisa (lotes, plani
 * **Concorrência:** dois tickets do mesmo script no mesmo ambiente (com `max_parallel_env` maior que 1) usam a mesma pasta ao mesmo tempo. A coordenação (por exemplo, mover o arquivo para uma subpasta antes de processar) é do script.
 * **Scripts e interpretadores** não podem ficar dentro de `input_dir` (`SSS_DIR`, §8.5).
 * Web e agentes podem estar em servidores diferentes: a pasta existe só no servidor de cada agente. Com mais de um agente atendendo o mesmo ambiente, cada um tem a sua `input_dir` (ou um compartilhamento de rede comum, montado pela infraestrutura).
-* **Envio pela tela (CR-020):** o arquivo chega pelo banco (§10, tabelas 19 a 21) e cada agente vivo do ambiente o grava na sua pasta (`modules/input_phase.py`, máquina de estados do laço, sem espera, uma entrega por vez; persistência do agente por `repo_oracle/scheduler_input`, fora da camada web, com a conexão do daemon):
+* **Envio pela tela (CR-020):** o arquivo chega pelo banco (§10, tabelas 19 a 21) e cada agente vivo do ambiente o grava na sua pasta (`modules/input_phase.py`, máquina de estados do laço, sem espera, uma entrega por vez; persistência do agente por `src/sss/persistence/oracle/scheduler_input`, fora da camada web, com a conexão do daemon):
   1. **baixar:** no ciclo rápido, o agente pega a próxima entrega `PENDING` dele e, a cada volta do laço, lê até 4 partes de 1 MiB do banco para `work_dir/input/delivery_<id>.part` (do agente, `0600`). No fim, tamanho e SHA-256 são conferidos; divergência é `FAILED`/`HASH` sem chamar o helper;
   2. **gravar:** o helper `put-input` (como o usuário de execução, com o temporário na entrada padrão, prazo de 120 s) grava `.sss_upload_<pid>.tmp` no destino com `O_EXCL`, confere tamanho e hash enquanto grava e publica de forma atômica: **sem substituir**, `link` + `unlink`, e um item já existente é `EXISTS`; **substituindo**, `replace`, recusado se o destino não for arquivo regular (`NAME`). Disco cheio é `SPACE`; outro erro, `ERROR`;
   3. **marcar:** `DELIVERED` ou `FAILED` com o motivo, só pelo próprio agente, com `INPUT_DELIVERY` na mesma transação; o temporário é apagado e o retrato daquela pasta é refeito.
@@ -2930,8 +2933,8 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
 **Pacote de implantação (F9.1; sem web2py desde o CR-021f3):** `python tools/package.py [--source <raiz do repositório>] [--out-dir <pasta>]`, só com a biblioteca padrão. Fica em `tools/` (CR-022b2), fora do pacote que gera.
 * Gera `<saida>/sss-<version>.tar.gz` (padrão `<origem>/dist/`; versão `sss_config.SSS_VERSION`), com tudo sob `sss-<versao>/` e um `SHA256SUMS` de cada arquivo dentro do pacote, e `<saida>/SHA256SUMS` com o hash do `tar.gz` (`sha256sum -c SHA256SUMS`). O tar é reprodutível: ordem, dono (0), data e modos fixos (`0755` no `bin/`, `0644` nos demais arquivos).
 * **Entram (lista de permissão da raiz, CR-022a):** `bin/sss-web.sh`, `bin/sss-scheduler.sh`, `bin/sss-stop.sh`, `bin/sss-helper`, `AGENTS.md`, `README.md` e as pastas `controllers/`, `docs/`, `instance/` (só os `*.example`), `modules/`, `scripts/`, `src/` (CR-022b3), `static/`, `views/` e `webapp/`, todas no topo do pacote, como no repositório. O resto da raiz (`.git`, `Makefile`, `CLAUDE.md`, `dev/`, `input/`, `output/`, `logs/`, `work/`...) é da máquina de desenvolvimento e não entra. O servidor web é o `scripts/run_web.py` da própria aplicação; nada do web2py entra (nem pasta de runtime vazia), e `applications/` na origem recusa o pacote.
-* **Não entram:** `controllers/dev.py`, `views/dev/`, `dev/`, `modules/repo_fake/`, `instance/config.ini`, `instance/web.env`, `log/`, `logs/`, `work/`, `exec/`, os testes (`tests/`, fora da lista de permissão desde o CR-022b1; um `scripts/test_*.py` perdido também fica fora), as ferramentas de build (`tools/`, CR-022b2), as pastas de runtime que o web2py criava dentro da aplicação numa cópia antiga (`sessions`, `errors`, `cache`, `databases`, `uploads`, `private`, `cron`, `applications`, `deposit`, `site-packages`), os launchers de DEV e os demais arquivos da raiz.
-* **Recusa** (código 1, sem gravar nada) se o pacote tiver um `secrets.cfg` real, `*.pyc`, `__pycache__`, `controllers/dev.py`, `repo_fake`, outra aplicação (`/admin/`, `welcome`, `examples`), resto do web2py (`gluon/`, `web2py.py`, `anyserver.py` ou `routes.py` na raiz, ou pasta de runtime dele), link simbólico, ou `password`/`cookie_key` com valor em `.ini`, `.cfg`, `.ini.example` ou `.cfg.example` (pelo nome do arquivo). A única exceção é o valor exato `CHANGE_ME` em `instance/secrets.cfg.example`. A mensagem cita arquivo e linha, nunca o valor.
+* **Não entram:** `controllers/dev.py`, `views/dev/`, `dev/`, `src/sss/persistence/fake/`, `instance/config.ini`, `instance/web.env`, `log/`, `logs/`, `work/`, `exec/`, os testes (`tests/`, fora da lista de permissão desde o CR-022b1; um `scripts/test_*.py` perdido também fica fora), as ferramentas de build (`tools/`, CR-022b2), as pastas de runtime que o web2py criava dentro da aplicação numa cópia antiga (`sessions`, `errors`, `cache`, `databases`, `uploads`, `private`, `cron`, `applications`, `deposit`, `site-packages`), os launchers de DEV e os demais arquivos da raiz.
+* **Recusa** (código 1, sem gravar nada) se o pacote tiver um `secrets.cfg` real, `*.pyc`, `__pycache__`, `controllers/dev.py`, o FAKE (`src/sss/persistence/fake/`), outra aplicação (`/admin/`, `welcome`, `examples`), resto do web2py (`gluon/`, `web2py.py`, `anyserver.py` ou `routes.py` na raiz, ou pasta de runtime dele), link simbólico, ou `password`/`cookie_key` com valor em `.ini`, `.cfg`, `.ini.example` ou `.cfg.example` (pelo nome do arquivo). A única exceção é o valor exato `CHANGE_ME` em `instance/secrets.cfg.example`. A mensagem cita arquivo e linha, nunca o valor.
 * O `package.py` não grava bytecode (`sys.dont_write_bytecode`), para poder rodar de dentro da própria cópia que empacota (CR-021f3). Uma árvore de desenvolvimento sempre tem `__pycache__` e o `secrets.cfg` local, então o pacote é gerado de uma cópia limpa: `git archive HEAD | tar -x -C <pasta>` e `python <pasta>/scripts/package.py --source <pasta>`.
 
 **Sem web2py (CR-021f):** o repositório e o pacote não têm `gluon/`, `web2py.py`, `anyserver.py` nem `routes.py`, e o servidor não cria pastas de runtime (sessão em cookie assinado, erros no log da aplicação). Em HML e PROD:
@@ -2986,7 +2989,7 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
   * Backend FAKE (DEV): o seed mostra os três quadros. O `agt-host02` tem `kill=10` (configuração divergente); o ticket 16 está `RUNNING` sem PID desde a carga; o ticket 4 (SH em `HOMOLOGACAO`, vencido 3 min antes da carga) só é atendido pelo `agt-host02` (o `agt-host01` mapeia `PYTHON3,BASH`) e entra na fila sem atendente quando ele passa a `AT_RISK`, cerca de 1 min depois da carga.
   * `critical_config` do nó web: `sss_config.critical_config(cfg)`, com `call` em segundos (`call_timeout_s`, arredondado para cima), igual ao texto do agente (§8.12).
 * **Monitoração externa (CR-007, R-18):** `scripts/health.py` (F9.1) roda, com a conta só de leitura do papel **monitor** (`[monitor]` no `secrets.cfg`, §4.1 e §11.1, CR-008 E3; a conta do agente não lê `tbsss_audit`), as consultas de saúde e devolve o código no padrão Nagios (0 OK, 1 WARN, 2 CRITICAL, 3 desconhecido), com uma linha por problema. Verifica: agente `ACTIVE` sem heartbeat além de `node_offline_timeout_s`; ambiente ativo sem nenhum agente saudável; os três quadros acima; fila `PENDING` vencida acima de um limite; ausência de `PURGE` auditado em 2 dias; versão do esquema (§11.1). Os limites são argumentos com padrão, e o `DEPLOYMENT.md` traz o exemplo de agendamento no monitoramento corporativo.
-  * **Uso (F9.1):** `python scripts/health.py [--config <config.ini>] [--no-pid-min 2] [--queue-warn 500] [--queue-crit 5000] [--wait-warn-min 30] [--wait-crit-min 120] [--purge-days 2]`. Todas as verificações usam um único `db_now()`. As consultas ficam em `repo_oracle/health.py` (fora da camada web), que também fornece à tela de agentes o SQL da fila sem atendente e do rodando sem PID: a tela e o monitoramento não divergem. Nenhum LOB é lido, e o plano não varre `tbsss_tickets` nem `tbsss_audit` (`ix_tbsss_tck_queue`, `ix_tbsss_tck_run`, `ix_tbsss_aud_actor`).
+  * **Uso (F9.1):** `python scripts/health.py [--config <config.ini>] [--no-pid-min 2] [--queue-warn 500] [--queue-crit 5000] [--wait-warn-min 30] [--wait-crit-min 120] [--purge-days 2]`. Todas as verificações usam um único `db_now()`. As consultas ficam em `src/sss/persistence/oracle/health.py` (fora da camada web), que também fornece à tela de agentes o SQL da fila sem atendente e do rodando sem PID: a tela e o monitoramento não divergem. Nenhum LOB é lido, e o plano não varre `tbsss_tickets` nem `tbsss_audit` (`ix_tbsss_tck_queue`, `ix_tbsss_tck_run`, `ix_tbsss_aud_actor`).
 
     | Verificação | Nível |
     |---|---|

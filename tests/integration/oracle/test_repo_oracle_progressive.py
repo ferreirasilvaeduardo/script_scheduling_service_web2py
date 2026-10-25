@@ -17,20 +17,20 @@ from unittest import mock
 from tests.support import _oracle_test_support
 from tests.support import _testenv  # noqa: F401
 from sss.config import app_context
-import db_conn
-import repo_errors
-import repo_factory
+from sss.persistence import db_conn
+from sss.persistence import repo_errors
+from sss.persistence import repo_factory
 from sss.core import sql_ident
-from repo_catalog import RepoCatalog
-from repo_oracle.catalog import RepoCatalogOracle
-from repo_rbac import RepoRbac
-from repo_oracle.agents import RepoAgentsOracle
-from repo_oracle.audit import RepoAuditOracle
-from repo_schedules import RepoSchedules
-from repo_oracle.schedules import RepoSchedulesOracle
-from repo_oracle.tickets import RepoTicketsOracle
-from repo_tickets import RepoTickets
-from repo_users import RepoUsers
+from sss.persistence.contracts.repo_catalog import RepoCatalog
+from sss.persistence.oracle.catalog import RepoCatalogOracle
+from sss.persistence.contracts.repo_rbac import RepoRbac
+from sss.persistence.oracle.agents import RepoAgentsOracle
+from sss.persistence.oracle.audit import RepoAuditOracle
+from sss.persistence.contracts.repo_schedules import RepoSchedules
+from sss.persistence.oracle.schedules import RepoSchedulesOracle
+from sss.persistence.oracle.tickets import RepoTicketsOracle
+from sss.persistence.contracts.repo_tickets import RepoTickets
+from sss.persistence.contracts.repo_users import RepoUsers
 
 
 def _prepare_real_db(cls):
@@ -93,7 +93,7 @@ class TestOracleRbacUsers(unittest.TestCase):
 
     def test_alterar_sem_data_nao_declara_bind_de_data_ausente(self):
         """Regressao (F7.3): alterar so o nome declarava locked_until/last_login_at e caia em DPY-4008."""
-        import repo_oracle.users as mod
+        from sss.persistence.oracle import users as mod
         line = tuple(1 if c in ("id", "profile_id") else ("Y" if c == "active" else
                       ("tst.x" if c == "login" else (0 if c in ("failed_attempts", "session_epoch") else None)))
                       for c in mod._COLS_USER)
@@ -1232,7 +1232,7 @@ class TestOracleAuditAgents(unittest.TestCase):
 
     def test_gravacao_de_auditoria_dos_outros_agregados_sem_corte(self):
         """base.write_audit recusa (nao corta) detalhe longo: a transacao toda e desfeita."""
-        from repo_oracle import base
+        from sss.persistence.oracle import base
         with self.assertRaises(repo_errors.RepoViolation):
             base.write_audit(mock.MagicMock(), "t", "s", {"actor": "ana", "action": "X", "detail": "d" * 1001},
                                   "tbsss_scripts", 1)

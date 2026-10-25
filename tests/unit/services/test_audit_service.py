@@ -15,7 +15,7 @@ import agents_service
 import audit_service
 import auth_service
 from sss.core import masking
-import repo_factory
+from sss.persistence import repo_factory
 from sss.core import security
 from admin_crud import AccessDenied
 from agents_service import DELAYED, AT_RISK, OFFLINE, OK, Thresholds, AgentsService

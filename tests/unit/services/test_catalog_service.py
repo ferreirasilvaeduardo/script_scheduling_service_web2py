@@ -9,7 +9,7 @@ import unittest
 from unittest import mock
 
 import auth_service
-import repo_factory
+from sss.persistence import repo_factory
 from sss.core import security
 from ticket_service import TicketService
 
@@ -187,7 +187,7 @@ class TestScriptHistory(_Base):
         self.assertEqual(h["typical_duration"], u"cerca de 4 minutos")
 
     def test_fora_das_rotinas_e_404(self):
-        from repo_errors import RepoNotFound
+        from sss.persistence.repo_errors import RepoNotFound
         with self.assertRaises(RepoNotFound):
             self.svc.script_history(self.ctx["op.hml"], "5")  # backup_extra: inativo
         with self.assertRaises(RepoNotFound):

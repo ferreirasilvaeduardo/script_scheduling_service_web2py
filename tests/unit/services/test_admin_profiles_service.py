@@ -13,11 +13,11 @@ from unittest import mock
 import admin_crud
 import admin_profiles_service as perfis_mod
 import auth_service
-import repo_factory
+from sss.persistence import repo_factory
 from sss.core import security
 from admin_crud import GENERAL_FIELD, AccessDenied, OperationDenied
 from admin_profiles_service import AdminProfilesService
-from repo_errors import RepoConflict, RepoNotFound
+from sss.persistence.repo_errors import RepoConflict, RepoNotFound
 
 IP = "10.7.7.7"
 SESSIONS = {

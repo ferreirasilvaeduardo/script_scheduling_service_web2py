@@ -9,7 +9,7 @@ from unittest import mock
 
 import auth_service
 import permissions_service as svc_mod
-import repo_factory
+from sss.persistence import repo_factory
 from sss.core import security
 from permissions_service import PermissionsService
 from ticket_service import TicketService

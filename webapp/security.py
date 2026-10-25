@@ -19,7 +19,7 @@ from sss.config import sss_config
 from sss.config import sss_logging
 import ui_helpers
 import ui_menu
-from repo_errors import RepoUnavailable
+from sss.persistence.repo_errors import RepoUnavailable
 from web import HTTP, Context, Markup, decode_path_info, escape, redirect
 
 from . import context

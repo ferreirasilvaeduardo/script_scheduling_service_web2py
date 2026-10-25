@@ -20,7 +20,7 @@ for _code_dir in (os.path.join(_BASE_DIR, "modules"), os.path.join(_BASE_DIR, "s
     if _code_dir not in sys.path:
         sys.path.insert(0, _code_dir)
 
-import ddl_builder
+from sss.persistence import ddl_builder
 from sss.core import sql_ident
 from sss.config import sss_config
 

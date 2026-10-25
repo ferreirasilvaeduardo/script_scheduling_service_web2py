@@ -8,7 +8,7 @@ from urllib.parse import quote
 
 import output_browse_service as browse
 from output_browse_service import InvalidRequest
-from repo_errors import RepoError, RepoNotFound
+from sss.persistence.repo_errors import RepoError, RepoNotFound
 
 from webapp import security as _security
 from webapp.context import HTTP, request, response

@@ -37,7 +37,7 @@ class TestSqlOracle11g(unittest.TestCase):
 
     def _get_sql_files(self):
         base_dir = _testenv.APP_DIR
-        repo_oracle_dir = os.path.join(base_dir, "modules", "repo_oracle")
+        repo_oracle_dir = os.path.join(base_dir, "src", "sss", "persistence", "oracle")
         file_paths = []
         for root, _, files in os.walk(repo_oracle_dir):
             for f in files:

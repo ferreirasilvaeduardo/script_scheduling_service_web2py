@@ -9,9 +9,9 @@ import unittest
 from unittest import mock
 
 import auth_service
-import repo_factory
+from sss.persistence import repo_factory
 from sss.core import security
-from repo_errors import RepoUnavailable, RepoNotFound
+from sss.persistence.repo_errors import RepoUnavailable, RepoNotFound
 from ticket_service import LOG_MAX_CHARS, DOWNLOAD_INTERRUPTED_MARKER, InvalidOffset, TicketService
 
 SESSIONS = {

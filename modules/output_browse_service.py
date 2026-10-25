@@ -14,7 +14,7 @@ import zipfile
 import admin_crud
 from sss.core import rbac
 import ui_helpers
-from repo_errors import RepoNotFound
+from sss.persistence.repo_errors import RepoNotFound
 
 FEATURE = "DOWNLOAD_OUTPUT"
 AUDIT_ACTION = "OUTPUT_DOWNLOAD"
@@ -284,7 +284,7 @@ def _service():
     with _default_lock:
         if _default is None:
             from sss.config import app_context
-            import repo_factory
+            from sss.persistence import repo_factory
             from sss.config import sss_logging
             factory = repo_factory
             _default = OutputBrowseService(tickets=factory.get("tickets"), catalog=factory.get("catalog"),
