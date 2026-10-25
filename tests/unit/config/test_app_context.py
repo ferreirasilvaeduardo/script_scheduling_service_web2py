@@ -15,13 +15,12 @@ from tests.support import _testenv  # noqa: F401 - ajusta sys.path sem importar 
 from sss.config import app_context
 
 APP_DIR = _testenv.APP_DIR
-MODULES_DIR = os.path.join(APP_DIR, "modules")
 SRC_DIR = os.path.join(APP_DIR, "src")
 REPO_ROOT = APP_DIR  # CR-022a: a aplicacao e a raiz do repositorio
 # Codigo que roda: a aplicacao (sem docs/, que guarda o historico) e os launchers da raiz. Desde o CR-022b7
 # controllers, templates e a camada web ficam em src/ (antes controllers/, views/ e webapp/ na raiz).
 CODE_DIRS = (os.path.join(REPO_ROOT, "bin"),) + tuple(
-    os.path.join(APP_DIR, name) for name in ("modules", "scripts", "src", "tests", "tools"))
+    os.path.join(APP_DIR, name) for name in ("scripts", "src", "tests", "tools"))
 _RE_OLD_CONTEXT = re.compile(r"\bcurrent\.(?:sss_cfg|repo_factory)\b")
 
 
@@ -66,12 +65,12 @@ class AppContextTest(unittest.TestCase):
 
 
 class ModulesWithoutGluonTest(unittest.TestCase):
-    """Regra de arquitetura do CR-021c: modules/ e src/ (CR-022b3) nao dependem do web2py."""
+    """Regra de arquitetura do CR-021c: src/ (todo o codigo desde o CR-022b8) nao depende do web2py."""
 
     def test_no_module_imports_gluon(self):
-        """Nenhum .py de modules/ nem de src/ (inclusive subpacotes) importa gluon, nem dentro de funcao."""
+        """Nenhum .py de src/ (inclusive subpacotes) importa gluon, nem dentro de funcao."""
         offenders = []
-        for top in (MODULES_DIR, SRC_DIR):
+        for top in (SRC_DIR,):
             for base, _dirs, files in os.walk(top):
                 for name in files:
                     if name.endswith(".py"):

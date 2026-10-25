@@ -213,7 +213,7 @@ class RunWebCheckTest(unittest.TestCase):
     """scripts/run_web.py --check: confere a configuracao sem abrir a porta (CR-021e2)."""
 
     def setUp(self):
-        import run_web  # pylint: disable=import-outside-toplevel
+        from sss.cli import run_web  # pylint: disable=import-outside-toplevel
         self.run_web = run_web
         cfg = types.SimpleNamespace(app=types.SimpleNamespace(sss_env="DEV"))
         for name, value in (("load_config", mock.Mock(return_value=cfg)),

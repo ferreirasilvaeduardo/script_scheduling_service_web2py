@@ -12,13 +12,10 @@ import sys
 from typing import List, Optional
 
 _APP_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-for _path in (os.path.join(_APP_DIR, "modules"), os.path.join(_APP_DIR, "src"), _APP_DIR,
-              os.path.join(_APP_DIR, "scripts")):
-    if _path not in sys.path:
-        sys.path.insert(0, _path)
+sys.path.insert(0, os.path.join(_APP_DIR, "src"))
 
 from sss.persistence import repo_factory  # noqa: E402
-import run_web  # noqa: E402
+from sss.cli import run_web  # noqa: E402
 
 
 def main(argv: Optional[List[str]] = None) -> int:

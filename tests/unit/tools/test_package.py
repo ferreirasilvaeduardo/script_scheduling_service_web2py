@@ -148,13 +148,13 @@ class TestPack(unittest.TestCase):
         self._refused("config.ini.example:2: cookie_key")
 
     def test_bytecode_link_e_outra_aplicacao(self):
-        self._write("modules/x.pyc", "x")
-        self._write("modules/__pycache__/y.cpython-36.pyc", "x")
+        self._write("src/sss/x.pyc", "x")
+        self._write("src/sss/__pycache__/y.cpython-36.pyc", "x")
         self._write("applications/admin/controllers/default.py", "x")
-        os.symlink("/etc", os.path.join(self.origem, "modules", "fora"))
-        text = self._refused("modules/x.pyc: bytecode")
+        os.symlink("/etc", os.path.join(self.origem, "src", "sss", "fora"))
+        text = self._refused("src/sss/x.pyc: bytecode")
         self.assertIn("__pycache__/y.cpython-36.pyc: bytecode", text)
-        self.assertIn("modules/fora: link simbolico", text)
+        self.assertIn("src/sss/fora: link simbolico", text)
 
     def test_resto_do_web2py_na_raiz_recusa(self):
         """CR-021f: gluon/, web2py.py, anyserver.py ou routes.py na origem recusam o pacote."""

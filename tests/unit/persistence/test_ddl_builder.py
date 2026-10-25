@@ -13,7 +13,7 @@ from unittest import mock
 
 from tests.support import _testenv  # noqa: F401
 from sss.persistence import ddl_builder
-import init_db
+from sss.cli import init_db
 from sss.core import sql_ident
 
 
@@ -531,7 +531,7 @@ class TestDdlSeedAndRollback(unittest.TestCase):
 
     def test_gerar_scripts_sql_cli_e_init_db_flag(self):
         """CLI gerar_scripts_sql e init_db --generate-sql gravam arquivos validos em disco."""
-        import generate_sql as gerar_scripts_sql
+        from sss.cli import generate_sql as gerar_scripts_sql
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             ret = gerar_scripts_sql.main([

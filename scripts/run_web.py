@@ -1,78 +1,15 @@
 # -*- coding: utf-8 -*-
-"""Inicia o servidor web do SSS (CR-021e), sem web2py.
+"""Servidor web: involucro de sss.cli.run_web (CR-022b8).
 
-Uso: python scripts/run_web.py [--config <config.ini>] [--host 127.0.0.1] [--port 8000] [--check]
-
-So em 127.0.0.1 por padrao: os usuarios chegam pelo proxy reverso HTTPS ou por tunel (DEPLOYMENT
-§10). SIGTERM e SIGINT so acionam a flag de parada; o servidor para de aceitar e espera as
-requisicoes em andamento ate ``[web] socket_timeout_s``.
-
-Com ``--check`` so confere configuracao, segredos e montagem da aplicacao, sem abrir a porta:
-imprime ``CONFIG_OK sss_env=<ambiente>`` (usado pelo bin/start_local.sh e na implantacao).
-
-Saida: 0 na parada normal ou no ``--check`` bem-sucedido; 2 configuracao ou segredos invalidos
-(CRITICAL ja registrado); 3 endereco indisponivel (porta em uso ou sem permissao).
+Comando de operacao inalterado; uso, opcoes e saida no docstring de src/sss/cli/run_web.py.
 """
-import argparse
 import os
 import sys
-import threading
-from typing import List, Optional
 
-_APP_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-for _path in (os.path.join(_APP_DIR, "modules"), os.path.join(_APP_DIR, "src"), _APP_DIR):
-    if _path not in sys.path:
-        sys.path.insert(0, _path)
+_SRC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src")
+sys.path.insert(0, _SRC)
 
-# Imports depois do sys.path (como no run_scheduler.py): os pacotes da aplicacao vem dele.
-# pylint: disable=wrong-import-position
-from sss.platform import os_platform  # noqa: E402
-from sss.config import sss_config  # noqa: E402
-from sss.web.framework import make_server, serve  # noqa: E402
-
-from sss.web.app import bootstrap, security  # noqa: E402
-
-# pylint: enable=wrong-import-position
-
-EXIT_CONFIG = 2
-EXIT_ADDRESS = 3
-
-
-def main(argv: Optional[List[str]] = None) -> int:
-    """Sobe o servidor e atende ate a parada; devolve o codigo de saida."""
-    parser = argparse.ArgumentParser(description="Servidor web do SSS (CR-021e)")
-    parser.add_argument("--config", default=None, help="config.ini (padrao: instance/config.ini)")
-    parser.add_argument("--host", default="127.0.0.1", help="endereco local (padrao: 127.0.0.1)")
-    parser.add_argument("--port", type=int, default=8000, help="porta (padrao: 8000)")
-    parser.add_argument("--check", action="store_true",
-                        help="so confere configuracao e segredos, sem subir o servidor")
-    args = parser.parse_args(argv)
-    try:
-        cfg = bootstrap.load_config(args.config)
-        app = bootstrap.make_app(cfg)
-    except sss_config.ConfigError:
-        return EXIT_CONFIG
-    if args.check:
-        print(f"CONFIG_OK sss_env={cfg.app.sss_env}")
-        return 0
-    log = security.log()
-    try:
-        server = make_server(app, args.host, args.port, max_threads=cfg.web.max_threads,
-                             socket_timeout_s=cfg.web.socket_timeout_s, log=log)
-    except OSError as exc:
-        log.critical("servidor web nao subiu em %s:%d: %s", args.host, args.port, exc,
-                     extra={"action": "INICIO"})
-        return EXIT_ADDRESS
-    stop = threading.Event()
-    os_platform.install_stop_handler(stop)
-    log.info("servidor web no ar em %s:%d (max_threads=%d socket_timeout_s=%d)", args.host,
-             args.port, cfg.web.max_threads, cfg.web.socket_timeout_s, extra={"action": "INICIO"})
-    if not serve(server, stop, grace_s=cfg.web.socket_timeout_s):
-        log.warning("parada com requisicoes ainda em andamento apos %d s",
-                    cfg.web.socket_timeout_s, extra={"action": "PARADA"})
-    log.info("servidor web parado", extra={"action": "PARADA"})
-    return 0
-
+from sss.cli.run_web import main  # noqa: E402  # pylint: disable=wrong-import-position
 
 if __name__ == "__main__":
     sys.exit(main())

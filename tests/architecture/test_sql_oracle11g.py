@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Varredura estatica de conformidade SQL Oracle 11gR2 (F7.3, AGENTS §4.3).
 
-Verifica que todos os arquivos em modules/repo_oracle/ e scripts/init_db.py:
+Verifica que todos os arquivos em src/sss/persistence/oracle/ e src/sss/cli/init_db.py (CR-022b4, 022b8):
 1. Nao utilizam sintaxe Oracle 12c+ (OFFSET, FETCH FIRST, IDENTITY, JSON_*, APPLY, etc.);
 2. Nao utilizam SELECT *;
 3. Todo FOR UPDATE utiliza WAIT n (n <= 5) ou SKIP LOCKED.
@@ -44,9 +44,10 @@ class TestSqlOracle11g(unittest.TestCase):
                 if f.endswith(".py") and f != "__init__.py":
                     file_paths.append(os.path.join(root, f))
 
-        init_db = os.path.join(base_dir, "scripts", "init_db.py")
-        if os.path.isfile(init_db):
-            file_paths.append(init_db)
+        # O SQL do bootstrap fica no codigo (sss.cli.init_db); scripts/init_db.py e so o involucro.
+        init_db = os.path.join(base_dir, "src", "sss", "cli", "init_db.py")
+        self.assertTrue(os.path.isfile(init_db), init_db)
+        file_paths.append(init_db)
         return file_paths
 
     def test_padroes_12c_detectam_a_sintaxe_proibida(self):
@@ -61,7 +62,7 @@ class TestSqlOracle11g(unittest.TestCase):
     def test_ausencia_sintaxe_12c(self):
         """Varre os arquivos do repositorio Oracle garantindo ausencia de recursos 12c+."""
         files = self._get_sql_files()
-        self.assertTrue(len(files) > 0, "Nenhum arquivo encontrado em modules/repo_oracle/")
+        self.assertTrue(len(files) > 0, "Nenhum arquivo encontrado em src/sss/persistence/oracle/")
 
         violations = []
         for path in files:

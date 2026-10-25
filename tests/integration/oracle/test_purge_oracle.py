@@ -11,7 +11,7 @@ import shutil
 import tempfile
 import types
 import unittest
-import purge as purge_cli  # scripts/purge.py (o repositorio e repo_oracle.purge)
+from sss.cli import purge as purge_cli  # scripts/purge.py (o repositorio e repo_oracle.purge)
 from sss.persistence.oracle.purge import RepoPurge
 
 

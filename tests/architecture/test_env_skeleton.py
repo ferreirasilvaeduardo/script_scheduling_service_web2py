@@ -21,11 +21,12 @@ class TestEnvSkeleton(unittest.TestCase):
         self.repo_root = self.app_dir  # CR-022a: a aplicacao e a raiz do repositorio
 
     def test_sys_path_configured(self):
-        """_testenv poe app_dir, modules/, scripts/ (ate o CR-022b8) e tools/ em sys.path."""
+        """_testenv poe app_dir, src/ e tools/ em sys.path; scripts/ so tem involucros (CR-022b8)."""
         self.assertIn(self.app_dir, sys.path)
-        self.assertIn(os.path.join(self.app_dir, "modules"), sys.path)
-        self.assertIn(os.path.join(self.app_dir, "scripts"), sys.path)
+        self.assertIn(os.path.join(self.app_dir, "src"), sys.path)
         self.assertIn(os.path.join(self.app_dir, "tools"), sys.path)
+        self.assertNotIn(os.path.join(self.app_dir, "scripts"), sys.path)
+        self.assertNotIn(os.path.join(self.app_dir, "modules"), sys.path)
 
     def test_directory_skeleton_exists(self):
         """Verifica presenca de todos os diretorios requeridos pelo README §3.2."""
@@ -33,7 +34,7 @@ class TestEnvSkeleton(unittest.TestCase):
             os.path.join(self.repo_root, "bin"),
             os.path.join(self.app_dir, "src", "sss", "web", "controllers"),
             os.path.join(self.app_dir, "src", "sss", "web", "app"),
-            os.path.join(self.app_dir, "modules"),
+            os.path.join(self.app_dir, "src", "sss", "cli"),
             os.path.join(self.app_dir, "src", "sss", "persistence", "fake"),
             os.path.join(self.app_dir, "src", "sss", "persistence", "oracle"),
             os.path.join(self.app_dir, "scripts"),
@@ -54,7 +55,7 @@ class TestEnvSkeleton(unittest.TestCase):
     def test_init_files_exist(self):
         """Verifica se pacotes python possuem __init__.py."""
         expected_inits = [
-            os.path.join(self.app_dir, "modules", "__init__.py"),
+            os.path.join(self.app_dir, "src", "sss", "cli", "__init__.py"),
             os.path.join(self.app_dir, "src", "sss", "persistence", "fake", "__init__.py"),
             os.path.join(self.app_dir, "src", "sss", "persistence", "oracle", "__init__.py"),
         ]

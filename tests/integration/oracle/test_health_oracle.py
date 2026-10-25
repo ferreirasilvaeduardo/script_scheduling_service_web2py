@@ -6,7 +6,7 @@ from tests.support import _testenv  # noqa: F401
 import os
 import re
 import unittest
-import health as saude_cli  # scripts/health.py (o repositorio e repo_oracle.health)
+from sss.cli import health as saude_cli  # scripts/health.py (o repositorio e repo_oracle.health)
 from sss.core import sql_ident
 from sss.config import sss_config
 from sss.persistence.oracle import health as saude_sql

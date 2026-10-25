@@ -351,16 +351,18 @@ bin/
       controllers/            # default.py (login), tickets.py, logs.py, schedules.py, admin_*.py, audit.py, inputs.py, outputs.py, dev.py (somente DEV)
       templates/              # layout.html, components/*.html, <controller>/*.html e *.load (antes views/)
       static/                 # bootstrap/, js/app/ (dom.js primeiro), css/, img/, fonts/; servidos em /script_scheduling_service/static/
-  modules/                    # só o __init__.py; sai no CR-022b8
-  scripts/
-    init_db.py                # [F7.1] bootstrap idempotente de DDL e seed, versão do esquema e migrações (§11)
-    migrations/               # [F7.1] migrações numeradas m<NNNN>_<descricao>.py (§11.1, CR-007)
-    health.py                  # [F9.1] verificação de saúde no padrão Nagios (§13, CR-007); consultas em src/sss/persistence/oracle/health.py
-    probe_driver.py          # [F7.0] sondagem isolada de um candidato de driver (Thin, Thick, cx_Oracle) (§2.3, CR-002)
-    run_scheduler.py          # [F8.3] entrypoint do daemon
-    run_web.py                # [CR-021e] entrypoint do servidor web (núcleo próprio, sem web2py)
-    purge.py                  # [F9.1] retenção (§11.3)
-    check_env.py, generate_sql.py  # diagnóstico do ambiente e SQL de implantação (§12.2)
+    cli/                      # [CR-022b8] código das ferramentas de operação; topo das camadas (pode usar todas)
+      init_db.py              # [F7.1] bootstrap idempotente de DDL e seed, versão do esquema e migrações (§11)
+      migrations/             # [F7.1] migrações numeradas m<NNNN>_<descricao>.py (§11.1, CR-007)
+      health.py               # [F9.1] verificação de saúde no padrão Nagios (§13, CR-007); consultas em src/sss/persistence/oracle/health.py
+      probe_driver.py         # [F7.0] sondagem isolada de um candidato de driver (Thin, Thick, cx_Oracle) (§2.3, CR-002)
+      run_scheduler.py        # [F8.3] daemon do agente
+      run_web.py              # [CR-021e] servidor web (núcleo próprio, sem web2py)
+      purge.py                # [F9.1] retenção (§11.3)
+      check_env.py, generate_sql.py  # diagnóstico do ambiente e SQL de implantação (§12.2)
+  scripts/                    # [CR-022b8] comandos de operação (systemd, cron, Nagios, DBA): um involucro por ferramenta de
+                              # src/sss/cli/ (põe src/ no sys.path e chama main()); único código da aplicação que mexe no sys.path
+    init_db.py, health.py, probe_driver.py, run_scheduler.py, run_web.py, purge.py, check_env.py, generate_sql.py
   tools/                      # [CR-022b2] ferramentas de build e desenvolvimento, fora do pacote
     package.py                # gera o pacote de implantação (§12.2)
   tests/                      # [CR-022b1] testes unittest por recurso usado (AGENTS.md §7; nunca implantados)
@@ -369,7 +371,7 @@ bin/
     integration/process/      # processos do sistema: spawn, sinais, helper, launchers
     functional/               # aplicação inteira por requisição ou com o servidor real
     architecture/             # regras lidas no código e nos documentos (Python 3.6, AST, pacote, contraste)
-    support/                  # _testenv (sys.path e APP_DIR), _oracle_test_support, _output_memory
+    support/                  # _testenv (sys.path com a raiz, src/ e tools/; APP_DIR e WEB_DIR), _oracle_test_support, _output_memory
   instance/config.ini         # configuração sem segredos (§12)
   dev/scripts/                # árvore de scripts de exemplo para DEV/testes (nunca implantada)
   dev/homologation/            # ferramentas de homologação: figuras do manual de UI Freeze e evidências reais no DEV
@@ -2680,7 +2682,7 @@ END;
 * **Conexão do `init_db`:** com a conta **dona do esquema** (`--owner-user`, padrão o `owner`), senha lida por `getpass` ou de `SSS_INIT_DB_PASSWORD`, nunca de arquivo nem de argumento. É a única conta com privilégio de DDL (CR-007, D1b).
 * **Versão do esquema e migração (CR-007, D4):**
   * base vazia: cria tudo e grava `tbsss_control` com `schema_version = sql_ident.SCHEMA_VERSION`;
-  * base com versão menor: aplica, em ordem, as migrações `scripts/migrations/m<NNNN>_<descricao>.py` (cada uma com `VERSAO`, idempotente, e auditada como `SCHEMA_MIGRATE`, com a versão no `detail`), atualizando `tbsss_control` ao fim de cada uma;
+  * base com versão menor: aplica, em ordem, as migrações `src/sss/cli/migrations/m<NNNN>_<descricao>.py` (cada uma com `VERSAO`, idempotente, e auditada como `SCHEMA_MIGRATE`, com a versão no `detail`), atualizando `tbsss_control` ao fim de cada uma;
   * base com versão maior que a do código: aborta (aplicação mais antiga que o banco);
   * **Versão 1 aberta até a primeira produção (AGENTS §4.16, ajustado no F7.3):** antes da primeira implantação em produção, mudanças de esquema entram direto na versão 1, sem migração. Os bancos de DEV (ex.: `GFPR`) são refeitos pelo ciclo `02_rollback` → `01_deploy` → `99_validate`. A primeira produção congela a versão 1;
   * **Nomes em inglês (CR-016a):** entraram direto na versão 1, pela regra acima. O esquema anterior (nomes em português) não convive com o novo: com `tbsss_controle` no owner, o `init_db` aborta (código 3) e pede o `02_rollback_sss.sql` **da versão anterior** antes. Web e agente do código novo não acham `tbsss_control` num banco antigo e recusam subir (código 15);
@@ -2939,7 +2941,7 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
 
 **Pacote de implantação (F9.1; sem web2py desde o CR-021f3):** `python tools/package.py [--source <raiz do repositório>] [--out-dir <pasta>]`, só com a biblioteca padrão. Fica em `tools/` (CR-022b2), fora do pacote que gera.
 * Gera `<saida>/sss-<version>.tar.gz` (padrão `<origem>/dist/`; versão `sss_config.SSS_VERSION`), com tudo sob `sss-<versao>/` e um `SHA256SUMS` de cada arquivo dentro do pacote, e `<saida>/SHA256SUMS` com o hash do `tar.gz` (`sha256sum -c SHA256SUMS`). O tar é reprodutível: ordem, dono (0), data e modos fixos (`0755` no `bin/`, `0644` nos demais arquivos).
-* **Entram (lista de permissão da raiz, CR-022a):** `bin/sss-web.sh`, `bin/sss-scheduler.sh`, `bin/sss-stop.sh`, `bin/sss-helper`, `AGENTS.md`, `README.md` e as pastas `docs/`, `instance/` (só os `*.example`), `modules/`, `scripts/` e `src/` (CR-022b3; desde o CR-022b7 com a camada web, os templates e os estáticos em `src/sss/web/`), todas no topo do pacote, como no repositório. O resto da raiz (`.git`, `Makefile`, `CLAUDE.md`, `dev/`, `input/`, `output/`, `logs/`, `work/`...) é da máquina de desenvolvimento e não entra. O servidor web é o `scripts/run_web.py` da própria aplicação; nada do web2py entra (nem pasta de runtime vazia), e `applications/` na origem recusa o pacote.
+* **Entram (lista de permissão da raiz, CR-022a):** `bin/sss-web.sh`, `bin/sss-scheduler.sh`, `bin/sss-stop.sh`, `bin/sss-helper`, `AGENTS.md`, `README.md` e as pastas `docs/`, `instance/` (só os `*.example`), `scripts/` (só os involucros, CR-022b8) e `src/` (CR-022b3; desde o CR-022b7 com a camada web, os templates e os estáticos em `src/sss/web/`), todas no topo do pacote, como no repositório. O resto da raiz (`.git`, `Makefile`, `CLAUDE.md`, `dev/`, `input/`, `output/`, `logs/`, `work/`...) é da máquina de desenvolvimento e não entra. O servidor web é o `scripts/run_web.py` da própria aplicação; nada do web2py entra (nem pasta de runtime vazia), e `applications/` na origem recusa o pacote.
 * **Não entram:** `src/sss/web/controllers/dev.py`, `src/sss/web/templates/dev/`, `dev/`, `src/sss/persistence/fake/`, `instance/config.ini`, `instance/web.env`, `log/`, `logs/`, `work/`, `exec/`, os testes (`tests/`, fora da lista de permissão desde o CR-022b1; um `scripts/test_*.py` perdido também fica fora), as ferramentas de build (`tools/`, CR-022b2), as pastas de runtime que o web2py criava dentro da aplicação numa cópia antiga (`sessions`, `errors`, `cache`, `databases`, `uploads`, `private`, `cron`, `applications`, `deposit`, `site-packages`), os launchers de DEV e os demais arquivos da raiz.
 * **Recusa** (código 1, sem gravar nada) se o pacote tiver um `secrets.cfg` real, `*.pyc`, `__pycache__`, `src/sss/web/controllers/dev.py`, o FAKE (`src/sss/persistence/fake/`), outra aplicação (`/admin/`, `welcome`, `examples`), resto do web2py (`gluon/`, `web2py.py`, `anyserver.py` ou `routes.py` na raiz, ou pasta de runtime dele), link simbólico, ou `password`/`cookie_key` com valor em `.ini`, `.cfg`, `.ini.example` ou `.cfg.example` (pelo nome do arquivo). A única exceção é o valor exato `CHANGE_ME` em `instance/secrets.cfg.example`. A mensagem cita arquivo e linha, nunca o valor.
 * O `package.py` não grava bytecode (`sys.dont_write_bytecode`), para poder rodar de dentro da própria cópia que empacota (CR-021f3). Uma árvore de desenvolvimento sempre tem `__pycache__` e o `secrets.cfg` local, então o pacote é gerado de uma cópia limpa: `git archive HEAD | tar -x -C <pasta>` e `python <pasta>/tools/package.py --source <pasta>`.

@@ -23,7 +23,7 @@ _RE_TEMPLATE_IMPORT = re.compile(r"\{\{\s*(?:import|from)\s+([A-Za-z_]\w*)")
 # que era importado pelo proprio nome (os_platform) ou pelo nome antigo (repo_oracle, repo_fake), e o que esta
 # dentro dele nunca foi importavel pelo nome curto (oracle/health.py era repo_oracle.health).
 GROUPING_DIRS = {"config", "core", "platform", "persistence", "contracts", "ui", "services", "scheduler", "web", "cli"}
-OLD_PACKAGE_NAMES = {"oracle": "repo_oracle", "fake": "repo_fake"}
+OLD_PACKAGE_NAMES = {"oracle": "repo_oracle", "fake": "repo_fake", "framework": "web", "app": "webapp"}
 
 
 def _moved_modules():
@@ -81,11 +81,15 @@ class TestPackageLayout(unittest.TestCase):
         self.assertEqual(offenders, [])
 
     def test_modulo_em_um_lugar_so(self):
-        modules = os.path.join(APP_DIR, "modules")
-        both = sorted(name for name in _moved_modules()
-                      if os.path.exists(os.path.join(modules, name + ".py"))
-                      or os.path.isdir(os.path.join(modules, name)))
-        self.assertEqual(both, [])
+        """As pastas de antes do CR-022b nao voltam: o codigo da aplicacao fica so em src/sss/."""
+        old = ("modules", "webapp", "controllers", "views", "static")
+        self.assertEqual([d for d in old if os.path.exists(os.path.join(APP_DIR, d))], [])
+
+    def test_nomes_antigos_registrados(self):
+        """Regressao do CR-022b8: web e webapp (022b7) e as ferramentas de scripts/ (022b8) sao nomes movidos."""
+        moved = _moved_modules()
+        for name in ("web", "webapp", "controllers", "repo_oracle", "health", "purge", "init_db", "run_web"):
+            self.assertIn(name, moved)
 
     def test_detector_pega_import_curto(self):
         """Caso negativo: o detector acha import, from, fallback de modules/ e import de template."""

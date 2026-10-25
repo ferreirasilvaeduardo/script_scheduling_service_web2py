@@ -107,7 +107,7 @@ sha256sum -c SHA256SUMS                       # esperado: "sss-<versao>.tar.gz: 
 tar -xzf sss-<versao>.tar.gz -C /opt/sss
 mv /opt/sss/sss-<versao> /opt/sss/app         # na atualização, veja o §18
 cd /opt/sss/app && sha256sum -c --quiet SHA256SUMS && echo "conteúdo confere"
-ls                                            # esperado: AGENTS.md README.md SHA256SUMS bin docs instance modules scripts src
+ls                                            # esperado: AGENTS.md README.md SHA256SUMS bin docs instance scripts src
 ```
 
 O pacote só tem o `bin/` e a aplicação (o código, os templates e os estáticos ficam em `src/sss/`, CR-022b): sem web2py (CR-021f), sem `src/sss/web/controllers/dev.py`, sem o FAKE (`src/sss/persistence/fake/`) e sem testes. O servidor web é o `scripts/run_web.py` da própria aplicação, e a raiz `/` leva ao login.

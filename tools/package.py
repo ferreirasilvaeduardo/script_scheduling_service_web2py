@@ -37,7 +37,7 @@ DEFAULT_ROOT = _APP_DIR  # CR-022a: a aplicacao e a raiz do repositorio
 BIN = ("sss-web.sh", "sss-scheduler.sh", "sss-stop.sh", "sss-helper")
 # Da raiz so entram estas pastas e arquivos da aplicacao (lista de permissao, CR-022a): o resto da raiz
 # (.git, Makefile, CLAUDE.md, input/, output/, logs/...) e da maquina de desenvolvimento.
-APP_DIRS = ("docs", "instance", "modules", "scripts", "src")
+APP_DIRS = ("docs", "instance", "scripts", "src")
 APP_FILES = ("AGENTS.md", "README.md")
 # Restos do web2py (CR-021f): na raiz, recusados; na aplicacao, as pastas de runtime que ele criava.
 WEB2PY_ROOT_LEFTOVERS = ("gluon", "web2py.py", "anyserver.py", "routes.py", "applications")

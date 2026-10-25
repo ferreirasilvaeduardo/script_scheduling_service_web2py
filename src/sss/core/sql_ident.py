@@ -46,7 +46,7 @@ FBI_TCK_OCCUR_EXPR = (
 )
 
 # Versao do esquema que o codigo espera em tbsss_control (CR-007, D4). Toda mudanca de esquema a
-# incrementa e traz a migracao scripts/migrations/m<NNNN>_*.py no mesmo pacote (AGENTS §4.16).
+# incrementa e traz a migracao src/sss/cli/migrations/m<NNNN>_*.py no mesmo pacote (AGENTS §4.16).
 SCHEMA_VERSION = 1  # aberta ate a primeira producao (AGENTS §4.16): o CR-016a entra direto nela
 
 # Colunas de registro (CR-006, README §10): todas as tabelas, exceto as listadas em TABELAS_SEM_REGISTRO.

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Padrao D8 do codigo novo do CR-021, conferido por AST: src/sss/web/framework/ (nucleo), src/sss/web/app/
-(montagem) e scripts/run_web.py (CR-022b7; antes modules/web/ e webapp/).
+(montagem) e src/sss/cli/run_web.py (CR-022b7 e 022b8; antes modules/web/, webapp/ e scripts/run_web.py).
 
 Linhas de ate 99 colunas; funcoes e metodos publicos com anotacoes de tipo e docstring; classes publicas
 com docstring; imports entre modulos de um pacote so relativos. O nucleo so usa a biblioteca padrao; a
@@ -16,7 +16,7 @@ from tests.support import _testenv  # noqa: F401 - ajusta sys.path sem importar 
 APP_DIR = _testenv.APP_DIR
 PACKAGE_DIR = os.path.join(_testenv.WEB_DIR, "framework")
 WEBAPP_DIR = os.path.join(_testenv.WEB_DIR, "app")
-RUN_WEB = os.path.join(APP_DIR, "scripts", "run_web.py")
+RUN_WEB = os.path.join(APP_DIR, "src", "sss", "cli", "run_web.py")
 MAX_COLUMNS = 99
 # Biblioteca padrao usada pelo pacote; modulo novo entra aqui de proposito (nunca dependencia de fora).
 STDLIB = {
@@ -59,7 +59,7 @@ def _sources():
         for name in sorted(os.listdir(folder)):
             if name.endswith(".py"):
                 _parse(os.path.join(folder, name), prefix + name, result)
-    _parse(RUN_WEB, "scripts/run_web.py", result)
+    _parse(RUN_WEB, "cli/run_web.py", result)
     return result
 
 

@@ -15,7 +15,7 @@ from unittest import mock
 from tests.support import _testenv  # noqa: F401
 from tests.support import _oracle_test_support
 from sss.persistence import db_conn
-import probe_driver as sondar_driver
+from sss.cli import probe_driver as sondar_driver
 from sss.core import sql_ident
 
 
