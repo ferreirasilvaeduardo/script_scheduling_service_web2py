@@ -143,7 +143,9 @@ class AgentsService(object):
                 "platform": ag.get("platform"),
                 "environments": [a for a in (ag.get("environments") or "").split(",") if a],
                 "interpreters": [i for i in (ag.get("interpreters") or "").split(",") if i],
-                # So os nomes logicos: os caminhos locais nunca vao para a tela (README §13).
+                # So os nomes logicos: os executaveis locais nunca vao para a tela (README §13). A pasta base
+                # (CR-023, D7) vai, como o caminho do script, visivel a quem ve o script (CR-005, D8).
+                "script_base_dir": ag.get("script_base_dir"),
                 "started_at": ag.get("started_at"),
                 "heartbeat_at": hb,
                 "age_s": age,

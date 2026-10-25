@@ -313,7 +313,7 @@ class TestOracleCatalog(unittest.TestCase):
             cases = (
                 (lambda: self.cat.environments_insert({"name": "minusculo"}, actor="t"), n("ck", "environments", "name")),
                 (lambda: self.cat.scripts_insert({"name": "s", "interpreter": "SH",
-                                                   "path_file": "relativo.sh"}, actor="t"), n("ck", "scripts", "path")),
+                                                   "path_file": "rel//dupla.sh"}, actor="t"), n("ck", "scripts", "path")),
                 (lambda: self.cat.scripts_insert({"name": "s", "interpreter": "SH",
                                                    "path_file": "/opt/../x.sh"}, actor="t"), n("ck", "scripts", "path")),
                 (lambda: self.cat.scripts_insert({"name": "s", "interpreter": "SH",

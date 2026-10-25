@@ -500,10 +500,11 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
         if base.get("interpreter") not in ("PYTHON3", "BASH", "SH"):
             raise repo_errors.RepoViolation("Interpretador fora da allowlist", constraint=self._ck("scripts", "int"))
         pfile = base.get("path_file") or ""
-        # ck_tbsss_scr_path (README §10, CR-005): absoluto, sem '..', '//' nem '\'; ate 500 caracteres.
-        if (not pfile.startswith("/") or ".." in pfile or "//" in pfile or "\\" in pfile
+        # ck_tbsss_scr_path (README §10, CR-005, CR-023): absoluto ou relativo, sem '..', '//' nem '\';
+        # ate 500 caracteres.
+        if (not pfile or ".." in pfile or "//" in pfile or "\\" in pfile
                 or len(pfile) > 500):
-            raise repo_errors.RepoViolation("path_file deve ser absoluto e sem '..'",
+            raise repo_errors.RepoViolation("path_file sem '..', '//' nem '\\'",
                                            constraint=self._ck("scripts", "path"))
         if not (1 <= int(base.get("max_parallel_env", 1)) <= 999):
             raise repo_errors.RepoViolation("max_qtd_parallel_env deve estar entre 1 e 999",

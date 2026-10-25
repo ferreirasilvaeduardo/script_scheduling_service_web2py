@@ -93,7 +93,9 @@ _info = ui_helpers.status_info(_t['status'])
       <dt>Interpretador</dt>
       <dd class="sss-mono">{{=_t['snapshot']['interpreter'] or '-'}}</dd>
       <dt>Arquivo do script</dt>
-      <dd class="sss-mono">{{=_t['snapshot']['path_file'] or '-'}}</dd>
+      <dd class="sss-mono">{{=_t['snapshot']['path_file'] or '-'}}{{if _t['snapshot']['path_relative']:}} <span class="sss-text-muted">(relativo à pasta base do agente)</span>{{pass}}</dd>
+      <dt>Caminho executado</dt>
+      <dd class="sss-mono">{{=_t['script_path'] or u'Ainda não executado'}}</dd>
       <dt>Montagem</dt>
       <dd>{{=_t['snapshot']['param_type'] or '-'}}</dd>
       <dt>Compilado em</dt>

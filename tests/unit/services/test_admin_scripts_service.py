@@ -148,6 +148,20 @@ class TestRegistration(_Base):
             _sid, errors, _ = self._insert(interpreter=cmd)
             self.assertEqual(errors.get("interpreter"), scr_mod.PATH_MESSAGES[Code.INTERPRETER_NOT_ALLOWED], cmd)
 
+    def test_cr023_relativo_e_pasta_da_aplicacao(self):
+        """CR-023: o relativo so tem o formato conferido no cadastro; a pasta da aplicacao e recusada,
+        salvo dev/ no DEV."""
+        _sid, errors, _ = self._insert(path_file="relatorios/novo.py")
+        self.assertEqual(errors, {})
+        app_src = os.path.join(path_guard.APP_DIR, "src", "x.py")
+        app_dev = os.path.join(path_guard.APP_DIR, "dev", "scripts", "x.py")
+        for env, path, expected in (("HML", app_src, Code.APP_DIR), ("DEV", app_src, Code.APP_DIR),
+                                    ("HML", app_dev, Code.APP_DIR), ("DEV", app_dev, None)):
+            _sid, errors, _ = self._insert(svc=self._service(env), name="App %s %s" % (env, path[-12:]),
+                                           path_file=path)
+            self.assertEqual(errors.get("path_file"),
+                             scr_mod.PATH_MESSAGES[expected] if expected else None, (env, path))
+
     def test_path_file_invalidos(self):
         # CR-005 (README §8.5): caminho absoluto, normalizado e fora das pastas do sistema; vale em qualquer sss_env.
         cases = (("./novo.py", Code.PATH_NOT_NORMALIZED), ("../novo.py", Code.HAS_DOTS),

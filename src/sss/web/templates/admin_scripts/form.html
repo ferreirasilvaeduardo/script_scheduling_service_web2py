@@ -15,8 +15,10 @@ _fields_b = [
     {'name': 'category', 'label': 'Categoria', 'value': _s.get('category'), 'error': errors.get('category'), 'maxlength': 30},
     {'name': 'stage', 'label': 'Etapa', 'value': _s.get('stage'), 'error': errors.get('stage'), 'maxlength': 30},
 ]
-_help_path = (u'Caminho completo do arquivo, começando por / (ex.: /opt/automacoes/scripts/carga.py). '
-               u'Não pode ficar em pastas do sistema (/bin, /usr, /etc…). ' + _s['validation_note'])
+_help_path = (u'Caminho completo, começando por / (ex.: /opt/automacoes/scripts/carga.py), ou relativo à '
+              u'pasta base de cada agente (ex.: faturamento/carga.py; [agent] script_base_dir), que cada agente '
+              u'resolve no seu servidor. Não pode ficar em pastas do sistema (/bin, /usr, /etc…) nem na pasta da '
+              u'aplicação. ' + _s['validation_note'])
 _fields_c = [
     {'name': 'interpreter', 'label': 'Interpretador', 'kind': 'select', 'value': _s.get('interpreter'), 'error': errors.get('interpreter'), 'required': True, 'options': list(interpreters),
      'help': u'Chave lógica: cada agente a traduz para o executável local.'},

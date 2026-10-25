@@ -352,6 +352,12 @@ class TestAgentsDashboard(_Base):
         self.now = self.base + datetime.timedelta(seconds=160)
         self.assertEqual(self._healths(), {"agt-host01": OK, "agt-host02": OFFLINE})
 
+    def test_cr023_pasta_base_de_cada_agente(self):
+        """CR-023 (D7): o painel mostra a pasta base publicada por cada agente (nula sem base)."""
+        bases = dict((a["code"], a["script_base_dir"])
+                     for a in self.svc_agentes.dashboard(self.ctx["admin"])["agents"])
+        self.assertEqual(bases, {"agt-host01": "/opt/automacoes/scripts", "agt-host02": None})
+
     def test_campos_e_tickets_running(self):
         dashboard = self.svc_agentes.dashboard(self.ctx["admin"])
         self.assertEqual(dashboard["now"], self.base)

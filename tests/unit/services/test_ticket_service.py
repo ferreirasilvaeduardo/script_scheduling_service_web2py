@@ -627,6 +627,20 @@ class TestTicketQuery(_BaseTicket):
         self.assertEqual(self.svc.detail(self.ctx["admin"], "25")["parent"]["id"], 17)
         self.assertEqual([f["id"] for f in self.svc.detail(self.ctx["admin"], "17")["children"]], [25])
 
+    def test_cr023_relativo_e_caminho_executado_no_detalhe(self):
+        """CR-023: o disparo aceita o caminho relativo; o detalhe marca o relativo e mostra o real gravado."""
+        self.catalog.scripts_update(1, {"path_file": "faturamento/carga_diaria.py"}, actor="teste")
+        tid, errors = self._create(login="op.hml", answers={"data_ref": "2026-10-20", "modo_exec": "SIMULACAO"})
+        self.assertEqual(errors, {})
+        det = self.svc.detail(self.ctx["op.hml"], str(tid))
+        self.assertEqual(det["snapshot"]["path_file"], "faturamento/carga_diaria.py")
+        self.assertTrue(det["snapshot"]["path_relative"])
+        self.assertIsNone(det["script_path"])
+        self.tickets._store.tickets[tid]["script_path"] = "/opt/automacoes/scripts/faturamento/carga_diaria.py"
+        det = self.svc.detail(self.ctx["op.hml"], str(tid))
+        self.assertEqual(det["script_path"], "/opt/automacoes/scripts/faturamento/carga_diaria.py")
+        self.assertFalse(self.svc.detail(self.ctx["admin"], "30")["snapshot"]["path_relative"])
+
     def test_caminho_completo_para_quem_nao_e_admin(self):
         """CR-005 D8: quem nao e admin ve o caminho completo no detalhe, no comando e na previa."""
         tid, errors = self._create(login="op.hml", answers={"data_ref": "2026-10-20", "modo_exec": "SIMULACAO"})

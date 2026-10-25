@@ -968,6 +968,8 @@ class TicketService(object):
             # Caminho completo para todos (README §8.5, CR-005 D8).
             snapshot = dict((k, snap.get(k)) for k in ("version", "interpreter", "path_file", "param_type"))
             snapshot["compiled_at"] = snap.get("compiled_at")  # chave de tela (CR-016d)
+            # CR-023: relativo a pasta base de cada agente; o real executado vem em script_path.
+            snapshot["path_relative"] = path_guard.is_relative(snap.get("path_file"))
         return {
             "id": ticket["id"],
             "script_id": ticket["script_id"],
@@ -984,6 +986,7 @@ class TicketService(object):
             "schedule_id": ticket.get("schedule_id"),
             "agent_id": ticket.get("agent_id"),
             "process_id": ticket.get("process_id"),
+            "script_path": ticket.get("script_path"),
             "created_at": ticket.get("created_at"),
             "scheduled_at": ticket.get("scheduled_at"),
             "started_at": ticket.get("started_at"),

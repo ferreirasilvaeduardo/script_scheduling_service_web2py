@@ -198,10 +198,10 @@ class BaseRepoContractTest(object):
             cat.scripts_insert({"name": c["scr"]["name"], "interpreter": "PYTHON3",
                                  "path_file": "/opt/tst/dup.py"}, actor="teste")
         self.assertEqual(ctx.exception.constraint, self.cn("uk", "scripts", "name"))
-        # CK de path_file (CR-005 R-g): absoluto, sem '..', '//' nem '\'.
+        # CK de path_file (CR-005 R-g; CR-023: o relativo e aceito): sem '..', '//' nem '\'.
         with self.assertRaises(RepoViolation) as ctx:
             cat.scripts_insert({"name": "tst_%s_path" % self.m.suf, "interpreter": "PYTHON3",
-                                 "path_file": "x.py"}, actor="teste")
+                                 "path_file": "a//x.py"}, actor="teste")
         self.assertEqual(ctx.exception.constraint, self.cn("ck", "scripts", "path"))
         with self.assertRaises(RepoViolation) as ctx:
             usr.insert({"login": c["login"], "name": "Duplicado", "password_hash": "h",

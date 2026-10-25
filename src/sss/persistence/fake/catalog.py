@@ -212,10 +212,11 @@ class RepoCatalogFake(RepoCatalog):
         if base.get("interpreter") not in ("PYTHON3", "BASH", "SH"):
             raise RepoViolation("Interpretador fora da allowlist", constraint="ck_tbsss_scr_int")
         pfile = base.get("path_file") or ""
-        # ck_tbsss_scr_path (README §10, CR-005): absoluto, sem '..', '//' nem '\\'; ate 500 caracteres.
-        if (not pfile.startswith("/") or ".." in pfile or "//" in pfile or "\\" in pfile
+        # ck_tbsss_scr_path (README §10, CR-005, CR-023): absoluto ou relativo, sem '..', '//' nem '\\';
+        # ate 500 caracteres.
+        if (not pfile or ".." in pfile or "//" in pfile or "\\" in pfile
                 or len(pfile) > 500):
-            raise RepoViolation("path_file deve ser absoluto e sem '..'", constraint="ck_tbsss_scr_path")
+            raise RepoViolation("path_file sem '..', '//' nem '\\'", constraint="ck_tbsss_scr_path")
         if not (1 <= int(base.get("max_parallel_env", 1)) <= 999):
             raise RepoViolation("max_qtd_parallel_env deve estar entre 1 e 999", constraint="ck_tbsss_scr_paral")
         tmout = base.get("timeout_s")

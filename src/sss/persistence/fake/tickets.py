@@ -110,6 +110,7 @@ class RepoTicketsFake(RepoTickets):
                 "agent_id": ticket.get("agent_id"),
                 "process_id": ticket.get("process_id"),
                 "process_start": ticket.get("process_start"),
+                "script_path": ticket.get("script_path"),
                 "status": status,
                 "priority": prio,
                 "cancel_requested": ticket.get("cancel_requested", "N"),

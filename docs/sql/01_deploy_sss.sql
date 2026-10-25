@@ -246,6 +246,7 @@ CREATE TABLE openrisow.tbsss_tickets (
     agent_id VARCHAR2(30 CHAR),
     process_id NUMBER(10),
     process_start NUMBER(20),
+    script_path VARCHAR2(1000 CHAR),
     status VARCHAR2(15 CHAR) DEFAULT 'PENDING' NOT NULL,
     priority NUMBER(1) DEFAULT 2 NOT NULL,
     cancel_requested CHAR(1) DEFAULT 'N' NOT NULL,
@@ -288,6 +289,7 @@ CREATE TABLE openrisow.tbsss_agents (
     environments VARCHAR2(1000 CHAR),
     platform VARCHAR2(10 CHAR),
     interpreters VARCHAR2(100 CHAR),
+    script_base_dir VARCHAR2(500 CHAR),
     status VARCHAR2(10 CHAR) DEFAULT 'ACTIVE' NOT NULL,
     started_at DATE,
     heartbeat_at DATE,
@@ -444,7 +446,7 @@ ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_paral CHECK (max
 
 ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_int CHECK (interpreter IN ('PYTHON3','BASH','SH'));
 
-ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_path CHECK (SUBSTR(path_file, 1, 1) = '/' AND INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\') = 0);
+ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_path CHECK (INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\') = 0);
 
 ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_tmout CHECK (timeout_s IS NULL OR timeout_s > 0);
 
@@ -1211,7 +1213,7 @@ COMMENT ON COLUMN openrisow.tbsss_scripts.script_group IS 'Coluna script_group d
 COMMENT ON COLUMN openrisow.tbsss_scripts.category IS 'Categoria de negocio ou agrupador funcional da rotina';
 COMMENT ON COLUMN openrisow.tbsss_scripts.stage IS 'Coluna stage da tabela tbsss_scripts';
 COMMENT ON COLUMN openrisow.tbsss_scripts.interpreter IS 'Interpretador utilizado para execucao (PYTHON3, BASH, SH)';
-COMMENT ON COLUMN openrisow.tbsss_scripts.path_file IS 'Caminho absoluto normalizado do script no sistema de arquivos do servidor';
+COMMENT ON COLUMN openrisow.tbsss_scripts.path_file IS 'Caminho normalizado do script: absoluto ou relativo a [agent] script_base_dir de cada agente';
 COMMENT ON COLUMN openrisow.tbsss_scripts.param_type IS 'Coluna param_type da tabela tbsss_scripts';
 COMMENT ON COLUMN openrisow.tbsss_scripts.max_parallel_env IS 'Coluna max_parallel_env da tabela tbsss_scripts';
 COMMENT ON COLUMN openrisow.tbsss_scripts.timeout_s IS 'Coluna timeout_s da tabela tbsss_scripts';
@@ -1312,6 +1314,7 @@ COMMENT ON COLUMN openrisow.tbsss_tickets.source_ip IS 'Endereco IP do cliente q
 COMMENT ON COLUMN openrisow.tbsss_tickets.agent_id IS 'Identificador do daemon do agente que executou o ticket';
 COMMENT ON COLUMN openrisow.tbsss_tickets.process_id IS 'Identificador do processo (PID) no sistema operacional do servidor';
 COMMENT ON COLUMN openrisow.tbsss_tickets.process_start IS 'Coluna process_start da tabela tbsss_tickets';
+COMMENT ON COLUMN openrisow.tbsss_tickets.script_path IS 'Caminho real do script executado, resolvido pelo agente (CR-023); vazio antes do inicio';
 COMMENT ON COLUMN openrisow.tbsss_tickets.status IS 'Situacao da execucao (PENDING, RUNNING, SUCCESS, FAILED, CANCELLED)';
 COMMENT ON COLUMN openrisow.tbsss_tickets.priority IS 'Prioridade de atendimento na fila (1=Critico, 2=Alta, 3=Normal, 4=Baixa)';
 COMMENT ON COLUMN openrisow.tbsss_tickets.cancel_requested IS 'Indicador se o cancelamento foi requisitado pelo operador (Y/N)';
@@ -1349,6 +1352,7 @@ COMMENT ON COLUMN openrisow.tbsss_agents.version IS 'Versao do software do servi
 COMMENT ON COLUMN openrisow.tbsss_agents.environments IS 'Lista separada por virgulas dos ambientes atendidos por este no';
 COMMENT ON COLUMN openrisow.tbsss_agents.platform IS 'Sistema operacional da maquina servidora (POSIX)';
 COMMENT ON COLUMN openrisow.tbsss_agents.interpreters IS 'Interpretadores homologados disponiveis no servidor (PYTHON3, BASH, SH)';
+COMMENT ON COLUMN openrisow.tbsss_agents.script_base_dir IS 'Pasta base dos scripts com caminho relativo ([agent] script_base_dir); vazio sem base';
 COMMENT ON COLUMN openrisow.tbsss_agents.status IS 'Estado de operacao do no (ACTIVE, STOPPED)';
 COMMENT ON COLUMN openrisow.tbsss_agents.started_at IS 'Data e hora de inicializacao do daemon';
 COMMENT ON COLUMN openrisow.tbsss_agents.heartbeat_at IS 'Data e hora do sinal periodico de disponibilidade mais recente';

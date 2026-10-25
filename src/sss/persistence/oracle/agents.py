@@ -20,7 +20,7 @@ from sss.persistence.oracle import health as saude_sql
 from sss.persistence.oracle.base import BaseRepoOracle
 
 _COLS_AGT = ("id", "code", "hostname", "daemon_pid", "version", "environments", "platform", "interpreters",
-             "status", "started_at", "heartbeat_at", "critical_config",
+             "script_base_dir", "status", "started_at", "heartbeat_at", "critical_config",
              "created_at", "created_by", "updated_at", "updated_by")
 # Mesmas colunas sem CLOB do listar de tickets (contrato RepoTickets.listar).
 _COLS_TCK = ("id", "script_id", "environment", "requested_by", "source_ip", "agent_id", "process_id",

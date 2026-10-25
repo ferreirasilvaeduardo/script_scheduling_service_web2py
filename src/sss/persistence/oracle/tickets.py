@@ -23,7 +23,7 @@ _TERMINAL = ("SUCCESS", "FAILED", "CANCELLED")
 
 # Colunas sem CLOB (listagens); obter acrescenta submitted_params.
 _COLS_TCK = ("id", "script_id", "environment", "requested_by", "source_ip", "agent_id", "process_id",
-             "process_start", "status", "priority", "cancel_requested", "status_reason",
+             "process_start", "script_path", "status", "priority", "cancel_requested", "status_reason",
              "parent_ticket_id", "schedule_id", "log_offset_chars", "log_truncated", "return_code",
              "scheduled_at", "started_at", "heartbeat_at", "finished_at",
              "created_at", "created_by", "updated_at", "updated_by")
@@ -72,11 +72,12 @@ _SQL_PRM_EXISTS = "SELECT id FROM {prm} WHERE id = :id"
 _SQL_TCK_EXISTS = "SELECT id FROM {tck} WHERE id = :id"
 _SQL_INSERT = (
     "INSERT INTO {tck} (id, script_id, environment, requested_by, source_ip, agent_id, process_id, "
-    "process_start, status, priority, cancel_requested, status_reason, parent_ticket_id, schedule_id, "
+    "process_start, script_path, status, priority, cancel_requested, status_reason, parent_ticket_id, "
+    "schedule_id, "
     "submitted_params, log_output, log_truncated, return_code, scheduled_at, started_at, "
     "heartbeat_at, finished_at, created_at, created_by, updated_at, updated_by) "
     "VALUES (:id, :script_id, :environment, :requested_by, :source_ip, :agent_id, :process_id, "
-    ":process_start, :status, :priority, :cancel_requested, :status_reason, :parent_ticket_id, "
+    ":process_start, :script_path, :status, :priority, :cancel_requested, :status_reason, :parent_ticket_id, "
     ":schedule_id, :submitted_params, :log_output, :log_truncated, :return_code, "
     "NVL(:scheduled_at, SYSDATE), :started_at, :heartbeat_at, :finished_at, SYSDATE, :actor, NULL, NULL)"
 )
@@ -528,6 +529,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
                 "id": tid, "script_id": script_id, "environment": environment, "requested_by": requester,
                 "source_ip": ticket.get("source_ip"), "agent_id": ticket.get("agent_id"),
                 "process_id": ticket.get("process_id"), "process_start": ticket.get("process_start"),
+                "script_path": ticket.get("script_path"),
                 "status": status, "priority": prio, "cancel_requested": ticket.get("cancel_requested", "N"),
                 "status_reason": ticket.get("status_reason"),
                 "parent_ticket_id": int(parent_id) if parent_id is not None else None,

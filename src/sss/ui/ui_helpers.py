@@ -66,7 +66,8 @@ _EXPLANATIONS = {
     "ORPHAN_PROCESS": (u"O servidor foi reiniciado e perdeu o controle do script.", u"Tente de novo."),
     "FENCED": (u"O servidor perdeu contato com o banco de dados e parou o script por segurança.",
                u"Tente de novo em alguns minutos."),
-    "PRECHECK_FAILED": (u"O script não pôde começar: o servidor não encontrou o arquivo, ou ele não está liberado.",
+    "PRECHECK_FAILED": (u"O script não pôde começar: o servidor não encontrou o arquivo (ou, com caminho relativo, "
+                        u"não tem a pasta base), ou ele não está liberado.",
                         u"Avise o administrador com o número deste ticket."),
     "SPAWN_ERROR": (u"O servidor não conseguiu iniciar o script.", u"Avise o administrador com o número deste ticket."),
     "LOG_LIMIT": (u"O script escreveu mensagens demais e foi parado, para não lotar o disco.",
