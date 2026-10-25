@@ -53,12 +53,12 @@ Fora de DEV, a conta da aplicação igual à dona do esquema é recusada (CR-008
 
 **Convenções:**
 * Comandos com `sudo` ou "como root" são do administrador do servidor. Os demais rodam como o usuário de serviço `sss` (`sudo -u sss -H bash`).
-* `W` = `/opt/sss/web2py` (raiz do pacote extraído; o nome da pasta ficou da época do web2py, removido no CR-021f, e só muda no CR-022) e `APP` = `$W/applications/script_scheduling_service`.
+* `W` = `APP` = `/opt/sss/app` (raiz do pacote extraído, que é a própria aplicação desde o CR-022a; até o CR-021 era `/opt/sss/app` com a aplicação em ``).
 * Caminhos padrão (podem ser trocados, desde que no `config.ini` também):
 
 | Caminho | Conteúdo | Dono | Modo | Chave do `config.ini` |
 |---|---|---|---|---|
-| `/opt/sss/web2py` | Pacote extraído (`bin/` + aplicação) | `sss` | `0750` | — |
+| `/opt/sss/app` | Pacote extraído (`bin/` + aplicação) | `sss` | `0750` | — |
 | `APP/instance/config.ini` | Configuração (sem segredos) | `sss` | `0640` | — |
 | `/etc/sss/secrets.cfg` | Segredos do papel do servidor | `sss` | `0600` (pasta `0700`) | `[secrets] secrets_file` |
 | `/var/log/sss` | Logs da aplicação e dos scripts, **em partição própria** (§4.3) | `sss` | `0750` | `[logging] log_dir` |
@@ -93,7 +93,7 @@ O pacote é gerado na máquina de desenvolvimento, a partir de uma cópia **limp
 ```bash
 # na máquina de desenvolvimento, no commit a implantar
 mkdir -p /tmp/sss-limpo && git archive HEAD | tar -x -C /tmp/sss-limpo
-python3 /tmp/sss-limpo/applications/script_scheduling_service/scripts/package.py --source /tmp/sss-limpo --out-dir /tmp/sss-dist
+python3 /tmp/sss-limpo/scripts/package.py --source /tmp/sss-limpo --out-dir /tmp/sss-dist
 # esperado: "Pacote: .../sss-<versao>.tar.gz" e "SHA256SUMS: .../SHA256SUMS"; código 0
 ```
 
@@ -105,9 +105,9 @@ Leve os dois arquivos (`sss-<version>.tar.gz` e `SHA256SUMS`) ao servidor e conf
 # como sss, na pasta onde estão os dois arquivos
 sha256sum -c SHA256SUMS                       # esperado: "sss-<versao>.tar.gz: OK"
 tar -xzf sss-<versao>.tar.gz -C /opt/sss
-mv /opt/sss/sss-<versao> /opt/sss/web2py      # na atualização, veja o §18
-cd /opt/sss/web2py && sha256sum -c --quiet SHA256SUMS && echo "conteúdo confere"
-ls applications/                              # esperado: só script_scheduling_service
+mv /opt/sss/sss-<versao> /opt/sss/app         # na atualização, veja o §18
+cd /opt/sss/app && sha256sum -c --quiet SHA256SUMS && echo "conteúdo confere"
+ls                                            # esperado: AGENTS.md README.md SHA256SUMS bin controllers docs instance modules scripts static views webapp
 ```
 
 O pacote só tem o `bin/` e a aplicação: sem web2py (CR-021f), sem `controllers/dev.py`, sem `repo_fake` e sem testes. O servidor web é o `scripts/run_web.py` da própria aplicação, e a raiz `/` leva ao login.
@@ -171,7 +171,7 @@ Os três scripts saem do mesmo registro de identificadores, com o owner e o pref
 
 ```bash
 # na máquina de desenvolvimento ou num servidor com o pacote
-cd /opt/sss/web2py/applications/script_scheduling_service
+cd /opt/sss/app
 python3 scripts/generate_sql.py --grants-to web=sss_web,agent=sss_agente,purge=sss_purge,monitor=sss_monitor
 # gera docs/sql/01_deploy_sss.sql, 02_rollback_sss.sql, 99_validate_deploy.sql e 03_grants_sss.sql
 ```
@@ -219,7 +219,7 @@ O seed cria os usuários de homologação `admin`, `op.prod`, `op.hml` e `consul
 * **Linha da combinação escolhida**, no log da aplicação de cada processo (ensaio, banco 19c):
   `INFO ... [action=INICIO] driver=oracledb modo=thin servidor=19.24.0.0.0 cliente=-`
   Com Thick ou cx_Oracle, `cliente=` mostra a versão do Instant Client (precisa ser 19). Registre essa linha no checklist (§19).
-* **Conferência antes de subir:** `python3 applications/script_scheduling_service/scripts/check_env.py`, a partir de `W`. Ela confere os pré-requisitos (código 0 = tudo OK, 1 = falta arquivo, 2 = Python menor que 3.6.0).
+* **Conferência antes de subir:** `python3 scripts/check_env.py`, a partir de `W`. Ela confere os pré-requisitos (código 0 = tudo OK, 1 = falta arquivo, 2 = Python menor que 3.6.0).
 * **Quando forçar:**
   * `driver_mode = thick` quando o banco é 11g. O Thin recusa com `DPY-3010` e a cadeia já pula para o Thick, mas forçar evita a sondagem a cada subida.
   * `driver_mode = cx_oracle` quando o `python-oracledb` não estiver disponível ou falhar nesse servidor.
@@ -235,7 +235,7 @@ Parta do `APP/instance/config.ini.example`, que é o **único config.ini de refe
 
 ```bash
 # como sss
-cd /opt/sss/web2py/applications/script_scheduling_service/instance
+cd /opt/sss/app/instance
 cp config.ini.example config.ini && chmod 0640 config.ini
 ```
 
@@ -275,7 +275,7 @@ Fora de DEV, uma seção de outro papel recusa a subida com CRITICAL (seção e 
 ```bash
 # como root, em cada agente, a partir do pacote extraído
 install -o root -g root -m 0755 -d /opt/sss/bin
-install -o root -g root -m 0755 /opt/sss/web2py/bin/sss-helper /opt/sss/bin/sss-helper
+install -o root -g root -m 0755 /opt/sss/app/bin/sss-helper /opt/sss/bin/sss-helper
 # CR-012, só com [agent] output_dir preenchido: uma pasta por ambiente, do usuário de execução dele
 install -o sss -g sss -m 0755 -d /var/lib/sss/output
 install -o sssprd -g sssprd -m 0700 -d /var/lib/sss/output/producao    # nome do ambiente em minúsculo, como no log
@@ -323,7 +323,7 @@ Os launchers recusam root, aplicam `umask 077`, exportam `TZ` (de `SSS_TZ`), `LA
 
 ```bash
 # como sss
-cd /opt/sss/web2py
+cd /opt/sss/app
 export PYTHON=/usr/bin/python3 SSS_TZ=America/Sao_Paulo
 bin/sss-web.sh "$PYTHON" --check                              # CONFIG_OK sss_env=<ambiente>; nao abre a porta
 bin/sss-web.sh "$PYTHON" --host 127.0.0.1 --port 8000
@@ -339,7 +339,7 @@ bin/sss-web.sh "$PYTHON" --host 127.0.0.1 --port 8000
 
 ```bash
 # como sss
-cd /opt/sss/web2py
+cd /opt/sss/app
 export PYTHON=/usr/bin/python3 SSS_TZ=America/Sao_Paulo
 bin/sss-scheduler.sh                       # ou: bin/sss-scheduler.sh --config /etc/sss/agente_b.ini
 ```
@@ -386,17 +386,17 @@ Wants=network-online.target
 Type=simple
 User=sss
 Group=sss
-WorkingDirectory=/opt/sss/web2py
+WorkingDirectory=/opt/sss/app
 Environment=PYTHON=/usr/bin/python3
 Environment=SSS_TZ=America/Sao_Paulo
-ExecStart=/opt/sss/web2py/bin/sss-web.sh /usr/bin/python3 --host 127.0.0.1 --port 8000
+ExecStart=/opt/sss/app/bin/sss-web.sh /usr/bin/python3 --host 127.0.0.1 --port 8000
 KillMode=mixed
 # maior que [web] socket_timeout_s: o servidor espera as requisicoes em andamento (§10.1)
 TimeoutStopSec=40
 Restart=on-failure
 NoNewPrivileges=yes
 ProtectSystem=strict
-ReadWritePaths=/opt/sss/web2py /var/log/sss
+ReadWritePaths=/opt/sss/app /var/log/sss
 PrivateTmp=yes
 
 [Install]
@@ -415,10 +415,10 @@ Wants=network-online.target
 Type=simple
 User=sss
 Group=sss
-WorkingDirectory=/opt/sss/web2py
+WorkingDirectory=/opt/sss/app
 Environment=PYTHON=/usr/bin/python3
 Environment=SSS_TZ=America/Sao_Paulo
-ExecStart=/opt/sss/web2py/bin/sss-scheduler.sh
+ExecStart=/opt/sss/app/bin/sss-scheduler.sh
 KillMode=mixed
 # maior que shutdown_grace_s + kill_grace_s (30 + 5 no padrao), com folga para finalizar no banco
 TimeoutStopSec=60
@@ -476,13 +476,13 @@ Depois:
 * **Primeiro, `--dry-run`:** só conta (estimativas), sem gravar nem apagar nada:
   ```bash
   # como sss
-  cd /opt/sss/web2py
-  LANG=C.UTF-8 LC_ALL=C.UTF-8 python3 applications/script_scheduling_service/scripts/purge.py --dry-run
+  cd /opt/sss/app
+  LANG=C.UTF-8 LC_ALL=C.UTF-8 python3 scripts/purge.py --dry-run
   # uma linha por alvo: "tickets: N linhas elegiveis (estimativa)", ..., e o aviso de estimativa
   ```
 * **Agendamento** em todo agente (os logs locais e a saída são de cada servidor; tickets e auditoria só um nó purga por vez, pela concessão no banco), `crontab -e` do `sss`:
   ```text
-  15 2 * * * cd /opt/sss/web2py && umask 077 && LANG=C.UTF-8 LC_ALL=C.UTF-8 /usr/bin/python3 applications/script_scheduling_service/scripts/purge.py > /dev/null
+  15 2 * * * cd /opt/sss/app && umask 077 && LANG=C.UTF-8 LC_ALL=C.UTF-8 /usr/bin/python3 scripts/purge.py > /dev/null
   ```
   O resumo vai para o stdout; o registro completo vai para `log_dir/internal/app/.../purge_<PID>.log`.
 * **Alvos:** `--target tickets|audit|local_logs|output|script_work|all` (padrão `all`). `script_work` (CR-019) remove as pastas de trabalho dos scripts mais antigas que `[logging] script_work_retention_days`.
@@ -500,8 +500,8 @@ Depois:
 
 ```bash
 # como o usuário que lê o secrets.cfg com a seção [monitor] (no servidor do agente: o sss)
-cd /opt/sss/web2py
-python3 applications/script_scheduling_service/scripts/health.py      # [ensaiado]
+cd /opt/sss/app
+python3 scripts/health.py      # [ensaiado]
 ```
 
 Saída do ensaio (um agente saudável e outros ambientes sem agente):
@@ -518,9 +518,9 @@ WARNING: nenhum PURGE auditado nos ultimos 2 dias (README §11.3)
 * **Agendamento:** a cada 5 minutos no monitoramento corporativo, com alerta no código 2. Exemplo de NRPE [não ensaiado], com o `health.py` rodando como `sss` por uma regra de `sudo` só para ele:
   ```text
   # /etc/sudoers.d/sss-monitor
-  nagios ALL=(sss) NOPASSWD: /usr/bin/python3 /opt/sss/web2py/applications/script_scheduling_service/scripts/health.py
+  nagios ALL=(sss) NOPASSWD: /usr/bin/python3 /opt/sss/app/scripts/health.py
   # nrpe.cfg
-  command[check_sss]=/usr/bin/sudo -n -u sss /usr/bin/python3 /opt/sss/web2py/applications/script_scheduling_service/scripts/health.py
+  command[check_sss]=/usr/bin/sudo -n -u sss /usr/bin/python3 /opt/sss/app/scripts/health.py
   ```
   Num servidor de monitoração separado, use um `config.ini` próprio com `--config` (mesmos tempos do de referência, para a checagem de configuração divergente) e um `secrets.cfg` só com `[monitor]`.
 
@@ -711,7 +711,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 
 ## 18. Atualização de versão e retorno [não ensaiado nesta versão]
 
-1. Gere e confira o pacote novo (§3) e extraia **ao lado** do atual: `/opt/sss/web2py-<versao>`.
+1. Gere e confira o pacote novo (§3) e extraia **ao lado** do atual: `/opt/sss/app-<versao>`.
 2. Copie o `instance/config.ini` atual para a pasta nova e compare com o `config.ini.example` novo (`diff`). Chave nova obrigatória ou removida aparece na subida como `configuracao invalida` (§15.1).
    * **Chaves renomeadas (CR-015a):** `[agent] saida_dir` → `output_dir`, `saida_max_bytes` → `output_max_bytes`, `saida_max_arquivos` → `output_max_files`, `entrada_dir` → `input_dir` e `[logging] saida_retention_days` → `output_retention_days`. Com o nome antigo, a subida para com `Chave renomeada: <antiga> passou a se chamar <nova>`.
    * **Rotas em inglês (CR-016d, D22):** as telas mudam de endereço, sem redirecionamento (`tickets/novo` → `tickets/new`, `admin_usuarios/lista` → `admin_users/index`, `auditoria/agentes` → `audit/agents`; a lista completa está em `docs/architecture/CR-016c2-identifiers.md`). Favoritos e links salvos com o endereço antigo dão 404: avise os usuários e entre pelo menu. A página inicial (`/script_scheduling_service/`) não muda.
@@ -726,7 +726,8 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
    * **Entrada pela tela (CR-020c):** o helper anterior não tem `put-input` nem `list-input`, e as entregas terminariam em `FAILED`/`ERROR`. Instale o helper novo em todos os agentes junto com a versão.
    * **Pasta de trabalho (CR-019):** o helper anterior ignora o campo `work` da especificação: a pasta não é criada e o script recebe em `SSS_WORK_DIR` um caminho que não existe. Antes de ligar `[agent] script_work_dir`, instale o helper novo e crie `script_work_dir/<ambiente>/` de cada ambiente atendido (§8); com a chave vazia, nada muda.
    * **Sem web2py (CR-021f):** o `bin/sss-web.sh` novo só aceita as opções do `scripts/run_web.py` e recusa `web2py.py`/`anyserver.py` (código 2). Troque, junto com a versão, a linha que sobe o web na unit do `systemd` ou no script de operação: `bin/sss-web.sh <python3> --host 127.0.0.1 --port <porta>` (§10.1). Confira antes com `bin/sss-web.sh <python3> --check`. A sessão passa a ser o cookie assinado `sss_session` (CR-021e, D1): quem estiver logado na hora da atualização entra de novo. O `httpserver.log`, os `parameters_<porta>.py` e o painel `/admin` do web2py deixam de existir: tire o `httpserver.log` do `logrotate` (§14.4) e não copie nada disso para a pasta nova.
-5. Pare os agentes (`sss-stop.sh` ou `SIGTERM`) e o web, troque as pastas (`mv /opt/sss/web2py /opt/sss/web2py-<anterior> && mv /opt/sss/web2py-<versao> /opt/sss/web2py`) e suba de novo.
+   * **Aplicação na raiz do pacote (CR-022a):** o pacote não tem mais `applications/script_scheduling_service/`; tudo fica direto em `/opt/sss/app` (antes `/opt/sss/web2py`). Na primeira atualização com esta versão, extraia em `/opt/sss/app` (sem renomear a pasta antiga para ela), copie o `config.ini` de `/opt/sss/web2py/applications/script_scheduling_service/instance/` para `/opt/sss/app/instance/` e troque nos caminhos de operação (unit do `systemd`, `cron` do purge, `sudoers` do monitoramento, scripts de subida) `/opt/sss/web2py` por `/opt/sss/app` e `.../applications/script_scheduling_service/scripts/` por `.../scripts/`. Caminhos absolutos do `config.ini` que apontavam para dentro da pasta antiga (ex.: `log_dir`, `work_dir`) também mudam. O retorno é subir de novo pela pasta antiga, que fica intacta.
+5. Pare os agentes (`sss-stop.sh` ou `SIGTERM`) e o web, troque as pastas (`mv /opt/sss/app /opt/sss/app-<anterior> && mv /opt/sss/app-<versao> /opt/sss/app`) e suba de novo.
 6. Valide (§11). **Retorno:** pare, troque as pastas de volta e suba. Com migração de esquema, o retorno precisa do backup do banco (§17).
 
 ---
@@ -742,7 +743,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 - [ ] `[logging] level = INFO`
 - [ ] `fence_timeout_s` e `node_offline_timeout_s` iguais em todos os agentes, conferidos pela linha `tempos do fencing` de cada um
 - [ ] Combinação de driver registrada (linha `driver=... modo=... servidor=... cliente=...` de cada servidor)
-- [ ] `ls applications/` mostra só `script_scheduling_service`; `curl .../admin/...` dá 404; `controllers/dev.py` ausente
+- [ ] `ls /opt/sss/app` sem `applications/`, `gluon/` nem `web2py.py`; `curl .../admin/...` dá 404; `controllers/dev.py` ausente
 - [ ] `secrets.cfg` com `0600` e dono `sss`, só com as seções do papel
 - [ ] Helper em `/opt/sss/bin/sss-helper` (root, `0755`) e `sudoers` de cada usuário de execução (§8)
 - [ ] Com `output_dir`, `input_dir` ou `script_work_dir`: a pasta de cada ambiente atendido criada pelo root, do usuário de execução, `0700` (§8)

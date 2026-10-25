@@ -39,7 +39,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${REPO_ROOT}"
 
 PYTHON="${PYTHON:-python3}"
-SERVER="applications/script_scheduling_service/scripts/run_web.py"
+SERVER="scripts/run_web.py"
 
 # 5. Executar SOMENTE o servidor web do SSS (README §12.2): nunca um comando arbitrario.
 #    Formas aceitas (as opcoes sao as do run_web.py: --config, --host, --port, --check):

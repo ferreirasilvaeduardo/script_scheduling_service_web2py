@@ -5,5 +5,3 @@
 models/10_security.py), ``errors`` (pagina de erro) e ``bootstrap`` (configuracao e montagem do
 app).
 """
-
-VERSION = "0.1.0"

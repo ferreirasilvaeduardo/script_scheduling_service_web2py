@@ -12,7 +12,7 @@ import unittest
 
 _SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 APP = os.path.dirname(_SCRIPTS)
-ROOT = os.path.dirname(os.path.dirname(APP))
+ROOT = APP  # CR-022a: a aplicacao e a raiz do repositorio
 GUIDE = os.path.join(APP, "docs", "DEPLOYMENT.md")
 
 

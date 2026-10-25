@@ -158,6 +158,8 @@ class SecurityHooksTest(unittest.TestCase):
             self.assertEqual(ctx.response.headers[name], value)
         self.assertNotIn("Cache-Control", ctx.response.headers)
         self.assertTrue(ctx.session.csrf_token, "token CSRF criado na primeira visita")
+        import sss_config  # pylint: disable=import-outside-toplevel
+        self.assertEqual(ctx.response.sss_version, sss_config.SSS_VERSION, "rodape com a versao do pacote")
 
     def test_post_size_origin_and_csrf(self):
         """POST acima do limite: 413; Origin de fora: 403; token errado ou ausente: 403; certo passa."""

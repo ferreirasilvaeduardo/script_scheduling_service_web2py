@@ -88,9 +88,9 @@ O SSS adota arquitetura de frontend **100% hermética**, em conformidade com pol
 
 * **Sem conexões externas:** É estritamente proibido o uso de CDNs, Google Fonts, diretivas `@import` remotas ou quaisquer recursos baixados da internet em tempo de execução.
 * **Bootstrap 5.3.8:** Fornecido localmente nos caminhos:
-  * `applications/script_scheduling_service/static/bootstrap/bootstrap.min.css`
-  * `applications/script_scheduling_service/static/bootstrap/bootstrap.bundle.min.js`
-* **JavaScript próprio, sem framework:** `applications/script_scheduling_service/static/js/app/`, com o `dom.js` carregado primeiro (AGENTS §2.3). O Alpine.js saiu no CR-021.
+  * `static/bootstrap/bootstrap.min.css`
+  * `static/bootstrap/bootstrap.bundle.min.js`
+* **JavaScript próprio, sem framework:** `static/js/app/`, com o `dom.js` carregado primeiro (AGENTS §2.3). O Alpine.js saiu no CR-021.
 
 ---
 
@@ -99,7 +99,7 @@ O SSS adota arquitetura de frontend **100% hermética**, em conformidade com pol
 Antes de iniciar qualquer atividade de desenvolvimento, execute o verificador de ambiente para garantir que todos os pré-requisitos estão satisfeitos:
 
 ```bash
-cd applications/script_scheduling_service
+cd /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
 python scripts/check_env.py
 ```
 
@@ -109,13 +109,13 @@ O script é somente leitura e exibirá uma tabela detalhada com o status `OK` ou
 
 ## 4. Execução do Servidor de Desenvolvimento
 
-O servidor web é o próprio do SSS (`scripts/run_web.py`, CR-021e); o web2py não roda mais a aplicação. Suba a partir da raiz do repositório (`/portaloptrib/TESHUVA/SSS/DEV/web2py`):
+O servidor web é o próprio do SSS (`scripts/run_web.py`, CR-021e); o web2py não roda mais a aplicação. Suba a partir da raiz do repositório (`/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`):
 
 ```bash
-cd /portaloptrib/TESHUVA/SSS/DEV/web2py
-~/.pyenv/versions/3.6.15/bin/python applications/script_scheduling_service/scripts/run_web.py --port 8000
+cd /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
+~/.pyenv/versions/3.6.15/bin/python scripts/run_web.py --port 8000
 # só conferir configuração e segredos, sem abrir a porta:
-~/.pyenv/versions/3.6.15/bin/python applications/script_scheduling_service/scripts/run_web.py --check
+~/.pyenv/versions/3.6.15/bin/python scripts/run_web.py --check
 ```
 
 **A aplicação usa sempre o Oracle** do `[oracle]` do `instance/config.ini` (owner e prefixo; F7.3). Por isso, o Python precisa ter o driver Oracle (`oracledb` ou `cx_Oracle`). Nesta máquina, o 3.6.0 e o 3.6.15 têm; no `bin/start_local.sh`, use `PYTHON=~/.pyenv/versions/3.6.15/bin/python3` (o launcher só aceita interpretador chamado `python3` ou `python3.X`, não o `python` do pyenv). Para parar, `Ctrl+C` ou `SIGTERM`: o servidor espera as requisições em andamento até `[web] socket_timeout_s`.
@@ -127,7 +127,7 @@ A aplicação fica no endereço local `127.0.0.1:8000/script_scheduling_service`
 Para subir de forma prática em segundo plano (com nohup, carimbo de data/hora no log e validação de subida):
 
 ```bash
-cd /portaloptrib/TESHUVA/SSS/DEV/web2py
+cd /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
 bin/start_local.sh               # sobe em background na porta 8000
 # ou: bin/start_local.sh 18000   # porta customizada
 # ou: bin/start_local.sh -f      # em primeiro plano no terminal
@@ -165,7 +165,7 @@ Todos os testes automatizados utilizam exclusivamente o framework nativo `unitte
 Para executar os testes a partir da aplicação:
 
 ```bash
-cd applications/script_scheduling_service
+cd /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
 python -m unittest discover -s scripts -p "test_*.py"
 ```
 
@@ -208,7 +208,7 @@ O script fica num **caminho absoluto** em qualquer lugar do servidor (`path_file
 Em DEV, uma pasta do seu `$HOME` serve, desde que o arquivo tenha modo `0644` ou `0755`. Os scripts do seed FAKE apontam para `/opt/automacoes/scripts/<arquivo>` (ex.: `/opt/automacoes/scripts/carga_diaria.py`). Para o agente encontrá-los, crie o link uma vez:
 
 ```bash
-cd applications/script_scheduling_service
+cd /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
 chmod -R go-w dev/scripts
 sudo install -d -o root -g root -m 0755 /opt/automacoes
 sudo ln -sfn "$PWD/dev/scripts" /opt/automacoes/scripts
@@ -225,7 +225,7 @@ Sem `sudo`, cadastre os scripts com o caminho real de `dev/scripts`.
 * **Log da aplicação:** `log_dir/internal/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (CR-009; até o F8.2 era `log_dir/app/...`, que pode ser apagada à mão). O arquivo nasce na pasta do minuto em que o processo sobe e troca para um novo, na pasta do minuto atual, ao atingir `app_log_max_bytes`. As pastas de dia mais antigas que `app_log_retention_days` são apagadas pelo próprio processo. Para seguir o arquivo mais recente:
 
   ```bash
-  LOG_DIR=/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs     # o [logging] log_dir do seu config.ini
+  LOG_DIR=/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/logs     # o [logging] log_dir do seu config.ini
   tail -f "$(find "$LOG_DIR/app" -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)"
   ```
 

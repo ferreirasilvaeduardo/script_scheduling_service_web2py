@@ -14,7 +14,7 @@ Para atender aos cenários operacionais frequentes de manipulação de arquivos 
   - Leitura em *streaming* / blocos (*chunks*) para arquivos de grande porte, com baixo uso de memória;
   - Parâmetros sanitizados sem injeção de comandos.
 - **Localização dos Fontes:**
-  - **Ambiente de Desenvolvimento:** `applications/script_scheduling_service/dev/scripts/utilitarios/`
+  - **Ambiente de Desenvolvimento:** `dev/scripts/utilitarios/`
   - **Ambiente de Produção:** `/opt/automacoes/scripts/utilitarios/`
 
 ---

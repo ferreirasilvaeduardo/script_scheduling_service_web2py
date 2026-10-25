@@ -6,8 +6,8 @@ Uso: python scripts/package.py [--source <raiz do repositorio>] [--out-dir <past
 Gera <saida>/sss-<versao>.tar.gz (tudo sob sss-<versao>/, com um SHA256SUMS de cada arquivo) e <saida>/SHA256SUMS
 com o hash do tar.gz. A versao e sss_config.SSS_VERSION. O tar e deterministico (ordem, dono, data e modos fixos).
 
-Entram: os launchers de producao e o helper do bin/ e a aplicacao sem codigo de DEV, sem testes e sem pastas de
-runtime. Desde o CR-021f nao ha web2py: o servidor web e o scripts/run_web.py da propria aplicacao.
+Entram: os launchers de producao e o helper do bin/ e a aplicacao (APP_DIRS e APP_FILES da raiz, que e a propria
+aplicacao desde o CR-022a) sem codigo de DEV, sem testes e sem pastas de runtime. Desde o CR-021f nao ha web2py: o servidor web e o scripts/run_web.py da propria aplicacao.
 Falha (codigo 1, sem gravar nada) se o pacote tiver secrets.cfg real, *.pyc, __pycache__, controllers/dev.py,
 repo_fake, /admin/, resto do web2py (gluon/, web2py.py, anyserver.py, routes.py ou pasta de runtime dele), link
 simbolico ou credencial que nao seja o CHANGE_ME de instance/secrets.cfg.example. A mensagem cita o arquivo e a
@@ -31,11 +31,14 @@ sys.dont_write_bytecode = True
 
 import sss_config  # noqa: E402
 
-APP = "applications/script_scheduling_service"
-DEFAULT_ROOT = os.path.dirname(os.path.dirname(_APP_DIR))
+DEFAULT_ROOT = _APP_DIR  # CR-022a: a aplicacao e a raiz do repositorio
 BIN = ("sss-web.sh", "sss-scheduler.sh", "sss-stop.sh", "sss-helper")
+# Da raiz so entram estas pastas e arquivos da aplicacao (lista de permissao, CR-022a): o resto da raiz
+# (.git, Makefile, CLAUDE.md, input/, output/, logs/...) e da maquina de desenvolvimento.
+APP_DIRS = ("controllers", "docs", "instance", "modules", "scripts", "static", "views", "webapp")
+APP_FILES = ("AGENTS.md", "README.md")
 # Restos do web2py (CR-021f): na raiz, recusados; na aplicacao, as pastas de runtime que ele criava.
-WEB2PY_ROOT_LEFTOVERS = ("gluon", "web2py.py", "anyserver.py", "routes.py")
+WEB2PY_ROOT_LEFTOVERS = ("gluon", "web2py.py", "anyserver.py", "routes.py", "applications")
 WEB2PY_APP_DIRS = ("sessions", "errors", "cache", "databases", "uploads", "private", "cron",
                    "applications", "deposit", "site-packages", "scripts/applications",
                    "scripts/deposit", "scripts/site-packages")
@@ -47,7 +50,7 @@ EXCLUDE_APP = (
 ) + WEB2PY_APP_DIRS
 _RE_TEST = re.compile(r"^scripts/test_[^/]*\.py$")
 _RE_CREDENTIAL = re.compile(r"^\s*(password|cookie_key)\s*[=:]\s*(.*?)\s*$", re.IGNORECASE)
-_SECRETS_EXAMPLE = APP + "/instance/secrets.cfg.example"
+_SECRETS_EXAMPLE = "instance/secrets.cfg.example"
 _PLACEHOLDER = "CHANGE_ME"
 MTIME = 1767225600  # 2026-01-01 00:00:00 UTC: tar reprodutivel
 
@@ -103,9 +106,13 @@ def collect(source):
             files.append(rel)
         else:
             problems.append("%s: ausente" % rel)
-    prefix = APP + "/"
-    files.extend(_walk(source, APP, problems,
-                              filter_value=lambda rel: _excluded_from_app(rel[len(prefix):])))
+    for name in APP_FILES:
+        if os.path.isfile(os.path.join(source, name)) and not os.path.islink(os.path.join(source, name)):
+            files.append(name)
+        else:
+            problems.append("%s: ausente" % name)
+    for name in APP_DIRS:
+        files.extend(_walk(source, name, problems, filter_value=_excluded_from_app))
     return sorted(files), problems
 
 
@@ -140,14 +147,10 @@ def check(files, read):
             problems.append("%s: bytecode" % rel)
         if rel.endswith("controllers/dev.py") or "repo_fake" in parts:
             problems.append("%s: codigo de DEV" % rel)
-        if rel.startswith("applications/") and parts[1] != "script_scheduling_service":
-            problems.append("%s: aplicacao fora do SSS (/admin/, welcome, examples)" % rel)
         if parts[0] in WEB2PY_ROOT_LEFTOVERS:
             problems.append(f"{rel}: resto do web2py (CR-021f)")
-        if rel.startswith(APP + "/"):
-            rest = rel[len(APP) + 1:]
-            if any(rest == d or rest.startswith(d + "/") for d in WEB2PY_APP_DIRS):
-                problems.append("%s: pasta de runtime do web2py" % rel)
+        elif any(rel == d or rel.startswith(d + "/") for d in WEB2PY_APP_DIRS):
+            problems.append("%s: pasta de runtime do web2py" % rel)
         problems.extend(_credentials(rel, read(rel)))
     return problems
 

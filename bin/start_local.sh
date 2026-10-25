@@ -26,7 +26,7 @@ umask 077
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${REPO_ROOT}"
 
-APP_DIR="${REPO_ROOT}/applications/script_scheduling_service"
+APP_DIR="${REPO_ROOT}"
 WORK_DIR="${APP_DIR}/work"
 LOG_DIR="${APP_DIR}/logs"
 PID_FILE="${WORK_DIR}/sss_web.pid"

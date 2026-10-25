@@ -2,7 +2,7 @@
 
 Antes de planejar ou executar qualquer tarefa, você DEVE seguir rigorosamente:
 1. `AGENTS.md` na raiz (atenção especial a §2, §3, §5, §6, §8 e §9).
-2. `applications/script_scheduling_service/README.md` (especificação de arquitetura e regras de negócio).
+2. `README.md` na raiz (a aplicação é a raiz do repositório desde o CR-022a) (especificação de arquitetura e regras de negócio).
 
 ## Regras Críticas de Execução:
 - **Compatibilidade:** Python 3.6 estrito. Não use sintaxes modernas proibidas (f-strings, dataclasses, walrus operator, pos-only args).

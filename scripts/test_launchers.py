@@ -16,7 +16,7 @@ import sys
 import tempfile
 import unittest
 
-BIN = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "bin"))
+BIN = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bin"))
 LAUNCHERS = ("sss-web.sh", "sss-scheduler.sh", "sss-stop.sh")
 LOCAL_SCRIPTS = ("start_local.sh", "stop_local.sh")
 
@@ -95,7 +95,7 @@ class TestLaunchers(unittest.TestCase):
 
     def test_web_tres_formas_e_recusa(self):
         """Sempre o run_web.py (CR-021e2): sem argumentos, so opcoes, ou interpretador e opcoes."""
-        server = "applications/script_scheduling_service/scripts/run_web.py"
+        server = "scripts/run_web.py"
         code, reg, _e = self._run_loop("sss-web.sh")
         self.assertEqual((code, reg["argv"]), (0, [server]))
         self.assertEqual((reg["cwd"], reg["umask"]), (self.root, "0o77"), "raiz do repositorio e umask 077")
@@ -116,7 +116,7 @@ class TestLaunchers(unittest.TestCase):
             self.assertIn("Erro", error)
 
     def test_scheduler_so_a_linha_do_daemon(self):
-        daemon = "applications/script_scheduling_service/scripts/run_scheduler.py"
+        daemon = "scripts/run_scheduler.py"
         code, reg, _e = self._run_loop("sss-scheduler.sh")
         self.assertEqual((code, reg["argv"], reg["cwd"]), (0, [daemon], self.root))
         code, reg, _e = self._run_loop("sss-scheduler.sh", "--config", "/etc/sss/agente_b.ini")

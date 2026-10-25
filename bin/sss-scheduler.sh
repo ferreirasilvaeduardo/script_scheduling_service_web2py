@@ -41,7 +41,7 @@ cd "${REPO_ROOT}"
 PYTHON="${PYTHON:-python3}"
 
 # 5. Somente a linha do daemon (README §3.1): sem argumentos ou --config <arquivo>; outro comando: codigo 2.
-DAEMON="applications/script_scheduling_service/scripts/run_scheduler.py"
+DAEMON="scripts/run_scheduler.py"
 if [ "$#" -eq 0 ]; then
     exec "${PYTHON}" "${DAEMON}"
 fi

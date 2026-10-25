@@ -20,7 +20,6 @@ import unittest
 
 import package as empacotar
 
-APP = empacotar.APP
 SECRET = "valor-de-teste-nao-placeholder"
 
 
@@ -35,18 +34,21 @@ class TestPack(unittest.TestCase):
             "bin/sss-web.sh": "#!/bin/bash\n", "bin/sss-scheduler.sh": "#!/bin/bash\n",
             "bin/sss-stop.sh": "#!/bin/bash\n", "bin/sss-helper": "#!/usr/bin/env python3\n",
             "bin/start_local.sh": "#!/bin/bash\n", "CLAUDE.md": "x", "parameters_8000.py": "x",
-            APP + "/controllers/default.py": "# default\n", APP + "/controllers/dev.py": "# dev\n",
-            APP + "/scripts/run_web.py": "# servidor\n", APP + "/webapp/bootstrap.py": "# web\n",
-            APP + "/views/dev/index.html": "x", APP + "/dev/scripts/a.py": "x",
-            APP + "/modules/repo_fake/__init__.py": "x", APP + "/modules/sss_config.py": "x",
-            APP + "/instance/config.ini": "[oracle]\nuser = sss_web\n",
-            APP + "/instance/config.ini.example": "[retention]\npurge_user =                 ; vazio em DEV\n",
-            APP + "/instance/secrets.cfg.example": "[oracle]\npassword = CHANGE_ME\n[web]\ncookie_key = CHANGE_ME\n"
+            "controllers/default.py": "# default\n", "controllers/dev.py": "# dev\n",
+            "scripts/run_web.py": "# servidor\n", "webapp/bootstrap.py": "# web\n",
+            "views/dev/index.html": "x", "dev/scripts/a.py": "x",
+            "modules/repo_fake/__init__.py": "x", "modules/sss_config.py": "x",
+            "instance/config.ini": "[oracle]\nuser = sss_web\n",
+            "instance/config.ini.example": "[retention]\npurge_user =                 ; vazio em DEV\n",
+            "instance/secrets.cfg.example": "[oracle]\npassword = CHANGE_ME\n[web]\ncookie_key = CHANGE_ME\n"
                                                    "[purge]\npassword = ...\n",
-            APP + "/scripts/purge.py": "x", APP + "/scripts/test_purge.py": "x", APP + "/scripts/_testenv.py": "x",
-            APP + "/scripts/logs/a.log": "x", APP + "/applications/x.txt": "x", APP + "/deposit/x": "x",
-            APP + "/logs/x": "x", APP + "/site-packages/x": "x", APP + "/sessions/abc": "x", APP + "/errors/e": "x",
-            APP + "/work/sss-a.lock": "x", APP + "/docs/DEPLOYMENT.md": "# Implantacao\n",
+            "scripts/purge.py": "x", "scripts/test_purge.py": "x", "scripts/_testenv.py": "x",
+            "scripts/logs/a.log": "x", "deposit/x": "x",
+            "logs/x": "x", "site-packages/x": "x", "sessions/abc": "x", "errors/e": "x",
+            "work/sss-a.lock": "x", "docs/DEPLOYMENT.md": "# Implantacao\n",
+            # CR-022a: a aplicacao e a raiz; o que e so da maquina de desenvolvimento fica fora
+            "AGENTS.md": "# regras\n", "README.md": "# SSS\n", "Makefile": "x", "LEIA-ME.TXT": "x",
+            ".git/config": "x", ".gitignore": "x", "input/a.txt": "x", "output/b.zip": "x", "script_work/c": "x",
         }
         for rel, text in files.items():
             self._write(rel, text)
@@ -92,15 +94,15 @@ class TestPack(unittest.TestCase):
                 self.assertEqual(hashlib.sha256(tar.extractfile(top + rel).read()).hexdigest(), hash_, rel)
         files = set(n for n, m in members.items() if m.isfile())
         self.assertEqual(members["bin/sss-helper"].mode, 0o755, "helper executavel")
-        self.assertEqual((members["bin/sss-helper"].uid, members[APP + "/scripts/run_web.py"].mode),
+        self.assertEqual((members["bin/sss-helper"].uid, members["scripts/run_web.py"].mode),
                          (0, 0o644))
         for rel in ("bin/sss-web.sh", "bin/sss-scheduler.sh", "bin/sss-stop.sh",
-                    APP + "/controllers/default.py", APP + "/scripts/run_web.py",
-                    APP + "/webapp/bootstrap.py", APP + "/scripts/purge.py",
-                    APP + "/instance/config.ini.example", APP + "/instance/secrets.cfg.example",
-                    APP + "/docs/DEPLOYMENT.md"):
+                    "controllers/default.py", "scripts/run_web.py",
+                    "webapp/bootstrap.py", "scripts/purge.py",
+                    "instance/config.ini.example", "instance/secrets.cfg.example",
+                    "docs/DEPLOYMENT.md"):
             self.assertIn(rel, files)
-        forbidden = [n for n in members if any(n == APP + "/" + p or n.startswith(APP + "/" + p + "/") for p in (
+        forbidden = [n for n in members if any(n == p or n.startswith(p + "/") for p in (
             "applications", "deposit", "logs", "site-packages", "scripts/logs", "work", "dev", "views/dev",
             "modules/repo_fake", "controllers/dev.py", "instance/config.ini", "scripts/test_purge.py",
             "scripts/_testenv.py", "sessions", "errors"))]
@@ -108,39 +110,42 @@ class TestPack(unittest.TestCase):
         # CR-021f: nada do web2py, nem pasta de runtime vazia
         self.assertFalse([n for n in members
                           if n.split("/", maxsplit=1)[0] in empacotar.WEB2PY_ROOT_LEFTOVERS])
-        self.assertFalse(set(("bin/start_local.sh", "CLAUDE.md", "parameters_8000.py")) & files)
+        self.assertFalse(set(("bin/start_local.sh", "CLAUDE.md", "parameters_8000.py", "Makefile", "LEIA-ME.TXT",
+                              ".gitignore")) & files)
+        self.assertFalse([n for n in members if n.split("/", maxsplit=1)[0] in (".git", "input", "output", "script_work")])
+        self.assertIn("AGENTS.md", files)
 
     def test_tar_reprodutivel(self):
         self.assertEqual(self._main()[0], 0)
         with open(self._package(), "rb") as f:
             first = f.read()
-        os.utime(os.path.join(self.origem, APP, "scripts", "run_web.py"), (1, 1))
+        os.utime(os.path.join(self.origem, "scripts", "run_web.py"), (1, 1))
         self.assertEqual(self._main()[0], 0)
         with open(self._package(), "rb") as f:
             self.assertEqual(f.read(), first)
 
     def test_falha_com_secrets_cfg_na_arvore(self):
-        self._write(APP + "/instance/secrets.cfg", "[oracle]\npassword = %s\n" % SECRET)
+        self._write("instance/secrets.cfg", "[oracle]\npassword = %s\n" % SECRET)
         text = self._refused("instance/secrets.cfg: arquivo de segredos real")
         self.assertIn("instance/secrets.cfg:2: password", text)
 
     def test_exemplo_com_senha_que_nao_e_placeholder(self):
-        self._write(APP + "/instance/secrets.cfg.example", "[oracle]\npassword = %s  ; teste\n" % SECRET)
+        self._write("instance/secrets.cfg.example", "[oracle]\npassword = %s  ; teste\n" % SECRET)
         self._refused("secrets.cfg.example:2: password com valor que nao e o placeholder CHANGE_ME")
 
     def test_change_me_so_no_exemplo_de_segredos(self):
-        self._write(APP + "/instance/outro.cfg.example", "[x]\npassword = CHANGE_ME\n")
+        self._write("instance/outro.cfg.example", "[x]\npassword = CHANGE_ME\n")
         self._refused("instance/outro.cfg.example:2: password")
 
     def test_cookie_key_em_ini(self):
-        self._write(APP + "/instance/config.ini.example", "[web]\ncookie_key = %s\n" % SECRET)
+        self._write("instance/config.ini.example", "[web]\ncookie_key = %s\n" % SECRET)
         self._refused("config.ini.example:2: cookie_key")
 
     def test_bytecode_link_e_outra_aplicacao(self):
-        self._write(APP + "/modules/x.pyc", "x")
-        self._write(APP + "/modules/__pycache__/y.cpython-36.pyc", "x")
+        self._write("modules/x.pyc", "x")
+        self._write("modules/__pycache__/y.cpython-36.pyc", "x")
         self._write("applications/admin/controllers/default.py", "x")
-        os.symlink("/etc", os.path.join(self.origem, APP, "modules", "fora"))
+        os.symlink("/etc", os.path.join(self.origem, "modules", "fora"))
         text = self._refused("modules/x.pyc: bytecode")
         self.assertIn("__pycache__/y.cpython-36.pyc: bytecode", text)
         self.assertIn("modules/fora: link simbolico", text)
@@ -160,8 +165,8 @@ class TestPack(unittest.TestCase):
         self.assertEqual(self._main()[0], 0, "sem os restos, o pacote sai")
 
     def test_verificar_codigo_de_dev_e_admin(self):
-        problems = empacotar.check([APP + "/controllers/dev.py", APP + "/modules/repo_fake/a.py",
-                                        "applications/admin/x.py", APP + "/deposit/x", APP + "/sessions/s",
+        problems = empacotar.check(["controllers/dev.py", "modules/repo_fake/a.py",
+                                        "applications/admin/x.py", "deposit/x", "sessions/s",
                                         "gluon/main.py", "web2py.py"], lambda rel: b"")
         self.assertEqual(len(problems), 7, problems)
 
@@ -170,14 +175,14 @@ class TestPack(unittest.TestCase):
         modules/__pycache__ na propria copia, e o pacote era recusado por bytecode."""
         here = os.path.dirname(os.path.abspath(__file__))
         with open(os.path.join(here, "package.py"), encoding="utf-8") as f:
-            self._write(APP + "/scripts/package.py", f.read())
-        self._write(APP + "/modules/sss_config.py",
+            self._write("scripts/package.py", f.read())
+        self._write("modules/sss_config.py",
                     f"SSS_VERSION = {empacotar.sss_config.SSS_VERSION!r}\n")
-        p = subprocess.run([sys.executable, os.path.join(self.origem, APP, "scripts", "package.py"),
+        p = subprocess.run([sys.executable, os.path.join(self.origem, "scripts", "package.py"),
                             "--source", self.origem, "--out-dir", self.saida], check=False,
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
         self.assertEqual(p.returncode, 0, p.stdout.decode("utf-8", "replace"))
-        self.assertFalse(os.path.exists(os.path.join(self.origem, APP, "modules", "__pycache__")))
+        self.assertFalse(os.path.exists(os.path.join(self.origem, "modules", "__pycache__")))
 
     def test_helper_ausente(self):
         os.remove(os.path.join(self.origem, "bin", "sss-helper"))
@@ -188,8 +193,8 @@ class TestPack(unittest.TestCase):
         files, _problems = empacotar.collect(empacotar.DEFAULT_ROOT)
         self.assertFalse([a for a in files if "/repo_fake/" in a or a.endswith("controllers/dev.py")
                           or "/scripts/test_" in a or a.endswith("instance/config.ini")])
-        self.assertIn(APP + "/modules/repo_oracle/purge.py", files)
-        self.assertIn(APP + "/scripts/run_web.py", files)
+        self.assertIn("modules/repo_oracle/purge.py", files)
+        self.assertIn("scripts/run_web.py", files)
         self.assertEqual(_problems, [], "a arvore real nao tem resto do web2py nem link (CR-021f)")
 
 
@@ -203,7 +208,7 @@ class TestPackageStartsWithoutDev(unittest.TestCase):
         excluded = ("repo_fake", "dev", "_testenv", "_oracle_test_support", "_output_memory")
         violations = []
         for rel in files:
-            if not rel.startswith(APP + "/") or not rel.endswith(".py"):
+            if rel.startswith("bin/") or not rel.endswith(".py"):
                 continue
             with open(os.path.join(empacotar.DEFAULT_ROOT, rel), encoding="utf-8") as f:
                 tree = ast.parse(f.read(), rel)

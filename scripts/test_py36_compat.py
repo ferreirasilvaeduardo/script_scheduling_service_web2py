@@ -301,7 +301,7 @@ class TestPy36Compat(unittest.TestCase):
     def setUp(self):
         scripts_dir = os.path.dirname(os.path.abspath(__file__))
         self.app_dir = os.path.dirname(scripts_dir)
-        self.repo_root = os.path.dirname(os.path.dirname(self.app_dir))
+        self.repo_root = self.app_dir  # CR-022a: a aplicacao e a raiz do repositorio
 
     def test_compilacao_python_36(self):
         """Compila todos os .py de APP e bin/ sob gramatica do Python 3.6."""

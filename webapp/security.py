@@ -15,13 +15,14 @@ import app_context
 import auth_service
 import rbac
 import security
+import sss_config
 import sss_logging
 import ui_helpers
 import ui_menu
 from repo_errors import RepoUnavailable
 from web import HTTP, Context, Markup, decode_path_info, escape, redirect
 
-from . import VERSION, context
+from . import context
 from .context import URL, request, response, session
 
 LOGIN = ("default", "login")
@@ -85,7 +86,8 @@ def before_request(ctx: Context) -> None:
     context.bind(ctx)
     cfg = app_context.require_config()
     response.sss_env = cfg.app.sss_env
-    response.sss_version = VERSION
+    # Mesma versao do pacote e do log do agente (CR-022a; antes, um 0.1.0 fixo herdado do web2py).
+    response.sss_version = sss_config.SSS_VERSION
     response.sss_menu = []
     _revalidate(cfg)
     if not session.csrf_token:

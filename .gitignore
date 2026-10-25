@@ -4,15 +4,17 @@
 *.pyc
 __pycache__/
 
-# Somente a aplicacao do SSS fica em applications/
-applications/*
-!applications/script_scheduling_service/
-
 # SSS instance configuration (only .example is tracked)
-applications/script_scheduling_service/instance/config.ini
-applications/script_scheduling_service/instance/web.env
-applications/script_scheduling_service/logs/
-applications/script_scheduling_service/work/
+/instance/config.ini
+/instance/web.env
+
+# Pastas de execucao do DEV (logs, trabalho do agente, entrada, saida e pasta de trabalho dos scripts)
+/logs/
+/work/
+/input/
+/output/
+/script_work/
+/dist/
 
 # Logs and secrets
 *.log
@@ -28,16 +30,14 @@ bin/sss-web-*_v*.sh
 /cron.master
 /welcome.w2p
 /gluon/
+/applications/
 
 # Pacotes de implantacao gerados (binarios)
-/applications/script_scheduling_service/docs/sss_packages/*.tar.gz
-/applications/script_scheduling_service/docs/sss_packages/*.sha256
-/applications/script_scheduling_service/docs/sss_dev_script_examples/
+/docs/sss_packages/*.tar.gz
+/docs/sss_packages/*.sha256
+/docs/sss_dev_script_examples/
 # Capturas do manual de homologacao: ja ficam dentro do .docx (dev/homologation/README.md)
-applications/script_scheduling_service/dev/homologation/screens/
+/dev/homologation/screens/
 # Evidencias reais (2026-10-22): capturas e estado da rodada; o .docx e o results.json sao versionados
-applications/script_scheduling_service/dev/homologation/evidence_*/*.png
-applications/script_scheduling_service/dev/homologation/evidence_*/state.json
-applications/script_scheduling_service/output/
-applications/script_scheduling_service/input/
-applications/script_scheduling_service/script_work/
+/dev/homologation/evidence_*/*.png
+/dev/homologation/evidence_*/state.json

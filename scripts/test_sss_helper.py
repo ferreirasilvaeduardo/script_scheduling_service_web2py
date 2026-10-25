@@ -15,8 +15,8 @@ import time
 import unittest
 from unittest import mock
 
-WEB2PY = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
-HELPER = os.path.join(WEB2PY, "bin", "sss-helper")
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+HELPER = os.path.join(REPO_ROOT, "bin", "sss-helper")
 
 
 _COPY = {}

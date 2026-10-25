@@ -16,7 +16,7 @@ import app_context
 
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODULES_DIR = os.path.join(APP_DIR, "modules")
-REPO_ROOT = os.path.dirname(os.path.dirname(APP_DIR))
+REPO_ROOT = APP_DIR  # CR-022a: a aplicacao e a raiz do repositorio
 # Codigo que roda: a aplicacao (sem docs/, que guarda o historico) e os launchers da raiz.
 CODE_DIRS = (os.path.join(REPO_ROOT, "bin"),) + tuple(
     os.path.join(APP_DIR, name) for name in ("controllers", "modules", "scripts", "views", "webapp"))
@@ -82,7 +82,7 @@ class ModulesWithoutGluonTest(unittest.TestCase):
     def test_no_python_file_imports_gluon(self):
         """CR-021f: sem web2py no repositorio; nenhum .py da aplicacao nem do bin/ importa gluon."""
         offenders = []
-        roots = [(APP_DIR, ("docs",)), (os.path.join(REPO_ROOT, "bin"), ())]
+        roots = [(APP_DIR, ("docs", ".git", ".bkp")), (os.path.join(REPO_ROOT, "bin"), ())]
         for top, skipped in roots:
             for base, dirs, files in os.walk(top):
                 dirs[:] = [d for d in dirs

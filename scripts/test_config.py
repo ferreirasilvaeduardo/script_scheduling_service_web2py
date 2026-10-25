@@ -29,7 +29,7 @@ class TestConfig(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp(prefix="sss_test_")
         self.app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.repo_root = os.path.dirname(os.path.dirname(self.app_dir))
+        self.repo_root = self.app_dir  # CR-022a: a aplicacao e a raiz do repositorio
         self.example_ini = os.path.join(self.app_dir, "instance", "config.ini.example")
 
         # masking.py ainda nao existe; o substituto registra o que load_secrets entrega.
@@ -136,13 +136,13 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(cfg.oracle.pool_max, 4)
 
         # [secrets]
-        self.assertEqual(cfg.secrets.secrets_file, "/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/instance")
+        self.assertEqual(cfg.secrets.secrets_file, "/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/instance")
 
         # [agent]
         self.assertEqual(cfg.agent.agent_id, "srv-linux-prod-01")
         self.assertEqual(cfg.agent.environments, ("PRODUCAO", "HOMOLOGACAO"))
         self.assertFalse(hasattr(cfg.agent, "base_script_dirs"))
-        self.assertEqual(cfg.agent.work_dir, "/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/work")
+        self.assertEqual(cfg.agent.work_dir, "/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/work")
         self.assertFalse(hasattr(cfg.agent, "script_owner_uids"), "CR-011")
         self.assertEqual(cfg.agent.max_parallel_jobs, 4)
         self.assertEqual(cfg.agent.max_parallel_hard_limit, 32)
@@ -167,7 +167,7 @@ class TestConfig(unittest.TestCase):
         )
 
         # [logging]
-        self.assertEqual(cfg.logging.log_dir, "/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/logs")
+        self.assertEqual(cfg.logging.log_dir, "/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/logs")
         self.assertEqual(cfg.logging.level, "INFO")
         self.assertEqual(cfg.logging.app_log_max_bytes, 10485760)
         self.assertEqual(cfg.logging.app_log_retention_days, 30)
@@ -793,10 +793,10 @@ class TestConfigCR007(unittest.TestCase):
                      agent={"exec_users": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml"})
         self._refusal("exec_work_dir", app=base, retention=ret,
                      agent={"exec_users": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml",
-                            "exec_work_dir": "/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/work/exec"})
+                            "exec_work_dir": "/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/work/exec"})
         cfg = self._load(app=base, retention=ret, agent={"exec_users": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml",
-                                                            "exec_work_dir": "/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/exec"})
-        self.assertEqual(cfg.agent.exec_work_dir, "/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/exec")
+                                                            "exec_work_dir": "/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/exec"})
+        self.assertEqual(cfg.agent.exec_work_dir, "/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/exec")
 
     def test_purge_user(self):
         """Vazio em DEV = purge desligado; fora de DEV e obrigatorio; nunca igual a conta ou ao owner."""
@@ -805,12 +805,12 @@ class TestConfigCR007(unittest.TestCase):
         self._refusal("purge_user", retention={"purge_user": "openrisow"})
         self.assertEqual(self._load(retention={"purge_user": "sss_purge"}).retention.purge_user, "sss_purge")
         agent = {"exec_users": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml",
-                 "exec_work_dir": "/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/exec"}
+                 "exec_work_dir": "/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/exec"}
         self._refusal("purge_user", app={"sss_env": "HML"}, agent=agent)
 
     def test_cr008_user_diferente_do_owner_fora_de_dev(self):
         ret = {"purge_user": "sss_purge"}
-        agent = {"exec_users": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml", "exec_work_dir": "/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/exec"}
+        agent = {"exec_users": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml", "exec_work_dir": "/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/exec"}
         self._refusal("user", app={"sss_env": "HML"}, retention=ret, agent=agent,
                      oracle={"user": "OPENRISOW"})
         cfg = self._load(app={"sss_env": "DEV"}, retention=ret,
@@ -897,7 +897,7 @@ class TestConfigCR007(unittest.TestCase):
     def test_segredos_do_agente_cobrem_os_ambientes(self):
         cfg = self._load(app={"sss_env": "HML"}, retention={"purge_user": "sss_purge"},
                              agent={"exec_users": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml",
-                                    "exec_work_dir": "/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/exec"})
+                                    "exec_work_dir": "/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/exec"})
         only_prod = [("oracle", {"password": "senha-agt-123"}),
                    ("environment:PRODUCAO", {"user": "app", "password": "senha-amb-123"})]
         with self.assertRaises(sss_config.ConfigError) as ctx:

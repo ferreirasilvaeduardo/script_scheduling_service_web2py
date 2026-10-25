@@ -27,8 +27,9 @@ HELPER = "/opt/sss/bin/sss-helper"
 SUDO = "/usr/bin/sudo"
 # Copia do helper no pacote (bin/sss-helper): em DEV sem usuario de execucao, os subcomandos da saida
 # (CR-012) rodam com o proprio usuario do agente, pela mesma implementacao do servidor.
+# modules/os_platform/ -> raiz do repositorio, que e a propria aplicacao desde o CR-022a.
 PACKAGE_HELPER = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                             "..", "..", "..", "..", "bin", "sss-helper"))
+                                             "..", "..", "bin", "sss-helper"))
 # Codigos do helper put-input (CR-020c, README §8.0 e §8.14).
 INPUT_EXISTS = 9
 INPUT_SPACE = 10

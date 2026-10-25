@@ -14,7 +14,7 @@ class TestEnvSkeleton(unittest.TestCase):
     def setUp(self):
         self.scripts_dir = os.path.dirname(os.path.abspath(__file__))
         self.app_dir = os.path.dirname(self.scripts_dir)
-        self.repo_root = os.path.dirname(os.path.dirname(self.app_dir))
+        self.repo_root = self.app_dir  # CR-022a: a aplicacao e a raiz do repositorio
 
     def test_sys_path_configured(self):
         """_testenv poe app_dir e modules/ em sys.path (a raiz do repositorio saiu no CR-021f)."""
@@ -79,10 +79,10 @@ class TestEnvSkeleton(unittest.TestCase):
         required_patterns = [
             "*.pyc",
             "__pycache__/",
-            "applications/script_scheduling_service/instance/config.ini",
-            "applications/script_scheduling_service/instance/web.env",
-            "applications/script_scheduling_service/logs/",
-            "applications/script_scheduling_service/work/",
+            "/instance/config.ini",
+            "/instance/web.env",
+            "/logs/",
+            "/work/",
             # Sobras do web2py numa copia antiga (CR-021f): o hash da senha do painel dele
             "/parameters_*.py",
             "*.log",

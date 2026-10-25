@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """Configuracao do ambiente de execucao para testes unitarios.
 
-Insere dinamicamente em sys.path a raiz da aplicacao
-(applications/script_scheduling_service) e modules/, calculadas a partir de __file__.
+Insere dinamicamente em sys.path a raiz da aplicacao (que e a raiz do repositorio desde o
+CR-022a) e modules/, calculadas a partir de __file__.
 A raiz do repositorio nao entra: desde o CR-021f nao ha web2py nela.
 """
 import os
