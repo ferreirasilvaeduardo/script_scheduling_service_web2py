@@ -29,9 +29,10 @@ class TestDeploymentGuide(unittest.TestCase):
         for name in sorted(set(re.findall(r"\bbin/([A-Za-z0-9_.-]+\.sh|sss-helper)\b", body))):
             if not os.path.isfile(os.path.join(ROOT, "bin", name)):
                 missing.append("bin/" + name)
-        for name in sorted(set(re.findall(r"\bscripts/([A-Za-z0-9_]+\.py)\b", body))):
-            if not os.path.isfile(os.path.join(APP, "scripts", name)):
-                missing.append("scripts/" + name)
+        for folder in ("scripts", "tools"):
+            for name in sorted(set(re.findall(r"\b%s/([A-Za-z0-9_]+\.py)\b" % folder, body))):
+                if not os.path.isfile(os.path.join(APP, folder, name)):
+                    missing.append(folder + "/" + name)
         for name in sorted(set(re.findall(r"\bdocs/sql/([0-9]{2}_[a-z_]+\.sql)\b", body))):
             if not os.path.isfile(os.path.join(APP, "docs", "sql", name)) and name != "03_grants_sss.sql":
                 missing.append("docs/sql/" + name)

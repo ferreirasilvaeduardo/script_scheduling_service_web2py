@@ -345,7 +345,9 @@ bin/
     run_scheduler.py          # [F8.3] entrypoint do daemon
     run_web.py                # [CR-021e] entrypoint do servidor web (núcleo próprio, sem web2py)
     purge.py                  # [F9.1] retenção (§11.3)
-    check_env.py, generate_sql.py, package.py  # diagnóstico do ambiente, SQL de implantação, pacote (§12.2)
+    check_env.py, generate_sql.py  # diagnóstico do ambiente e SQL de implantação (§12.2)
+  tools/                      # [CR-022b2] ferramentas de build e desenvolvimento, fora do pacote
+    package.py                # gera o pacote de implantação (§12.2)
   tests/                      # [CR-022b1] testes unittest por recurso usado (AGENTS.md §7; nunca implantados)
     unit/<camada>/            # sem banco real nem rede: config, core, platform, persistence, ui, services, scheduler, web, cli, tools
     integration/oracle/       # Oracle real, só com SSS_TEST_ORACLE=1 (<arquivo>_oracle.py: a parte Oracle de um teste unitário)
@@ -361,7 +363,7 @@ bin/
   dev/web_harness/             # [CR-021] roteiros Playwright das telas contra o backend FAKE (nunca implantados)
                               # (capture_evidence.js + build_evidence_docx.py; Puppeteer e .docx; nunca implantadas)
 docs/
-  prompts/                    # prompts de execução faseada (UI-first)
+  prompts/                    # histórico: prompts com que as fases F0 a F9 foram construídas (caminhos de antes do CR-022a)
   homologation/               # manual de homologação (UI Freeze, histórico) e evidências reais no DEV (2026-10-22)
 /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/instance          # segredos fora do repositório, modo 0600, um arquivo por papel (§4.1)
 /opt/sss/bin/sss-helper       # cópia do bin/sss-helper, dono root, 0755 (§8.0)
@@ -2922,10 +2924,10 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
 
 `bin/sss-helper` (CR-007, D1) é o helper de execução do §8.0. O pacote o leva, mas ele só vale depois de copiado pelo root para `/opt/sss/bin/sss-helper` (dono root, `0755`), com a regra de sudoers do `DEPLOYMENT.md`.
 
-**Pacote de implantação (F9.1; sem web2py desde o CR-021f3):** `python scripts/package.py [--source <raiz do repositório>] [--out-dir <pasta>]`, só com a biblioteca padrão.
+**Pacote de implantação (F9.1; sem web2py desde o CR-021f3):** `python tools/package.py [--source <raiz do repositório>] [--out-dir <pasta>]`, só com a biblioteca padrão. Fica em `tools/` (CR-022b2), fora do pacote que gera.
 * Gera `<saida>/sss-<version>.tar.gz` (padrão `<origem>/dist/`; versão `sss_config.SSS_VERSION`), com tudo sob `sss-<versao>/` e um `SHA256SUMS` de cada arquivo dentro do pacote, e `<saida>/SHA256SUMS` com o hash do `tar.gz` (`sha256sum -c SHA256SUMS`). O tar é reprodutível: ordem, dono (0), data e modos fixos (`0755` no `bin/`, `0644` nos demais arquivos).
 * **Entram (lista de permissão da raiz, CR-022a):** `bin/sss-web.sh`, `bin/sss-scheduler.sh`, `bin/sss-stop.sh`, `bin/sss-helper`, `AGENTS.md`, `README.md` e as pastas `controllers/`, `docs/`, `instance/` (só os `*.example`), `modules/`, `scripts/`, `static/`, `views/` e `webapp/`, todas no topo do pacote, como no repositório. O resto da raiz (`.git`, `Makefile`, `CLAUDE.md`, `dev/`, `input/`, `output/`, `logs/`, `work/`...) é da máquina de desenvolvimento e não entra. O servidor web é o `scripts/run_web.py` da própria aplicação; nada do web2py entra (nem pasta de runtime vazia), e `applications/` na origem recusa o pacote.
-* **Não entram:** `controllers/dev.py`, `views/dev/`, `dev/`, `modules/repo_fake/`, `instance/config.ini`, `instance/web.env`, `log/`, `logs/`, `work/`, `exec/`, os testes (`tests/`, fora da lista de permissão desde o CR-022b1; um `scripts/test_*.py` perdido também fica fora), as pastas de runtime que o web2py criava dentro da aplicação numa cópia antiga (`sessions`, `errors`, `cache`, `databases`, `uploads`, `private`, `cron`, `applications`, `deposit`, `site-packages`), os launchers de DEV e os demais arquivos da raiz.
+* **Não entram:** `controllers/dev.py`, `views/dev/`, `dev/`, `modules/repo_fake/`, `instance/config.ini`, `instance/web.env`, `log/`, `logs/`, `work/`, `exec/`, os testes (`tests/`, fora da lista de permissão desde o CR-022b1; um `scripts/test_*.py` perdido também fica fora), as ferramentas de build (`tools/`, CR-022b2), as pastas de runtime que o web2py criava dentro da aplicação numa cópia antiga (`sessions`, `errors`, `cache`, `databases`, `uploads`, `private`, `cron`, `applications`, `deposit`, `site-packages`), os launchers de DEV e os demais arquivos da raiz.
 * **Recusa** (código 1, sem gravar nada) se o pacote tiver um `secrets.cfg` real, `*.pyc`, `__pycache__`, `controllers/dev.py`, `repo_fake`, outra aplicação (`/admin/`, `welcome`, `examples`), resto do web2py (`gluon/`, `web2py.py`, `anyserver.py` ou `routes.py` na raiz, ou pasta de runtime dele), link simbólico, ou `password`/`cookie_key` com valor em `.ini`, `.cfg`, `.ini.example` ou `.cfg.example` (pelo nome do arquivo). A única exceção é o valor exato `CHANGE_ME` em `instance/secrets.cfg.example`. A mensagem cita arquivo e linha, nunca o valor.
 * O `package.py` não grava bytecode (`sys.dont_write_bytecode`), para poder rodar de dentro da própria cópia que empacota (CR-021f3). Uma árvore de desenvolvimento sempre tem `__pycache__` e o `secrets.cfg` local, então o pacote é gerado de uma cópia limpa: `git archive HEAD | tar -x -C <pasta>` e `python <pasta>/scripts/package.py --source <pasta>`.
 

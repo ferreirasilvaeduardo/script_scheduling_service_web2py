@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Testes do scripts/package.py (README §12.2; F9.1c; CR-005; CR-003 P10).
+"""Testes do tools/package.py (README §12.2; F9.1c; CR-005; CR-003 P10).
 
 Arvore falsa do repositorio em diretorio temporario: pacote gerado, SHA256SUMS de fora conferindo com o tar.gz e o
 de dentro com cada arquivo, tar reprodutivel, bin/sss-helper executavel, sem nada do web2py (CR-021f), DEV, testes
@@ -44,6 +44,7 @@ class TestPack(unittest.TestCase):
                                                    "[purge]\npassword = ...\n",
             "scripts/purge.py": "x", "scripts/test_purge.py": "x",
             "tests/__init__.py": "x", "tests/unit/test_purge.py": "x", "tests/support/_testenv.py": "x",
+            "tools/package.py": "x",
             "scripts/logs/a.log": "x", "deposit/x": "x",
             "logs/x": "x", "site-packages/x": "x", "sessions/abc": "x", "errors/e": "x",
             "work/sss-a.lock": "x", "docs/DEPLOYMENT.md": "# Implantacao\n",
@@ -106,7 +107,7 @@ class TestPack(unittest.TestCase):
         forbidden = [n for n in members if any(n == p or n.startswith(p + "/") for p in (
             "applications", "deposit", "logs", "site-packages", "scripts/logs", "work", "dev", "views/dev",
             "modules/repo_fake", "controllers/dev.py", "instance/config.ini", "scripts/test_purge.py",
-            "tests", "sessions", "errors"))]
+            "tests", "tools", "sessions", "errors"))]
         self.assertEqual(forbidden, [])
         # CR-021f: nada do web2py, nem pasta de runtime vazia
         self.assertFalse([n for n in members
@@ -174,11 +175,11 @@ class TestPack(unittest.TestCase):
     def test_rodando_de_dentro_da_copia_que_empacota(self):
         """Regressao do ensaio do CR-021f3: o package.py da copia limpa importava o sss_config e gravava
         modules/__pycache__ na propria copia, e o pacote era recusado por bytecode."""
-        with open(os.path.join(_testenv.APP_DIR, "scripts", "package.py"), encoding="utf-8") as f:
-            self._write("scripts/package.py", f.read())
+        with open(os.path.join(_testenv.APP_DIR, "tools", "package.py"), encoding="utf-8") as f:
+            self._write("tools/package.py", f.read())
         self._write("modules/sss_config.py",
                     f"SSS_VERSION = {empacotar.sss_config.SSS_VERSION!r}\n")
-        p = subprocess.run([sys.executable, os.path.join(self.origem, "scripts", "package.py"),
+        p = subprocess.run([sys.executable, os.path.join(self.origem, "tools", "package.py"),
                             "--source", self.origem, "--out-dir", self.saida], check=False,
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
         self.assertEqual(p.returncode, 0, p.stdout.decode("utf-8", "replace"))
@@ -192,7 +193,7 @@ class TestPack(unittest.TestCase):
         # Coleta da propria arvore: as regras de inclusao nunca puxam DEV, testes nem runtime.
         files, _problems = empacotar.collect(empacotar.DEFAULT_ROOT)
         self.assertFalse([a for a in files if "/repo_fake/" in a or a.endswith("controllers/dev.py")
-                          or a.startswith(("tests/", "scripts/test_")) or a.endswith("instance/config.ini")])
+                          or a.startswith(("tests/", "tools/", "scripts/test_")) or a.endswith("instance/config.ini")])
         self.assertIn("modules/repo_oracle/purge.py", files)
         self.assertIn("scripts/run_web.py", files)
         self.assertEqual(_problems, [], "a arvore real nao tem resto do web2py nem link (CR-021f)")

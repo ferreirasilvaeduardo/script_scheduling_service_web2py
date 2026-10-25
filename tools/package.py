@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """Pacote de implantacao (README §12.2; F9.1c; CR-005; CR-003 P10). Biblioteca padrao apenas.
 
-Uso: python scripts/package.py [--source <raiz do repositorio>] [--out-dir <pasta>]
+Uso: python tools/package.py [--source <raiz do repositorio>] [--out-dir <pasta>]
+
+Ferramenta de build (CR-022b2): fica em tools/, fora do pacote que ela mesma gera.
 
 Gera <saida>/sss-<versao>.tar.gz (tudo sob sss-<versao>/, com um SHA256SUMS de cada arquivo) e <saida>/SHA256SUMS
 com o hash do tar.gz. A versao e sss_config.SSS_VERSION. O tar e deterministico (ordem, dono, data e modos fixos).
@@ -22,8 +24,8 @@ import re
 import sys
 import tarfile
 
-_SCRIPTS = os.path.dirname(os.path.abspath(__file__))
-_APP_DIR = os.path.dirname(_SCRIPTS)
+_TOOLS = os.path.dirname(os.path.abspath(__file__))
+_APP_DIR = os.path.dirname(_TOOLS)
 sys.path.insert(0, os.path.join(_APP_DIR, "modules"))
 # Rodando de dentro da copia limpa que vai empacotar, o import abaixo gravaria modules/__pycache__ nela
 # e o proprio pacote seria recusado por bytecode (achado no ensaio do CR-021f3).

@@ -93,11 +93,11 @@ O pacote é gerado na máquina de desenvolvimento, a partir de uma cópia **limp
 ```bash
 # na máquina de desenvolvimento, no commit a implantar
 mkdir -p /tmp/sss-limpo && git archive HEAD | tar -x -C /tmp/sss-limpo
-python3 /tmp/sss-limpo/scripts/package.py --source /tmp/sss-limpo --out-dir /tmp/sss-dist
+python3 /tmp/sss-limpo/tools/package.py --source /tmp/sss-limpo --out-dir /tmp/sss-dist
 # esperado: "Pacote: .../sss-<versao>.tar.gz" e "SHA256SUMS: .../SHA256SUMS"; código 0
 ```
 
-Ensaiado de novo no CR-021f3, já sem web2py: o `package.py` não grava `__pycache__` na cópia que empacota (antes, o próprio `__pycache__` recusava o pacote). Com código 1, a saída diz o que foi recusado ("Pacote recusado:" e uma linha por problema, com arquivo e linha, nunca o valor). O caso comum é um `password` ou `cookie_key` que não é `CHANGE_ME` no `instance/secrets.cfg.example`.
+O `package.py` fica em `tools/` desde o CR-022b2 (antes, `scripts/`): é ferramenta de build e não vai no pacote. Ensaiado de novo no CR-021f3, já sem web2py: o `package.py` não grava `__pycache__` na cópia que empacota (antes, o próprio `__pycache__` recusava o pacote). Com código 1, a saída diz o que foi recusado ("Pacote recusado:" e uma linha por problema, com arquivo e linha, nunca o valor). O caso comum é um `password` ou `cookie_key` que não é `CHANGE_ME` no `instance/secrets.cfg.example`.
 
 Leve os dois arquivos (`sss-<version>.tar.gz` e `SHA256SUMS`) ao servidor e confira:
 

@@ -21,10 +21,11 @@ class TestEnvSkeleton(unittest.TestCase):
         self.repo_root = self.app_dir  # CR-022a: a aplicacao e a raiz do repositorio
 
     def test_sys_path_configured(self):
-        """_testenv poe app_dir, modules/ e scripts/ em sys.path (scripts/ ate o CR-022b8)."""
+        """_testenv poe app_dir, modules/, scripts/ (ate o CR-022b8) e tools/ em sys.path."""
         self.assertIn(self.app_dir, sys.path)
         self.assertIn(os.path.join(self.app_dir, "modules"), sys.path)
         self.assertIn(os.path.join(self.app_dir, "scripts"), sys.path)
+        self.assertIn(os.path.join(self.app_dir, "tools"), sys.path)
 
     def test_directory_skeleton_exists(self):
         """Verifica presenca de todos os diretorios requeridos pelo README §3.2."""
@@ -37,6 +38,7 @@ class TestEnvSkeleton(unittest.TestCase):
             os.path.join(self.app_dir, "modules", "repo_oracle"),
             os.path.join(self.app_dir, "scripts"),
             os.path.join(self.app_dir, "tests"),
+            os.path.join(self.app_dir, "tools"),
             os.path.join(self.app_dir, "views"),
             os.path.join(self.app_dir, "views", "components"),
             os.path.join(self.app_dir, "static", "css"),

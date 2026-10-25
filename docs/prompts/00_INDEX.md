@@ -1,5 +1,7 @@
 # SSS — Plano de Execução UI-First (Antigravity)
 
+> **Histórico (CR-022b2, 2026-10-25).** Estes prompts são o roteiro com que as fases F0 a F9 foram construídas, todas concluídas. Eles ficam como foram executados e **não** descrevem o código atual: os caminhos são os de antes do CR-022a (`APP` = `applications/script_scheduling_service`, testes em `scripts/`), e vários nomes de arquivo, tabela e rota são os de antes da tradução para o inglês (CR-016). Para o estado atual, valem o `README.md`, o `AGENTS.md` e os documentos de `docs/architecture/`. Uma mudança nova é planejada a partir deles, não destes prompts.
+
 ## Como usar
 
 1. **Regra permanente:** cadastre o conteúdo integral do `AGENTS.md` como regra do workspace no Antigravity. Assim ela vale em toda conversa.
