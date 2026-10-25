@@ -373,6 +373,9 @@ bin/
     architecture/             # regras lidas no código e nos documentos (Python 3.6, AST, pacote, contraste)
     support/                  # _testenv (sys.path com a raiz, src/ e tools/; APP_DIR e WEB_DIR), _oracle_test_support, _output_memory
   instance/config.ini         # configuração sem segredos (§12)
+  .flake8                     # [CR-022b9] lint: 99 colunas e a dívida anterior por arquivo (só diminui; AGENTS §1)
+  pyproject.toml              # [CR-022b9] só configuração de ferramentas (mypy estrito com a dívida por módulo, isort, autopep8, pylint); sem [project], sem pip install
+  Makefile                    # alvos de teste (test-*), lint (portão flake8), type-check (mypy) e pacote; só DEV
   dev/scripts/                # árvore de scripts de exemplo para DEV/testes (nunca implantada)
   dev/homologation/            # ferramentas de homologação: figuras do manual de UI Freeze e evidências reais no DEV
   dev/web_harness/             # [CR-021] roteiros Playwright das telas contra o backend FAKE (nunca implantados)

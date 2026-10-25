@@ -187,6 +187,15 @@ for v in 3.6.0 3.6.8 3.13.2; do ~/.pyenv/versions/$v/bin/python -m unittest disc
 
 O `tests/support/_testenv.py` põe no `sys.path` a raiz da aplicação, `src/` (pacote `sss`, CR-022b3; ferramentas de operação em `sss.cli`, CR-022b8) e `tools/`, calculados a partir do próprio arquivo, e expõe `APP_DIR`. Todo teste o importa primeiro (`from tests.support import _testenv`). Cada pasta de `tests/` tem `__init__.py`: sem ele, o `unittest` do Python 3.6 não descobre os testes da pasta.
 
+**Lint e tipos (CR-022b9, AGENTS §1):** `flake8`, `mypy`, `pylint`, `isort` e `autopep8` ficam no Python 3.11 da máquina de desenvolvimento (o 3.6 não tem as versões atuais), que não precisa de driver Oracle para isso:
+
+```bash
+make lint PYTHON=~/.pyenv/versions/3.11.11/bin/python3        # flake8 nos .py versionados: zero achados
+make type-check PYTHON=~/.pyenv/versions/3.11.11/bin/python3  # mypy estrito em src/sss: zero achados
+```
+
+Arquivo novo ou alterado segue 99 colunas e tipos estritos; a dívida antiga está listada no `.flake8` e no `pyproject.toml` e só diminui.
+
 ---
 
 ## 6. Árvore de Scripts de Exemplo (`dev/scripts/`)

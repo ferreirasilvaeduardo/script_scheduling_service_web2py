@@ -12,7 +12,7 @@ REQUIRED_PACKAGES := isort autopep8 flake8 pylint mypy
 EXCLUDES := .pytest_cache .mypy_cache .bkp .sql __pycache__ sss_dev_script_examples sss_packages
 PY_FILES := $(shell find . -name "*.py" $(foreach d,$(EXCLUDES),! -path "./$(d)/*"))
 
-.PHONY: check-sqlplus check-runtime check-dev-deps check-deps freeze-req zip-deploy zip-deploy-zip list-deploy format lint type-check check-all test-unit test-integration test-functional test-architecture test-all
+.PHONY: check-sqlplus check-runtime check-dev-deps check-deps freeze-req zip-deploy zip-deploy-zip list-deploy format lint lint-pylint type-check check-all test-unit test-integration test-functional test-architecture test-all
 
 # Valida o sqlplus, ORACLE_HOME e bibliotecas partilhadas do Instant Client
 check-sqlplus:
@@ -183,14 +183,18 @@ format: check-deps
 	$(PYTHON) -m isort . --skip .pytest_cache --skip .bkp --skip .sql --skip sss_dev_script_examples --skip sss_packages
 	$(PYTHON) -m autopep8 --in-place --recursive --exclude .pytest_cache,.bkp,.sql,sss_dev_script_examples,sss_packages .
 
-# Análise estática de código
-lint: check-deps
-	$(PYTHON) -m flake8 . --exclude=.pytest_cache,.bkp,.sql,sss_dev_script_examples,sss_packages
-	$(PYTHON) -m pylint $(PY_FILES)
+# Análise estática de código (CR-022b9, D7): portão com zero achados nos arquivos versionados.
+# Configuração no .flake8 (99 colunas e a dívida por arquivo, que só diminui).
+lint: check-dev-deps
+	$(PYTHON) -m flake8 $$(git ls-files '*.py')
 
-# Verificação de tipagem
-type-check: check-deps
-	$(PYTHON) -m mypy --explicit-package-bases . --exclude '(\.pytest_cache|\.bkp|\.sql|sss_dev_script_examples|sss_packages)'
+# pylint fora do portão (muito ruído na dívida atual); configuração no pyproject.toml
+lint-pylint: check-dev-deps
+	$(PYTHON) -m pylint $$(git ls-files '*.py')
+
+# Verificação de tipagem (CR-022b9, D7): mypy estrito em src/sss, com a dívida listada no pyproject.toml
+type-check: check-dev-deps
+	$(PYTHON) -m mypy
 
 # Testes (AGENTS.md §7, CR-022b1): unittest a partir da raiz; o Oracle real só com SSS_TEST_ORACLE=1
 test-unit:

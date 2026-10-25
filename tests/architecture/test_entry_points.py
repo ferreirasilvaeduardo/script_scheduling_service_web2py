@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Pontos de entrada (CR-022b8, D6): scripts/*.py sao involucros de sss.cli e o unico codigo da aplicacao que
-mexe no sys.path.
+"""Pontos de entrada (CR-022b8, D6): scripts/*.py sao involucros de sss.cli e o unico codigo da
+aplicacao que mexe no sys.path.
 
-Cada scripts/<nome>.py, conferido por AST: docstring, ``import os`` e ``import sys``, o caminho de src/ calculado
-a partir do proprio arquivo, um ``sys.path.insert``, ``from sss.cli.<nome> import main`` e
-``sys.exit(main())`` sob ``if __name__ == "__main__"``. Todo modulo de src/sss/cli/ tem o seu involucro. Nenhum
-.py de src/ toca o sys.path.
+Cada scripts/<nome>.py, conferido por AST: docstring, ``import os`` e ``import sys``, o caminho de
+src/ calculado a partir do proprio arquivo, um ``sys.path.insert``, ``from sss.cli.<nome> import
+main`` e ``sys.exit(main())`` sob ``if __name__ == "__main__"``. Todo modulo de src/sss/cli/ tem o
+seu involucro. Nenhum .py de src/ toca o sys.path.
 """
 import ast
 import io
@@ -53,13 +53,15 @@ class EntryPointsTest(unittest.TestCase):
 
     def setUp(self):
         self.wrappers = sorted(f[:-3] for f in os.listdir(SCRIPTS_DIR) if f.endswith(".py"))
-        self.cli = sorted(f[:-3] for f in os.listdir(CLI_DIR) if f.endswith(".py") and f != "__init__.py")
+        self.cli = sorted(f[:-3] for f in os.listdir(CLI_DIR)
+                          if f.endswith(".py") and f != "__init__.py")
 
     def test_um_involucro_por_ferramenta(self):
         """scripts/ e src/sss/cli/ tem os mesmos nomes; scripts/ so tem .py de involucro."""
         self.assertTrue(self.cli, "src/sss/cli/ sem ferramentas")
         self.assertEqual(self.wrappers, self.cli)
-        others = sorted(f for f in os.listdir(SCRIPTS_DIR) if not f.endswith(".py") and f != "__pycache__")
+        others = sorted(f for f in os.listdir(SCRIPTS_DIR)
+                        if not f.endswith(".py") and f != "__pycache__")
         self.assertEqual(others, [])
 
     def test_involucro_tem_a_forma_fixa(self):

@@ -1,0 +1,136 @@
+# Configuracao das ferramentas de desenvolvimento (CR-022b9, D7). So configuracao: o projeto nao e
+# instalado por pip (AGENTS §2.2), nao tem [project] nem [build-system]. O flake8 nao le este arquivo
+# (fica no .flake8). mypy, isort, autopep8 e pylint rodam no Python 3.11 da maquina de desenvolvimento.
+
+[tool.mypy]
+# O mypy 1.x nao aceita alvo 3.6; a sintaxe 3.6 e conferida por tests/architecture/test_py36_compat.py.
+python_version = "3.8"
+mypy_path = "src"
+packages = ["sss"]
+strict = true
+# Drivers Oracle e bibliotecas sem stubs (oracledb, cx_Oracle).
+ignore_missing_imports = true
+
+# Divida anterior ao CR-022b9: modulos com erro no modo estrito. A lista so diminui
+# (tests/architecture/test_quality_debt.py): ao tipar um modulo, apague-o daqui. Nunca acrescente.
+[[tool.mypy.overrides]]
+module = [
+    "sss.cli.check_env",
+    "sss.cli.generate_sql",
+    "sss.cli.health",
+    "sss.cli.init_db",
+    "sss.cli.probe_driver",
+    "sss.cli.purge",
+    "sss.cli.run_scheduler",
+    "sss.cli.run_web",
+    "sss.config.app_context",
+    "sss.config.log_paths",
+    "sss.config.sss_config",
+    "sss.config.sss_logging",
+    "sss.core.cron_parser",
+    "sss.core.masking",
+    "sss.core.params_compiler",
+    "sss.core.rbac",
+    "sss.core.recurrence",
+    "sss.core.security",
+    "sss.core.sql_ident",
+    "sss.persistence.contracts.repo_agents",
+    "sss.persistence.contracts.repo_audit",
+    "sss.persistence.contracts.repo_catalog",
+    "sss.persistence.contracts.repo_inputs",
+    "sss.persistence.contracts.repo_rbac",
+    "sss.persistence.contracts.repo_schedules",
+    "sss.persistence.contracts.repo_tickets",
+    "sss.persistence.contracts.repo_users",
+    "sss.persistence.db_conn",
+    "sss.persistence.ddl_builder",
+    "sss.persistence.fake.agents",
+    "sss.persistence.fake.audit",
+    "sss.persistence.fake.catalog",
+    "sss.persistence.fake.inputs",
+    "sss.persistence.fake.rbac",
+    "sss.persistence.fake.schedules",
+    "sss.persistence.fake.seed",
+    "sss.persistence.fake.store",
+    "sss.persistence.fake.tickets",
+    "sss.persistence.fake.users",
+    "sss.persistence.oracle.agents",
+    "sss.persistence.oracle.audit",
+    "sss.persistence.oracle.base",
+    "sss.persistence.oracle.catalog",
+    "sss.persistence.oracle.health",
+    "sss.persistence.oracle.inputs",
+    "sss.persistence.oracle.purge",
+    "sss.persistence.oracle.rbac",
+    "sss.persistence.oracle.scheduler_input",
+    "sss.persistence.oracle.scheduler_log",
+    "sss.persistence.oracle.scheduler_output",
+    "sss.persistence.oracle.scheduler_queue",
+    "sss.persistence.oracle.scheduler_schedules",
+    "sss.persistence.oracle.schedules",
+    "sss.persistence.oracle.tickets",
+    "sss.persistence.oracle.users",
+    "sss.persistence.repo_errors",
+    "sss.persistence.repo_factory",
+    "sss.platform.os_platform",
+    "sss.platform.os_platform.posix",
+    "sss.platform.path_guard",
+    "sss.scheduler.env_builder",
+    "sss.scheduler.executor",
+    "sss.scheduler.input_phase",
+    "sss.scheduler.log_pump",
+    "sss.scheduler.output_phase",
+    "sss.scheduler.schedule_expansion",
+    "sss.scheduler.scheduler_loop",
+    "sss.services.admin_crud",
+    "sss.services.admin_environments_service",
+    "sss.services.admin_parameters_service",
+    "sss.services.admin_profiles_service",
+    "sss.services.admin_scripts_service",
+    "sss.services.admin_users_service",
+    "sss.services.agents_service",
+    "sss.services.audit_service",
+    "sss.services.auth_service",
+    "sss.services.input_browse_service",
+    "sss.services.output_browse_service",
+    "sss.services.permissions_service",
+    "sss.services.schedules_service",
+    "sss.services.ticket_service",
+    "sss.ui.ui_helpers",
+    "sss.ui.ui_menu",
+    "sss.web.app.bootstrap",
+    "sss.web.app.context",
+    "sss.web.app.errors",
+    "sss.web.app.security",
+    "sss.web.controllers.admin_environments",
+    "sss.web.controllers.admin_parameters",
+    "sss.web.controllers.admin_profiles",
+    "sss.web.controllers.admin_scripts",
+    "sss.web.controllers.admin_users",
+    "sss.web.controllers.audit",
+    "sss.web.controllers.default",
+    "sss.web.controllers.dev",
+    "sss.web.controllers.inputs",
+    "sss.web.controllers.logs",
+    "sss.web.controllers.outputs",
+    "sss.web.controllers.schedules",
+    "sss.web.controllers.tickets",
+    "sss.web.framework.markup",
+    "sss.web.framework.multipart",
+    "sss.web.framework.request",
+    "sss.web.framework.server",
+    "sss.web.framework.session",
+    "sss.web.framework.storage",
+    "sss.web.framework.template",
+]
+ignore_errors = true
+
+[tool.isort]
+line_length = 99
+src_paths = ["src", "tests", "tools"]
+
+[tool.autopep8]
+max_line_length = 99
+
+[tool.pylint.format]
+max-line-length = 99
