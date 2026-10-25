@@ -42,9 +42,11 @@ _Agent = collections.namedtuple("_Agent", (
     "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "queue_aging_min", "child_locale",
     "cancel_poll_interval_s", "orchestrator_interval_s", "max_parallel_jobs",
     "log_dir_min_free_mb", "script_timeout_s", "env_passthrough", "output_dir", "output_max_bytes",
-    "output_max_files", "schedule_batch_size", "shutdown_mode", "shutdown_grace_s", "input_dir"))
-# CR-012: sem output_dir por padrao; F8.4b: lote do desdobro; F8.4d: parada TERMINATE; CR-014: sem input_dir.
-_Agent.__new__.__defaults__ = (None, 20971520, 1000, 50, "TERMINATE", 30, None)
+    "output_max_files", "schedule_batch_size", "shutdown_mode", "shutdown_grace_s", "input_dir",
+    "script_base_dir"))
+# CR-012: sem output_dir por padrao; F8.4b: lote do desdobro; F8.4d: parada TERMINATE; CR-014: sem input_dir;
+# CR-023: sem script_base_dir.
+_Agent.__new__.__defaults__ = (None, 20971520, 1000, 50, "TERMINATE", 30, None, None)
 _Log = collections.namedtuple("_Log", "log_dir max_log_size_bytes max_local_log_size_bytes")
 _Cfg = collections.namedtuple("_Cfg", "agent logging app oracle secrets")
 _App = collections.namedtuple("_App", "sss_env")
@@ -181,12 +183,12 @@ class _Db(object):
         self._fail("is_cancel_requested")
         return self.tickets[tid]["cancel_requested"] == "Y"
 
-    def register_pid(self, conn, tid, agent_id, pid, start):
+    def register_pid(self, conn, tid, agent_id, pid, start, script_path=None):
         self._fail("register_pid")
         t = self.tickets[tid]
         if t["status"] != "RUNNING" or t["agent_id"] != agent_id:
             return False
-        t.update(process_id=pid, process_start=start)
+        t.update(process_id=pid, process_start=start, script_path=script_path)
         return True
 
     def return_to_queue(self, conn, tid, agent_id):
@@ -424,6 +426,29 @@ class TestExecution(_Base):
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
         self.assertIn("%s|%s\n" % (real, link), self.db.tickets[tid]["log"])
 
+    def test_cr023_relativo_junto_da_base_e_caminho_gravado(self):
+        # CR-023: o relativo vira base/<relativo>; o real vai para script_path junto com o PID.
+        sid = self.db.script("echo \"$SSS_SCRIPT_FILE|$SSS_SCRIPT_LINK\"\n")
+        real = self.db.scripts[sid]["path_file"]
+        relative = os.path.basename(real)
+        self.db.scripts[sid]["path_file"] = relative
+        tid = self.db.ticket(sid)
+        self.start_agent(script_base_dir=self.db.base)
+        self.run_loop(self.finished(tid))
+        self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
+        self.assertIn("%s|\n" % real, self.db.tickets[tid]["log"])
+        self.assertEqual(self.db.tickets[tid]["script_path"], real)
+
+    def test_cr023_relativo_sem_base_e_precheck(self):
+        sid = self.db.script("echo nunca\n")
+        self.db.scripts[sid]["path_file"] = os.path.basename(self.db.scripts[sid]["path_file"])
+        tid = self.db.ticket(sid)
+        self.start_agent()
+        with self.assertLogs("sss_scheduler", "WARNING") as logs:
+            self.run_loop(self.finished(tid))
+        self.assertEqual(self.final(tid)[:2], ("FAILED", "PRECHECK_FAILED"))
+        self.assertTrue(any("NO_BASE_DIR" in line for line in logs.output))
+
     def test_cr014_pasta_de_entrada_permanente_por_ambiente_e_script(self):
         # CR-014 (README §8.14): SSS_INPUT_DIR = input_dir/<ambiente>/<script>, criada sob demanda e mantida.
         input_value = os.path.join(self.root, "input")
@@ -648,9 +673,9 @@ class TestPending(_Base):
     def test_posse_perdida_no_registrar_pid(self):
         tid = self.db.ticket(self.db.script("sleep 300\n"))
         original = self.db.register_pid
-        def _perdeu(conn, t, *a):
+        def _perdeu(conn, t, *a, **kw):
             self.db.tickets[t]["agent_id"] = "outro"
-            return original(conn, t, *a)
+            return original(conn, t, *a, **kw)
         self.db.register_pid = _perdeu
         self.start_agent()
         with self.assertLogs("sss_scheduler", "ERROR"):

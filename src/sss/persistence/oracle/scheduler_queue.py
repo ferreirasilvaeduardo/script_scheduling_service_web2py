@@ -8,6 +8,8 @@ Cada operacao de escrita e uma transacao propria (COMMIT no sucesso, ROLLBACK em
 rowcount (AGENTS §4.11). Ator de toda gravacao: 'SYSTEM:<agent_id>' (CR-006); updated_* so nas alteracoes de
 negocio (transicoes de status, registro e parada do agente), nunca no heartbeat nem no registro do PID.
 """
+from typing import Optional
+
 from sss.persistence import db_conn
 from sss.core import rbac
 from sss.core import sql_ident
@@ -21,6 +23,15 @@ _IN_MAX = 900
 TERMINAL_STATUSES = ("SUCCESS", "FAILED", "CANCELLED")
 DETAIL_MAX = 1000
 ACTOR_MAX = 40
+# CR-023 (D6): a coluna script_path do ticket tem 1000 caracteres; caminho maior guarda o final,
+# que identifica o arquivo.
+SCRIPT_PATH_MAX = 1000
+
+
+def _fit_path(path: Optional[str]) -> Optional[str]:
+    if path is None or len(path) <= SCRIPT_PATH_MAX:
+        return path
+    return "..." + path[-(SCRIPT_PATH_MAX - 3):]
 
 
 class RegistrationLost(RuntimeError):
@@ -229,15 +240,15 @@ class RepoSchedulerQueue(object):
         cur = conn.cursor()
         try:
             cur.execute("SELECT id, script_id, environment, requested_by, status, priority, cancel_requested, "
-                        "agent_id, process_id, process_start, parent_ticket_id, schedule_id, scheduled_at, "
-                        "started_at, created_at, log_offset_chars, submitted_params FROM " + self._tck +
+                        "agent_id, process_id, process_start, script_path, parent_ticket_id, schedule_id, "
+                        "scheduled_at, started_at, created_at, log_offset_chars, submitted_params FROM " + self._tck +
                         " WHERE id = :id",
                         id=int(ticket_id))
             r = cur.fetchone()
             if r is None:
                 return None
             names = ("id", "script_id", "environment", "requested_by", "status", "priority", "cancel_requested",
-                     "agent_id", "process_id", "process_start", "parent_ticket_id", "schedule_id",
+                     "agent_id", "process_id", "process_start", "script_path", "parent_ticket_id", "schedule_id",
                      "scheduled_at", "started_at", "created_at", "log_offset_chars", "submitted_params")
             data = dict(zip(names, r))
             data["submitted_params"] = _read_lob(data["submitted_params"])
@@ -330,15 +341,17 @@ class RepoSchedulerQueue(object):
     # Transicoes do ticket (§5.1, §8.4 passo 5, §8.7)
     # -------------------------------------------------------------------------
 
-    def register_pid(self, conn, ticket_id, agent_id, pid, process_start):
-        """PID e identidade do processo (README §8.4 passo 5). Rotina tecnica, sem updated_*.
-        False = posse perdida (OWNERSHIP_LOST)."""
+    def register_pid(self, conn, ticket_id, agent_id, pid, process_start, script_path=None):
+        """PID e identidade do processo (README §8.4 passo 5) e o caminho real executado (CR-023, D6).
+        Rotina tecnica, sem updated_*. False = posse perdida (OWNERSHIP_LOST)."""
         with db_conn.transaction(conn):
             cur = conn.cursor()
             try:
-                cur.execute("UPDATE " + self._tck + " SET process_id = :pid, process_start = :process_start "
+                cur.execute("UPDATE " + self._tck + " SET process_id = :pid, process_start = :process_start, "
+                            "script_path = :script_path "
                             "WHERE id = :ticket_id AND agent_id = :agent_id AND status = 'RUNNING'",
-                            pid=int(pid), process_start=process_start, ticket_id=int(ticket_id), agent_id=agent_id)
+                            pid=int(pid), process_start=process_start, script_path=_fit_path(script_path),
+                            ticket_id=int(ticket_id), agent_id=agent_id)
                 return cur.rowcount == 1
             finally:
                 cur.close()
@@ -487,8 +500,8 @@ class RepoSchedulerQueue(object):
     def register_agent(self, conn, data, process_exists, attempts=2):
         """Registro do agente sob FOR UPDATE WAIT 5 (README §8.12 passo 7; CR-007 R-11). Devolve o id.
 
-        dados: code, hostname, pid, version, environments, platform, interpreters, critical_config,
-        node_offline_timeout_s. process_exists: os_platform.process_exists (o repositorio nao conhece o SO).
+        dados: code, hostname, pid, version, environments, platform, interpreters, script_base_dir (CR-023),
+        critical_config, node_offline_timeout_s. process_exists: os_platform.process_exists (o repositorio nao conhece o SO).
         Duplicidade: DuplicateAgent. Corrida na inclusao (uk_<prefixo>agt_code): ROLLBACK e nova tentativa.
         """
         for attempt in range(attempts):
@@ -516,18 +529,22 @@ class RepoSchedulerQueue(object):
                         raise DuplicateAgent("agent_id %s ativo em %s (pid %s)" % (d["code"], r[1], r[2]))
                 binds = dict(code=d["code"], hostname=d["hostname"], pid=int(d["pid"]), version=d["version"],
                              environments=d["environments"], platform=d["platform"],
-                             interpreters=d["interpreters"], config=d["critical_config"], actor=actor)
+                             interpreters=d["interpreters"], base=d.get("script_base_dir"),
+                             config=d["critical_config"], actor=actor)
                 cur.execute(
                     "MERGE INTO " + self._agt + " a USING (SELECT :code AS code FROM DUAL) s "
                     "ON (a.code = s.code) "
                     "WHEN MATCHED THEN UPDATE SET a.status = 'ACTIVE', a.hostname = :hostname, a.daemon_pid = :pid, "
                     "a.version = :version, a.environments = :environments, a.platform = :platform, "
-                    "a.interpreters = :interpreters, a.started_at = SYSDATE, a.heartbeat_at = SYSDATE, "
-                    "a.critical_config = :config, a.updated_at = SYSDATE, a.updated_by = :actor "
+                    "a.interpreters = :interpreters, a.script_base_dir = :base, a.started_at = SYSDATE, "
+                    "a.heartbeat_at = SYSDATE, a.critical_config = :config, a.updated_at = SYSDATE, "
+                    "a.updated_by = :actor "
                     "WHEN NOT MATCHED THEN INSERT (id, code, hostname, daemon_pid, version, environments, platform, "
-                    "interpreters, status, started_at, heartbeat_at, critical_config, created_at, created_by) "
+                    "interpreters, script_base_dir, status, started_at, heartbeat_at, critical_config, created_at, "
+                    "created_by) "
                     "VALUES (" + self._seq_agt + ".NEXTVAL, :code, :hostname, :pid, :version, :environments, "
-                    ":platform, :interpreters, 'ACTIVE', SYSDATE, SYSDATE, :config, SYSDATE, :actor)", binds)
+                    ":platform, :interpreters, :base, 'ACTIVE', SYSDATE, SYSDATE, :config, SYSDATE, :actor)",
+                    binds)
                 if cur.rowcount != 1:
                     raise RuntimeError("MERGE do agente sem efeito")
                 cur.execute("SELECT id FROM " + self._agt + " WHERE code = :code", code=d["code"])

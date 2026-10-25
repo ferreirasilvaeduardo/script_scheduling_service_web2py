@@ -125,7 +125,8 @@ class TestDdlBuilder(unittest.TestCase):
 
         constraints = {item.name: item.sql for item in self.statements if item.kind == "CONSTRAINT"}
         ck_path = constraints["ck_tbsss_scr_path"]
-        self.assertIn("SUBSTR(path_file, 1, 1) = '/'", ck_path)
+        # CR-023: absoluto ou relativo a [agent] script_base_dir
+        self.assertNotIn("SUBSTR(path_file, 1, 1) = '/'", ck_path)
         self.assertIn("INSTR(path_file, '..') = 0", ck_path)
         self.assertIn("INSTR(path_file, '//') = 0", ck_path)
         self.assertIn("INSTR(path_file, '\\') = 0", ck_path)

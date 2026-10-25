@@ -20,6 +20,7 @@ from unittest import mock
 
 from tests.support import _testenv
 from sss.config import sss_config
+from sss.platform import path_guard
 from sss.config import sss_logging
 
 
@@ -743,6 +744,19 @@ class TestConfigCR007(unittest.TestCase):
                                                  "input_dir": os.path.join(base, "s", "input")})
         for v in ("0", "366"):
             self._refusal("script_work_retention_days", logging={"script_work_retention_days": v})
+        # CR-023 (README §8.5): script_base_dir opcional; a pasta pode nao existir (so aviso na subida).
+        self.assertIsNone(cfg.agent.script_base_dir)
+        ok = self._load(agent={"script_base_dir": "/opt/sss_teste/base_inexistente"})
+        self.assertEqual(ok.agent.script_base_dir, "/opt/sss_teste/base_inexistente")
+        app_dev = os.path.join(path_guard.APP_DIR, "dev", "scripts")
+        self.assertEqual(self._load(agent={"script_base_dir": app_dev}).agent.script_base_dir, app_dev)
+        # Como as demais pastas, o caminho e normalizado na carga.
+        self.assertEqual(self._load(agent={"script_base_dir": "/opt//sss_teste/"}).agent.script_base_dir,
+                         "/opt/sss_teste")
+        for value in ("relativa/scripts", "/etc/sss",
+                      os.path.join(cfg.agent.work_dir, "s"), os.path.join(cfg.logging.log_dir, "s"),
+                      os.path.join(path_guard.APP_DIR, "src")):
+            self._refusal("script_base_dir", agent={"script_base_dir": value})
         # CR-020e: retencao dos envios da tela de Entrada.
         self.assertEqual(self._load().retention.input_retention_days, 30)
         for v in ("0", "3651"):

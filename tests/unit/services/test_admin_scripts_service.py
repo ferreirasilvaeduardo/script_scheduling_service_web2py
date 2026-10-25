@@ -150,7 +150,8 @@ class TestRegistration(_Base):
 
     def test_path_file_invalidos(self):
         # CR-005 (README §8.5): caminho absoluto, normalizado e fora das pastas do sistema; vale em qualquer sss_env.
-        cases = (("novo.py", Code.RELATIVE_PATH), ("/etc/passwd", Code.SYSTEM_DIR),
+        cases = (("./novo.py", Code.PATH_NOT_NORMALIZED), ("../novo.py", Code.HAS_DOTS),
+                 ("/etc/passwd", Code.SYSTEM_DIR),
                  ("/usr/local/bin/x.py", Code.SYSTEM_DIR), ("/etc/nao_existe.py", Code.SYSTEM_DIR),
                  (self.base + "/../x.py", Code.HAS_DOTS), (self.base + "//novo.py", Code.PATH_NOT_NORMALIZED),
                  ("/opt\\x.py", Code.INVALID_SEPARATOR))

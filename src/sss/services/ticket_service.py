@@ -244,10 +244,12 @@ def _display_argv(snap):
 class TicketService(object):
     """Servico de disparo com dependencias injetadas (repositorios, arvore de scripts e log)."""
 
-    def __init__(self, catalog, tickets, log, audit=None):
+    def __init__(self, catalog, tickets, log, audit=None, sss_env=None):
         self._catalog = catalog
         self._tickets = tickets
         self._log = log
+        # CR-023 (D8): no DEV, script em dev/ da aplicacao e aceito.
+        self._dev = sss_env == "DEV"
         # CR-020a: o download da saida pelo detalhe do ticket grava OUTPUT_DOWNLOAD, como a tela de Saidas.
         self._audit = audit
 
@@ -512,7 +514,7 @@ class TicketService(object):
         # e conferido pelo agente, no servidor onde ele roda (README §8.4).
         try:
             path_guard.validate_registration(script["path_file"])
-            path_guard.check_forbidden_dirs(script["path_file"])
+            path_guard.check_forbidden_dirs(script["path_file"], dev=self._dev)
         except path_guard.PathGuardError as e:
             self._log.warning("caminho do script recusado (login=%s script_id=%s code=%s)",
                               ctx["login"], script["id"], e.code, extra={"action": "TICKET_CREATE"})
@@ -1192,6 +1194,7 @@ def _service():
                 tickets=factory.get("tickets"),
                 log=sss_logging.get_logger("sss_web", cfg),
                 audit=factory.get("audit"),
+                sss_env=cfg.app.sss_env,
             )
         return _default
 

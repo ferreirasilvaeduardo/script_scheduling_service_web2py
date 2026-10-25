@@ -179,6 +179,8 @@ SCHEMA = collections.OrderedDict([
         ("input_dir", FieldDef("path", required=False, default=None)),
         # CR-019: pasta de trabalho dos scripts, por ticket, com as partes da pasta de saida (vazio desliga; README §8.15).
         ("script_work_dir", FieldDef("path", required=False, default=None)),
+        # CR-023: pasta base dos scripts cadastrados com caminho relativo (vazio desliga; README §8.5).
+        ("script_base_dir", FieldDef("path", required=False, default=None)),
         ("child_locale", FieldDef("str", required=True)),
         ("env_passthrough", FieldDef("list_csv", required=False, default=())),
     ])),
@@ -260,7 +262,7 @@ class AgentConfig(_ItemAccessMixin, collections.namedtuple("AgentConfig", [
     "misfire_tolerance_s", "cron_horizon_days", "child_locale",
     "env_passthrough", "exec_users", "interpreters", "exec_work_dir", "queue_aging_min",
     "log_dir_min_free_mb", "output_dir", "output_max_bytes", "output_max_files", "input_dir",
-    "script_work_dir"
+    "script_work_dir", "script_base_dir"
 ])):
     __slots__ = ()
 
@@ -538,6 +540,26 @@ def _inside(path, folder):
     return os.path.commonpath([path, folder]) == folder
 
 
+def _validate_script_base_dir(agent: dict, log_dir: str, dev: bool) -> None:
+    """CR-023 (D5): formato da pasta base; a existencia so e avisada na subida do agente (README §8.5)."""
+    # pylint: disable=import-outside-toplevel
+    from sss.platform import path_guard
+    base = agent["script_base_dir"]
+    if not os.path.isabs(base) or os.path.normpath(base) != base:
+        raise ConfigError(section="agent", key="script_base_dir",
+                          reason="Deve ser um caminho absoluto e normalizado")
+    sss_dirs = (agent["work_dir"], log_dir, agent["exec_work_dir"], agent["output_dir"],
+                agent["input_dir"], agent["script_work_dir"])
+    try:
+        path_guard.check_forbidden_dirs(base, sss_dirs, dev=dev)
+    except path_guard.PathGuardError as exc:
+        reasons = {"SYSTEM_DIR": "Nao pode ficar numa pasta do sistema",
+                   "SSS_DIR": "Nao pode ficar dentro de uma pasta do SSS (log, trabalho, entrada, saida)",
+                   "APP_DIR": "Nao pode ficar dentro da pasta da aplicacao (no DEV, so em dev/)"}
+        raise ConfigError(section="agent", key="script_base_dir",
+                          reason=reasons.get(exc.code, exc.code))
+
+
 def _validate_cr007(app, oracle, agent, logging_dict, retention):
     """Validacoes cruzadas do CR-007: invariantes I3/I4, execucao, retencao e purge."""
     call_s = call_timeout_s(oracle["call_timeout_ms"])
@@ -617,6 +639,8 @@ def _validate_cr007(app, oracle, agent, logging_dict, retention):
             if other and (_inside(agent["script_work_dir"], other) or _inside(other, agent["script_work_dir"])):
                 raise ConfigError(section="agent", key="script_work_dir",
                                  reason="Nao pode ficar dentro de %s nem conte-lo" % name)
+    if agent["script_base_dir"]:
+        _validate_script_base_dir(agent, logging_dict["log_dir"], dev)
 
     if retention["audit_retention_days"] < retention["ticket_retention_days"]:
         raise ConfigError(section="retention", key="audit_retention_days",

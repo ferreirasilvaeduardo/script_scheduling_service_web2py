@@ -52,13 +52,15 @@ _RE_FILTER = re.compile(r"[^\x00-\x1f\x7f<>]{1,60}")
 
 PATH_MESSAGES = {
     Code.RELATIVE_PATH: u"Informe o caminho completo do arquivo, começando por / (ex.: /opt/automacoes/scripts/carga.py).",
-    Code.PATH_NOT_NORMALIZED: u"Escreva o caminho sem // repetida, sem /./ e sem / no fim.",
+    Code.PATH_NOT_NORMALIZED: u"Escreva o caminho sem // repetida, sem ./ e sem / no fim.",
     Code.HAS_DOTS: u"O caminho não pode conter '..'.",
     Code.INVALID_SEPARATOR: u"Use só / para separar pastas; não use \\.",
     Code.INVALID_CHARACTER: u"O caminho contém caracteres de controle não permitidos.",
     Code.SYSTEM_DIR: u"Scripts não podem ficar em pastas do sistema (/bin, /sbin, /usr, /lib, /etc, /boot, "
                              u"/proc, /sys, /dev, /root). Use outra pasta.",
     Code.SSS_DIR: u"Scripts não podem ficar nas pastas de log ou de trabalho do SSS. Use outra pasta.",
+    Code.APP_DIR: u"Scripts não podem ficar na pasta da aplicação do SSS, que é trocada a cada "
+                  u"atualização. Use outra pasta.",
     Code.INTERPRETER_UNSAFE: u"O executável do interpretador não passou na checagem de segurança.",
     Code.INTERPRETER_NOT_ALLOWED: u"Interpretador não permitido.",
 }
@@ -295,7 +297,7 @@ class AdminScriptsService(object):
             return
         try:
             path_guard.validate_registration(path_file)
-            path_guard.check_forbidden_dirs(path_file)
+            path_guard.check_forbidden_dirs(path_file, dev=self._env == "DEV")
         except PathGuardError as exc:
             errors["path_file"] = PATH_MESSAGES[exc.code]
 

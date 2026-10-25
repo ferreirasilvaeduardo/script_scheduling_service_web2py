@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 """Validacao de interpretador logico e caminho de script (README §6.4, §8.5, AGENTS §3.2, CR-001, CR-005, CR-011).
 
-CR-005: somente POSIX e caminho absoluto livre (sem pastas base). CR-011: o ambiente controla o conteudo e a
+CR-005: somente POSIX e caminho absoluto livre. CR-011: o ambiente controla o conteudo e a
 versao dos scripts; o SSS confere so o essencial do arquivo real (pode haver link simbolico no caminho):
 existe, e arquivo regular, nao e gravavel por grupo nem por outros e fica fora das pastas do sistema e do SSS.
+CR-023: o caminho cadastrado tambem pode ser relativo a [agent] script_base_dir de cada agente, e nenhum
+script fica dentro da pasta da aplicacao (salvo dev/ no DEV).
 Modulo puro: nao importa gluon (AGENTS §7.1).
 """
 import errno
 import os
+from typing import Iterable, Optional
 
 from sss.platform import os_platform
 
@@ -24,11 +27,18 @@ FIXED_ARGS = {
 SYSTEM_DIRS = os_platform.SYSTEM_DIRS
 # Tamanho maximo de path_file (coluna VARCHAR2(500 CHAR)).
 MAX_LENGTH = 500
+# Pasta da aplicacao (src/sss/platform/ -> raiz), que a atualizacao troca inteira (CR-023, D8);
+# no DEV, a subpasta dev/ guarda os scripts de exemplo e e a excecao.
+APP_DIR = os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
+APP_DEV_DIR = os.path.join(APP_DIR, "dev")
 
 
 class Code(object):
     """Codigos de rejeicao do path_guard (README §8.5)."""
+    # Agente anterior ao CR-023 diante de caminho relativo; o atual nao o usa mais.
     RELATIVE_PATH = 'RELATIVE_PATH'
+    NO_BASE_DIR = 'NO_BASE_DIR'
+    APP_DIR = 'APP_DIR'
     PATH_NOT_NORMALIZED = 'PATH_NOT_NORMALIZED'
     HAS_DOTS = 'HAS_DOTS'
     INVALID_SEPARATOR = 'INVALID_SEPARATOR'
@@ -57,19 +67,38 @@ def validate_interpreter(interpreter):
         raise PathGuardError(Code.INTERPRETER_NOT_ALLOWED)
 
 
-def validate_registration(path_file):
-    """Formato de path_file (README §8.5, ck_tbsss_scr_path): absoluto, normalizado, sem '..', '\\' e controle."""
-    if not isinstance(path_file, str) or path_file[:1] != '/':
-        raise PathGuardError(Code.RELATIVE_PATH)
+def is_relative(path_file: object) -> bool:
+    """True se o caminho cadastrado e relativo a [agent] script_base_dir (CR-023, D2)."""
+    return isinstance(path_file, str) and path_file != '' and path_file[:1] != '/'
+
+
+def validate_registration(path_file: object) -> None:
+    """Formato de path_file (README §8.5, ck_tbsss_scr_path): absoluto ou relativo (CR-023), normalizado,
+    sem '..', '//', '\\' nem controle."""
+    if not isinstance(path_file, str) or path_file == '':
+        raise PathGuardError(Code.PATH_NOT_NORMALIZED)
     if any(ord(c) < 32 or ord(c) == 127 for c in path_file):
         raise PathGuardError(Code.INVALID_CHARACTER)
     if '\\' in path_file:
         raise PathGuardError(Code.INVALID_SEPARATOR)
     if '..' in path_file:
         raise PathGuardError(Code.HAS_DOTS)
-    # normpath mantem '//' inicial (POSIX); a CK recusa '//' em qualquer ponto.
+    # normpath mantem '//' inicial (POSIX); a CK recusa '//' em qualquer ponto. No relativo, recusa './'
+    # no inicio, '.' sozinho e barra no fim.
     if path_file == '/' or '//' in path_file or os.path.normpath(path_file) != path_file:
         raise PathGuardError(Code.PATH_NOT_NORMALIZED)
+    if path_file == '.':
+        raise PathGuardError(Code.PATH_NOT_NORMALIZED)
+
+
+def join_base(path_file: str, base_dir: Optional[str]) -> str:
+    """Caminho no servidor do agente: o absoluto como esta; o relativo junto de script_base_dir (CR-023, D3).
+    Relativo sem pasta base: NO_BASE_DIR."""
+    if not is_relative(path_file):
+        return path_file
+    if not base_dir:
+        raise PathGuardError(Code.NO_BASE_DIR)
+    return os.path.join(base_dir, path_file)
 
 
 def _inside(path, folder):
@@ -77,14 +106,19 @@ def _inside(path, folder):
     return os.path.commonpath([path, folder]) == folder
 
 
-def check_forbidden_dirs(path_file, sss_dirs=()):
-    """Recusa pastas do sistema e log_dir/work_dir, no caminho digitado e no resolvido (symlink)."""
+def check_forbidden_dirs(path_file: str, sss_dirs: Iterable[Optional[str]] = (), dev: bool = False) -> None:
+    """Recusa pastas do sistema, as do SSS (log_dir, work_dir...) e a da aplicacao (salvo dev/ no DEV,
+    CR-023 D8), no caminho digitado e no resolvido (symlink). Caminho relativo: nada a conferir aqui."""
+    if is_relative(path_file):
+        return
     sss = [os_platform.final_path(d) for d in sss_dirs if d]
     for target in (path_file, os_platform.final_path(path_file)):
         if any(_inside(target, d) for d in SYSTEM_DIRS):
             raise PathGuardError(Code.SYSTEM_DIR)
         if any(_inside(target, d) for d in sss):
             raise PathGuardError(Code.SSS_DIR)
+        if _inside(target, APP_DIR) and not (dev and _inside(target, APP_DEV_DIR)):
+            raise PathGuardError(Code.APP_DIR)
 
 
 def _stat(path):
@@ -97,19 +131,22 @@ def _stat(path):
         raise PathGuardError(Code.NOT_FOUND)
 
 
-def resolve(path_file, sss_dirs=()):
+def resolve(path_file: str, sss_dirs: Iterable[Optional[str]] = (), base_dir: Optional[str] = None,
+            dev: bool = False) -> str:
     """Confere o script no servidor do agente e devolve o caminho real, que e o executado (README §8.5, CR-011).
 
-    Formato do caminho cadastrado; pastas do sistema e do SSS no cadastrado e no real; o arquivo real existe
-    (NOT_FOUND; ciclo de links tambem), as pastas deixam passar (NO_ACCESS), e arquivo regular
+    Formato do caminho cadastrado; o relativo vira base_dir/<relativo> (CR-023; sem base, NO_BASE_DIR) e o
+    real pode ficar fora da base; pastas do sistema, do SSS e da aplicacao no caminho e no real; o arquivo
+    real existe (NOT_FOUND; ciclo de links tambem), as pastas deixam passar (NO_ACCESS), e arquivo regular
     (NOT_A_FILE) e nao e gravavel por grupo nem por outros (GROUP_OTHER_WRITABLE).
     """
     validate_registration(path_file)
-    check_forbidden_dirs(path_file, sss_dirs)
-    code = os_platform.validate_script_path(path_file)
+    target = join_base(path_file, base_dir)
+    check_forbidden_dirs(target, sss_dirs, dev=dev)
+    code = os_platform.validate_script_path(target)
     if code:
         raise PathGuardError(code)
-    return os_platform.final_path(path_file)
+    return os_platform.final_path(target)
 
 
 def validate_executable(path, sss_dirs=()):

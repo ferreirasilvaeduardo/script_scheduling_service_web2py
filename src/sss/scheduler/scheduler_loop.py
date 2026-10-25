@@ -252,6 +252,19 @@ class Agent(object):
         self._check_user_dir("output_dir", "pasta de saida", "pastas de saida (CR-012)")
         self._check_user_dir("input_dir", "pasta de entrada", "pastas de entrada (CR-014)")
         self._check_user_dir("script_work_dir", "pasta de trabalho", "pastas de trabalho (CR-019)")
+        self._check_script_base_dir()
+
+    def _check_script_base_dir(self) -> None:
+        """CR-023 (D5): pasta base inexistente so e avisada; os tickets com caminho relativo dao NOT_FOUND."""
+        base = getattr(self.cfg.agent, "script_base_dir", None)
+        if not base:
+            self.log.info("sem pasta base dos scripts ([agent] script_base_dir): so caminho absoluto",
+                          extra={"action": "INICIO"})
+        elif os.path.isdir(base):
+            self.log.info("pasta base dos scripts: %s", base, extra={"action": "INICIO"})
+        else:
+            self.log.warning("pasta base dos scripts %s nao existe: scripts com caminho relativo vao terminar "
+                             "em PRECHECK_FAILED (NOT_FOUND)", base, extra={"action": "INICIO"})
 
     def _check_user_dir(self, key, name, plural):
         """README §8.12 passo 4: a pasta da chave fora das pastas do sistema; fora de DEV, a pasta de cada
@@ -325,6 +338,7 @@ class Agent(object):
                 "code": agent.agent_id, "hostname": self.hostname, "pid": self.pid,
                 "version": sss_config.SSS_VERSION, "environments": ",".join(agent.environments),
                 "platform": self.plat.NAME, "interpreters": ",".join(k for k, _v in agent.interpreters),
+                "script_base_dir": getattr(agent, "script_base_dir", None),
                 "critical_config": critical, "node_offline_timeout_s": agent.node_offline_timeout_s,
             }, self.plat.process_exists)
             divergent = self.repo.check_config(self._conn(), agent.agent_id, critical,
@@ -1221,6 +1235,8 @@ class Agent(object):
         class _Cfg(object):
             interpreters = dict(agent.interpreters)
             sss_dirs = _sss_dirs(self.cfg)
+            script_base_dir = getattr(agent, "script_base_dir", None)
+            dev = self.cfg.app.sss_env == "DEV"
         return _Cfg()
 
     def _refuse(self, item, code):
@@ -1278,6 +1294,7 @@ class Agent(object):
     def _spawn(self, item, snap, argv, script_real, context):
         agent = self.cfg.agent
         ticket = item.ticket
+        item.script_path = script_real
         user = env_builder.exec_user(self.cfg, ticket["environment"])
         label = "SSS-%s-%s" % (self.agent_id, item.tid)
         try:
@@ -1353,7 +1370,8 @@ class Agent(object):
     def _register_pid(self, item):
         ex = item.execution
         try:
-            ok = self.repo.register_pid(self._conn(), item.tid, self.agent_id, ex.pid, ex.identity)
+            ok = self.repo.register_pid(self._conn(), item.tid, self.agent_id, ex.pid, ex.identity,
+                                        script_path=item.script_path)
         except Exception as exc:  # noqa: BLE001 - PID pendente (CR-008, R-08)
             if not item.pid_warned:
                 item.pid_warned = True
@@ -1432,3 +1450,4 @@ class _Item(object):
         self.pid_warned = False
         self.finalize_pending = False
         self.output = None  # CR-012: output_phase.Saida quando o agente tem output_dir
+        self.script_path = None  # CR-023 (D6): caminho real executado, gravado junto com o PID

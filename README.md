@@ -1728,9 +1728,10 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
 5. **Instante de início:** renomear o log (passo 3), ler `os_platform.process_identity(pid)` (`starttime` no Linux; §8.0), gravar **`work_dir/ticket_<id>/.sss_proc`** (JSON com `ticket_id`, `pid`, `pgid`, `process_start` e `exec_user`; arquivo temporário + `rename`, `0600`) **antes** do banco (CR-007, R-01) e então:
    ```sql
    UPDATE {owner}.tbsss_tickets
-      SET process_id = :pid, process_start = :process_start
+      SET process_id = :pid, process_start = :process_start, script_path = :script_path
     WHERE id = :ticket_id AND agent_id = :agent_id AND status = 'RUNNING'
    ```
+   `script_path` é o caminho real executado (CR-023, D6), mostrado no detalhe do ticket.
    Se `rowcount = 0`, a posse foi perdida (por exemplo, `NODE_OFFLINE` durante o spawn): encerramento do grupo pela máquina de estados do executor (`request_stop`/`advance_stop`, sem esperar) e ERROR `OWNERSHIP_LOST`. Se o `UPDATE` falhar por erro de banco, o ticket fica "PID pendente" no mapa local e o `UPDATE` é refeito a cada ciclo rápido até `rowcount` 1 ou 0 (CR-008, R-08); enquanto isso, o processo é acompanhado normalmente (heartbeat, cancelamento, timeout, fencing). O registro do PID é rotina técnica e não grava `updated_*` (§10, CR-006).
 
 ### 8.5 Validação de interpretador e caminho (`path_guard.py`, CR-005, CR-011)
@@ -1741,27 +1742,31 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
 
 * O executável de cada interpretador vem de `[agent] interpreters`. Na inicialização, o agente confere, por `path_guard.validate_executable`: caminho absoluto e normalizado, existe, é arquivo executável e fica fora de `log_dir`, `work_dir` e `exec_work_dir`. Pode ser link simbólico (como `/usr/bin/python3`) e pode ficar nas pastas do sistema. Falha: `INTERPRETER_UNSAFE` (ou `NOT_FOUND`), CRITICAL.
 
-**Caminho livre (CR-005, D2): o script pode ficar em qualquer lugar do servidor, fora das pastas do sistema e do SSS**
+**Caminho livre (CR-005, D2; CR-023): o script pode ficar em qualquer lugar do servidor, fora das pastas do sistema, do SSS e da aplicação**
 
-* O cadastro grava em `path_file` o **caminho absoluto** do arquivo (ex.: `/opt/automacoes/scripts/faturamento/carga_faturas.py`). O mesmo caminho vale para todos os agentes que atendem o script.
+* O cadastro grava em `path_file` o caminho do arquivo, de uma de duas formas:
+  * **absoluto** (ex.: `/opt/automacoes/scripts/faturamento/carga_faturas.py`): o mesmo caminho vale para todos os agentes que atendem o script;
+  * **relativo à pasta base do agente** (CR-023, ex.: `faturamento/carga_faturas.py`): cada agente junta o relativo à sua `[agent] script_base_dir` (§12) e confere o caminho juntado como um absoluto. A pasta base pode ser diferente em cada servidor. O caminho real pode ficar fora da pasta base (link simbólico); as pastas proibidas continuam valendo.
+* **Pasta base (CR-023):** `[agent] script_base_dir`, opcional. Vazia ou ausente, o agente só executa caminho absoluto, e o relativo termina em `PRECHECK_FAILED` com `NO_BASE_DIR`. A subida registra a pasta base no log (INFO) e só avisa (WARNING) se ela não existir; aí os tickets com caminho relativo terminam em `NOT_FOUND`. Cada agente publica a sua pasta base no registro (`tbsss_agents.script_base_dir`, painel de agentes). **Regra de configuração:** todo agente de um ambiente que tem script com caminho relativo precisa da pasta base, porque o ticket vai para qualquer agente que atende o ambiente; não há desvio na fila.
+* **Caminho real executado (CR-023):** o agente grava em `tbsss_tickets.script_path`, junto com o PID (§8.4, passo 5), o caminho real que executou; o detalhe do ticket o mostra ao lado do cadastrado.
 * **Link simbólico (CR-011):** o `path_file` pode ser link, ou ter link em qualquer pasta do caminho. O agente resolve o caminho real (`os.path.realpath`) e **executa o arquivo real**; o script recebe os dois (`SSS_SCRIPT_FILE` e `SSS_SCRIPT_LINK`, §8.6). A pasta onde o link está não é conferida: quem puder gravar nela pode trocar o destino, risco aceito no §14.
 * **Formato** (`validate_registration`; parte dele também nas CKs, abaixo):
-  * absoluto (começa com `/`) e normalizado (`os.path.normpath(p) == p`): sem `//`, sem `/./` e sem barra no fim;
+  * absoluto (começa com `/`) ou relativo (não começa com `/`), e normalizado (`os.path.normpath(p) == p`): sem `//`, sem `./`, sem `/./` e sem barra no fim; o relativo também não pode ser só `.`;
   * sem `..` em nenhum ponto, sem `\` e sem caractere de controle;
   * até 500 caracteres.
-* **Pastas proibidas**, no caminho cadastrado e no real: dentro de `/bin`, `/sbin`, `/usr`, `/lib`, `/lib32`, `/lib64`, `/libx32`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev` ou `/root` é `SYSTEM_DIR`; dentro de `log_dir`, `work_dir`, `exec_work_dir`, `output_dir`, `input_dir` ou `script_work_dir` é `SSS_DIR` (CR-014 e CR-019: o usuário de execução grava nas três últimas, e um script guardado ali poderia ser trocado por outro script).
+* **Pastas proibidas**, no caminho cadastrado e no real: dentro de `/bin`, `/sbin`, `/usr`, `/lib`, `/lib32`, `/lib64`, `/libx32`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev` ou `/root` é `SYSTEM_DIR`; dentro de `log_dir`, `work_dir`, `exec_work_dir`, `output_dir`, `input_dir` ou `script_work_dir` é `SSS_DIR` (CR-014 e CR-019: o usuário de execução grava nas três últimas, e um script guardado ali poderia ser trocado por outro script); dentro da pasta da aplicação (`/opt/sss/app`, que a atualização troca inteira, DEPLOYMENT §18) é `APP_DIR` (CR-023), salvo a subpasta `dev/` com `sss_env = DEV`. No cadastro, o caminho relativo não é conferido aqui: a conferência é no agente, depois de juntar a pasta base.
 * **O arquivo real** (`os_platform.validate_script_path`):
   * existe (`NOT_FOUND`; um ciclo de links também dá `NOT_FOUND`);
   * as pastas do caminho deixam o agente passar (`EACCES` é `NO_ACCESS`, diferente de `NOT_FOUND`);
   * é arquivo regular (`NOT_A_FILE`);
   * não é gravável por grupo nem por outros (`st_mode & 0o022 == 0`; senão `GROUP_OTHER_WRITABLE`). As pastas do caminho não são conferidas.
-* **Códigos de recusa:** `RELATIVE_PATH`, `PATH_NOT_NORMALIZED`, `HAS_DOTS`, `INVALID_SEPARATOR`, `INVALID_CHARACTER`, `SYSTEM_DIR`, `SSS_DIR`, `NOT_FOUND`, `NO_ACCESS`, `NOT_A_FILE`, `GROUP_OTHER_WRITABLE`, `INTERPRETER_NOT_ALLOWED` e `INTERPRETER_UNSAFE`. A mensagem de erro nunca inclui o caminho.
+* **Códigos de recusa:** `PATH_NOT_NORMALIZED`, `HAS_DOTS`, `INVALID_SEPARATOR`, `INVALID_CHARACTER`, `SYSTEM_DIR`, `SSS_DIR`, `APP_DIR`, `NO_BASE_DIR`, `NOT_FOUND`, `NO_ACCESS`, `NOT_A_FILE`, `GROUP_OTHER_WRITABLE`, `INTERPRETER_NOT_ALLOWED` e `INTERPRETER_UNSAFE`. `RELATIVE_PATH` só vem de agente anterior ao CR-023, que não aceita caminho relativo (DEPLOYMENT §18). A mensagem de erro nunca inclui o caminho.
 * **Onde cada coisa é conferida (CR-011, S1):**
   * **no nó web** (cadastro, prévia e disparo): só o formato, o interpretador da allowlist e as pastas do sistema. O web pode nem ter o arquivo, e não emite aviso de arquivo ausente;
   * **no agente**, a cada execução (§8.4, passo 1): tudo acima, inclusive o arquivo real. Falha: `PRECHECK_FAILED` com o código na linha `[SSS]` do log.
 * **CKs de banco** (defesa adicional):
   * `ck_tbsss_scr_int` restringe `interpreter` à allowlist lógica;
-  * `ck_tbsss_scr_path` exige `path_file` absoluto, sem `..`, `//` nem `\`.
+  * `ck_tbsss_scr_path` exige `path_file` sem `..`, `//` nem `\` (desde o CR-023, absoluto ou relativo).
 * **Cadastro na UI** (`admin_scripts`, F4.5):
   * o formato e as pastas do sistema são conferidos ao salvar e ao reativar, com os códigos traduzidos para português; o estado do arquivo no nó web não impede salvar, editar, desativar nem reativar;
   * `path_file` é um campo de texto com o caminho absoluto; a ajuda dá um exemplo (`/opt/automacoes/scripts/carga.py`) e informa que o arquivo é conferido pelo agente, no servidor onde o script roda, e que pode ser link simbólico;
@@ -1795,7 +1800,7 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
 | `SSS_ENVIRONMENT_CONNECTION` e `PADRAO_VALOR_RUN_CONEXAO_BD` | o mesmo valor `user/password@dsn`, com credenciais de `secrets.cfg [environment:<NOME>]` e DSN de `tbsss_environments.connection`; a segunda é o nome antigo, mantido para os scripts existentes (CR-010). Omitidas se o ambiente não tiver DSN ou credencial. Mascaradas em todo log |
 | `SSS_SCRIPT_ID`, `SSS_SCRIPT_NAME`, `SSS_INTERPRETER` | do snapshot (o nome da época da criação do ticket, §6.5) (CR-010) |
 | `SSS_SCRIPT_FILE`, `SSS_SCRIPT_DIR` | `script_real` (o arquivo real, que é o executado) e `os.path.dirname(script_real)` |
-| `SSS_SCRIPT_LINK` | o `path_file` cadastrado, só quando ele difere do real (há link simbólico no caminho; CR-011) |
+| `SSS_SCRIPT_LINK` | o `path_file` cadastrado, já junto da pasta base quando é relativo (CR-023), só quando ele difere do real (há link simbólico no caminho; CR-011) |
 | `SSS_OUTPUT_DIR` | pasta de saída do ticket (§8.13, CR-012), só quando o agente tem `output_dir` |
 | `SSS_INPUT_DIR` | pasta de entrada do script no ambiente (§8.14, CR-014), permanente, só quando o agente tem `input_dir` |
 | `SSS_WORK_DIR` | pasta de trabalho do ticket (§8.15, CR-019), mantida depois do ticket até a retenção, só quando o agente tem `script_work_dir`. Não é o `HOME` nem o `cwd`, que continuam na pasta descartável do passo 2 do §8.4 |
@@ -2300,7 +2305,7 @@ END;
   * `ck_tbsss_scr_active`
   * `ck_tbsss_scr_paral (max_parallel_env BETWEEN 1 AND 999)`
   * `ck_tbsss_scr_int (interpreter IN ('PYTHON3','BASH','SH'))`
-  * `ck_tbsss_scr_path (SUBSTR(path_file, 1, 1) = '/' AND INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\') = 0)` (formato do §8.5, CR-005)
+  * `ck_tbsss_scr_path (INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\') = 0)` (formato do §8.5, CR-005; desde o CR-023 sem exigir a `/` inicial, porque o caminho pode ser relativo a `[agent] script_base_dir`)
   * `ck_tbsss_scr_tmout (timeout_s IS NULL OR timeout_s > 0)`
   * `ck_tbsss_scr_upd` (colunas de registro, CR-006)
 * **Colunas:**
@@ -2311,7 +2316,7 @@ END;
   * `category VARCHAR2(30 CHAR)`
   * `stage VARCHAR2(30 CHAR)`
   * `interpreter VARCHAR2(15 CHAR) NOT NULL` (lógico; o executável é mapeado por agente, §8.5)
-  * `path_file VARCHAR2(500 CHAR) NOT NULL` (caminho absoluto do script, §8.5, CR-005)
+  * `path_file VARCHAR2(500 CHAR) NOT NULL` (caminho do script, absoluto ou relativo a `[agent] script_base_dir` de cada agente, §8.5, CR-005, CR-023)
   * `param_type VARCHAR2(15 CHAR) DEFAULT 'NAMED' NOT NULL`
   * `max_parallel_env NUMBER(3) DEFAULT 1 NOT NULL`
   * `timeout_s NUMBER(7)`
@@ -2487,6 +2492,7 @@ END;
   * `agent_id VARCHAR2(30 CHAR)`
   * `process_id NUMBER(10)` (CR-007: comporta PIDs de até 10 dígitos, como no HP-UX)
   * `process_start NUMBER(20)`
+  * `script_path VARCHAR2(1000 CHAR)` (CR-023: caminho real executado, gravado pelo agente junto com o PID; acima de 1000 caracteres, só o final, com `...` na frente)
   * `status VARCHAR2(15 CHAR) DEFAULT 'PENDING' NOT NULL`
   * `priority NUMBER(1) DEFAULT 2 NOT NULL`
   * `cancel_requested CHAR(1) DEFAULT 'N' NOT NULL`
@@ -2535,6 +2541,7 @@ END;
   * `environments VARCHAR2(1000 CHAR)` (CR-007; `environments` que não caiba é recusado na configuração)
   * `platform VARCHAR2(10 CHAR)`, com CK `ck_tbsss_agt_plat (platform IS NULL OR platform IN ('LINUX','UNIX'))`
   * `interpreters VARCHAR2(100 CHAR)` (lista separada por vírgula dos interpretadores lógicos suportados)
+  * `script_base_dir VARCHAR2(500 CHAR)` (CR-023: `[agent] script_base_dir` publicado pelo agente no registro; nulo sem pasta base)
   * `status VARCHAR2(10 CHAR) DEFAULT 'ACTIVE' NOT NULL`
   * `started_at DATE`
   * `heartbeat_at DATE`
@@ -2887,6 +2894,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[agent]` | `output_dir` (CR-012) | caminho | opcional; absoluto e normalizado, fora das pastas do sistema, sem sobreposição com `log_dir`, `work_dir` e `exec_work_dir` (nenhuma dentro da outra) |
 | `[agent]` | `input_dir` (CR-014) | caminho | opcional; absoluto e normalizado, fora das pastas do sistema, sem sobreposição com `log_dir`, `work_dir`, `exec_work_dir` e `output_dir` (nenhuma dentro da outra) |
 | `[agent]` | `script_work_dir` (CR-019) | caminho | opcional; absoluto e normalizado, fora das pastas do sistema, sem sobreposição com `log_dir`, `work_dir`, `exec_work_dir`, `output_dir` e `input_dir` (nenhuma dentro da outra) |
+| `[agent]` | `script_base_dir` (CR-023) | caminho | opcional; pasta base dos scripts com caminho relativo (§8.5). Absoluto e normalizado, fora das pastas do sistema, fora de `log_dir`, `work_dir`, `exec_work_dir`, `output_dir`, `input_dir` e `script_work_dir` e fora da pasta da aplicação (no DEV, só em `dev/`). Não precisa existir na subida (só aviso no log) |
 | `[agent]` | `output_max_bytes`, `output_max_files` (CR-012) | inteiro | 1.048.576 a 209.715.200, padrão 20.971.520; 1 a 10.000, padrão 1.000 |
 | `[agent]` | `child_locale` | texto | obrigatório |
 | `[agent]` | `env_passthrough` | lista CSV | opcional, sem as variáveis bloqueadas nem as chaves fixas do §8.6 |

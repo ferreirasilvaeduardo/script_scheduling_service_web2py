@@ -163,15 +163,100 @@ class TestAccessAndExecutable(unittest.TestCase):
                 self.assertEqual(ctx.exception.code, Code.INTERPRETER_UNSAFE)
 
 
+@unittest.skipIf(os.geteuid() == 0, "root sempre passa em os.access(W_OK)")
+class TestBaseDir(unittest.TestCase):
+    """CR-023: caminho relativo junto de [agent] script_base_dir; o real pode ficar fora da base (D3)."""
+
+    setUp = TestResolver.setUp
+    tearDown = TestResolver.tearDown
+    _lock = TestResolver._lock
+    _p = TestResolver._p
+
+    def test_relativo_junto_da_base(self):
+        real = os.path.realpath(self._p("sub/ok.py"))
+        self.assertEqual(path_guard.resolve("sub/ok.py", base_dir=self.base), real)
+        self.assertEqual(path_guard.resolve("link_ok.py", base_dir=self.base), real)
+
+    def test_link_para_fora_da_base_e_aceito(self):
+        self.assertEqual(path_guard.resolve("link_fora.py", base_dir=self.base), os.path.realpath(self.down))
+
+    def test_pastas_proibidas_valem_para_o_relativo(self):
+        cases = (("link_etc.py", Code.SYSTEM_DIR), ("nao_existe.py", Code.NOT_FOUND),
+                 ("sub", Code.NOT_A_FILE), ("ciclo_a", Code.NOT_FOUND))
+        for rel, code in cases:
+            with self.subTest(caminho=rel):
+                with self.assertRaises(PathGuardError) as ctx:
+                    path_guard.resolve(rel, base_dir=self.base)
+                self.assertEqual(ctx.exception.code, code)
+        with self.assertRaises(PathGuardError) as ctx:
+            path_guard.resolve("sub/ok.py", sss_dirs=(self.base,), base_dir=self.base)
+        self.assertEqual(ctx.exception.code, Code.SSS_DIR)
+
+    def test_relativo_sem_base(self):
+        for base in (None, ""):
+            with self.assertRaises(PathGuardError) as ctx:
+                path_guard.resolve("sub/ok.py", base_dir=base)
+            self.assertEqual(ctx.exception.code, Code.NO_BASE_DIR)
+
+    def test_absoluto_ignora_a_base(self):
+        real = os.path.realpath(self._p("sub/ok.py"))
+        self.assertEqual(path_guard.resolve(self._p("sub/ok.py"), base_dir="/nao/existe"), real)
+
+    def test_juntar_com_a_base(self):
+        self.assertEqual(path_guard.join_base("a/b.py", "/opt/s"), "/opt/s/a/b.py")
+        self.assertEqual(path_guard.join_base("/x/b.py", "/opt/s"), "/x/b.py")
+        self.assertEqual(path_guard.join_base("/x/b.py", None), "/x/b.py")
+        self.assertTrue(path_guard.is_relative("a.py"))
+        self.assertFalse(path_guard.is_relative("/a.py"))
+        self.assertFalse(path_guard.is_relative(""))
+
+
+class TestAppDir(unittest.TestCase):
+    """CR-023 (D8): script dentro da pasta da aplicacao e recusado; no DEV, dev/ e a excecao."""
+
+    def test_pasta_da_aplicacao(self):
+        inside = os.path.join(path_guard.APP_DIR, "src", "x.py")
+        for dev in (False, True):
+            with self.assertRaises(PathGuardError) as ctx:
+                path_guard.check_forbidden_dirs(inside, dev=dev)
+            self.assertEqual(ctx.exception.code, Code.APP_DIR)
+        in_dev = os.path.join(path_guard.APP_DIR, "dev", "scripts", "x.py")
+        path_guard.check_forbidden_dirs(in_dev, dev=True)
+        with self.assertRaises(PathGuardError) as ctx:
+            path_guard.check_forbidden_dirs(in_dev)
+        self.assertEqual(ctx.exception.code, Code.APP_DIR)
+
+    def test_link_para_dentro_da_aplicacao(self):
+        root = tempfile.mkdtemp(prefix="sss_pg_app_")
+        self.addCleanup(shutil.rmtree, root)
+        link = os.path.join(root, "app.py")
+        os.symlink(os.path.join(path_guard.APP_DIR, "README.md"), link)
+        with self.assertRaises(PathGuardError) as ctx:
+            path_guard.check_forbidden_dirs(link, dev=True)
+        self.assertEqual(ctx.exception.code, Code.APP_DIR)
+
+    def test_relativo_nao_e_conferido_no_cadastro(self):
+        path_guard.check_forbidden_dirs("relatorios/x.py")
+
+
 class TestTextValidations(unittest.TestCase):
 
     def test_validar_cadastro(self):
         path_guard.validate_registration("/opt/automacoes/scripts/faturamento/carga_faturas.py")
         path_guard.validate_registration("/opt/a b/script com espaço.py")
-        cases = (("faturamento/carga.py", Code.RELATIVE_PATH),
-                 ("", Code.RELATIVE_PATH),
-                 (None, Code.RELATIVE_PATH),
-                 ("./a.py", Code.RELATIVE_PATH),
+        # CR-023: relativo a [agent] script_base_dir
+        for value in ("faturamento/carga.py", "a.py", "x y/script com espaço.sh"):
+            path_guard.validate_registration(value)
+        cases = (("", Code.PATH_NOT_NORMALIZED),
+                 (None, Code.PATH_NOT_NORMALIZED),
+                 ("./a.py", Code.PATH_NOT_NORMALIZED),
+                 (".", Code.PATH_NOT_NORMALIZED),
+                 ("a//b.py", Code.PATH_NOT_NORMALIZED),
+                 ("a/b/", Code.PATH_NOT_NORMALIZED),
+                 ("a/../b.py", Code.HAS_DOTS),
+                 ("../b.py", Code.HAS_DOTS),
+                 ("a\\b.py", Code.INVALID_SEPARATOR),
+                 ("a\x00.py", Code.INVALID_CHARACTER),
                  ("/opt/../etc/passwd", Code.HAS_DOTS),
                  ("/opt/a..b.py", Code.HAS_DOTS),
                  ("/opt\\a.py", Code.INVALID_SEPARATOR),

@@ -66,7 +66,7 @@ class TestSchedulerQueueOracle(unittest.TestCase):
         return self.repo.register_agent(self.conn, {
             "code": self.agent, "hostname": "host-teste", "pid": pid or os.getpid(), "version": "teste",
             "environments": self.amb, "platform": "LINUX", "interpreters": "SH", "critical_config": "hb=10",
-            "node_offline_timeout_s": 120}, lambda p: False)
+            "script_base_dir": "/opt/tst/base", "node_offline_timeout_s": 120}, lambda p: False)
 
     def test_ordem_da_fila_igual_a_ordenacao_completa(self):
         """CR-013: a janela por prioridade devolve o lote exato da ordem (efetiva, inicio, id), sem os scripts
@@ -128,7 +128,11 @@ class TestSchedulerQueueOracle(unittest.TestCase):
         ctx = self.repo.execution_context(self.conn, self.repo.get_ticket(self.conn, tid))
         self.assertEqual(ctx["ctx"]["login"], self.c["login"])
         self.assertTrue(self.repo.active_homologated_script(self.conn, self.c["scr"]["id"], self.amb))
-        self.assertTrue(self.repo.register_pid(self.conn, tid, self.agent, 4321, 777))
+        # CR-023 (D6): caminho real executado gravado junto com o PID; acima de 1000 caracteres, o final.
+        self.assertTrue(self.repo.register_pid(self.conn, tid, self.agent, 4321, 777,
+                                               script_path="/opt/tst/" + "d/" * 600 + "fim.sh"))
+        stored = self.repo.get_ticket(self.conn, tid)["script_path"]
+        self.assertEqual((len(stored), stored[:3], stored[-6:]), (1000, "...", "fim.sh"))
         lost, now = self.repo.heartbeat(self.conn, self.agent, "host-teste", os.getpid(), [tid])
         self.assertEqual(lost, [])
         self.assertIsInstance(now, datetime.datetime)
@@ -137,6 +141,11 @@ class TestSchedulerQueueOracle(unittest.TestCase):
         self.assertFalse(self.repo.finalize(self.conn, tid, self.agent, "FAILED", "EXIT_ERROR", 1))
         t = self.repo.get_ticket(self.conn, tid)
         self.assertEqual((t["status"], t["process_id"], t["process_start"]), ("SUCCESS", 4321, 777))
+        cur = self.conn.cursor()
+        cur.execute("SELECT script_base_dir FROM " + self.catalog.qualify_table("agents") + " WHERE code = :c",
+                    c=self.agent)
+        self.assertEqual(cur.fetchone()[0], "/opt/tst/base", "CR-023 (D7): base publicada no registro")
+        cur.close()
         tickets = self.obter_repo("tickets")
         self.assertEqual(tickets.get(tid)["updated_by"], "SYSTEM:%s" % self.agent)
         self.assertTrue(self.repo.stop_agent(self.conn, self.agent, "host-teste", os.getpid(), "TERMINATE"))

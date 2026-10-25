@@ -137,8 +137,14 @@ def build(cfg, secrets, ticket, environment, script_real, work_dir_ticket, envir
         _set(env, "SSS_RECURRENCE", (schedule or {}).get("recurrence_type"))
     # Script, log e agente.
     # CR-011: com link simbolico no caminho, o cadastrado vai em SSS_SCRIPT_LINK; o real nos demais.
-    if snap.get("path_file") and snap["path_file"] != script_real:
-        _set(env, "SSS_SCRIPT_LINK", snap["path_file"])
+    # CR-023: o cadastrado relativo entra ja junto da pasta base (nunca chega relativo ao script).
+    if snap.get("path_file"):
+        typed = snap["path_file"]
+        base = getattr(cfg.agent, "script_base_dir", None)
+        if typed[:1] != "/" and base:
+            typed = os.path.join(base, typed)
+        if typed != script_real:
+            _set(env, "SSS_SCRIPT_LINK", typed)
     _set(env, "SSS_SCRIPT_ID", snap.get("script_id"))
     _set(env, "SSS_SCRIPT_NAME", snap.get("script_name"))
     _set(env, "SSS_INTERPRETER", snap.get("interpreter"))

@@ -315,7 +315,8 @@ def _build_table_registry():
             ('active', {'sufixo': 'active', 'expr': "active IN ('Y', 'N')"}),
             ('paral', {'sufixo': 'paral', 'expr': "max_parallel_env BETWEEN 1 AND 999"}),
             ('int', {'sufixo': 'int', 'expr': "interpreter IN ('PYTHON3','BASH','SH')"}),
-            ('path', {'sufixo': 'path', 'expr': "SUBSTR(path_file, 1, 1) = '/' AND INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\\') = 0"}),
+            # CR-023: absoluto ou relativo a [agent] script_base_dir (sem exigir a '/' inicial)
+            ('path', {'sufixo': 'path', 'expr': "INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\\') = 0"}),
             ('tmout', {'sufixo': 'tmout', 'expr': "timeout_s IS NULL OR timeout_s > 0"}),
         ])),
         ('indices', OrderedDict()),
@@ -558,6 +559,8 @@ def _build_table_registry():
             ('agent_id', {'name': 'agent_id', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
             ('process_id', {'name': 'process_id', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
             ('process_start', {'name': 'process_start', 'tipo': 'NUMBER(20)', 'not_null': False, 'default': None}),
+            # CR-023 (D6): caminho real executado, gravado pelo agente junto com o PID
+            ('script_path', {'name': 'script_path', 'tipo': 'VARCHAR2(1000 CHAR)', 'not_null': False, 'default': None}),
             ('status', {'name': 'status', 'tipo': 'VARCHAR2(15 CHAR)', 'not_null': True, 'default': "'PENDING'"}),
             ('priority', {'name': 'priority', 'tipo': 'NUMBER(1)', 'not_null': True, 'default': '2'}),
             ('cancel_requested', {'name': 'cancel_requested', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'N'"}),
@@ -654,6 +657,8 @@ def _build_table_registry():
             ('environments', {'name': 'environments', 'tipo': 'VARCHAR2(1000 CHAR)', 'not_null': False, 'default': None}),
             ('platform', {'name': 'platform', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': False, 'default': None}),
             ('interpreters', {'name': 'interpreters', 'tipo': 'VARCHAR2(100 CHAR)', 'not_null': False, 'default': None}),
+            # CR-023 (D7): pasta base do caminho relativo, publicada pelo agente no registro
+            ('script_base_dir', {'name': 'script_base_dir', 'tipo': 'VARCHAR2(500 CHAR)', 'not_null': False, 'default': None}),
             ('status', {'name': 'status', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': True, 'default': "'ACTIVE'"}),
             ('started_at', {'name': 'started_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
             ('heartbeat_at', {'name': 'heartbeat_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),

@@ -451,6 +451,21 @@ class TestValidateSnapshot(unittest.TestCase):
             pc.validate_snapshot(js, cfg or self.cfg)
         return ctx.exception.reason
 
+    def test_cr023_relativo_junto_da_base_do_agente(self):
+        cfg = collections.namedtuple("CfgBase", ["interpreters", "script_base_dir"])(
+            self.cfg.interpreters, self.base)
+        _snap, argv, script_real = pc.validate_snapshot(
+            self._changed(path_file="faturamento/carga_faturas.py"), cfg)
+        self.assertEqual(script_real, os.path.realpath(self.arq))
+        self.assertIn(script_real, argv)
+        self.assertEqual(self._reason(self._changed(path_file="faturamento/nao_existe.py"), cfg),
+                         "PATH_GUARD_NOT_FOUND")
+
+    def test_cr023_pasta_da_aplicacao(self):
+        cfg = collections.namedtuple("CfgDev", ["interpreters", "dev"])(self.cfg.interpreters, True)
+        inside = os.path.join(path_guard.APP_DIR, "README.md")
+        self.assertEqual(self._reason(self._changed(path_file=inside), cfg), "PATH_GUARD_APP_DIR")
+
     def test_ok_monta_argv_com_executavel_e_base_do_agente(self):
         snap, argv, script_real = pc.validate_snapshot(self.js, self.cfg)
         self.assertEqual(argv, [EXE_PY, "-I", self.real, "--data", "2026-10-13"])
@@ -479,7 +494,8 @@ class TestValidateSnapshot(unittest.TestCase):
         self.assertEqual(self._reason(self._changed(args=["--n", 1])), "INVALID_ARGS")
 
     def test_path_guard_revalidado_no_agente(self):
-        self.assertEqual(self._reason(self._changed(path_file="x.py")), "PATH_GUARD_RELATIVE_PATH")
+        # CR-023: relativo sem script_base_dir no agente
+        self.assertEqual(self._reason(self._changed(path_file="x.py")), "PATH_GUARD_NO_BASE_DIR")
         self.assertEqual(self._reason(self._changed(path_file="/opt/../x.py")), "PATH_GUARD_HAS_DOTS")
         self.assertEqual(self._reason(self._changed(path_file="/etc/passwd")), "PATH_GUARD_SYSTEM_DIR")
         self.assertEqual(self._reason(self._changed(path_file=os.path.join(self.base, "nao_existe.py"))),

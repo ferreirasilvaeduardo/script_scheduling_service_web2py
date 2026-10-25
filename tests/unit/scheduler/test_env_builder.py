@@ -13,7 +13,8 @@ from sss.scheduler import env_builder
 from sss.core import masking
 from sss.config.sss_config import EnvironmentSecret, Secrets
 
-_AgentStub = collections.namedtuple("_Agente", "agent_id child_locale env_passthrough exec_users exec_work_dir")
+_AgentStub = collections.namedtuple("_Agente", "agent_id child_locale env_passthrough exec_users exec_work_dir "
+                                               "script_base_dir")
 _Cfg = collections.namedtuple("_Cfg", "agent")
 
 WORK = "/srv/sss/work/ticket_41"
@@ -24,7 +25,7 @@ DAEMON = {"PATH": "/opt/daemon/bin:/usr/bin", "HOME": "/home/sssagente", "TZ": "
 
 
 def _cfg(passthrough=("ORACLE_HOME", "NLS_LANG", "TNS_ADMIN"), users=(), exec_work_dir=None):
-    return _Cfg(_AgentStub("srv-01", "C.UTF-8", tuple(passthrough), tuple(users), exec_work_dir))
+    return _Cfg(_AgentStub("srv-01", "C.UTF-8", tuple(passthrough), tuple(users), exec_work_dir, None))
 
 
 def _secrets(environments=None):
@@ -173,6 +174,15 @@ class TestEnvBuilder(unittest.TestCase):
                                              snapshot={"path_file": SCRIPT})
         self.assertEqual((env["SSS_SCRIPT_FILE"], env["SSS_SCRIPT_LINK"]), (SCRIPT, "/opt/automacoes/atual/carga.py"))
         self.assertNotIn("SSS_SCRIPT_LINK", without_link)
+
+    def test_cr023_relativo_vira_absoluto_no_link(self):
+        cfg = _cfg()
+        cfg = cfg._replace(agent=cfg.agent._replace(script_base_dir="/opt/automacoes/scripts"))
+        with self.assertLogs("sss_scheduler", "WARNING"):
+            env = env_builder.build(cfg, _secrets(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
+                                    snapshot={"path_file": "relatorios/carga.py"})
+        self.assertEqual(env["SSS_SCRIPT_LINK"], "/opt/automacoes/scripts/relatorios/carga.py")
+        self.assertEqual(env["SSS_SCRIPT_FILE"], SCRIPT)
 
     def test_cr012_pasta_de_saida_so_quando_informada(self):
         with self.assertLogs("sss_scheduler", "WARNING"):
