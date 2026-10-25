@@ -14,7 +14,7 @@ import unittest
 from unittest import mock
 
 from sss.persistence import db_conn
-import schedule_expansion
+from sss.scheduler import schedule_expansion
 from sss.core import rbac
 from sss.core import sql_ident
 from sss.persistence.oracle.scheduler_schedules import DuplicateOccurrence

@@ -20,8 +20,8 @@ import time
 import unittest
 from unittest import mock
 
-import env_builder
-import executor
+from sss.scheduler import env_builder
+from sss.scheduler import executor
 from sss.core import params_compiler as pc
 from sss.platform import path_guard
 from sss.platform import os_platform

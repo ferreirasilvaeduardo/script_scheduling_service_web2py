@@ -11,8 +11,8 @@ import sys
 import tempfile
 import unittest
 from sss.persistence import db_conn
-import log_pump
-from log_pump import Pump
+from sss.scheduler import log_pump
+from sss.scheduler.log_pump import Pump
 from sss.persistence.oracle.scheduler_log import (WRITTEN, ALREADY_WRITTEN, OWNERSHIP_LOST, LogOffsetMismatch,
                                                   RepoSchedulerLog)
 from tests.unit.scheduler.test_log_pump import MB, _CHILD  # noqa: F401

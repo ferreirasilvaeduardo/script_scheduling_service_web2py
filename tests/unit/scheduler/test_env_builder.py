@@ -9,7 +9,7 @@ import os
 import unittest
 from unittest import mock
 
-import env_builder
+from sss.scheduler import env_builder
 from sss.core import masking
 from sss.config.sss_config import EnvironmentSecret, Secrets
 

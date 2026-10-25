@@ -20,9 +20,9 @@ import time
 import unittest
 from unittest import mock
 
-import executor
+from sss.scheduler import executor
 from sss.platform import os_platform
-import scheduler_loop as sl
+from sss.scheduler import scheduler_loop as sl
 from sss.core import sql_ident
 from sss.config import sss_config
 from sss.persistence.oracle.scheduler_queue import DuplicateAgent

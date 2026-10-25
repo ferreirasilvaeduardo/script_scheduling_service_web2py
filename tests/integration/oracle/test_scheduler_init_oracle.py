@@ -6,7 +6,7 @@ from tests.support import _testenv  # noqa: F401
 import os
 import time
 import unittest
-import scheduler_loop as sl
+from sss.scheduler import scheduler_loop as sl
 from sss.config import sss_config
 from tests.unit.scheduler.test_scheduler_init import _Base  # noqa: F401
 

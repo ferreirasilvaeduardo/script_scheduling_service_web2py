@@ -6,7 +6,7 @@ from tests.support import _testenv  # noqa: F401
 import datetime
 import json
 import unittest
-import schedule_expansion
+from sss.scheduler import schedule_expansion
 import os  # noqa: E402
 from tests.unit.scheduler.test_scheduler_ha import _Cfg  # noqa: F401
 

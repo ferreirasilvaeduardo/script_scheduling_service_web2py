@@ -16,9 +16,9 @@ import unittest
 from unittest import mock
 
 from sss.persistence import db_conn
-import log_pump
+from sss.scheduler import log_pump
 from sss.core import masking
-from log_pump import MARKER, Pump, Round
+from sss.scheduler.log_pump import MARKER, Pump, Round
 from sss.persistence.oracle import scheduler_log
 from sss.persistence.oracle.scheduler_log import (WRITTEN, ALREADY_WRITTEN, OWNERSHIP_LOST, LogOffsetMismatch,
                                                   RepoSchedulerLog)

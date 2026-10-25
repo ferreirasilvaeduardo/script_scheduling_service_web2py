@@ -13,7 +13,7 @@ import unittest
 import zipfile
 from unittest import mock
 
-import output_phase
+from sss.scheduler import output_phase
 from tests.support._output_memory import RepoOutputMemory
 from sss.persistence.oracle import scheduler_output
 

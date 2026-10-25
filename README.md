@@ -340,12 +340,15 @@ bin/
       input_browse_service.py, output_browse_service.py  # telas Entrada e Saídas (CR-020)
       audit_service.py        # catálogo de ações, consulta e exportação da trilha (§4.4). A escrita de tbsss_audit
                               # é feita pelo próprio repositório, na operação que recebe audit= (não existe audit.py)
+    scheduler/                # [CR-022b6] agente (daemon); não importa ui, services nem a camada web
+      scheduler_loop.py       # [F8.3] laço principal do daemon
+      executor.py             # [F8.1] spawn, timeout, kill, finalização
+      env_builder.py          # [F8.1] montagem do ambiente limpo (§8.6)
+      log_pump.py             # [F8.2] arquivo local -> CLOB com mascaramento (§8.10)
+      schedule_expansion.py   # [F8.4b] desdobro das regras de agendamento em tickets (§7)
+      input_phase.py, output_phase.py  # entrega dos arquivos de entrada e empacotamento da saída (CR-020, CR-012)
   modules/
     web/                      # [CR-021d1/d2] núcleo web próprio (WSGI, request, multipart, response, sessão assinada, rotas, templates); ligado no CR-021e
-    env_builder.py            # [F8.1] montagem do ambiente limpo (§8.6)
-    executor.py               # [F8.1] spawn, timeout, kill, finalização
-    log_pump.py               # [F8.2] arquivo local -> CLOB com mascaramento (§8.10)
-    scheduler_loop.py         # [F8.3] laço principal do daemon
   scripts/
     init_db.py                # [F7.1] bootstrap idempotente de DDL e seed, versão do esquema e migrações (§11)
     migrations/               # [F7.1] migrações numeradas m<NNNN>_<descricao>.py (§11.1, CR-007)
@@ -1301,7 +1304,7 @@ Nos dois casos, `next_run_at` recebe a **primeira ocorrência futura** maior que
 
 ### 7.5 Algoritmo de desdobro (ciclo 1 do daemon)
 
-Implementado em `modules/schedule_expansion.py` (F8.4b), chamado pelo ciclo do orquestrador do agente e suspenso na parada; o SQL fica em `src/sss/persistence/oracle/scheduler_schedules.py`. O log de cada regra (`agendamento <id>: ...`, ação `DESDOBRO`) permite reconstruir a decisão sem o banco: ticket gerado (com a ocorrência e a prioridade), avanço, conclusão, pausa (com o motivo e o detalhe), `SKIP_OVERLAP`, `MISFIRE` e `DESDOBRO_ERRO_BANCO`; o ciclo fecha com o resumo (regras, tickets, pausas e as que estavam com outro agente).
+Implementado em `src/sss/scheduler/schedule_expansion.py` (F8.4b), chamado pelo ciclo do orquestrador do agente e suspenso na parada; o SQL fica em `src/sss/persistence/oracle/scheduler_schedules.py`. O log de cada regra (`agendamento <id>: ...`, ação `DESDOBRO`) permite reconstruir a decisão sem o banco: ticket gerado (com a ocorrência e a prioridade), avanço, conclusão, pausa (com o motivo e o detalhe), `SKIP_OVERLAP`, `MISFIRE` e `DESDOBRO_ERRO_BANCO`; o ciclo fecha com o resumo (regras, tickets, pausas e as que estavam com outro agente).
 
 **Leitura paginada (CR-007, R-08).** A cada ciclo do orquestrador, o agente lê páginas de regras vencidas (usa `ix_tbsss_sch_next (active, next_run_at, id)`), começando do início e continuando depois da última regra lida:
 
@@ -2024,7 +2027,7 @@ Canal opcional para o script devolver arquivos ao usuário. O zip vai para o ban
 * **Ligado por agente:** `[agent] output_dir` vazio desliga o recurso naquele agente (sem `SSS_OUTPUT_DIR`, sem zip).
 * **Pasta do ticket:** `output_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, com as partes do caminho do log (§8.4, passo 3). Usa o número do ticket, e não o PID.
 * **Dono:** fora de DEV, `output_dir/<ambiente>/` é criada na implantação pelo root, com dono o usuário de execução do ambiente e `0700` (`DEPLOYMENT.md`). O helper `run`, como o usuário de execução, cria o resto do caminho nível a nível com `os.mkdir(..., 0o700)`, recusando link ou item que não seja diretório do próprio usuário. Uma falha aqui faz o helper sair com o código 2 ou 4 antes de executar o script, com a causa (`sss-helper: ...`) no log do ticket, como as demais falhas do preparo do `run`. O agente não lê o conteúdo. Em DEV sem usuário de execução, o agente cria tudo.
-* **Fase de saída**, máquina de estados do laço (`modules/output_phase.py`), sem espera, em todo fim de ticket (sucesso, erro, timeout, cancelamento, `LOG_LIMIT`), em duas etapas: **empacotar** depois do grupo encerrado e antes do flush final (§8.7, passo 1a: o ticket segue `RUNNING`, e a linha `[SSS]` entra no log) e **gravar** depois da finalização (§8.7, passo 6):
+* **Fase de saída**, máquina de estados do laço (`src/sss/scheduler/output_phase.py`), sem espera, em todo fim de ticket (sucesso, erro, timeout, cancelamento, `LOG_LIMIT`), em duas etapas: **empacotar** depois do grupo encerrado e antes do flush final (§8.7, passo 1a: o ticket segue `RUNNING`, e a linha `[SSS]` entra no log) e **gravar** depois da finalização (§8.7, passo 6):
   1. o agente inicia o `pack` (helper fora de DEV; `platform` em DEV) com a saída padrão no arquivo `work_dir/ticket_<id>/output.zip` e acompanha com `poll()`. Prazo fixo de 120 s: ao vencer, o processo é encerrado e a saída fica `FAILED` (`DEADLINE`);
   2. o `pack` percorre a pasta sem seguir links; só entram arquivos regulares, com o nome relativo à pasta do ticket. Conta os arquivos antes de compactar (`ZIP_DEFLATED`) e interrompe ao passar de `output_max_bytes`. **Não há zip parcial**;
   3. código 6 (pasta vazia ou inexistente): a pasta é removida e nada é gravado;
@@ -2062,7 +2065,7 @@ Pasta permanente onde o script encontra os arquivos de que precisa (lotes, plani
 * **Concorrência:** dois tickets do mesmo script no mesmo ambiente (com `max_parallel_env` maior que 1) usam a mesma pasta ao mesmo tempo. A coordenação (por exemplo, mover o arquivo para uma subpasta antes de processar) é do script.
 * **Scripts e interpretadores** não podem ficar dentro de `input_dir` (`SSS_DIR`, §8.5).
 * Web e agentes podem estar em servidores diferentes: a pasta existe só no servidor de cada agente. Com mais de um agente atendendo o mesmo ambiente, cada um tem a sua `input_dir` (ou um compartilhamento de rede comum, montado pela infraestrutura).
-* **Envio pela tela (CR-020):** o arquivo chega pelo banco (§10, tabelas 19 a 21) e cada agente vivo do ambiente o grava na sua pasta (`modules/input_phase.py`, máquina de estados do laço, sem espera, uma entrega por vez; persistência do agente por `src/sss/persistence/oracle/scheduler_input`, fora da camada web, com a conexão do daemon):
+* **Envio pela tela (CR-020):** o arquivo chega pelo banco (§10, tabelas 19 a 21) e cada agente vivo do ambiente o grava na sua pasta (`src/sss/scheduler/input_phase.py`, máquina de estados do laço, sem espera, uma entrega por vez; persistência do agente por `src/sss/persistence/oracle/scheduler_input`, fora da camada web, com a conexão do daemon):
   1. **baixar:** no ciclo rápido, o agente pega a próxima entrega `PENDING` dele e, a cada volta do laço, lê até 4 partes de 1 MiB do banco para `work_dir/input/delivery_<id>.part` (do agente, `0600`). No fim, tamanho e SHA-256 são conferidos; divergência é `FAILED`/`HASH` sem chamar o helper;
   2. **gravar:** o helper `put-input` (como o usuário de execução, com o temporário na entrada padrão, prazo de 120 s) grava `.sss_upload_<pid>.tmp` no destino com `O_EXCL`, confere tamanho e hash enquanto grava e publica de forma atômica: **sem substituir**, `link` + `unlink`, e um item já existente é `EXISTS`; **substituindo**, `replace`, recusado se o destino não for arquivo regular (`NAME`). Disco cheio é `SPACE`; outro erro, `ERROR`;
   3. **marcar:** `DELIVERED` ou `FAILED` com o motivo, só pelo próprio agente, com `INPUT_DELIVERY` na mesma transação; o temporário é apagado e o retrato daquela pasta é refeito.

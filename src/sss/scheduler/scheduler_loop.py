@@ -21,12 +21,12 @@ import threading
 import time
 
 from sss.persistence import db_conn
-import schedule_expansion
-import env_builder
-import executor
-import input_phase
-import output_phase
-import log_pump
+from sss.scheduler import schedule_expansion
+from sss.scheduler import env_builder
+from sss.scheduler import executor
+from sss.scheduler import input_phase
+from sss.scheduler import output_phase
+from sss.scheduler import log_pump
 from sss.core import params_compiler
 from sss.config import log_paths
 from sss.platform import os_platform
