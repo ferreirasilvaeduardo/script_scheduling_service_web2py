@@ -503,15 +503,15 @@ class TicketService(object):
         return date.replace(microsecond=0)
 
     def _compile(self, ctx, script, env, answers, now, errors):
-        """Confere o formato do caminho e compila o snapshot v4, acumulando erros por campo."""
+        """Confere o formato do caminho e compila o snapshot v5, acumulando erros por campo."""
         links = self._links(script["id"])
         codes = set(v["code"] for v in links)
         if not isinstance(answers, dict):
             answers = {}
         answers = dict((k, _last(v)) for k, v in answers.items() if k in codes)
 
-        # CR-011 (README §5.4, §8.5): o web confere so o formato do caminho e as pastas do sistema; o arquivo
-        # e conferido pelo agente, no servidor onde ele roda (README §8.4).
+        # CR-011 (README §5.4, §8.5): o web confere o formato e, no absoluto, as pastas do sistema e da aplicacao
+        # (CR-023); o arquivo e conferido pelo agente, no servidor onde ele roda (README §8.4).
         try:
             path_guard.validate_registration(script["path_file"])
             path_guard.check_forbidden_dirs(script["path_file"], dev=self._dev)

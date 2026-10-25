@@ -239,7 +239,7 @@ cd /opt/sss/app/instance
 cp config.ini.example config.ini && chmod 0640 config.ini
 ```
 
-Ajuste em cada servidor: `[app] sss_env`, `[oracle]` (`user` do papel do servidor, `dsn`, `owner`, `table_prefix`, `driver_mode`), `[secrets] secrets_file = /etc/sss/secrets.cfg`, `[logging] log_dir`, `[web] allowed_origins` e `trusted_proxies` (nó web) e `[agent]` (agentes: `agent_id` único, `environments`, `exec_users`, `exec_work_dir`, `work_dir`, `interpreters`). A descrição de cada chave está no README §12.1.
+Ajuste em cada servidor: `[app] sss_env`, `[oracle]` (`user` do papel do servidor, `dsn`, `owner`, `table_prefix`, `driver_mode`), `[secrets] secrets_file = /etc/sss/secrets.cfg`, `[logging] log_dir`, `[web] allowed_origins` e `trusted_proxies` (nó web) e `[agent]` (agentes: `agent_id` único, `environments`, `exec_users`, `exec_work_dir`, `work_dir`, `interpreters` e, com script de caminho relativo, `script_base_dir`, §9). A descrição de cada chave está no README §12.1.
 
 **Tempos que precisam ser idênticos em todos os agentes (README §8.9, D7):** copie `fence_timeout_s` e `node_offline_timeout_s` do arquivo de referência **sem alterar**, assim como os outros valores do `critical_config` (`heartbeat_interval_s`, `call_timeout_ms`, `kill_grace_s`, `misfire_policy`, `misfire_tolerance_s`, `cron_horizon_days`, `queue_aging_min`). Cada agente registra na subida:
 
@@ -303,14 +303,15 @@ sss ALL=(ssshml) NOPASSWD: /opt/sss/bin/sss-helper
 
 ---
 
-## 9. Scripts cadastrados (CR-005, CR-011)
+## 9. Scripts cadastrados (CR-005, CR-011, CR-023)
 
-* O caminho cadastrado (`path_file`) é **absoluto**, em qualquer pasta fora das pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`) e fora das pastas do SSS (`log_dir`, `work_dir`, `exec_work_dir`, `output_dir`, `input_dir` e `script_work_dir`).
+* O caminho cadastrado (`path_file`) é **absoluto** ou **relativo à pasta base** do agente (CR-023), em qualquer pasta fora das pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`), fora das pastas do SSS (`log_dir`, `work_dir`, `exec_work_dir`, `output_dir`, `input_dir` e `script_work_dir`) e fora da pasta da aplicação (`/opt/sss/app`, trocada a cada atualização).
+* **Pasta base (CR-023):** `[agent] script_base_dir` (ex.: `/opt/automacoes/scripts`). O agente junta o caminho relativo cadastrado (ex.: `faturamento/carga.py`) a ela e confere o resultado como um caminho absoluto; o arquivo real pode ficar fora da pasta base (link). A pasta pode ser diferente em cada servidor, mas **todo agente de um ambiente que tem script com caminho relativo precisa dela**: o ticket vai para qualquer agente do ambiente, e o agente sem pasta base termina o ticket em `PRECHECK_FAILED` (`NO_BASE_DIR`). Na subida, o log mostra a pasta base (INFO) ou avisa que ela não existe (WARNING); o painel de agentes mostra a de cada um. Os 14 scripts de demonstração do seed são cadastrados como `utilitarios/<arquivo>`.
 * **Pasta de entrada (CR-014):** com `[agent] input_dir`, cada script recebe `SSS_INPUT_DIR` = `input_dir/<ambiente>/<nome do script em minúsculo, sem acento nem espaço>/` (ex.: "Carga Diária" em `PRODUCAO` → `/var/lib/sss/input/producao/carga_diaria/`). A pasta é criada na primeira execução e **nunca** é limpa pelo SSS: quem deposita os arquivos e o próprio script cuidam do conteúdo. Para depositar arquivos de fora, use o usuário de execução do ambiente (ou um processo dele).
 * **Pasta de trabalho (CR-019):** com `[agent] script_work_dir`, cada ticket recebe `SSS_WORK_DIR` = `script_work_dir/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, criada antes da execução e mantida depois dela, para consulta no servidor do agente. O `HOME` e a pasta corrente do script continuam na pasta descartável de `exec_work_dir`.
 * Pode ser um link simbólico. O arquivo **real** precisa existir no servidor do agente, ser arquivo regular, ser legível pelo usuário de execução e **não** ter escrita de grupo nem de outros (`chmod go-w`).
 * O conteúdo e a versão do script são controlados pelo ambiente: o SSS não confere hash nem dono (CR-011). Quem grava na pasta do script muda o que vai rodar.
-* O nó web confere só o formato do caminho. A conferência do arquivo é feita pelo agente, antes de cada execução; uma recusa aparece como `PRECHECK_FAILED` (§15).
+* O nó web confere o formato do caminho e, no caminho absoluto, as pastas do sistema e a da aplicação (o relativo só pelo formato). A conferência do arquivo é feita pelo agente, antes de cada execução; uma recusa aparece como `PRECHECK_FAILED` (§15).
 * O interpretador do script (`PYTHON3`, `BASH`, `SH`) precisa estar mapeado em `[agent] interpreters` de pelo menos um agente saudável do ambiente. Senão, o ticket fica `PENDING` (§15, "fila sem atendente").
 
 ---
@@ -636,7 +637,9 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | `FAILED` / `PRECHECK_FAILED` | `pre-validacao recusada: <código>` e `[SSS] pre-validacao recusada: <código> (agente X)` | Ver os códigos abaixo | Ver abaixo |
 | ↳ `NOT_FOUND`, `NO_ACCESS`, `NOT_A_FILE` | | O arquivo real não existe, não é legível ou não é arquivo, no servidor do agente | Corrija o arquivo no agente (§9) |
 | ↳ `GROUP_OTHER_WRITABLE` | | Arquivo real com escrita de grupo ou outros | `chmod go-w <arquivo>` |
-| ↳ `SYSTEM_DIR`, `SSS_DIR` | | Script nas pastas do sistema ou nas do SSS (inclusive `output_dir`, `input_dir` e `script_work_dir`, CR-014 e CR-019) | Mova o script e corrija o cadastro |
+| ↳ `SYSTEM_DIR`, `SSS_DIR`, `APP_DIR` | | Script nas pastas do sistema, nas do SSS (inclusive `output_dir`, `input_dir` e `script_work_dir`, CR-014 e CR-019) ou na pasta da aplicação (CR-023) | Mova o script e corrija o cadastro |
+| ↳ `NO_BASE_DIR` | | Script com caminho relativo e **este** agente sem `[agent] script_base_dir` (CR-023) | Configure a pasta base no agente (§9) e suba de novo |
+| ↳ `RELATIVE_PATH` | | Agente de versão anterior ao CR-023 diante de script com caminho relativo | Atualize todos os agentes do ambiente (§18) |
 | ↳ `INTERPRETER_UNAVAILABLE` | | O interpretador do script não está mapeado **neste** agente | `[agent] interpreters` |
 | ↳ `UNSUPPORTED_VERSION` | | Ticket criado por uma versão anterior (snapshot antes da versão 5) | Dispare de novo pela tela |
 | ↳ `REGISTRATION_CHANGED`, `SCRIPT_INACTIVE`, `NOT_HOMOLOGATED`, `ENVIRONMENT_INACTIVE`, `NO_PERMISSION` | | O cadastro mudou entre o disparo e a execução | Confira o cadastro e dispare de novo |
@@ -728,6 +731,18 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
    * **Sem web2py (CR-021f):** o `bin/sss-web.sh` novo só aceita as opções do `scripts/run_web.py` e recusa `web2py.py`/`anyserver.py` (código 2). Troque, junto com a versão, a linha que sobe o web na unit do `systemd` ou no script de operação: `bin/sss-web.sh <python3> --host 127.0.0.1 --port <porta>` (§10.1). Confira antes com `bin/sss-web.sh <python3> --check`. A sessão passa a ser o cookie assinado `sss_session` (CR-021e, D1): quem estiver logado na hora da atualização entra de novo. O `httpserver.log`, os `parameters_<porta>.py` e o painel `/admin` do web2py deixam de existir: tire o `httpserver.log` do `logrotate` (§14.4) e não copie nada disso para a pasta nova.
    * **Aplicação na raiz do pacote (CR-022a):** o pacote não tem mais `applications/script_scheduling_service/`; tudo fica direto em `/opt/sss/app` (antes `/opt/sss/web2py`). Na primeira atualização com esta versão, extraia em `/opt/sss/app` (sem renomear a pasta antiga para ela), copie o `config.ini` de `/opt/sss/web2py/applications/script_scheduling_service/instance/` para `/opt/sss/app/instance/` e troque nos caminhos de operação (unit do `systemd`, `cron` do purge, `sudoers` do monitoramento, scripts de subida) `/opt/sss/web2py` por `/opt/sss/app` e `.../applications/script_scheduling_service/scripts/` por `.../scripts/`. Caminhos absolutos do `config.ini` que apontavam para dentro da pasta antiga (ex.: `log_dir`, `work_dir`) também mudam. O retorno é subir de novo pela pasta antiga, que fica intacta.
    * **Código no pacote `src/sss/` (CR-022b):** para a operação nada muda: os comandos continuam `bin/*.sh` e `scripts/<nome>.py` (agora involucros que chamam `src/sss/cli/`), com as mesmas opções e códigos de saída. O pacote passa a ter só `bin/`, `docs/`, `instance/`, `scripts/` e `src/` (§3); as pastas `modules/`, `webapp/`, `controllers/`, `views/` e `static/` saíram, e templates e estáticos ficam em `src/sss/web/`. Automação local que apontava para arquivos dessas pastas (cópia de CSS, inspeção de template) precisa do caminho novo; as URLs não mudam.
+   * **Caminho relativo à pasta base (CR-023):** atualize **todos** os agentes antes de cadastrar o primeiro script com caminho relativo (o agente anterior termina o ticket em `PRECHECK_FAILED`, `RELATIVE_PATH`) e configure `[agent] script_base_dir` em cada um (§9). O esquema continua na versão 1, sem migração: num banco já instalado, o DBA aplica antes da subida (troque `openrisow` e `tbsss_` pelo owner e prefixo do ambiente):
+     ```sql
+     ALTER TABLE openrisow.tbsss_scripts DROP CONSTRAINT ck_tbsss_scr_path;
+     ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_path
+       CHECK (INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\') = 0);
+     ALTER TABLE openrisow.tbsss_tickets ADD (script_path VARCHAR2(1000 CHAR));
+     ALTER TABLE openrisow.tbsss_agents ADD (script_base_dir VARCHAR2(500 CHAR));
+     COMMENT ON COLUMN openrisow.tbsss_tickets.script_path IS 'Caminho real do script executado, resolvido pelo agente (CR-023); vazio antes do inicio';
+     COMMENT ON COLUMN openrisow.tbsss_agents.script_base_dir IS 'Pasta base dos scripts com caminho relativo ([agent] script_base_dir); vazio sem base';
+     COMMENT ON COLUMN openrisow.tbsss_scripts.path_file IS 'Caminho normalizado do script: absoluto ou relativo a [agent] script_base_dir de cada agente';
+     ```
+     Para voltar à versão anterior, nada no banco precisa ser desfeito: ela não usa as colunas novas, e a CK nova aceita os caminhos absolutos que ela grava (um script já cadastrado com caminho relativo termina em `RELATIVE_PATH` nos agentes dela). Num banco já instalado, os 14 scripts de demonstração continuam com o caminho absoluto: o `01_deploy_sss.sql` não roda sobre um esquema existente, e só o `scripts/init_db.py` reaplica o seed (o `MERGE` passa os 14 para `utilitarios/<arquivo>`). Antes de reaplicar o seed, ou de cadastrar qualquer script com caminho relativo, configure `script_base_dir` em todos os agentes do ambiente.
 5. Pare os agentes (`sss-stop.sh` ou `SIGTERM`) e o web, troque as pastas (`mv /opt/sss/app /opt/sss/app-<anterior> && mv /opt/sss/app-<versao> /opt/sss/app`) e suba de novo.
 6. Valide (§11). **Retorno:** pare, troque as pastas de volta e suba. Com migração de esquema, o retorno precisa do backup do banco (§17).
 
@@ -748,6 +763,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 - [ ] `secrets.cfg` com `0600` e dono `sss`, só com as seções do papel
 - [ ] Helper em `/opt/sss/bin/sss-helper` (root, `0755`) e `sudoers` de cada usuário de execução (§8)
 - [ ] Com `output_dir`, `input_dir` ou `script_work_dir`: a pasta de cada ambiente atendido criada pelo root, do usuário de execução, `0700` (§8)
+- [ ] Com script de caminho relativo (CR-023): `[agent] script_base_dir` em **todos** os agentes do ambiente, a pasta existente e a linha `pasta base dos scripts` no log de subida e no painel de agentes (§9)
 - [ ] `log_dir` em partição própria, com alerta de uso (§4.3)
 - [ ] Senha inicial do seed trocada (§5.3)
 - [ ] `cron` do purge e `health.py` no monitoramento (§12, §13)

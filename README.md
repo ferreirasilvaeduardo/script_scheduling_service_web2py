@@ -823,7 +823,7 @@ Os filtros da lista de tickets usam os mesmos nomes. A auditoria, o CSV e o banc
 | `NODE_OFFLINE` | "O servidor que rodava o script parou de responder." | "Tente de novo: outro servidor pode assumir." |
 | `ORPHAN_PROCESS` | "O servidor foi reiniciado e perdeu o controle do script." | "Tente de novo." |
 | `FENCED` | "O servidor perdeu contato com o banco de dados e parou o script por segurança." | "Tente de novo em alguns minutos." |
-| `PRECHECK_FAILED` | "O script não pôde começar: o arquivo, o cadastro ou a permissão não estavam liberados na hora de rodar." | "Veja o motivo no fim do log e avise o administrador com o número deste ticket." |
+| `PRECHECK_FAILED` | "O script não pôde começar: o servidor não encontrou o arquivo (ou, com caminho relativo, não tem a pasta base), ou ele não está liberado." | "Avise o administrador com o número deste ticket." (o código do motivo fica no fim do log) |
 | `SPAWN_ERROR` | "O servidor não conseguiu iniciar o script." | "Avise o administrador com o número deste ticket." |
 | `LOG_LIMIT` | "O script escreveu mensagens demais e foi parado, para não lotar o disco." | "Avise o responsável pelo script." |
 | `SHUTDOWN` | "O servidor foi desligado enquanto o script rodava." | "Tente de novo." |
@@ -852,7 +852,7 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
 6. `INSERT` em `tbsss_ticket_answer` via `executemany`, com os valores **resolvidos** (após a precedência) e o mesmo `created_by` do ticket.
 7. Auditoria `TICKET_CREATE` e `COMMIT`. Em qualquer exceção, `ROLLBACK`.
 
-* **Caminho do script na criação (CR-005, D4):** o nó web valida `path_file` conforme a §8.5 ("Validação no nó web"). O formato e as pastas do sistema são conferidos sempre. Se o arquivo existe no nó web, as checagens de dono e permissão também rodam e bloqueiam a criação. Se não existe ali, o ticket é criado e a validação definitiva fica no claim (§8.4).
+* **Caminho do script na criação (CR-005, D4; CR-011, S1; CR-023):** o nó web valida `path_file` conforme a §8.5 ("Onde cada coisa é conferida"): o formato sempre e, no caminho absoluto, as pastas do sistema e a da aplicação. O arquivo não é conferido no nó web; a validação definitiva fica no claim (§8.4), no servidor do agente.
 * **`ticket_answer`:** respostas sem valor (`None`) não são gravadas. `CHECKBOX` é gravado como `"true"`/`"false"`.
 * **O contexto é conferido de novo na execução (CR-007, D2):** se, até o claim, o solicitante perder a permissão, o usuário ou o perfil forem desativados, ou o ambiente for desativado, o agente recusa com `PRECHECK_FAILED` e o subcódigo `NO_PERMISSION` ou `ENVIRONMENT_INACTIVE` (§8.4). O ticket agendado para o futuro não "guarda" a permissão da época da criação.
 
@@ -1158,8 +1158,8 @@ SH         -> [<exe SH>, <script_real>, ...args]
 ```
 
 * `<exe X>` vem de `[agent] interpreters` do agente (§12.1).
-* `<script_real>` é o `realpath` de `path_file`, o caminho absoluto cadastrado (CR-005, D2), conferido pelo `path_guard` do agente (§8.5).
-* A UI mostra o `argv` **lógico**, por exemplo `PYTHON3 -I /opt/automacoes/scripts/carga.py --data 2026-10-13`, com o caminho completo para todos (CR-005, D8).
+* `<script_real>` é o `realpath` de `path_file`: o caminho absoluto cadastrado (CR-005, D2) ou o relativo junto da `[agent] script_base_dir` do agente (CR-023), conferido pelo `path_guard` do agente (§8.5).
+* A UI mostra o `argv` **lógico**, por exemplo `PYTHON3 -I /opt/automacoes/scripts/carga.py --data 2026-10-13`, com o caminho cadastrado para todos (CR-005, D8). Com caminho relativo, aparece o relativo (`PYTHON3 -I faturamento/carga.py ...`); o caminho real executado fica em "Caminho executado", no detalhe do ticket (CR-023).
 * Fora de DEV, o `argv` é executado pelo helper com o usuário de execução do ambiente (§8.0, §8.4); o `argv` em si não muda.
 
 ### 6.5 Snapshot imutável (`tbsss_tickets.submitted_params`)
@@ -1186,7 +1186,7 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
 * **Versão 2 (CR-001):** o snapshot não guarda mais caminho absoluto nem executável do nó que o compilou. O agente revalida `interpreter` contra a allowlist e o próprio mapeamento, resolve `path_file` pelo `path_guard` local e monta o `argv` (§6.4, §8.4).
 * **Versão 3 (CR-003, várias pastas base):** acrescentava `base_dir`, o nome lógico da pasta onde o script ficava.
 * **Versão 4 (CR-005, caminho livre):** sai `base_dir`; `path_file` é o caminho **absoluto** cadastrado. O agente o confere pelo `path_guard` local (§8.5) e monta o `argv` (§6.4, §8.4). O executável do interpretador continua fora do snapshot.
-* **Versão 5 (CR-016c2, D20):** as chaves passam a inglês (`script_name`, `answers`, `sensitive`, `compiled_at`). O agente recusa as versões 1 a 4 (`UNSUPPORTED_VERSION`); como o CR-016a recria o banco, não há ticket v4 num ambiente atualizado.
+* **Versão 5 (CR-016c2, D20):** as chaves passam a inglês (`script_name`, `answers`, `sensitive`, `compiled_at`). O agente recusa as versões 1 a 4 (`UNSUPPORTED_VERSION`); como o CR-016a recria o banco, não há ticket v4 num ambiente atualizado. Desde o CR-023, `path_file` pode ser relativo à pasta base do agente, sem mudar a versão (D9): o agente anterior recusa o relativo com `RELATIVE_PATH`.
 * Snapshots das versões 1 a 3 foram gerados apenas em DEV/FAKE e não são aceitos pelo agente. O claim os rejeita com `PRECHECK_FAILED`.
 
 * O snapshot é **compilado na criação do ticket** (manual ou desdobro). O agente **nunca** recompila nem lê `tbsss_script_param` e `tbsss_parameters` para executar.
@@ -1616,7 +1616,7 @@ SELECT id, script_id, environment FROM (
 
 O filtro `interpreter IN (:int0..:intN)` da leitura 1 usa os interpretadores que **este** agente suporta (§12.1). Assim, cada agente só pega os scripts que consegue executar. Os placeholders são gerados pelo código, e os valores vão sempre como binds.
 
-Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um agente que não tenha o arquivo, ou em que ele não passe na §8.5, finaliza o ticket com `PRECHECK_FAILED`.
+Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olha o caminho, e um agente que não tenha o arquivo, não tenha a pasta base de um caminho relativo (`NO_BASE_DIR`) ou em que o arquivo não passe na §8.5 finaliza o ticket com `PRECHECK_FAILED`.
 
 ### 8.3 Claim em três passos (por candidato, uma transação)
 
@@ -1662,7 +1662,7 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
    * o JSON é válido e tem `version` suportada (`UNSUPPORTED_VERSION`);
    * `version == 5`, e `interpreter` consta na allowlist lógica **e** no mapeamento deste agente (`INTERPRETER_UNAVAILABLE`);
    * `path_file` e `interpreter` do snapshot são iguais aos do cadastro atual do script (`REGISTRATION_CHANGED`, CR-007 R-24);
-   * `path_file` (absoluto) passa na §8.5 neste agente, que fornece o `script_real` (códigos do `path_guard`);
+   * `path_file` (absoluto, ou relativo junto da `[agent] script_base_dir` deste agente, CR-023) passa na §8.5 neste agente, que fornece o `script_real` (códigos do `path_guard`);
    * o `argv` é montado pelo agente (§6.4) a partir de `interpreter`, `script_real` e `args`;
    * o script segue `active = 'Y'` (`SCRIPT_INACTIVE`) e homologado para o ambiente (`NOT_HOMOLOGATED`);
    * o ambiente do ticket segue ativo (`ENVIRONMENT_INACTIVE`) e o **solicitante** ainda tem `rbac.can_execute` para o script e o ambiente, com o mesmo contexto de RBAC do desdobro (`NO_PERMISSION`, CR-007 D2).
@@ -1762,7 +1762,7 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
   * não é gravável por grupo nem por outros (`st_mode & 0o022 == 0`; senão `GROUP_OTHER_WRITABLE`). As pastas do caminho não são conferidas.
 * **Códigos de recusa:** `PATH_NOT_NORMALIZED`, `HAS_DOTS`, `INVALID_SEPARATOR`, `INVALID_CHARACTER`, `SYSTEM_DIR`, `SSS_DIR`, `APP_DIR`, `NO_BASE_DIR`, `NOT_FOUND`, `NO_ACCESS`, `NOT_A_FILE`, `GROUP_OTHER_WRITABLE`, `INTERPRETER_NOT_ALLOWED` e `INTERPRETER_UNSAFE`. `RELATIVE_PATH` só vem de agente anterior ao CR-023, que não aceita caminho relativo (DEPLOYMENT §18). A mensagem de erro nunca inclui o caminho.
 * **Onde cada coisa é conferida (CR-011, S1):**
-  * **no nó web** (cadastro, prévia e disparo): só o formato, o interpretador da allowlist e as pastas do sistema. O web pode nem ter o arquivo, e não emite aviso de arquivo ausente;
+  * **no nó web** (cadastro, prévia e disparo): só o formato, o interpretador da allowlist e, no caminho absoluto, as pastas do sistema e a da aplicação (o relativo só tem o formato conferido, porque a pasta base é de cada agente). O web pode nem ter o arquivo, e não emite aviso de arquivo ausente;
   * **no agente**, a cada execução (§8.4, passo 1): tudo acima, inclusive o arquivo real. Falha: `PRECHECK_FAILED` com o código na linha `[SSS]` do log.
 * **CKs de banco** (defesa adicional):
   * `ck_tbsss_scr_int` restringe `interpreter` à allowlist lógica;
@@ -1771,7 +1771,7 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
   * o formato e as pastas do sistema são conferidos ao salvar e ao reativar, com os códigos traduzidos para português; o estado do arquivo no nó web não impede salvar, editar, desativar nem reativar;
   * `path_file` é um campo de texto com o caminho absoluto ou relativo à pasta base de cada agente (CR-023); a ajuda dá os dois exemplos (`/opt/automacoes/scripts/carga.py` e `faturamento/carga.py`), diz que o relativo é resolvido por cada agente no seu servidor e informa que o arquivo é conferido pelo agente, no servidor onde o script roda, e que pode ser link simbólico; o caminho dentro da pasta da aplicação é recusado (`APP_DIR`; no DEV, `dev/` é aceito);
   * `interpreter` é um select fixo da allowlist lógica, e o servidor exige o valor exato, mesmo que o HTML tenha sido adulterado;
-  * **caminho visível a todos (D8):** o caminho completo aparece no cadastro, na prévia do argv, no disparo e no detalhe do ticket, para todos que veem o script ou o ticket (a R-f foi revogada);
+  * **caminho visível a todos (D8):** o caminho cadastrado (completo ou relativo, CR-023) aparece no cadastro, na prévia do argv, no disparo e no detalhe do ticket, junto do caminho executado, para todos que veem o script ou o ticket (a R-f foi revogada);
   * **nome reservado (D7):** o nome cuja pasta de log (§8.4, passo 3) seria `app` é recusado: "Este nome é reservado pelo sistema. Escolha outro.";
   * o `name` do script é texto livre de 1 a 60 caracteres (sem caracteres de controle), único e editável, porque o snapshot guarda o nome da época e tickets e agendamentos referenciam o `script_id`. Renomear um script muda a pasta dos **próximos** logs de execução; os antigos ficam onde estão;
   * a unicidade do `name` **diferencia maiúsculas de minúsculas**, como a UK `uk_tbsss_scr_name` no Oracle: `Carga` e `carga` são nomes distintos (e dividem a pasta de log `carga`, o que é aceito, porque o arquivo leva o número do ticket). O FAKE segue a mesma regra;
@@ -2013,12 +2013,13 @@ O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualqu
    * com `output_dir` (CR-012): fora de DEV, `output_dir/<ambiente>/` de cada ambiente atendido existe, é diretório, pertence ao usuário de execução do ambiente e não tem escrita de grupo nem de outros; em DEV, `output_dir` existe e é gravável pelo agente.
    * com `input_dir` (CR-014): a mesma conferência, para `input_dir/<ambiente>/` (CRITICAL `pasta de entrada: <falha>`).
    * com `script_work_dir` (CR-019): a mesma conferência, para `script_work_dir/<ambiente>/` (CRITICAL `pasta de trabalho: <falha>`).
+   * `script_base_dir` (CR-023): INFO com a pasta base, INFO "sem pasta base" quando vazia, ou WARNING se ela não existir (a subida segue; os tickets com caminho relativo terminam em `NOT_FOUND`). O formato já foi conferido na carga da configuração.
 5. **Instância única por host:** `os_platform.lock_instance` em `work_dir/sss-<agent_id>.lock`. Um arquivo `.stop` antigo é removido com WARN, para o daemon não parar logo depois de subir (CR-007, R-32).
 6. **Banco:** selecionar o driver (§2.3; a sondagem roda aqui), conectar e confirmar o relógio do banco (`SELECT SYSDATE FROM DUAL`). WARN se o `SYSDATE` divergir do relógio local em mais de 60 s (§7.1). **Versão do esquema (CR-007, D4):** `SELECT schema_version FROM {owner}.tbsss_control WHERE id = 1` precisa ser igual a `sql_ident.SCHEMA_VERSION`; diferente ou ausente, CRITICAL com as duas versões.
 7. **Registro em `tbsss_agents`**, numa transação (CR-007, R-11):
    * travar a linha do mesmo `code` com `SELECT ... FOR UPDATE WAIT 5`. Sem linha, a inclusão pode disputar com outro processo: a violação de `uk_tbsss_agt_code` leva a `ROLLBACK` e a uma nova tentativa, que encontra a linha;
    * recusar a subida (`agent_id` duplicado) se a linha estiver `ACTIVE` com `heartbeat_at` recente (menor que `node_offline_timeout_s`) e: `hostname` diferente, **ou** o mesmo `hostname` com um `daemon_pid` diferente do próprio que ainda existe (`os_platform.process_exists`). Mesmo host com o PID antigo morto é a religação depois de uma queda, e segue;
-   * caso contrário, executar `MERGE` com `status = 'ACTIVE'`, `hostname`, `daemon_pid`, `version`, `ambientes`, `platform`, `interpreters`, `started_at` e **`critical_config`** (abaixo). A inclusão grava `created_at = SYSDATE` e `created_by = 'SYSTEM:<agent_id>'`; a atualização grava `updated_*` com o mesmo ator (§10, CR-006).
+   * caso contrário, executar `MERGE` com `status = 'ACTIVE'`, `hostname`, `daemon_pid`, `version`, `ambientes`, `platform`, `interpreters`, `script_base_dir` (CR-023), `started_at` e **`critical_config`** (abaixo). A inclusão grava `created_at = SYSDATE` e `created_by = 'SYSTEM:<agent_id>'`; a atualização grava `updated_*` com o mesmo ator (§10, CR-006).
    * Auditar `AGENT_START`.
    * **Configuração crítica igual em todos os nós (CR-007, R-23):** `critical_config` é o texto canônico `hb=<heartbeat_interval_s>;fence=<fence_timeout_s>;offline=<node_offline_timeout_s>;call=<call_timeout_s>;kill=<kill_grace_s>;misfire=<misfire_policy>;tol=<misfire_tolerance_s>;horizonte=<cron_horizon_days>;envelhecimento=<queue_aging_min>`. Se outro agente `ACTIVE` com heartbeat recente tiver um valor diferente, a subida é recusada com CRITICAL (as duas configurações no log). A cada ciclo do orquestrador a conferência se repete: divergência é ERROR `CONFIG_DIVERGENTE`, e a tela de agentes mostra (§13).
    * `last_hb_ok` é inicializado aqui (§8.9).
@@ -2829,6 +2830,7 @@ output_max_bytes = 20971520        ; limite do zip da saída (1 MiB a 200 MiB)
 output_max_files = 1000         ; limite de arquivos da saída (1 a 10.000)
 input_dir =                     ; CR-014: pasta de entrada dos scripts (§8.14); vazio desliga
 script_work_dir =               ; CR-019: pasta de trabalho dos scripts, por ticket (§8.15); vazio desliga
+script_base_dir =               ; CR-023: pasta base dos scripts com caminho relativo (§8.5); vazio: só caminho absoluto
 child_locale = C.UTF-8
 env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
 

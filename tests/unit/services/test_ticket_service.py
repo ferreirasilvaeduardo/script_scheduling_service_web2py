@@ -639,7 +639,6 @@ class TestTicketQuery(_BaseTicket):
         self.tickets._store.tickets[tid]["script_path"] = "/opt/automacoes/scripts/faturamento/carga_diaria.py"
         det = self.svc.detail(self.ctx["op.hml"], str(tid))
         self.assertEqual(det["script_path"], "/opt/automacoes/scripts/faturamento/carga_diaria.py")
-        self.assertFalse(self.svc.detail(self.ctx["admin"], "30")["snapshot"]["path_relative"])
 
     def test_caminho_completo_para_quem_nao_e_admin(self):
         """CR-005 D8: quem nao e admin ve o caminho completo no detalhe, no comando e na previa."""
@@ -648,6 +647,7 @@ class TestTicketQuery(_BaseTicket):
         path = os.path.join(self.base, "carga_diaria.py")
         det = self.svc.detail(self.ctx["op.hml"], str(tid))
         self.assertEqual(det["snapshot"]["path_file"], path)
+        self.assertFalse(det["snapshot"]["path_relative"])
         self.assertEqual(det["display_argv"][2], path)
         self.assertIn(path, det["display_command"])
         r = self.svc.trigger_summary(self.ctx["op.hml"], "1", "HOMOLOGACAO",

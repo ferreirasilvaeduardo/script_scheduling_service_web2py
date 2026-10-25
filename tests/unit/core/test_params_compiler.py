@@ -551,7 +551,9 @@ class TestSeedFake(unittest.TestCase):
         for tid in (1, 11, 17, 37):
             snap = json.loads(tickets.get(tid)["submitted_params"])
             self.assertEqual((snap["version"], set(snap.keys())), (5, KEYS_6_5), tid)
-            self.assertTrue(snap["path_file"].startswith("/opt/automacoes/scripts/"), tid)
+            # CR-023: o seed do FAKE cadastra os scripts com caminho relativo a pasta base do agente.
+            self.assertFalse(snap["path_file"].startswith("/"), tid)
+            path_guard.validate_registration(snap["path_file"])
 
 
 if __name__ == "__main__":

@@ -36,7 +36,8 @@ OPTIONS_MAX_LENGTH = 500
 OPTION_KEY_MAX_LENGTH = 100
 OPTION_LABEL_MAX_LENGTH = 100
 
-# Snapshot v5 (README §6.5, CR-005; chaves em ingles no CR-016c2, D20): path_file absoluto; sem pasta base nem executavel do no que compilou.
+# Snapshot v5 (README §6.5, CR-005; chaves em ingles no CR-016c2, D20): path_file como foi cadastrado (absoluto ou,
+# desde o CR-023, relativo a pasta base de cada agente); sem executavel do no que compilou.
 _SNAPSHOT_KEYS = ('version', 'script_id', 'script_name', 'interpreter', 'path_file', 'param_type',
                     'args', 'answers', 'sensitive', 'compiled_at')
 
@@ -405,7 +406,7 @@ def build_agent_argv(interpreter, executable, script_real, args):
 def compile_snapshot(script, links, answers, now):
     """Compila o snapshot v5 (README §6.5) -> (json_str | None, resolvidos, erros por campo).
 
-    Guarda o interpretador logico, o path_file absoluto e apenas os argumentos: o argv real e montado
+    Guarda o interpretador logico, o path_file cadastrado e apenas os argumentos: o argv real e montado
     pelo agente com o proprio executavel. Erros sao acumulados.
     """
     resolved, errors = _resolve(links, answers)

@@ -8,12 +8,12 @@ Geram e conferem as figuras dos documentos de homologação em `docs/homologatio
 
 | Arquivo | Uso |
 |---|---|
-| `tools/capture_evidence.js` | Executa os casos (CT-01 a CT-25, a preparação da massa e o encerramento) no navegador (Puppeteer), confere o resultado esperado de cada passo e grava as telas, `results.json`, `state.json` e o log em `evidence_20261022/` |
+| `tools/capture_evidence.js` | Executa os casos (CT-01 a CT-31, a preparação da massa e o encerramento; o CT-31 é o caminho relativo do CR-023) no navegador (Puppeteer), confere o resultado esperado de cada passo e grava as telas, `results.json`, `state.json` e o log em `evidence_<data>[_r<n>]/` (a rodada mais recente é a `evidence_20261025_r9/`) |
 | `tools/build_evidence_docx.py` | Gera o `.docx` de evidências a partir de `evidence_20261022/` (`python-docx`) |
 | `evidence_20261022/results.json`, `execucao.log` | Resultado de cada verificação e o log da execução que gerou o documento (versionados) |
 | `evidence_20261022/*.png`, `state.json` | Capturas e estado da rodada; não versionados, porque as capturas já estão dentro do `.docx` |
 
-Pré-requisitos: servidor web do DEV no ar (`bin/start_local.sh 18000`), agente do DEV no ar com `interpreters` configurado, scripts do seed acessíveis em `/opt/automacoes/scripts/utilitarios/` (link para `dev/scripts/utilitarios/`) e os arquivos de entrada em `input/<ambiente>/<script>/` (ver o documento, seção 2).
+Pré-requisitos: servidor web do DEV no ar (`bin/start_local.sh 18000`), agente do DEV no ar com `interpreters` configurado, o agente com `[agent] script_base_dir` = `dev/scripts` do repositório (CR-023: o seed e os diagnósticos são cadastrados com caminho relativo, como `utilitarios/zipar_arquivos.py` e `diagnostico/gerar_saida.sh`) e os arquivos de entrada em `input/<ambiente>/<script>/` (ver o documento, seção 2).
 
 ```bash
 cd dev/homologation/tools

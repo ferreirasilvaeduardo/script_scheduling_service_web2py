@@ -42,7 +42,8 @@ AMBAR = RGBColor(0x8A, 0x5A, 0x00)
 
 ORDEM = ["CT-01", "CT-02", "CT-03", "MASSA", "CT-04", "CT-05", "CT-06", "CT-07", "CT-08", "CT-09", "CT-10",
          "CT-11", "CT-12", "CT-13", "CT-14", "CT-15", "CT-16", "CT-17", "CT-18", "CT-19", "CT-20", "CT-21",
-         "CT-22", "CT-23", "CT-24", "CT-25", "CT-26", "CT-27", "CT-28", "CT-29", "CT-30", "ENCERRAMENTO"]
+         "CT-22", "CT-23", "CT-24", "CT-25", "CT-26", "CT-27", "CT-28", "CT-29", "CT-30", "CT-31",
+         "ENCERRAMENTO"]
 
 # Adaptacao de cada caso ao DEV real (o manual de 18/10 foi escrito sobre a massa simulada do FAKE).
 ADAPTACAO = {
@@ -526,6 +527,35 @@ RODADAS["20261025_r8"] = {
     "servidor_web": u"servidor web próprio (scripts/run_web.py → sss.cli.run_web), código em src/sss (CR-022b)",
     "registros": RODADAS["20261023_r3"]["registros"],
 }
+RODADAS["20261025_r9"] = {
+    "commit": u"29b9ebb (CR-023b: telas do caminho relativo e da pasta base) mais o CR-023c (seed e DEV com caminho "
+              u"relativo, CT-31), no mesmo commit deste documento",
+    "adaptacao": dict(RODADAS["20261024_r2"]["adaptacao"], **{
+        "CT-01": ADAPTACAO["CT-01"] + u" As tabelas do DEV foram recriadas no CR-023a, então o admin voltou à senha "
+                                      u"inicial.",
+        "CT-31": u"Caso novo do CR-023: o painel de agentes mostra a pasta base do agente do DEV ([agent] "
+                 u"script_base_dir = dev/scripts do repositório); o ticket do CT-05 (utilitarios/gerar_hash_arquivo.py, "
+                 u"relativo) mostra o caminho executado; um diagnóstico com caminho relativo para arquivo ausente "
+                 u"(diag_relativo_ausente, só GFPREPROD) termina em PRECHECK_FAILED (NOT_FOUND) e é desativado no fim.",
+    }),
+    "ressalva": RODADAS["20261024_r2"]["ressalva"],
+    "defeitos": [],
+    "observacoes": [
+        u"Rodada do CR-023 (caminho relativo à pasta base do agente). As tabelas do DEV foram recriadas a pedido do "
+        u"responsável (rollback do SSS e init_db): os registros das rodadas anteriores não existem mais, e o seed "
+        u"cadastra os 14 scripts com caminho relativo (utilitarios/<arquivo>). Servidor web pelo bin/start_local.sh, "
+        u"agente pelo bin/sss-scheduler.sh, Oracle. Marca %s." % STAMP,
+        RODADAS["20261025_r4"]["observacoes"][1],
+    ],
+    "agente": RODADAS["20261024_r4"]["agente"],
+    "senhas": u"Com as tabelas recriadas, o admin começou com a senha inicial documentada (DEPLOYMENT.md §5.3); "
+              u"no CT-01 a troca válida usou a senha escolhida pelo responsável pela homologação.",
+    "servidor_web": u"servidor web próprio (scripts/run_web.py → sss.cli.run_web), código em src/sss (CR-022b)",
+    "seed_scripts": u"Scripts do seed e diagnósticos com caminho relativo (CR-023): utilitarios/<arquivo> e "
+                    u"diagnostico/<arquivo>, resolvidos pelo agente na pasta base [agent] script_base_dir = dev/scripts "
+                    u"do repositório.",
+    "registros": RODADAS["20261023_r3"]["registros"],
+}
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]
@@ -699,8 +729,9 @@ def main():
     for txt in (
             u"Servidor web do DEV iniciado com bin/start_local.sh 18000 (Python 3.6.15), ligado ao Oracle do DEV.",
             RODADA.get("agente", _AGENTE_PADRAO),
-            u"Scripts do seed: o cadastro aponta para /opt/automacoes/scripts/utilitarios/, instalado nesta máquina "
-            u"como link simbólico para dev/scripts/utilitarios/ do repositório (aceito pelo CR-011).",
+            RODADA.get("seed_scripts", u"Scripts do seed: o cadastro aponta para /opt/automacoes/scripts/utilitarios/, "
+                       u"instalado nesta máquina como link simbólico para dev/scripts/utilitarios/ do repositório "
+                       u"(aceito pelo CR-011)."),
             u"Arquivos de entrada reais nas pastas de entrada de cada ambiente e script (CR-014): clientes, notas e "
             u"extrato em texto e um lote de 3 GB de texto para a compactação longa."):
         doc.add_paragraph(txt, style="List Bullet")

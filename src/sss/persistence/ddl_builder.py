@@ -93,69 +93,69 @@ DEFAULT_PARAMETERS = (
 
 # Catalogo padrao de scripts utilitarios de demonstracao (nome, descricao, grupo, categoria, etapa, interpretador, path_file, param_type, max_par, timeout_seg, params)
 DEFAULT_SCRIPTS = (
-    ("zipar_arquivos", "Compacta arquivo ou pasta em formato ZIP", "UTILITARIOS", "ARQUIVOS", "COMPACTACAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/zipar_arquivos.py", "NAMED", 2, 1800, (
+    ("zipar_arquivos", "Compacta arquivo ou pasta em formato ZIP", "UTILITARIOS", "ARQUIVOS", "COMPACTACAO", "PYTHON3", "utilitarios/zipar_arquivos.py", "NAMED", 2, 1800, (
         ("arq_origem", 1, "Y", None),
         ("arq_destino", 2, "Y", None),
         ("nivel_compressao", 3, "N", "6"),
     )),
-    ("descompactar_zip", "Extrai arquivos de pacote ZIP para pasta destino com protecao segura", "UTILITARIOS", "ARQUIVOS", "DESCOMPACTACAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/descompactar_zip.py", "NAMED", 2, 1800, (
+    ("descompactar_zip", "Extrai arquivos de pacote ZIP para pasta destino com protecao segura", "UTILITARIOS", "ARQUIVOS", "DESCOMPACTACAO", "PYTHON3", "utilitarios/descompactar_zip.py", "NAMED", 2, 1800, (
         ("arq_zip", 1, "Y", None),
         ("arq_destino", 2, "Y", None),
     )),
-    ("quebrar_arquivo", "Divide arquivo texto em partes menores por quantidade de linhas", "UTILITARIOS", "ARQUIVOS", "DIVISAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/quebrar_arquivo.py", "NAMED", 2, 1800, (
+    ("quebrar_arquivo", "Divide arquivo texto em partes menores por quantidade de linhas", "UTILITARIOS", "ARQUIVOS", "DIVISAO", "PYTHON3", "utilitarios/quebrar_arquivo.py", "NAMED", 2, 1800, (
         ("arq_origem", 1, "Y", None),
         ("linhas_por_parte", 2, "N", "1000"),
         ("prefixo_saida", 3, "N", "/tmp/parte_"),
     )),
-    ("juntar_arquivos", "Concatena blocos de arquivos ordenados em arquivo consolidado final", "UTILITARIOS", "ARQUIVOS", "CONCATENACAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/juntar_arquivos.py", "NAMED", 2, 1800, (
+    ("juntar_arquivos", "Concatena blocos de arquivos ordenados em arquivo consolidado final", "UTILITARIOS", "ARQUIVOS", "CONCATENACAO", "PYTHON3", "utilitarios/juntar_arquivos.py", "NAMED", 2, 1800, (
         ("padrao_origem", 1, "Y", "/tmp/parte_*"),
         ("arq_destino", 2, "Y", None),
     )),
-    ("converter_encoding", "Converte codificacao de caracteres de arquivo texto (ex: ISO-8859-1 para UTF-8)", "UTILITARIOS", "ARQUIVOS", "CONVERSAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/converter_encoding.py", "NAMED", 2, 1800, (
+    ("converter_encoding", "Converte codificacao de caracteres de arquivo texto (ex: ISO-8859-1 para UTF-8)", "UTILITARIOS", "ARQUIVOS", "CONVERSAO", "PYTHON3", "utilitarios/converter_encoding.py", "NAMED", 2, 1800, (
         ("arq_origem", 1, "Y", None),
         ("arq_destino", 2, "Y", None),
         ("enc_origem", 3, "N", "ISO-8859-1"),
         ("enc_destino", 4, "N", "UTF-8"),
     )),
-    ("substituir_texto", "Localiza e substitui texto em arquivo gerando copia atualizada", "UTILITARIOS", "ARQUIVOS", "TRANSFORMACAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/substituir_texto.py", "NAMED", 2, 1800, (
+    ("substituir_texto", "Localiza e substitui texto em arquivo gerando copia atualizada", "UTILITARIOS", "ARQUIVOS", "TRANSFORMACAO", "PYTHON3", "utilitarios/substituir_texto.py", "NAMED", 2, 1800, (
         ("arq_origem", 1, "Y", None),
         ("arq_destino", 2, "Y", None),
         ("termo_busca", 3, "Y", None),
         ("termo_substituicao", 4, "Y", None),
     )),
-    ("remover_duplicadas", "Remove linhas duplicadas de arquivo texto preservando ordem ou ordenando", "UTILITARIOS", "ARQUIVOS", "HIGIENIZACAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/remover_duplicadas.py", "NAMED", 2, 1800, (
+    ("remover_duplicadas", "Remove linhas duplicadas de arquivo texto preservando ordem ou ordenando", "UTILITARIOS", "ARQUIVOS", "HIGIENIZACAO", "PYTHON3", "utilitarios/remover_duplicadas.py", "NAMED", 2, 1800, (
         ("arq_origem", 1, "Y", None),
         ("arq_destino", 2, "Y", None),
         ("flag_ordenar", 3, "N", "S"),
     )),
-    ("gerar_hash_arquivo", "Calcula hash criptografico (SHA256, MD5, SHA1) para conferencia de integridade", "UTILITARIOS", "ARQUIVOS", "AUDITORIA", "PYTHON3", "/opt/automacoes/scripts/utilitarios/gerar_hash_arquivo.py", "NAMED", 2, 1800, (
+    ("gerar_hash_arquivo", "Calcula hash criptografico (SHA256, MD5, SHA1) para conferencia de integridade", "UTILITARIOS", "ARQUIVOS", "AUDITORIA", "PYTHON3", "utilitarios/gerar_hash_arquivo.py", "NAMED", 2, 1800, (
         ("arq_origem", 1, "Y", None),
         ("tipo_hash", 2, "N", "sha256"),
     )),
-    ("compactar_targz", "Cria pacote compactado .tar.gz a partir de arquivo ou pasta", "UTILITARIOS", "ARQUIVOS", "COMPACTACAO", "BASH", "/opt/automacoes/scripts/utilitarios/compactar_targz.sh", "NAMED", 2, 1800, (
+    ("compactar_targz", "Cria pacote compactado .tar.gz a partir de arquivo ou pasta", "UTILITARIOS", "ARQUIVOS", "COMPACTACAO", "BASH", "utilitarios/compactar_targz.sh", "NAMED", 2, 1800, (
         ("arq_origem", 1, "Y", None),
         ("arq_destino", 2, "Y", None),
     )),
-    ("descompactar_targz", "Extrai pacote compactado .tar.gz para pasta destino com verificacao", "UTILITARIOS", "ARQUIVOS", "DESCOMPACTACAO", "BASH", "/opt/automacoes/scripts/utilitarios/descompactar_targz.sh", "NAMED", 2, 1800, (
+    ("descompactar_targz", "Extrai pacote compactado .tar.gz para pasta destino com verificacao", "UTILITARIOS", "ARQUIVOS", "DESCOMPACTACAO", "BASH", "utilitarios/descompactar_targz.sh", "NAMED", 2, 1800, (
         ("arq_tar", 1, "Y", None),
         ("arq_destino", 2, "Y", None),
     )),
-    ("contar_linhas_arquivo", "Conta linhas, palavras e bytes de arquivo texto (modo posicional/sequencial)", "UTILITARIOS", "ARQUIVOS", "ANALISE", "SH", "/opt/automacoes/scripts/utilitarios/contar_linhas_arquivo.sh", "POSITIONAL", 2, 600, (
+    ("contar_linhas_arquivo", "Conta linhas, palavras e bytes de arquivo texto (modo posicional/sequencial)", "UTILITARIOS", "ARQUIVOS", "ANALISE", "SH", "utilitarios/contar_linhas_arquivo.sh", "POSITIONAL", 2, 600, (
         ("caminho_arquivo", 1, "Y", None),
     )),
-    ("filtrar_linhas", "Filtra linhas de arquivo baseado em padrao de texto com opcao de inverter", "UTILITARIOS", "ARQUIVOS", "FILTRAGEM", "BASH", "/opt/automacoes/scripts/utilitarios/filtrar_linhas.sh", "NAMED", 2, 1800, (
+    ("filtrar_linhas", "Filtra linhas de arquivo baseado em padrao de texto com opcao de inverter", "UTILITARIOS", "ARQUIVOS", "FILTRAGEM", "BASH", "utilitarios/filtrar_linhas.sh", "NAMED", 2, 1800, (
         ("arq_origem", 1, "Y", None),
         ("arq_destino", 2, "Y", None),
         ("termo_filtro", 3, "Y", None),
         ("flag_inverter", 4, "N", "N"),
     )),
-    ("ordenar_arquivo", "Ordena linhas de arquivo texto com opcoes numerica e reversa", "UTILITARIOS", "ARQUIVOS", "ORGANIZACAO", "SH", "/opt/automacoes/scripts/utilitarios/ordenar_arquivo.sh", "NAMED", 2, 1800, (
+    ("ordenar_arquivo", "Ordena linhas de arquivo texto com opcoes numerica e reversa", "UTILITARIOS", "ARQUIVOS", "ORGANIZACAO", "SH", "utilitarios/ordenar_arquivo.sh", "NAMED", 2, 1800, (
         ("arq_origem", 1, "Y", None),
         ("arq_destino", 2, "Y", None),
         ("flag_numerico", 3, "N", "N"),
         ("flag_reverso", 4, "N", "N"),
     )),
-    ("limpar_linhas_vazias", "Remove espacos em branco excedentes e linhas vazias de arquivo texto", "UTILITARIOS", "ARQUIVOS", "HIGIENIZACAO", "BASH", "/opt/automacoes/scripts/utilitarios/limpar_linhas_vazias.sh", "NAMED", 2, 1800, (
+    ("limpar_linhas_vazias", "Remove espacos em branco excedentes e linhas vazias de arquivo texto", "UTILITARIOS", "ARQUIVOS", "HIGIENIZACAO", "BASH", "utilitarios/limpar_linhas_vazias.sh", "NAMED", 2, 1800, (
         ("arq_origem", 1, "Y", None),
         ("arq_destino", 2, "Y", None),
     )),

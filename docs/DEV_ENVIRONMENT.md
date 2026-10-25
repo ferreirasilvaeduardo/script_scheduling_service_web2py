@@ -214,26 +214,25 @@ A pasta `dev/scripts/` contém scripts de exemplo **sem lógica perigosa**, usad
 | `diagnostico/pasta_trabalho.sh` | Diagnóstico do CR-019: confere `SSS_WORK_DIR`, grava `diagnostico.txt` e `sub/arquivo.txt` na pasta de trabalho e lista o que gravou. Sai com 1 sem a variável e com 2 se a pasta não existir |
 | `diagnostico/gerar_saida.sh` | Diagnóstico do CR-020a: grava `resumo.txt` e `detalhes/relatório de testes.csv` em `SSS_OUTPUT_DIR`, para gerar uma saída real e testar a tela de Saídas. Sai com 1 sem a variável |
 
-### 6.1 O que o `path_guard` confere (CR-005, CR-011)
+### 6.1 O que o `path_guard` confere (CR-005, CR-011, CR-023)
 
-O script fica num **caminho absoluto** em qualquer lugar do servidor (`path_file`, README §8.5); não há pastas base. O ambiente controla o conteúdo e a versão dos scripts (CR-011): não há hash nem conferência do dono.
+O script fica num **caminho absoluto** em qualquer lugar do servidor ou num caminho **relativo à pasta base** do agente (`path_file`, README §8.5; `[agent] script_base_dir`, CR-023). O ambiente controla o conteúdo e a versão dos scripts (CR-011): não há hash nem conferência do dono.
 
-* **No nó web** (cadastro e disparo): só o formato do caminho e as pastas do sistema. O arquivo não precisa existir na sua máquina, e não há aviso.
+* **No nó web** (cadastro e disparo): o formato do caminho e, no caminho absoluto, as pastas do sistema e a da aplicação (o relativo só pelo formato). O arquivo não precisa existir na sua máquina, e não há aviso.
 * **No agente**, a cada execução:
-  * o caminho pode ser link simbólico; o agente resolve o caminho real e executa o arquivo real;
-  * o caminho, cadastrado ou real, não fica em pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`) nem dentro de `log_dir`, `work_dir` ou `exec_work_dir`;
+  * o relativo é juntado à `script_base_dir` (sem ela, `NO_BASE_DIR`);
+  * o caminho pode ser link simbólico, inclusive para fora da pasta base; o agente resolve o caminho real e executa o arquivo real;
+  * o caminho, juntado ou real, não fica em pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`), nem dentro de `log_dir`, `work_dir`, `exec_work_dir`, `output_dir`, `input_dir` ou `script_work_dir`, nem na pasta da aplicação (no DEV, `dev/` é a exceção);
   * o arquivo real existe, é arquivo regular e não tem escrita para grupo nem para outros (`st_mode & 0o022 == 0`); as pastas do caminho não são conferidas.
 
-Em DEV, uma pasta do seu `$HOME` serve, desde que o arquivo tenha modo `0644` ou `0755`. Os scripts do seed FAKE apontam para `/opt/automacoes/scripts/<arquivo>` (ex.: `/opt/automacoes/scripts/carga_diaria.py`). Para o agente encontrá-los, crie o link uma vez:
+**No DEV:** o seed (Oracle e FAKE) e os diagnósticos da homologação usam caminho relativo (`utilitarios/zipar_arquivos.py`, `carga_diaria.py`, `diagnostico/gerar_saida.sh`), e o `instance/config.ini` do agente aponta a pasta base para os scripts do repositório:
 
-```bash
-cd /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
-chmod -R go-w dev/scripts
-sudo install -d -o root -g root -m 0755 /opt/automacoes
-sudo ln -sfn "$PWD/dev/scripts" /opt/automacoes/scripts
+```ini
+[agent]
+script_base_dir = /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/dev/scripts
 ```
 
-Sem `sudo`, cadastre os scripts com o caminho real de `dev/scripts`.
+Os arquivos precisam de modo `0644` ou `0755` (`chmod -R go-w dev/scripts`). Uma pasta do seu `$HOME` também serve, com caminho absoluto.
 
 * As chaves `script_owner_uids` e `ambientes_exigem_hash` foram retiradas (CR-011). Se ainda estiverem no seu `config.ini`, a subida aborta com "Chave removida: ...; apague a linha". Apague a linha.
 * As chaves `base_script_dirs` e a antiga `base_script_dir` foram retiradas (CR-005). Se ainda estiverem no seu `config.ini`, a subida aborta com "Chave desconhecida na secao [agent]". Apague a linha.

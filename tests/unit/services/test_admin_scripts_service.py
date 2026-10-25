@@ -263,8 +263,8 @@ class TestRegistration(_Base):
         f = self.svc.form(self.ctx["admin"])
         for key in ("pasta_base", "pastas", "base_exibicao"):
             self.assertNotIn(key, f)
-        self.assertEqual(self.svc.form(self.ctx["gestor"], str(S_CARGA))["path_file"],
-                         "/opt/automacoes/scripts/carga_diaria.py")
+        # CR-023: o seed do FAKE cadastra os scripts com caminho relativo a pasta base do agente.
+        self.assertEqual(self.svc.form(self.ctx["gestor"], str(S_CARGA))["path_file"], "carga_diaria.py")
 
 
 @_SKIP_ROOT
@@ -418,7 +418,7 @@ class TestPreview(_Base):
 
     def test_previa_do_seed_gera_argv_esperado_e_mascara_sensivel(self):
         r = self.svc.preview(self.ctx["admin"], str(S_CARGA))
-        real = "/opt/automacoes/scripts/carga_diaria.py"
+        real = "carga_diaria.py"  # CR-023: relativo, como foi cadastrado
         self.assertEqual((r["errors"], r["warning"]), ({}, None))
         self.assertEqual(r["argv"], ["PYTHON3", "-I", real, "--data-ref", "2026-10-14", "-n", "5000",
                                      "--modo", "REAL", "--verbose", "--documento", "****"])
@@ -427,8 +427,7 @@ class TestPreview(_Base):
         # CR-005 R-f: no cadastro (MANAGE_SCRIPTS) o caminho aparece inteiro, porque e o que o usuario cadastra.
         _screen, items = self._links_json(S_CARGA)
         r = self.svc.preview(self.ctx["gestor"], str(S_CARGA), json.dumps(items[:1]))
-        self.assertEqual(r["argv"], ["PYTHON3", "-I", "/opt/automacoes/scripts/carga_diaria.py",
-                                     "--data-ref", "2026-10-14"])
+        self.assertEqual(r["argv"], ["PYTHON3", "-I", "carga_diaria.py", "--data-ref", "2026-10-14"])
 
     def test_acesso_negado_e_nao_encontrado(self):
         for call in (lambda c: self.svc.list(c, {}, 1, 20), lambda c: self.svc.homologation(c, "1"),

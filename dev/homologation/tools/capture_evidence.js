@@ -526,9 +526,9 @@ CTS['CT-05'] = async () => {
     await expectNoText('Sem o botão Pré-visualizar comando: o comando fica no modal (CR-017b)', 'Pré-visualizar comando');
     await snap('Etapa 3: questionário', { full: true });
     await clickText('[data-component="ticketTrigger"] [data-action="open"]', 'Criar ticket', { wait: 1500 });
-    await expectText('Confirmação com a frase-resumo e o comando que será executado, com o caminho completo do script',
+    await expectText('Confirmação com a frase-resumo e o comando que será executado, com o arquivo do script (relativo, CR-023)',
         'Vamos rodar', 'gerar_hash_arquivo', 'CLONE2', 'Comando que será executado',
-        '/opt/automacoes/scripts/utilitarios/gerar_hash_arquivo.py');
+        'utilitarios/gerar_hash_arquivo.py');
     await expectTextCI('Ambiente de produção: alerta na confirmação (CR-017a)', 'Ambiente de produção');
     check('Ambiente de produção: botão Criar ticket em vermelho', await page.$('.modal .btn-danger[type="submit"]') !== null);
     await snap('Confirmação do disparo, com o resumo e o alerta de produção');
@@ -538,7 +538,8 @@ CTS['CT-05'] = async () => {
     saveState();
     await expectText('Mensagem "Ticket #N criado com sucesso."', `Ticket #${id} criado com sucesso.`);
     await expectText('Detalhe com o que aconteceu, o que fazer agora, as etapas e o arquivo do script',
-        'O que aconteceu', 'O que fazer agora', 'Pedido criado', 'Na fila', '/opt/automacoes/scripts/utilitarios/gerar_hash_arquivo.py');
+        'O que aconteceu', 'O que fazer agora', 'Pedido criado', 'Na fila', 'utilitarios/gerar_hash_arquivo.py',
+        'relativo à pasta base do agente');
     await snap('Ticket criado (detalhe)', { full: true });
     const fim = await waitStatus(id, ['Deu certo', 'Deu erro'], 120);
     check(`Ticket #${id} executado pelo agente real até o fim`, fim.includes('Deu certo'));
@@ -1037,22 +1038,24 @@ CTS['CT-16'] = async () => {
     begin('CT-16', 'Gestão de Scripts, homologação e vínculo de parâmetros');
     await login('admin');
     await go('/admin_scripts/index');
-    await expectText('Lista com o caminho completo de cada script', '/opt/automacoes/scripts/utilitarios/');
+    await expectText('Lista com o caminho de cada script (relativo à pasta base, CR-023)', 'utilitarios/');
     await snap('Lista de scripts');
     const sid = state.scripts.contar_linhas_arquivo;
-    const original = '/opt/automacoes/scripts/utilitarios/contar_linhas_arquivo.sh';
+    const original = 'utilitarios/contar_linhas_arquivo.sh';
     await go(`/admin_scripts/form/${sid}`);
     const campo = await page.$eval('#field-path_file', (e) => e.value);
-    check('Arquivo do script com o caminho completo', campo === original, campo);
-    await expectText('Ajuda do campo com o exemplo de caminho', '/opt/automacoes/scripts/');
+    check('Arquivo do script com o caminho relativo à pasta base (CR-023)', campo === original, campo);
+    await expectText('Ajuda do campo com os dois exemplos de caminho', '/opt/automacoes/scripts/', 'relativo à', 'pasta base');
     await expectText('Quadro Quem pode rodar: pronto, com os perfis (CR-017d)', 'Quem pode rodar', 'Pronto para rodar.',
         'OPERATOR_HML', 'OPERATOR_PROD');
     await snap('Edição de script com o caminho completo e o quadro Quem pode rodar', { full: true });
     const casos = [
-        ['contar_linhas_arquivo.sh', 'Informe o caminho completo do arquivo, começando por /'],
+        ['./contar_linhas_arquivo.sh', 'Escreva o caminho sem // repetida, sem ./ e sem / no fim.'],
         ['/opt/automacoes/../scripts/contar.sh', "O caminho não pode conter '..'."],
+        ['utilitarios/../contar.sh', "O caminho não pode conter '..'."],
         ['/etc/passwd', 'Scripts não podem ficar em pastas do sistema'],
-        ['/opt/automacoes/scripts/', 'Escreva o caminho sem // repetida, sem /./ e sem / no fim.'],
+        ['/opt/automacoes/scripts/', 'Escreva o caminho sem // repetida, sem ./ e sem / no fim.'],
+        [path.join(APP, 'src', 'sss', 'x.py'), 'Scripts não podem ficar na pasta da aplicação'],
     ];
     for (const [valor, msg] of casos) {
         await go(`/admin_scripts/form/${sid}`);
@@ -1065,7 +1068,7 @@ CTS['CT-16'] = async () => {
     await submit('/admin_scripts/save');
     check('Nome "App" recusado como reservado', (await errorOf('name')).includes('Este nome é reservado pelo sistema.'), await errorOf('name'));
     await go(`/admin_scripts/form/${sid}`);
-    await fill('#field-path_file', '/opt/automacoes/scripts/utilitarios/contar_linhas_arquivo_nova.sh');
+    await fill('#field-path_file', 'utilitarios/contar_linhas_arquivo_nova.sh');
     await submit('/admin_scripts/save');
     await expectText('Arquivo que não existe neste servidor: salvo, com a nota de que o agente confere na execução',
         'Script salvo com sucesso.', 'agente');
@@ -1376,7 +1379,7 @@ CTS['CT-24'] = async () => {
     await ruleAction(page, 'resume', state.rule.id);
     await expectText('Regra retomada ao final', `Regra ${state.rule.name} retomada.`);
     note('Responsável inativo: no DEV as regras são do admin (o op.hml não tem Regras de Agendamento), então o cenário do manual não se aplica sem mudar permissões; coberto pelos testes automatizados.');
-    note('Link simbólico (CR-011): os 14 scripts do DEV rodaram por /opt/automacoes/scripts/utilitarios, que é um link para dev/scripts/utilitarios; o agente executou o arquivo real (comportamento atual; o manual de 18/10 previa recusa).');
+    note('Caminho relativo (CR-023): os 14 scripts do seed são cadastrados como utilitarios/<arquivo> e o agente do DEV os junta à pasta base [agent] script_base_dir = dev/scripts do repositório; link simbólico continua aceito (CR-011), com o arquivo real executado.');
     // quadro Registro por perfil
     await login('consulta');
     await go(`/tickets/detail/${state.tickets.ok_prod}`);
@@ -1596,9 +1599,9 @@ CTS['CT-27'] = async () => {
         { scheduledAt: localIso(120) });
     state.tickets.ct27_fila = fila;
     saveState();
-    const original = '/opt/automacoes/scripts/utilitarios/contar_linhas_arquivo.sh';
+    const original = 'utilitarios/contar_linhas_arquivo.sh';
     await go(`/admin_scripts/form/${sid}`);
-    await fill('#field-path_file', '/opt/automacoes/scripts/utilitarios/contar_linhas_arquivo_nova.sh');
+    await fill('#field-path_file', 'utilitarios/contar_linhas_arquivo_nova.sh');
     await submit('/admin_scripts/save');
     await expectText(`Troca do arquivo salva, com o aviso do ticket #${fila} na fila que vai ser recusado`,
         'Script salvo com sucesso.', `#${fila}`, 'vão ser recusados na hora de rodar');
@@ -1621,7 +1624,8 @@ CTS['CT-27'] = async () => {
 // ---------------------------------------------------------------------------------------------
 // Rodada 3: CR-019 (pasta de trabalho) e CR-020 (Saidas e Entrada)
 // ---------------------------------------------------------------------------------------------
-const DIAG = path.join(APP, 'dev', 'scripts', 'diagnostico');
+// CR-023: os scripts de diagnostico sao cadastrados com caminho relativo a pasta base do agente do DEV (dev/scripts).
+const DIAG = 'diagnostico';
 
 // Cadastra (ou reativa) um script de diagnostico pela tela, liberado so no GFPREPROD; devolve o id.
 async function diagScript(name, file, description) {
@@ -1645,7 +1649,7 @@ async function diagScript(name, file, description) {
     } else {
         await go(`/admin_scripts/form/${sid}`);
         if (await clickText('button', 'Reativar')) await confirmModal();
-        // Cadastro de rodada anterior pode ter o caminho da pasta antiga do repositorio (CR-022a)
+        // Cadastro de rodada anterior pode ter outro caminho (pasta antiga do repositorio, CR-022a; absoluto, CR-023)
         await go(`/admin_scripts/form/${sid}`);
         if ((await page.$eval('#field-path_file', (el) => el.value)) !== file) {
             await fill('#field-path_file', file);
@@ -1855,6 +1859,36 @@ CTS['CT-30'] = async () => {
     note('O DEV tem [agent] script_work_dir ligado (CR-019c); fora do DEV a pasta de cada ambiente é criada pelo root (DEPLOYMENT).');
 };
 
+CTS['CT-31'] = async () => {
+    begin('CT-31', 'CR-023: caminho relativo à pasta base do agente');
+    await login('admin');
+    await go('/audit/agents');
+    await sleep(1500);
+    await expectText('Painel de agentes com a pasta base de cada agente', 'Pasta base dos scripts',
+        path.join(APP, 'dev', 'scripts'));
+    await snap('Painel de agentes com a pasta base dos scripts', { full: true });
+    await go(`/tickets/detail/${state.tickets.ct05}`);
+    await expectText('Ticket do CT-05: arquivo relativo e caminho executado, o real dentro da pasta base',
+        'utilitarios/gerar_hash_arquivo.py', 'relativo à pasta base do agente', 'Caminho executado',
+        path.join(APP, 'dev', 'scripts', 'utilitarios', 'gerar_hash_arquivo.py'));
+    await snap('Detalhe do ticket com o caminho executado', { full: true });
+    const sid = await diagScript('diag_relativo_ausente', 'diagnostico/nao_existe.sh',
+        'Diagnostico do CR-023: caminho relativo para arquivo que nao existe');
+    const tid = await runDirect(sid, 'GFPREPROD', {});
+    state.tickets.ct31 = tid;
+    saveState();
+    const fim = await waitStatus(tid, ['Deu certo', 'Deu erro', 'Não conseguiu', 'Arquivo não encontrado'], 120);
+    await sleep(2000);
+    await go(`/tickets/detail/${tid}`);
+    await expectText('Relativo para arquivo ausente: PRECHECK_FAILED, sem caminho executado',
+        'não encontrou o arquivo', 'Ainda não executado');
+    await expectText('Log com o motivo NOT_FOUND', 'NOT_FOUND');
+    check(`Ticket #${tid} não executou (${fim})`, !fim.includes('Deu certo'), fim);
+    await snap('Caminho relativo para arquivo ausente', { full: true });
+    check('Script de diagnóstico desativado ao final', await deactivateScript(sid));
+    note('Agente sem pasta base (NO_BASE_DIR) e link para fora da pasta base: cobertos pelos testes automatizados (o DEV tem um agente só, com pasta base).');
+};
+
 CTS['ENCERRAMENTO'] = async () => {
     begin('ENCERRAMENTO', 'Encerramento: regras da homologação pausadas (ficam como evidência, sem rodar)');
     await login('admin');
@@ -1872,7 +1906,7 @@ CTS['ENCERRAMENTO'] = async () => {
 
 const ORDER = ['CT-01', 'CT-02', 'CT-03', 'MASSA', 'CT-04', 'CT-05', 'CT-06', 'CT-07', 'CT-08', 'CT-09', 'CT-10',
     'CT-11', 'CT-12', 'CT-13', 'CT-14', 'CT-15', 'CT-16', 'CT-17', 'CT-18', 'CT-19', 'CT-20', 'CT-21', 'CT-22',
-    'CT-23', 'CT-24', 'CT-25', 'CT-26', 'CT-27', 'CT-28', 'CT-29', 'CT-30', 'ENCERRAMENTO'];
+    'CT-23', 'CT-24', 'CT-25', 'CT-26', 'CT-27', 'CT-28', 'CT-29', 'CT-30', 'CT-31', 'ENCERRAMENTO'];
 
 module.exports = { CTS };
 
