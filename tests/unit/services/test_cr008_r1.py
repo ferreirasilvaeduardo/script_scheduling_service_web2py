@@ -13,13 +13,13 @@ from unittest import mock
 import admin_profiles_service as perfis_mod
 import admin_users_service as usr_mod
 import auth_service
-import params_compiler
+from sss.core import params_compiler
 import repo_factory
-import security
+from sss.core import security
 from admin_crud import GENERAL_FIELD, OperationDenied
 from admin_profiles_service import AdminProfilesService
 from admin_users_service import AdminUsersService
-from params_compiler import ParamError
+from sss.core.params_compiler import ParamError
 
 IP = "10.8.8.8"
 DEV_PASSWORD = "senha-dev-de-teste-123"

@@ -14,9 +14,9 @@ from unittest import mock
 import agents_service
 import audit_service
 import auth_service
-import masking
+from sss.core import masking
 import repo_factory
-import security
+from sss.core import security
 from admin_crud import AccessDenied
 from agents_service import DELAYED, AT_RISK, OFFLINE, OK, Thresholds, AgentsService
 from audit_service import InvalidFilters, AuditService

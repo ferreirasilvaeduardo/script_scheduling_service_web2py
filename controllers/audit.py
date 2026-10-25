@@ -5,7 +5,7 @@ nenhuma action altera agentes. Regras em modules/audit_service.py e modules/agen
 CSRF e Origin de todo POST sao validados em webapp/security.py.
 """
 import agents_service
-import app_context
+from sss.config import app_context
 import audit_service
 import ticket_service
 import ui_helpers

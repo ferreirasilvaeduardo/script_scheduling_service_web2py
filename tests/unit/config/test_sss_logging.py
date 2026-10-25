@@ -9,9 +9,9 @@ import unittest
 from unittest import mock
 
 from tests.support import _testenv  # noqa: F401
-import log_paths
-import sss_config
-import sss_logging
+from sss.config import log_paths
+from sss.config import sss_config
+from sss.config import sss_logging
 
 
 class TestSSSLogging(unittest.TestCase):
@@ -117,7 +117,7 @@ class TestSSSLogging(unittest.TestCase):
         dt_t0 = datetime.datetime(2026, 10, 16, 8, 30, 0)
         dt_t1 = datetime.datetime(2026, 10, 16, 8, 31, 0)
 
-        with mock.patch("sss_logging.datetime.datetime") as mock_dt, mock.patch("log_paths.datetime.datetime", mock_dt):
+        with mock.patch("sss.config.sss_logging.datetime.datetime") as mock_dt, mock.patch("sss.config.log_paths.datetime.datetime", mock_dt):
             mock_dt.now.return_value = dt_t0
             mock_dt.side_effect = lambda *args, **kw: datetime.datetime(*args, **kw)
             handler = sss_logging.AppLogRotatingHandler(
@@ -169,7 +169,7 @@ class TestSSSLogging(unittest.TestCase):
             with open(os.path.join(p, "dummy.log"), "w", encoding="utf-8") as f:
                 f.write("log antigo")
 
-        with mock.patch("sss_logging.datetime.datetime") as mock_dt, mock.patch("log_paths.datetime.datetime", mock_dt):
+        with mock.patch("sss.config.sss_logging.datetime.datetime") as mock_dt, mock.patch("sss.config.log_paths.datetime.datetime", mock_dt):
             mock_dt.now.return_value = today
             mock_dt.side_effect = lambda *args, **kw: datetime.datetime(*args, **kw)
 
@@ -233,7 +233,7 @@ class TestSSSLogging(unittest.TestCase):
         log_dir = os.path.join(self.tmp_dir, "logs")
         old = os.path.join(log_dir, "internal", "app", "2000", "01", "01", "00", "00")
         os.makedirs(old)
-        with mock.patch("log_paths.shutil.rmtree", side_effect=PermissionError(13, "Permission denied")):
+        with mock.patch("sss.config.log_paths.shutil.rmtree", side_effect=PermissionError(13, "Permission denied")):
             logger = sss_logging.configure("sss_web", self._create_cfg(log_dir))
         self.addCleanup(lambda: [h.close() for h in list(logger.handlers)])
         logger.info("primeira linha")

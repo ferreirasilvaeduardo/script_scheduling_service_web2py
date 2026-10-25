@@ -16,7 +16,7 @@ from tests.support import _testenv  # noqa: F401
 from tests.support import _oracle_test_support
 import db_conn
 import probe_driver as sondar_driver
-import sql_ident
+from sss.core import sql_ident
 
 
 class _FakeOracleConfig(object):
@@ -744,7 +744,7 @@ class TestOracleTestSupportMocks(unittest.TestCase):
         self.assertEqual(mock_cur.execute.call_count, 1)
 
     def test_compartilhado_conta_igual_owner_com_esquema_na_versao(self):
-        import sql_ident
+        from sss.core import sql_ident
         mock_conn, mock_cur = self._conn("OPENRISOW", sql_ident.SCHEMA_VERSION)
         res = _oracle_test_support.validate_disposable_schema(mock_conn, "openrisow", "openrisow", prefix="tbsss_")
         self.assertEqual(res, "OPENRISOW")
@@ -752,7 +752,7 @@ class TestOracleTestSupportMocks(unittest.TestCase):
                          "SELECT schema_version FROM OPENRISOW.tbsss_control")
 
     def test_compartilhado_versao_divergente_recusada(self):
-        import sql_ident
+        from sss.core import sql_ident
         mock_conn, _cur = self._conn("OPENRISOW", sql_ident.SCHEMA_VERSION + 1)
         with self.assertRaises(_oracle_test_support.SchemaPreconditionError) as ctx:
             _oracle_test_support.validate_disposable_schema(mock_conn, "OPENRISOW", "OPENRISOW")
@@ -769,19 +769,19 @@ class TestOracleTestSupportMocks(unittest.TestCase):
         self.assertIn("Esquema SSS ausente", str(ctx.exception))
 
     def test_compartilhado_sessao_de_outra_conta_recusada(self):
-        import sql_ident
+        from sss.core import sql_ident
         mock_conn, _cur = self._conn("OUTRA", sql_ident.SCHEMA_VERSION)
         with self.assertRaises(_oracle_test_support.SchemaPreconditionError):
             _oracle_test_support.validate_disposable_schema(mock_conn, "OPENRISOW", "OPENRISOW")
 
     def test_preparar_usa_o_config_da_aplicacao_e_registra_o_modo(self):
         """Sem cfg, usa sss_config.get_config() (instance/config.ini) e guarda o modo validado."""
-        import sql_ident
+        from sss.core import sql_ident
         mock_conn, _cur = self._conn("OPENRISOW", sql_ident.SCHEMA_VERSION)
         cfg = self._cfg()
         with mock.patch.dict(os.environ, self._ENABLED, clear=True):
-            with mock.patch("sss_config.get_config", return_value=cfg) as get:
-                with mock.patch("sss_config.load_secrets", return_value=mock.MagicMock()):
+            with mock.patch("sss.config.sss_config.get_config", return_value=cfg) as get:
+                with mock.patch("sss.config.sss_config.load_secrets", return_value=mock.MagicMock()):
                     with mock.patch("db_conn.connect", return_value=mock_conn):
                         self.assertIs(_oracle_test_support.prepare_disposable_schema("web"), cfg)
         get.assert_called_once_with()
@@ -798,7 +798,7 @@ class TestOracleTestSupportMocks(unittest.TestCase):
 
     def test_preparar_desligado_nao_le_config_nem_conecta(self):
         with mock.patch.dict(os.environ, {}, clear=True):
-            with mock.patch("sss_config.get_config") as get, mock.patch("db_conn.connect") as connect:
+            with mock.patch("sss.config.sss_config.get_config") as get, mock.patch("db_conn.connect") as connect:
                 with self.assertRaises(_oracle_test_support.SchemaPreconditionError):
                     _oracle_test_support.prepare_disposable_schema("web")
         get.assert_not_called()

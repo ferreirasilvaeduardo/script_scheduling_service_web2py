@@ -497,7 +497,7 @@ class TestSssHelper(unittest.TestCase):
 
     def test_relativo_de_pastas_log_passa_no_helper(self):
         import datetime
-        import log_paths
+        from sss.config import log_paths
         helper = _load_helper()
         dt = datetime.datetime(2026, 1, 2, 3, 4)
         for name in (u"Carga Diária", u"-x-", u"a.b_c", u"!!!", u"x" * 60, u"Relatório 2026 (v2)"):

@@ -12,14 +12,14 @@ import re
 import threading
 
 import admin_crud
-import params_compiler
-import log_paths
+from sss.core import params_compiler
+from sss.config import log_paths
 import path_guard
-import rbac
+from sss.core import rbac
 import schedules_service
 import ui_helpers
 from admin_crud import GENERAL_FIELD, OperationDenied
-from params_compiler import ParamError, PARAM_TYPES
+from sss.core.params_compiler import ParamError, PARAM_TYPES
 from path_guard import Code, PathGuardError
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
@@ -644,9 +644,9 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            import app_context
+            from sss.config import app_context
             import repo_factory
-            import sss_logging
+            from sss.config import sss_logging
             factory = repo_factory
             cfg = app_context.require_config()
             tickets = factory.get("tickets")

@@ -8,10 +8,10 @@ import unittest
 from unittest import mock
 
 import auth_service
-import rbac
+from sss.core import rbac
 import repo_factory
-import security
-import sql_ident
+from sss.core import security
+from sss.core import sql_ident
 import ui_helpers
 from schedules_service import SchedulesService
 from ticket_service import TicketService

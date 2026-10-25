@@ -3,7 +3,7 @@
 
 CSRF e Origin de todo POST sao validados em webapp/security.py.
 """
-import app_context
+from sss.config import app_context
 import ticket_service
 import ui_helpers
 from repo_errors import RepoError, RepoNotFound

@@ -25,11 +25,11 @@ import executor
 import log_pump
 import path_guard
 import os_platform
-import rbac
+from sss.core import rbac
 import scheduler_loop as sl
-import sql_ident
+from sss.core import sql_ident
 from repo_oracle.scheduler_queue import RegistrationLost
-from sss_config import EnvironmentSecret, Secrets
+from sss.config.sss_config import EnvironmentSecret, Secrets
 from tests.support._output_memory import RepoOutputMemory
 
 FAKE_AGENT = 2 ** 31 - 3

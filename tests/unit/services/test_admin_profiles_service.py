@@ -14,7 +14,7 @@ import admin_crud
 import admin_profiles_service as perfis_mod
 import auth_service
 import repo_factory
-import security
+from sss.core import security
 from admin_crud import GENERAL_FIELD, AccessDenied, OperationDenied
 from admin_profiles_service import AdminProfilesService
 from repo_errors import RepoConflict, RepoNotFound
@@ -184,7 +184,7 @@ class TestWhoCan(_Base):
         return dict((p["name"], p) for p in items_list)
 
     def test_por_script_bate_com_pode_executar(self):
-        import rbac
+        from sss.core import rbac
         q = self.svc.who_can(self.ctx["admin"], script_id="1")
         profiles = self._names(q["profiles"])
         self.assertEqual(profiles["ADMINISTRATOR"]["reason"], u"administrador")

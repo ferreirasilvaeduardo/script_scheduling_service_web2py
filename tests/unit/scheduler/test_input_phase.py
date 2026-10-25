@@ -113,9 +113,9 @@ class TestDaemonSemWeb2py(unittest.TestCase):
         """Regressao do ensaio do CR-020c: o agente nao sobe se o repositorio da entrada carregar o web2py."""
         import subprocess
         import sys
-        modules = os.path.join(_testenv.APP_DIR, "modules")
-        code = ("import sys; sys.path.insert(0, %r); import scheduler_loop, repo_oracle.scheduler_input; "
-                "sys.exit(1 if 'gluon' in sys.modules else 0)" % modules)
+        paths = [os.path.join(_testenv.APP_DIR, "modules"), os.path.join(_testenv.APP_DIR, "src")]
+        code = ("import sys; sys.path[:0] = %r; import scheduler_loop, repo_oracle.scheduler_input; "
+                "sys.exit(1 if 'gluon' in sys.modules else 0)" % paths)
         p = subprocess.run([sys.executable, "-I", "-c", code], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                            timeout=60)
         self.assertEqual(p.returncode, 0, p.stderr.decode("utf-8", "replace")[-500:])

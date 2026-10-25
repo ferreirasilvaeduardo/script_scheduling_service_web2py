@@ -3,7 +3,7 @@
 import datetime
 import re
 
-import app_context
+from sss.config import app_context
 import ui_helpers
 
 from webapp.context import HTTP, URL, request, response

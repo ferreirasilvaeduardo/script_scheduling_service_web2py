@@ -7,7 +7,7 @@ bloco ja gravado (COMMIT de desfecho desconhecido). Nunca le o CLOB para concate
 O COMMIT e do chamador. Gravar o log e rotina tecnica: nada de updated_* (CR-006, README §10).
 """
 import db_conn
-import sql_ident
+from sss.core import sql_ident
 
 WRITTEN = "WRITTEN"
 ALREADY_WRITTEN = "ALREADY_WRITTEN"

@@ -13,10 +13,10 @@ import unittest
 from unittest import mock
 
 import auth_service
-import params_compiler
+from sss.core import params_compiler
 import path_guard
 import repo_factory
-import security
+from sss.core import security
 import ticket_service
 import ui_helpers
 from repo_errors import RepoNotFound

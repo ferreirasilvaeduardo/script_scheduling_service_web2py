@@ -6,7 +6,7 @@ Totalmente idempotente e aderente ao README §9, §10, §11.1 e AGENTS §4.
 """
 import collections
 
-import sql_ident
+from sss.core import sql_ident
 
 # Estrutura representativa de uma instrucao DDL
 DDLItem = collections.namedtuple("DDLItem", [

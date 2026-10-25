@@ -8,10 +8,10 @@ import io
 import json
 import zipfile
 
-import params_compiler
-import recurrence
-import security
-import sql_ident
+from sss.core import params_compiler
+from sss.core import recurrence
+from sss.core import security
+from sss.core import sql_ident
 
 # Contas de demonstracao que permanecem sem senha utilizavel mesmo em DEV.
 _NO_PASSWORD_DEV = ("inativo", "bloqueado")

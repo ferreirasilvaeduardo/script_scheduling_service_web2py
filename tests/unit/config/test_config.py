@@ -19,8 +19,8 @@ import unittest
 from unittest import mock
 
 from tests.support import _testenv
-import sss_config
-import sss_logging
+from sss.config import sss_config
+from sss.config import sss_logging
 
 
 class TestConfig(unittest.TestCase):
@@ -32,11 +32,11 @@ class TestConfig(unittest.TestCase):
         self.repo_root = self.app_dir  # CR-022a: a aplicacao e a raiz do repositorio
         self.example_ini = os.path.join(self.app_dir, "instance", "config.ini.example")
 
-        # masking.py ainda nao existe; o substituto registra o que load_secrets entrega.
+        # O substituto registra o que load_secrets entrega (sss_config importa sss.core.masking dentro da funcao).
         self.masked = []
-        masking_stub = types.ModuleType("masking")
+        masking_stub = types.ModuleType("sss.core.masking")
         masking_stub.register_secret = self.masked.append
-        patcher = mock.patch.dict(sys.modules, {"masking": masking_stub})
+        patcher = mock.patch.dict(sys.modules, {"sss.core.masking": masking_stub})
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -563,7 +563,7 @@ class TestConfig(unittest.TestCase):
     def test_carga_de_segredos_sem_masking_falha(self):
         """Regressao: sem masking.py a carga falha, em vez de seguir sem mascaramento."""
         path_sec, _ = self._create_temp_secrets(mode=0o600)
-        with mock.patch.dict(sys.modules, {"masking": None}):
+        with mock.patch.dict(sys.modules, {"sss.core.masking": None}):
             with self.assertRaises(ImportError):
                 sss_config.load_secrets(path_sec)
 
@@ -587,7 +587,7 @@ class TestConfig(unittest.TestCase):
     def test_falha_no_chmod_do_log_dir_propaga(self):
         """Regressao: falha no chmod do log_dir aborta a configuracao (antes: except OSError: pass)."""
         log_dir = os.path.join(self.tmp_dir, "logs_chmod")
-        with mock.patch("sss_logging.os.chmod", side_effect=PermissionError(1, "Operation not permitted")):
+        with mock.patch("sss.config.sss_logging.os.chmod", side_effect=PermissionError(1, "Operation not permitted")):
             with self.assertRaises(OSError):
                 sss_logging.configure("teste_chmod", self._cfg_with_log_dir(log_dir))
 

@@ -12,10 +12,11 @@ import re
 import unittest
 
 from tests.support import _testenv  # noqa: F401 - ajusta sys.path sem importar gluon
-import app_context
+from sss.config import app_context
 
 APP_DIR = _testenv.APP_DIR
 MODULES_DIR = os.path.join(APP_DIR, "modules")
+SRC_DIR = os.path.join(APP_DIR, "src")
 REPO_ROOT = APP_DIR  # CR-022a: a aplicacao e a raiz do repositorio
 # Codigo que roda: a aplicacao (sem docs/, que guarda o historico) e os launchers da raiz.
 CODE_DIRS = (os.path.join(REPO_ROOT, "bin"),) + tuple(
@@ -64,19 +65,20 @@ class AppContextTest(unittest.TestCase):
 
 
 class ModulesWithoutGluonTest(unittest.TestCase):
-    """Regra de arquitetura do CR-021c: modules/ nao depende do web2py."""
+    """Regra de arquitetura do CR-021c: modules/ e src/ (CR-022b3) nao dependem do web2py."""
 
     def test_no_module_imports_gluon(self):
-        """Nenhum .py de modules/ (inclusive subpacotes) importa gluon, nem dentro de funcao."""
+        """Nenhum .py de modules/ nem de src/ (inclusive subpacotes) importa gluon, nem dentro de funcao."""
         offenders = []
-        for base, _dirs, files in os.walk(MODULES_DIR):
-            for name in files:
-                if name.endswith(".py"):
-                    path = os.path.join(base, name)
-                    with io.open(path, encoding="utf-8") as handle:
-                        source = handle.read()
-                    if "gluon" in _imported_roots(source):
-                        offenders.append(os.path.relpath(path, MODULES_DIR))
+        for top in (MODULES_DIR, SRC_DIR):
+            for base, _dirs, files in os.walk(top):
+                for name in files:
+                    if name.endswith(".py"):
+                        path = os.path.join(base, name)
+                        with io.open(path, encoding="utf-8") as handle:
+                            source = handle.read()
+                        if "gluon" in _imported_roots(source):
+                            offenders.append(os.path.relpath(path, APP_DIR))
         self.assertEqual(sorted(offenders), [])
 
     def test_no_python_file_imports_gluon(self):

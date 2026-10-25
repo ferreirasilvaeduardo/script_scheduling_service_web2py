@@ -12,9 +12,9 @@ import os
 from types import ModuleType
 from typing import Any, Callable, Dict, Mapping, Optional
 
-import app_context
-import masking
-import sss_config
+from sss.config import app_context
+from sss.core import masking
+from sss.config import sss_config
 from web import Application, Context, Route, SessionCodec, Settings, Templates
 
 from . import context, errors, security

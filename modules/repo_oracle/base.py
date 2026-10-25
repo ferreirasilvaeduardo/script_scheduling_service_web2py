@@ -11,11 +11,11 @@ import datetime
 import re
 import threading
 
-import app_context
+from sss.config import app_context
 import db_conn
 import repo_errors
-import sql_ident
-import sss_config
+from sss.core import sql_ident
+from sss.config import sss_config
 
 _RE_CONSTRAINT = re.compile(r"\((?:[A-Za-z0-9_]+\.)?([A-Za-z0-9_]+)\)")
 

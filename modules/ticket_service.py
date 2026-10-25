@@ -12,9 +12,9 @@ import re
 import shlex
 import threading
 
-import params_compiler
+from sss.core import params_compiler
 import path_guard
-import rbac
+from sss.core import rbac
 import ui_helpers
 from repo_errors import RepoError, RepoNotFound
 
@@ -1182,9 +1182,9 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            import app_context
+            from sss.config import app_context
             import repo_factory
-            import sss_logging
+            from sss.config import sss_logging
             factory = repo_factory
             cfg = app_context.require_config()
             _default = TicketService(

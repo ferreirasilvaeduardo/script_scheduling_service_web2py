@@ -11,7 +11,7 @@ import admin_crud
 import admin_parameters_service as prm_mod
 import auth_service
 import repo_factory
-import security
+from sss.core import security
 from admin_crud import GENERAL_FIELD, AccessDenied, OperationDenied
 from admin_parameters_service import AdminParametersService
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation

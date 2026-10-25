@@ -11,12 +11,12 @@ from unittest import mock
 import admin_crud
 import admin_profiles_service as perfis_mod
 import auth_service
-import rbac
+from sss.core import rbac
 import repo_factory
-import security
+from sss.core import security
 from admin_crud import GENERAL_FIELD, AccessDenied, OperationDenied
 from admin_profiles_service import AdminProfilesService
-from rbac import Reason
+from sss.core.rbac import Reason
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 

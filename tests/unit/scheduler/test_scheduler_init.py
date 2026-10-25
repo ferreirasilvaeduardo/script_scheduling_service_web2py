@@ -23,8 +23,8 @@ from unittest import mock
 import executor
 import os_platform
 import scheduler_loop as sl
-import sql_ident
-import sss_config
+from sss.core import sql_ident
+from sss.config import sss_config
 from repo_oracle.scheduler_queue import DuplicateAgent
 from tests.support._output_memory import RepoOutputMemory
 

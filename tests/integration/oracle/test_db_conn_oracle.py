@@ -15,7 +15,7 @@ class TestDbConnReal(unittest.TestCase):
     def test_conexao_real_schema_descartavel(self):
         if not _oracle_test_support.real_db_configured():
             self.skipTest("Testes Oracle reais desligados (SSS_TEST_ORACLE=1); marcado como NAO TESTADO")
-        import sss_config
+        from sss.config import sss_config
         cfg = _oracle_test_support.prepare_disposable_schema(role="web")
         secrets_value = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role="web")
 

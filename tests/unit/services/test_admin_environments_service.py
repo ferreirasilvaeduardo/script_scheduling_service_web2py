@@ -10,9 +10,9 @@ from unittest import mock
 import admin_environments_service as svc_mod
 import admin_crud
 import auth_service
-import masking
+from sss.core import masking
 import repo_factory
-import security
+from sss.core import security
 from admin_environments_service import AdminEnvironmentsService
 from admin_crud import GENERAL_FIELD, AccessDenied
 from repo_errors import RepoConflict, RepoNotFound

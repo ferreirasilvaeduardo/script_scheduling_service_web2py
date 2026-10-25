@@ -9,7 +9,7 @@ import threading
 
 import admin_crud
 import auth_service
-import security
+from sss.core import security
 import ui_helpers
 from admin_crud import GENERAL_FIELD, OperationDenied
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
@@ -340,9 +340,9 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            import app_context
+            from sss.config import app_context
             import repo_factory
-            import sss_logging
+            from sss.config import sss_logging
             factory = repo_factory
             _default = AdminUsersService(
                 users=factory.get("users"),

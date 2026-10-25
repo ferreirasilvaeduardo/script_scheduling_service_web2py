@@ -26,18 +26,18 @@ import tarfile
 
 _TOOLS = os.path.dirname(os.path.abspath(__file__))
 _APP_DIR = os.path.dirname(_TOOLS)
-sys.path.insert(0, os.path.join(_APP_DIR, "modules"))
-# Rodando de dentro da copia limpa que vai empacotar, o import abaixo gravaria modules/__pycache__ nela
+sys.path.insert(0, os.path.join(_APP_DIR, "src"))
+# Rodando de dentro da copia limpa que vai empacotar, o import abaixo gravaria src/sss/config/__pycache__ nela
 # e o proprio pacote seria recusado por bytecode (achado no ensaio do CR-021f3).
 sys.dont_write_bytecode = True
 
-import sss_config  # noqa: E402
+from sss.config import sss_config  # noqa: E402
 
 DEFAULT_ROOT = _APP_DIR  # CR-022a: a aplicacao e a raiz do repositorio
 BIN = ("sss-web.sh", "sss-scheduler.sh", "sss-stop.sh", "sss-helper")
 # Da raiz so entram estas pastas e arquivos da aplicacao (lista de permissao, CR-022a): o resto da raiz
 # (.git, Makefile, CLAUDE.md, input/, output/, logs/...) e da maquina de desenvolvimento.
-APP_DIRS = ("controllers", "docs", "instance", "modules", "scripts", "static", "views", "webapp")
+APP_DIRS = ("controllers", "docs", "instance", "modules", "scripts", "src", "static", "views", "webapp")
 APP_FILES = ("AGENTS.md", "README.md")
 # Restos do web2py (CR-021f): na raiz, recusados; na aplicacao, as pastas de runtime que ele criava.
 WEB2PY_ROOT_LEFTOVERS = ("gluon", "web2py.py", "anyserver.py", "routes.py", "applications")

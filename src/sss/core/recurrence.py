@@ -23,8 +23,8 @@ import collections
 import datetime
 import re
 
-import cron_parser
-from cron_parser import CronError
+from sss.core import cron_parser
+from sss.core.cron_parser import CronError
 
 TYPES = ('ONCE', 'DAILY', 'WEEKLY', 'MONTHLY', 'CRON')
 MISFIRE_POLICIES = ('RUN_ONCE', 'SKIP')

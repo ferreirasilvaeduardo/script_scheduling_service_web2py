@@ -13,7 +13,7 @@ import admin_crud
 import auth_service
 import output_browse_service as browse
 import repo_factory
-import security
+from sss.core import security
 from output_browse_service import BlobReader, InvalidRequest, OutputBrowseService
 from repo_errors import RepoNotFound
 

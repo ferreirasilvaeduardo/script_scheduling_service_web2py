@@ -7,8 +7,8 @@ import hashlib
 import json
 import re
 
-import masking
-import rbac
+from sss.core import masking
+from sss.core import rbac
 import ui_helpers
 
 GENERAL_FIELD = "_geral"

@@ -7,7 +7,7 @@ webapp/security.py. Senhas sao retiradas de request.vars assim que lidas
 """
 import admin_crud
 import admin_users_service as service
-import security
+from sss.core import security
 import ui_helpers
 from admin_crud import AccessDenied, OperationDenied
 from repo_errors import RepoConflict, RepoError, RepoNotFound

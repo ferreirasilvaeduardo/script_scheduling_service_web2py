@@ -7,7 +7,7 @@ import os
 import time
 import unittest
 import scheduler_loop as sl
-import sss_config
+from sss.config import sss_config
 from tests.unit.scheduler.test_scheduler_init import _Base  # noqa: F401
 
 
@@ -24,7 +24,7 @@ class TestStartupOracle(_Base):
 
     def _clean_registration(self):
         import db_conn
-        import sql_ident
+        from sss.core import sql_ident
         seg = sss_config.load_secrets(self.cfg_real.secrets.secrets_file, cfg=self.cfg_real, role="agent")
         conn = db_conn.connect(self.cfg_real, seg, "agent")
         try:

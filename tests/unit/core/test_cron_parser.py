@@ -9,8 +9,8 @@ import random
 import timeit
 import unittest
 
-import cron_parser
-from cron_parser import CronError
+from sss.core import cron_parser
+from sss.core.cron_parser import CronError
 
 D = datetime.datetime
 # Quinta-feira, com segundos e microssegundos de proposito.
@@ -210,9 +210,9 @@ class TestDescribe(unittest.TestCase):
 class TestPurity(unittest.TestCase):
 
     def test_sem_now_nem_gluon(self):
-        modules = os.path.join(_testenv.APP_DIR, 'modules')
+        core = os.path.join(_testenv.APP_DIR, 'src', 'sss', 'core')
         for name in ('cron_parser.py', 'recurrence.py'):
-            with open(os.path.join(modules, name), encoding='utf-8') as f:
+            with open(os.path.join(core, name), encoding='utf-8') as f:
                 tree = ast.parse(f.read())
             calls = set(n.func.attr for n in ast.walk(tree)
                            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute))

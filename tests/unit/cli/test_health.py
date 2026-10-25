@@ -19,8 +19,8 @@ import unittest
 from unittest import mock
 
 import health as saude_cli  # scripts/health.py (o repositorio e repo_oracle.health)
-import sql_ident
-import sss_config
+from sss.core import sql_ident
+from sss.config import sss_config
 from repo_oracle import health as saude_sql
 
 NOW = datetime.datetime(2026, 10, 21, 10, 0, 0)
@@ -254,7 +254,7 @@ class TestMain(unittest.TestCase):
                     "[monitor]\nuser = sss_monitor\npassword = senha-mon-1\n")
         os.chmod(path, 0o600)
         registered = []
-        with mock.patch("masking.register_secret", side_effect=registered.append):
+        with mock.patch("sss.core.masking.register_secret", side_effect=registered.append):
             seg = sss_config.load_secrets(path, sss_env="PROD", role="monitor")
         self.assertEqual((seg.monitor_user, seg.oracle_password, seg.purge_password, seg.environments),
                          ("sss_monitor", None, None, {}))

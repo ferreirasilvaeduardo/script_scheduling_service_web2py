@@ -12,9 +12,9 @@ import tempfile
 import unittest
 from unittest import mock
 
-import params_compiler as pc
+from sss.core import params_compiler as pc
 import path_guard
-from params_compiler import ParamError, SnapshotError
+from sss.core.params_compiler import ParamError, SnapshotError
 
 # UID fictício do agente: o dono dos arquivos de teste é o usuário do teste (CR-007, R-15).
 FAKE_AGENT = 2 ** 31 - 3

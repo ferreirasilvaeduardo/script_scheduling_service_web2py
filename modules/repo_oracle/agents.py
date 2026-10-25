@@ -14,7 +14,7 @@ Leituras do painel de agentes com a mesma semantica do repo_fake/agents.py (READ
 import datetime
 
 import db_conn
-import sql_ident
+from sss.core import sql_ident
 from repo_agents import RepoAgents
 from repo_oracle import health as saude_sql
 from repo_oracle.base import BaseRepoOracle

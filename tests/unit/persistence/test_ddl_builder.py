@@ -14,7 +14,7 @@ from unittest import mock
 from tests.support import _testenv  # noqa: F401
 import ddl_builder
 import init_db
-import sql_ident
+from sss.core import sql_ident
 
 
 class TestDdlBuilder(unittest.TestCase):
@@ -493,7 +493,7 @@ class TestDdlSeedAndRollback(unittest.TestCase):
 
     def test_hash_do_seed_confere_com_a_senha_documentada(self):
         """Regressao (F7.3): o hash do seed nao conferia com a senha do README §11.1 e nenhum usuario entrava."""
-        import security
+        from sss.core import security
         self.assertTrue(security.verify_password("Sss@Homolog2026!", ddl_builder.HOMOLOGATION_DEFAULT_PASSWORD_HASH))
         seed = "\n".join(ddl_builder.build_seed_statements(self.owner, self.prefixo))
         self.assertIn(ddl_builder.HOMOLOGATION_DEFAULT_PASSWORD_HASH, seed)

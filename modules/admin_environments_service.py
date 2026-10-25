@@ -8,7 +8,7 @@ import re
 import threading
 
 import admin_crud
-import log_paths
+from sss.config import log_paths
 import ui_helpers
 from admin_crud import GENERAL_FIELD
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
@@ -251,9 +251,9 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            import app_context
+            from sss.config import app_context
             import repo_factory
-            import sss_logging
+            from sss.config import sss_logging
             factory = repo_factory
             _default = AdminEnvironmentsService(
                 catalog=factory.get("catalog"),

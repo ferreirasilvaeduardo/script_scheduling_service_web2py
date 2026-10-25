@@ -17,11 +17,12 @@ import sys
 
 _BASE = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 sys.path.insert(0, os.path.join(_BASE, "modules"))
+sys.path.insert(0, os.path.join(_BASE, "src"))
 
 import agents_service  # noqa: E402
 import db_conn  # noqa: E402
-import sql_ident  # noqa: E402
-import sss_config  # noqa: E402
+from sss.core import sql_ident  # noqa: E402
+from sss.config import sss_config  # noqa: E402
 from repo_oracle import health as saude_sql  # noqa: E402
 
 OK, WARNING, CRITICAL, UNKNOWN = 0, 1, 2, 3

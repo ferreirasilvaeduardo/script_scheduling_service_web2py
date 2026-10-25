@@ -391,7 +391,7 @@ class TestLocalLogs(_Base):
 
     def test_falha_na_remocao_sai_com_3(self):
         self._minute("producao/carga/2026/01/01/10/00")
-        with mock.patch("log_paths.shutil.rmtree", side_effect=OSError(13, "Permission denied")):
+        with mock.patch("sss.config.log_paths.shutil.rmtree", side_effect=OSError(13, "Permission denied")):
             self.assertEqual(self._purge(_Db()).run(("local_logs",)), purge_cli.EXIT_LOCAL)
 
     def test_caminho_real_fora_de_log_dir_nao_e_removido(self):

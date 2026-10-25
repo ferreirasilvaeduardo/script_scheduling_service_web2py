@@ -16,12 +16,13 @@ import time
 
 _BASE = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 sys.path.insert(0, os.path.join(_BASE, "modules"))
+sys.path.insert(0, os.path.join(_BASE, "src"))
 
-import masking  # noqa: E402
+from sss.core import masking  # noqa: E402
 import os_platform  # noqa: E402
 import scheduler_loop  # noqa: E402
-import sss_config  # noqa: E402
-import sss_logging  # noqa: E402
+from sss.config import sss_config  # noqa: E402
+from sss.config import sss_logging  # noqa: E402
 
 _DAEMON_LOGGERS = ("sss_db_conn", "sss_config")
 

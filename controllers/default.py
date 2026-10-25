@@ -5,9 +5,9 @@ import time
 import agents_service
 import auth_service
 import permissions_service
-import rbac
+from sss.core import rbac
 import schedules_service
-import security
+from sss.core import security
 import ticket_service
 import ui_helpers
 from repo_errors import RepoError

@@ -55,10 +55,10 @@ def main():
 
     # Item 5: Driver Oracle (driver_mode e cadeia adaptativa)
     try:
-        modules_dir = os.path.join(app_dir, "modules")
-        if modules_dir not in sys.path:
-            sys.path.insert(0, modules_dir)
-        import sss_config
+        for code_dir in (os.path.join(app_dir, "modules"), os.path.join(app_dir, "src")):
+            if code_dir not in sys.path:
+                sys.path.insert(0, code_dir)
+        from sss.config import sss_config
         cfg = sss_config.get_config()
         mode = getattr(cfg.oracle, "driver_mode", "auto")
         chain_desc = "auto (Thin -> Thick -> cx_Oracle)" if mode == "auto" else mode

@@ -16,13 +16,13 @@ import re
 import threading
 
 import admin_crud
-import cron_parser
-import params_compiler
-import rbac
-import recurrence
+from sss.core import cron_parser
+from sss.core import params_compiler
+from sss.core import rbac
+from sss.core import recurrence
 import ui_helpers
 from admin_crud import GENERAL_FIELD, OperationDenied
-from cron_parser import CronError
+from sss.core.cron_parser import CronError
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 from ticket_service import AccessDenied as DisparoNegado
 
@@ -949,9 +949,9 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            import app_context
+            from sss.config import app_context
             import repo_factory
-            import sss_logging
+            from sss.config import sss_logging
             import ticket_service
             factory = repo_factory
             cfg = app_context.require_config()

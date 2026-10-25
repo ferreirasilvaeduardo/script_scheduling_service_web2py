@@ -9,7 +9,7 @@ from unittest import mock
 
 import auth_service
 import repo_factory
-import security
+from sss.core import security
 import ui_helpers
 from admin_environments_service import AdminEnvironmentsService
 from admin_parameters_service import AdminParametersService

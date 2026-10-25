@@ -29,9 +29,9 @@ from unittest import mock
 
 from tests.support import _testenv  # noqa: F401
 
-import app_context
+from sss.config import app_context
 import repo_factory
-import sql_ident
+from sss.core import sql_ident
 from repo_schedules import RepoSchedules
 from repo_agents import RepoAgents
 from repo_audit import RepoAudit
@@ -988,7 +988,9 @@ class TestRepoFactoryAndIntegrity(unittest.TestCase):
 
         def preparar(env):
             with mock.patch.dict(os.environ, env, clear=True):
-                with mock.patch.dict("sys.modules", {"db_conn": db_conn_mock, "sss_config": sss_config_mock}):
+                # "from sss.config import sss_config" le o atributo do pacote antes de sys.modules (CR-022b3)
+                with mock.patch.dict("sys.modules", {"db_conn": db_conn_mock, "sss.config.sss_config": sss_config_mock}), \
+                        mock.patch("sss.config.sss_config", sss_config_mock):
                     return prepare_disposable_schema("web")
 
         # Ligado e autorizado: usa o config da aplicacao, confere a sessao e fecha a conexao.
@@ -1133,7 +1135,7 @@ class TestFailFastRegression(unittest.TestCase):
         self.assertEqual(repo_factory._resolve_config({"app": {"sss_env": "DEV"}}), ("ORACLE", "DEV"))
         self.assertEqual(repo_factory._resolve_config({"app": {"sss_env": "DEV", "data_backend": "FAKE"}}),
                          ("FAKE", "DEV"))
-        import sss_config
+        from sss.config import sss_config
         cfg_app = sss_config.AppConfig(sss_env="PROD")
         self.assertEqual(repo_factory._resolve_config({"app": cfg_app}), ("ORACLE", "PROD"))
 

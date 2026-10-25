@@ -127,10 +127,7 @@ def validate_disposable_schema(conn, configured_owner, expected_session_user, pr
 
 def _check_sss_schema(cur, owner, prefix):
     """Owner existente: so aceita se o esquema SSS estiver implantado na versao do codigo."""
-    try:
-        import sql_ident
-    except ImportError:
-        from modules import sql_ident
+    from sss.core import sql_ident
     table = sql_ident.table(owner, prefix or "tbsss_", "control")
     try:
         cur.execute("SELECT schema_version FROM " + table)
@@ -147,10 +144,7 @@ def _check_sss_schema(cur, owner, prefix):
 def prepare_disposable_schema(role="web", cfg=None, secrets=None):
     """Valida o banco real para o papel e devolve o cfg do instance/config.ini (ou o informado)."""
     global _current_mode
-    try:
-        import sss_config
-    except ImportError:
-        from modules import sss_config
+    from sss.config import sss_config
 
     ok, reason = check_environment_preconditions()
     if not ok:

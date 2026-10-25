@@ -304,15 +304,25 @@ bin/
 ./                            # raiz do repositório = a própria aplicação (CR-022a; antes ficava em web2py/applications/script_scheduling_service/)
   controllers/                # default.py (login), tickets.py, logs.py, agendamentos.py, admin_*.py, auditoria.py, dev.py (somente DEV)
   webapp/                     # [CR-021e] camada web: requisição por thread e URL, sessão/CSRF/cabeçalhos/guardas, página de erro, montagem do servidor
+  src/sss/                    # [CR-022b] pacote da aplicação, importado pelo nome qualificado (from sss.core import masking)
+    config/                   # [CR-022b3] configuração, contexto do processo e caminhos de log
+      sss_config.py           # parser e validação tipada do config.ini e do secrets.cfg
+      sss_logging.py          # configuração de logging (§13)
+      app_context.py          # [CR-021c] configuração do processo (no lugar do gluon.current)
+      log_paths.py            # pasta do script e caminhos dos logs de execução e da aplicação (§8.4, §13, CR-005)
+    core/                     # [CR-022b3] regras puras: CRON, recorrência, parâmetros, mascaramento, RBAC, senha, identificadores
+      cron_parser.py          # parser CRON de 5 campos (§7.3)
+      recurrence.py           # cálculo da próxima execução e misfire (§7)
+      params_compiler.py      # validação de respostas e compilação do argv (§6)
+      masking.py              # mascaramento de segredos e PII
+      rbac.py                 # decisões de autorização (§4.3)
+      security.py             # hash de senha, CSRF, comparação em tempo constante
+      sql_ident.py            # registro de identificadores, validação de owner/prefixo, nomes qualificados
   modules/
-    sss_config.py             # parser e validação tipada do config.ini e do secrets.cfg
-    sss_logging.py            # configuração de logging (§13)
     db_conn.py                # [F7.0/F7.2] seleção do driver (Thin → Thick → cx_Oracle), adaptador, binds, mapa de erros, pool, conexão dedicada do daemon
     os_platform/              # [F8.0] primitivas de SO, só POSIX (Linux/Unix) (§8.0, CR-005)
-    sql_ident.py              # registro de identificadores, validação de owner/prefixo, nomes qualificados
     repo_errors.py            # exceções de contrato (§2.5)
     repo_factory.py           # seleção do backend FAKE/ORACLE (banco real via repo_oracle)
-    app_context.py            # [CR-021c] configuração do processo (no lugar do gluon.current)
     web/                      # [CR-021d1/d2] núcleo web próprio (WSGI, request, multipart, response, sessão assinada, rotas, templates); ligado no CR-021e
     repo_*.py                 # contratos abstratos por agregado (sem SQL)
     repo_fake/                # implementação em memória + seed (somente DEV)
@@ -323,17 +333,10 @@ bin/
     schedules_service.py, agents_service.py, permissions_service.py  # regras, painel de agentes, O que eu posso fazer
     ui_menu.py                # menu por permissão
     ui_helpers.py             # formatação de status, datas e paginação para as views
-    rbac.py                   # decisões de autorização (§4.3)
-    security.py               # hash de senha, CSRF, comparação em tempo constante
-    params_compiler.py        # validação de respostas e compilação do argv (§6)
-    cron_parser.py            # parser CRON de 5 campos (§7.3)
-    recurrence.py             # cálculo da próxima execução e misfire (§7)
     path_guard.py             # validação de interpretador e script (§8.5)
-    log_paths.py              # pasta do script e caminhos dos logs de execução e da aplicação (§8.4, §13, CR-005)
     env_builder.py            # [F8.1] montagem do ambiente limpo (§8.6)
     executor.py               # [F8.1] spawn, timeout, kill, finalização
     log_pump.py               # [F8.2] arquivo local -> CLOB com mascaramento (§8.10)
-    masking.py                # mascaramento de segredos e PII
     scheduler_loop.py         # [F8.3] laço principal do daemon
     audit_service.py          # catálogo de ações, consulta e exportação da trilha (§4.4). A escrita de tbsss_audit
                               # é feita pelo próprio repositório, na operação que recebe audit= (não existe audit.py)
@@ -2094,7 +2097,7 @@ UK/FK/CK/IX = {uk|fk|ck|ix}_{prefixo}{abrev}_{sufixo}   ix_tbsss_tck_queue
 
 * **Nomes em inglês (CR-016a):** tabela (`{fisico}`), coluna, abreviação, sufixo e valor gravado (`'Y'`/`'N'`, `DAILY`, `NAMED`, `VIEW_LOGS`…) são em inglês. A chave lógica da entidade no código (`ambientes`, `agendamentos`…) muda no CR-016c; até lá, `sql_ident.physical(entity)` dá o nome físico, e `sql_ident.table`/`sql_ident.sequence` dão o nome qualificado. Texto de tela e comentários de tabela e coluna continuam em português.
 * `{prefixo}` vem de `table_prefix`, inclui o `_` final e obedece à regex `^[a-z][a-z0-9_]{0,7}$` (começa com letra minúscula, para gerar nome Oracle válido e casar com o registro, que só aceita identificadores em minúsculas; até 8 caracteres; CR-007, R-31).
-* O DDL é gerado por `init_db.py` a partir de um **registro único de identificadores** em `modules/sql_ident.py`, consumido também por `test_db_schema.py`.
+* O DDL é gerado por `init_db.py` a partir de um **registro único de identificadores** em `src/sss/core/sql_ident.py`, consumido também por `test_db_schema.py`.
 * O `owner` vem de `[oracle] owner` no `config.ini` (ex.: `openrisow`) e obedece à regex `^[A-Za-z][A-Za-z0-9_]{0,29}$`. Todo objeto no banco é qualificado como `{owner}.{prefixo}{fisico}`.
 * Os exemplos com `tbsss_` neste documento representam a expansão utilizando o prefixo padrão configurado (`table_prefix = tbsss_`).
 * **Pior caso com prefixo de 8 caracteres:** `sq_` + 8 + `profile_feature` = **26** (conforme).
@@ -2926,7 +2929,7 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
 
 **Pacote de implantação (F9.1; sem web2py desde o CR-021f3):** `python tools/package.py [--source <raiz do repositório>] [--out-dir <pasta>]`, só com a biblioteca padrão. Fica em `tools/` (CR-022b2), fora do pacote que gera.
 * Gera `<saida>/sss-<version>.tar.gz` (padrão `<origem>/dist/`; versão `sss_config.SSS_VERSION`), com tudo sob `sss-<versao>/` e um `SHA256SUMS` de cada arquivo dentro do pacote, e `<saida>/SHA256SUMS` com o hash do `tar.gz` (`sha256sum -c SHA256SUMS`). O tar é reprodutível: ordem, dono (0), data e modos fixos (`0755` no `bin/`, `0644` nos demais arquivos).
-* **Entram (lista de permissão da raiz, CR-022a):** `bin/sss-web.sh`, `bin/sss-scheduler.sh`, `bin/sss-stop.sh`, `bin/sss-helper`, `AGENTS.md`, `README.md` e as pastas `controllers/`, `docs/`, `instance/` (só os `*.example`), `modules/`, `scripts/`, `static/`, `views/` e `webapp/`, todas no topo do pacote, como no repositório. O resto da raiz (`.git`, `Makefile`, `CLAUDE.md`, `dev/`, `input/`, `output/`, `logs/`, `work/`...) é da máquina de desenvolvimento e não entra. O servidor web é o `scripts/run_web.py` da própria aplicação; nada do web2py entra (nem pasta de runtime vazia), e `applications/` na origem recusa o pacote.
+* **Entram (lista de permissão da raiz, CR-022a):** `bin/sss-web.sh`, `bin/sss-scheduler.sh`, `bin/sss-stop.sh`, `bin/sss-helper`, `AGENTS.md`, `README.md` e as pastas `controllers/`, `docs/`, `instance/` (só os `*.example`), `modules/`, `scripts/`, `src/` (CR-022b3), `static/`, `views/` e `webapp/`, todas no topo do pacote, como no repositório. O resto da raiz (`.git`, `Makefile`, `CLAUDE.md`, `dev/`, `input/`, `output/`, `logs/`, `work/`...) é da máquina de desenvolvimento e não entra. O servidor web é o `scripts/run_web.py` da própria aplicação; nada do web2py entra (nem pasta de runtime vazia), e `applications/` na origem recusa o pacote.
 * **Não entram:** `controllers/dev.py`, `views/dev/`, `dev/`, `modules/repo_fake/`, `instance/config.ini`, `instance/web.env`, `log/`, `logs/`, `work/`, `exec/`, os testes (`tests/`, fora da lista de permissão desde o CR-022b1; um `scripts/test_*.py` perdido também fica fora), as ferramentas de build (`tools/`, CR-022b2), as pastas de runtime que o web2py criava dentro da aplicação numa cópia antiga (`sessions`, `errors`, `cache`, `databases`, `uploads`, `private`, `cron`, `applications`, `deposit`, `site-packages`), os launchers de DEV e os demais arquivos da raiz.
 * **Recusa** (código 1, sem gravar nada) se o pacote tiver um `secrets.cfg` real, `*.pyc`, `__pycache__`, `controllers/dev.py`, `repo_fake`, outra aplicação (`/admin/`, `welcome`, `examples`), resto do web2py (`gluon/`, `web2py.py`, `anyserver.py` ou `routes.py` na raiz, ou pasta de runtime dele), link simbólico, ou `password`/`cookie_key` com valor em `.ini`, `.cfg`, `.ini.example` ou `.cfg.example` (pelo nome do arquivo). A única exceção é o valor exato `CHANGE_ME` em `instance/secrets.cfg.example`. A mensagem cita arquivo e linha, nunca o valor.
 * O `package.py` não grava bytecode (`sys.dont_write_bytecode`), para poder rodar de dentro da própria cópia que empacota (CR-021f3). Uma árvore de desenvolvimento sempre tem `__pycache__` e o `secrets.cfg` local, então o pacote é gerado de uma cópia limpa: `git archive HEAD | tar -x -C <pasta>` e `python <pasta>/scripts/package.py --source <pasta>`.

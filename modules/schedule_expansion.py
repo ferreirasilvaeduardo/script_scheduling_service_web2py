@@ -12,9 +12,9 @@ import json
 import logging
 
 import db_conn
-import params_compiler
-import rbac
-import recurrence
+from sss.core import params_compiler
+from sss.core import rbac
+from sss.core import recurrence
 from repo_oracle.scheduler_schedules import DuplicateOccurrence
 
 _log = logging.getLogger("sss_scheduler")

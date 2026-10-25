@@ -14,11 +14,11 @@ import sys
 _scripts_dir = os.path.dirname(os.path.abspath(__file__))
 _app_dir = os.path.dirname(_scripts_dir)
 _modules_dir = os.path.join(_app_dir, "modules")
-for _p in (_app_dir, _modules_dir):
+for _p in (_app_dir, _modules_dir, os.path.join(_app_dir, "src")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-import sss_config  # noqa: E402
+from sss.config import sss_config  # noqa: E402
 import os_platform  # noqa: E402
 
 

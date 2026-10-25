@@ -16,13 +16,13 @@ import sys
 
 # Garante acesso aos modulos locais
 _BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-_MODULES_DIR = os.path.join(_BASE_DIR, "modules")
-if _MODULES_DIR not in sys.path:
-    sys.path.insert(0, _MODULES_DIR)
+for _code_dir in (os.path.join(_BASE_DIR, "modules"), os.path.join(_BASE_DIR, "src")):
+    if _code_dir not in sys.path:
+        sys.path.insert(0, _code_dir)
 
 import ddl_builder
-import sql_ident
-import sss_config
+from sss.core import sql_ident
+from sss.config import sss_config
 
 
 def main(argv=None):

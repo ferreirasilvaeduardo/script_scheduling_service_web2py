@@ -7,8 +7,8 @@ import os
 import unittest
 from unittest import mock
 
-import params_compiler
-import recurrence
+from sss.core import params_compiler
+from sss.core import recurrence
 import repo_factory
 
 # README §4.3.D, texto exato.
@@ -76,7 +76,7 @@ class TestSeedFake(unittest.TestCase):
                 self.assertIn(code, answers, a["id"])
 
     def test_linha_de_controle_na_versao_do_codigo(self):
-        import sql_ident
+        from sss.core import sql_ident
         self.assertIn(1, self.store.control)
         ctl = self.store.control[1]
         self.assertEqual(ctl["id"], 1)
@@ -89,7 +89,7 @@ class TestSeedRecordColumns(unittest.TestCase):
     setUp = TestSeedFake.setUp
 
     def test_toda_linha_com_registro_coerente(self):
-        import sql_ident
+        from sss.core import sql_ident
         for entity in sql_ident.TABLES:
             rows = list(getattr(self.store, entity).values())
             self.assertTrue(rows, entity)

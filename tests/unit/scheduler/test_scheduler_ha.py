@@ -15,8 +15,8 @@ from unittest import mock
 
 import db_conn
 import schedule_expansion
-import rbac
-import sql_ident
+from sss.core import rbac
+from sss.core import sql_ident
 from repo_oracle.scheduler_schedules import DuplicateOccurrence
 from tests.unit.persistence.test_scheduler_queue import _Error
 
@@ -416,7 +416,7 @@ class TestExpansion(_Base):
         self.rule(recurrence_type="CRON", cron_expression="0 10 29 2 *", run_time=None,
                    next_run_at=datetime.datetime(2026, 10, 20, 9, 55))
         self.agenda.rules[1]["cron_expression"] = "55 9 * * *"
-        with mock.patch("recurrence.next_run", side_effect=schedule_expansion.recurrence.CronError("sem ocorrencia")):
+        with mock.patch("sss.core.recurrence.next_run", side_effect=schedule_expansion.recurrence.CronError("sem ocorrencia")):
             with self.assertLogs("sss_scheduler", "WARNING"):
                 self.assertEqual(self.process(), "INVALID_CRON_WITH_TICKET")
         r = self.agenda.rules[1]
@@ -425,7 +425,7 @@ class TestExpansion(_Base):
         self.setUp()
         self.rule(recurrence_type="CRON", cron_expression="55 9 * * *", run_time=None, last_ticket_id=50)
         self.agenda.tickets[50] = {"status": "RUNNING", "created_at": NOW}
-        with mock.patch("recurrence.next_run", side_effect=schedule_expansion.recurrence.CronError("sem ocorrencia")):
+        with mock.patch("sss.core.recurrence.next_run", side_effect=schedule_expansion.recurrence.CronError("sem ocorrencia")):
             with self.assertLogs("sss_scheduler", "WARNING"):
                 self.assertEqual(self.process(), "INVALID_CRON")
         self.assertEqual(len(self.agenda.tickets), 1, "sobreposicao: sem ticket novo")

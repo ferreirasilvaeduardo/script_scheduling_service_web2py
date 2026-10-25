@@ -13,7 +13,7 @@ a reserva e o avanco sem ticket sao rotina tecnica (sem updated_*); pausa e conc
 import datetime
 
 import db_conn
-import sql_ident
+from sss.core import sql_ident
 
 # Primeira pagina (README §7.5): :last_next = DATE '0001-01-01' e :last_id = 0.
 DATE_INITIAL = datetime.datetime(1, 1, 1)

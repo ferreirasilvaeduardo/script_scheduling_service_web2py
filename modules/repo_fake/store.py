@@ -9,7 +9,7 @@ import datetime
 import threading
 
 from repo_errors import RepoViolation
-from sql_ident import ACTOR_MAX
+from sss.core.sql_ident import ACTOR_MAX
 
 # Limites de tbsss_audit (README §4.4, §10 tabela 16).
 _ACTOR_MAX = 40

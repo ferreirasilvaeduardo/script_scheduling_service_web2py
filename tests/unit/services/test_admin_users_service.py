@@ -12,7 +12,7 @@ import admin_crud
 import admin_users_service as usr_mod
 import auth_service
 import repo_factory
-import security
+from sss.core import security
 from admin_crud import GENERAL_FIELD, AccessDenied, OperationDenied
 from admin_users_service import AdminUsersService
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation

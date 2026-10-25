@@ -9,8 +9,8 @@ rowcount (AGENTS §4.11). Ator de toda gravacao: 'SYSTEM:<agent_id>' (CR-006); u
 negocio (transicoes de status, registro e parada do agente), nunca no heartbeat nem no registro do PID.
 """
 import db_conn
-import rbac
-import sql_ident
+from sss.core import rbac
+from sss.core import sql_ident
 
 _START = sql_ident.FBI_TCK_QUEUE_START
 _RUN = sql_ident.FBI_TCK_RUN_AGENT_CASE

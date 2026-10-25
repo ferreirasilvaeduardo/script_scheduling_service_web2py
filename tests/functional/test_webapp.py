@@ -18,7 +18,7 @@ APP_DIR = _testenv.APP_DIR
 if APP_DIR not in sys.path:
     sys.path.insert(0, APP_DIR)
 
-import app_context  # noqa: E402
+from sss.config import app_context  # noqa: E402
 from web import HTTP, Context, Markup, Request, Response, Route, Session  # noqa: E402
 
 from webapp import bootstrap, context, security  # noqa: E402
@@ -158,7 +158,7 @@ class SecurityHooksTest(unittest.TestCase):
             self.assertEqual(ctx.response.headers[name], value)
         self.assertNotIn("Cache-Control", ctx.response.headers)
         self.assertTrue(ctx.session.csrf_token, "token CSRF criado na primeira visita")
-        import sss_config  # pylint: disable=import-outside-toplevel
+        from sss.config import sss_config  # pylint: disable=import-outside-toplevel
         self.assertEqual(ctx.response.sss_version, sss_config.SSS_VERSION, "rodape com a versao do pacote")
 
     def test_post_size_origin_and_csrf(self):

@@ -13,7 +13,7 @@ import admin_crud
 import schedules_service as svc_mod
 import auth_service
 import repo_factory
-import security
+from sss.core import security
 from admin_crud import GENERAL_FIELD, AccessDenied, OperationDenied
 from schedules_service import SchedulesService
 from repo_errors import RepoConflict, RepoNotFound

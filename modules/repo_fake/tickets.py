@@ -3,7 +3,7 @@
 import copy
 import datetime
 
-import masking
+from sss.core import masking
 from repo_errors import RepoNotFound, RepoViolation
 from repo_fake.store import paginate
 from repo_tickets import RepoTickets

@@ -9,7 +9,7 @@ A entrega so e marcada pelo proprio agente (agent_id = :agent_id), com INPUT_DEL
 import db_conn
 import repo_errors
 import repo_inputs
-import sql_ident
+from sss.core import sql_ident
 
 ACTOR_MAX = sql_ident.ACTOR_MAX
 DETAIL_MAX = 1000

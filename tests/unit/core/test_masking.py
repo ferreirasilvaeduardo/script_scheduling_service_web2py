@@ -7,7 +7,7 @@ import logging
 import time
 import unittest
 
-import masking
+from sss.core import masking
 
 
 def _stream(masker, chunks):

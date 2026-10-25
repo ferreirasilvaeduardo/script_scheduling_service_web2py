@@ -27,12 +27,12 @@ import executor
 import input_phase
 import output_phase
 import log_pump
-import params_compiler
-import log_paths
+from sss.core import params_compiler
+from sss.config import log_paths
 import os_platform
-import rbac
+from sss.core import rbac
 import repo_inputs
-import sss_config
+from sss.config import sss_config
 from repo_oracle.scheduler_schedules import RepoSchedulerSchedules
 from repo_oracle.scheduler_queue import DuplicateAgent, RegistrationLost, RepoSchedulerQueue
 from repo_oracle.scheduler_log import RepoSchedulerLog

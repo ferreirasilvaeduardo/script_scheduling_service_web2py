@@ -17,7 +17,7 @@ from unittest import mock
 
 import db_conn
 import log_pump
-import masking
+from sss.core import masking
 from log_pump import MARKER, Pump, Round
 from repo_oracle import scheduler_log
 from repo_oracle.scheduler_log import (WRITTEN, ALREADY_WRITTEN, OWNERSHIP_LOST, LogOffsetMismatch,
@@ -547,10 +547,11 @@ class TestRepoSchedulerLog(unittest.TestCase):
 # -----------------------------------------------------------------------------
 
 _CHILD = r'''
-import json, sys, warnings
+import json, os, sys, warnings
 warnings.simplefilter("ignore")
-sys.path.insert(0, sys.argv[1])
-import sss_config, db_conn
+sys.path[:0] = [sys.argv[1], os.path.join(os.path.dirname(sys.argv[1]), "src")]
+import db_conn
+from sss.config import sss_config
 from repo_oracle.scheduler_log import RepoSchedulerLog
 cfg = sss_config.get_config()
 cfg = cfg._replace(oracle=cfg.oracle._replace(driver_mode=sys.argv[2]))

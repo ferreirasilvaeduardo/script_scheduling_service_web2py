@@ -6,8 +6,8 @@ import datetime
 import timeit
 import unittest
 
-import recurrence as rec
-from cron_parser import CronError
+from sss.core import recurrence as rec
+from sss.core.cron_parser import CronError
 
 D = datetime.datetime
 # Quinta-feira, com segundos e microssegundos de proposito.

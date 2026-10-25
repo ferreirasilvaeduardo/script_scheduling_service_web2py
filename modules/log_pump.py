@@ -13,7 +13,7 @@ import codecs
 import logging
 import os
 
-import masking
+from sss.core import masking
 from repo_oracle.scheduler_log import WRITTEN, ALREADY_WRITTEN, OWNERSHIP_LOST, LogOffsetMismatch
 
 _log = logging.getLogger("sss_scheduler")

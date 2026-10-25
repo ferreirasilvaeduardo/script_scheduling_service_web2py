@@ -9,9 +9,9 @@ import logging
 import os
 import threading
 
-import app_context
-import masking
-import security
+from sss.config import app_context
+from sss.core import masking
+from sss.core import security
 
 # O repo_fake nao vai no pacote de implantacao (README §12.2): e importado so no ramo FAKE, que so um teste
 # em DEV liga (F9.1d).

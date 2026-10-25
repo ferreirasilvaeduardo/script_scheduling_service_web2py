@@ -27,7 +27,7 @@ STDLIB = {
 
 
 def _app_modules():
-    """Nomes dos modulos da aplicacao (modules/*.py e subpacotes)."""
+    """Nomes dos modulos da aplicacao ainda em modules/ (*.py e subpacotes); os de src/ entram pela raiz "sss"."""
     folder = os.path.join(APP_DIR, "modules")
     return {os.path.splitext(name)[0] for name in os.listdir(folder)
             if name.endswith(".py") or os.path.isdir(os.path.join(folder, name))}
@@ -39,8 +39,8 @@ def _allowed(name):
         return STDLIB
     if name.startswith("webapp/"):
         # O bootstrap registra os controllers por import explicito.
-        return STDLIB | _app_modules() | {"web", "controllers"}
-    return STDLIB | _app_modules() | {"web", "webapp"}
+        return STDLIB | _app_modules() | {"sss", "web", "controllers"}
+    return STDLIB | _app_modules() | {"sss", "web", "webapp"}
 
 
 def _parse(path, key, result):

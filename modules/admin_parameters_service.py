@@ -11,12 +11,12 @@ import re
 import threading
 
 import admin_crud
-import params_compiler
+from sss.core import params_compiler
 import ui_helpers
-import rbac
+from sss.core import rbac
 import schedules_service
 from admin_crud import GENERAL_FIELD, OperationDenied
-from params_compiler import ParamError, COMPONENT_TYPES
+from sss.core.params_compiler import ParamError, COMPONENT_TYPES
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 FEATURE = "MANAGE_PARAMETERS"
@@ -476,9 +476,9 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            import app_context
+            from sss.config import app_context
             import repo_factory
-            import sss_logging
+            from sss.config import sss_logging
             _default = AdminParametersService(
                 catalog=repo_factory.get("catalog"),
                 log=sss_logging.get_logger("sss_web", app_context.require_config()),

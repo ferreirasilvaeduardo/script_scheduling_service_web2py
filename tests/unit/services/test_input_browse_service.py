@@ -12,7 +12,7 @@ import admin_crud
 import auth_service
 import input_browse_service as browse
 import repo_factory
-import security
+from sss.core import security
 from input_browse_service import InputBrowseService, InvalidRequest
 from repo_errors import RepoNotFound
 

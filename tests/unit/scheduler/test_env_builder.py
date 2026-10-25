@@ -10,8 +10,8 @@ import unittest
 from unittest import mock
 
 import env_builder
-import masking
-from sss_config import EnvironmentSecret, Secrets
+from sss.core import masking
+from sss.config.sss_config import EnvironmentSecret, Secrets
 
 _AgentStub = collections.namedtuple("_Agente", "agent_id child_locale env_passthrough exec_users exec_work_dir")
 _Cfg = collections.namedtuple("_Cfg", "agent")

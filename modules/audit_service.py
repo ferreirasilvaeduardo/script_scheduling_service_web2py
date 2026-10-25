@@ -13,8 +13,8 @@ import re
 import threading
 
 import admin_crud
-import masking
-import rbac
+from sss.core import masking
+from sss.core import rbac
 import ui_helpers
 from admin_crud import AccessDenied  # noqa: F401  (reexportado para o controller)
 
@@ -372,9 +372,9 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            import app_context
+            from sss.config import app_context
             import repo_factory
-            import sss_logging
+            from sss.config import sss_logging
             factory = repo_factory
             _default = AuditService(
                 audit=factory.get("audit"),

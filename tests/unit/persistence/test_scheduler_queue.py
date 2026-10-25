@@ -13,7 +13,7 @@ import unittest
 from unittest import mock
 
 import db_conn
-import sql_ident
+from sss.core import sql_ident
 from repo_oracle import scheduler_queue
 from repo_oracle.scheduler_queue import DuplicateAgent, RegistrationLost, RepoSchedulerQueue
 
@@ -334,7 +334,7 @@ class TestWithoutDb(unittest.TestCase):
         self.assertEqual(ctx["environment"]["description"], "Producao")
         self.assertEqual(ctx["homologations"], frozenset({5}))
         self.assertEqual(ctx["schedule"], {"name": "Noturna", "recurrence_type": "DAILY"})
-        import rbac
+        from sss.core import rbac
         self.assertEqual(rbac.can_execute(ctx["ctx"], ctx["script"], ctx["environment"], ctx["homologations"]),
                          (True, rbac.Reason.OK))
 

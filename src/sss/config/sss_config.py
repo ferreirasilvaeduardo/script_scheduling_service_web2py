@@ -817,7 +817,7 @@ def _monitor_secrets(cp, env):
         values[key] = cp["monitor"][key].strip()
         if not values[key]:
             raise ConfigError(section="monitor", key=key, reason="%s nao pode ser vazio em [monitor]" % key)
-    from masking import register_secret
+    from sss.core.masking import register_secret
     register_secret(values["password"])
     return Secrets(oracle_password=None, cookie_key=None, environments={}, purge_password=None,
                     monitor=EnvironmentSecret(user=values["user"], password=values["password"]))
@@ -959,7 +959,7 @@ def load_secrets(path, cfg=None, sss_env=None, data_backend=None, role="web"):
 
     # Import tardio para nao acoplar carregar() ao masking. Sem masking.py a carga de
     # segredos falha (ImportError): segredo sem mascaramento nunca chega aos logs (AGENTS §3.3).
-    from masking import register_secret
+    from sss.core.masking import register_secret
 
     if oracle_password:
         register_secret(oracle_password)
@@ -978,7 +978,8 @@ _CONFIG_CACHE = None
 
 def default_config_path():
     """Caminho canonico do config.ini da aplicacao (instance/config.ini)."""
-    app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # src/sss/config/ -> raiz da aplicacao (CR-022b3)
+    app_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
     return os.path.join(app_dir, "instance", "config.ini")
 
 
@@ -995,7 +996,7 @@ def _raw_log_dir(ini_path):
 
 
 def _abort(log_name, exc, log_dir):
-    import sss_logging
+    from sss.config import sss_logging
     sss_logging.log_initial_critical(log_name, "Subida abortada: configuracao invalida: %s" % exc, log_dir)
 
 

@@ -17,7 +17,7 @@ import path_guard
 import admin_scripts_service as scr_mod
 import auth_service
 import repo_factory
-import security
+from sss.core import security
 from admin_crud import GENERAL_FIELD, AccessDenied, OperationDenied
 from admin_profiles_service import AdminProfilesService
 from admin_scripts_service import AdminScriptsService
@@ -318,7 +318,7 @@ class TestLinks(_Base):
         self.assertIsNone(sub)
 
     def test_detalhe_dos_vinculos_passa_pelo_masking(self):
-        import masking
+        from sss.core import masking
         masking.MASKER.register("SEGREDO-DE-INFRA-9")
         screen, items = self._links_json(S_CARGA)
         for item in items:

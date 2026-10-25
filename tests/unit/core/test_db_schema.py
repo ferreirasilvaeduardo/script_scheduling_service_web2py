@@ -19,8 +19,8 @@ import unittest
 
 from tests.support import _testenv  # noqa: F401 - ajusta sys.path sem importar gluon
 
-import sql_ident
-from sql_ident import (
+from sss.core import sql_ident
+from sss.core.sql_ident import (
     TABLES,
     FBI_TCK_QUEUE_EXPR,
     FBI_TCK_RUN_EXPR,

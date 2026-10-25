@@ -8,7 +8,7 @@ tabelas que a conta do papel monitor le (README §11.1); nenhum LOB e lido.
 import datetime
 
 import db_conn
-import sql_ident
+from sss.core import sql_ident
 
 _RUN = "(" + sql_ident.FBI_TCK_RUN_AGENT_CASE + ")"
 _START = sql_ident.FBI_TCK_QUEUE_START

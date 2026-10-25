@@ -6,7 +6,7 @@ import os
 import re
 import unittest
 
-import security
+from sss.core import security
 
 _MODULES = os.path.join(_testenv.APP_DIR, "modules")
 _RE_FORMATO = re.compile(r"pbkdf2_sha256\$200000\$[0-9a-f]{32}\$[0-9a-f]{64}")

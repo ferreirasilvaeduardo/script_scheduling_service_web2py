@@ -7,8 +7,8 @@ import os
 import re
 import unittest
 import health as saude_cli  # scripts/health.py (o repositorio e repo_oracle.health)
-import sql_ident
-import sss_config
+from sss.core import sql_ident
+from sss.config import sss_config
 from repo_oracle import health as saude_sql
 from tests.unit.cli.test_health import _args  # noqa: F401
 

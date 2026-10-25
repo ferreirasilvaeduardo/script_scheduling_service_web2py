@@ -9,7 +9,7 @@ gravacao: 'SYSTEM:purge'.
 import json
 
 import db_conn
-import sql_ident
+from sss.core import sql_ident
 
 ACTOR = "SYSTEM:purge"
 TERMINAL_STATUSES = ("SUCCESS", "FAILED", "CANCELLED")

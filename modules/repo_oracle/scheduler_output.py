@@ -8,7 +8,7 @@ Ator: 'SYSTEM:<agent_id>'. Trocar a situacao e alteracao de negocio (updated_*);
 reiniciar uma gravacao interrompida sao rotina tecnica (README §10, CR-006).
 """
 import db_conn
-import sql_ident
+from sss.core import sql_ident
 
 WRITTEN = "WRITTEN"
 ALREADY_WRITTEN = "ALREADY_WRITTEN"

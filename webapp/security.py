@@ -11,12 +11,12 @@ import logging
 import time
 from typing import Any, Dict, Optional
 
-import app_context
+from sss.config import app_context
 import auth_service
-import rbac
-import security
-import sss_config
-import sss_logging
+from sss.core import rbac
+from sss.core import security
+from sss.config import sss_config
+from sss.config import sss_logging
 import ui_helpers
 import ui_menu
 from repo_errors import RepoUnavailable

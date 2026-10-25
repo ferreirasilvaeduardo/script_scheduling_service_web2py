@@ -16,11 +16,11 @@ from unittest import mock
 
 from tests.support import _oracle_test_support
 from tests.support import _testenv  # noqa: F401
-import app_context
+from sss.config import app_context
 import db_conn
 import repo_errors
 import repo_factory
-import sql_ident
+from sss.core import sql_ident
 from repo_catalog import RepoCatalog
 from repo_oracle.catalog import RepoCatalogOracle
 from repo_rbac import RepoRbac

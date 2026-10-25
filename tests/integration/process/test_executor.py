@@ -22,10 +22,10 @@ from unittest import mock
 
 import env_builder
 import executor
-import params_compiler as pc
+from sss.core import params_compiler as pc
 import path_guard
 import os_platform
-from sss_config import Secrets
+from sss.config.sss_config import Secrets
 
 FAKE_AGENT = 2 ** 31 - 3
 STARTED_AT = datetime.datetime(2026, 10, 16, 14, 5, 33)

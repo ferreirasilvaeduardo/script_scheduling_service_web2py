@@ -185,7 +185,7 @@ Resultado esperado hoje, sem `SSS_TEST_ORACLE`: `Ran 1470 tests ... OK (skipped=
 for v in 3.6.0 3.6.8 3.13.2; do ~/.pyenv/versions/$v/bin/python -m unittest discover -s tests -t .; done
 ```
 
-O `tests/support/_testenv.py` põe no `sys.path` a raiz da aplicação, `modules/` e `scripts/`, calculados a partir do próprio arquivo, e expõe `APP_DIR`. Todo teste o importa primeiro (`from tests.support import _testenv`). Cada pasta de `tests/` tem `__init__.py`: sem ele, o `unittest` do Python 3.6 não descobre os testes da pasta.
+O `tests/support/_testenv.py` põe no `sys.path` a raiz da aplicação, `modules/`, `src/` (pacote `sss`, CR-022b3), `scripts/` e `tools/`, calculados a partir do próprio arquivo, e expõe `APP_DIR`. Todo teste o importa primeiro (`from tests.support import _testenv`). Cada pasta de `tests/` tem `__init__.py`: sem ele, o `unittest` do Python 3.6 não descobre os testes da pasta.
 
 ---
 

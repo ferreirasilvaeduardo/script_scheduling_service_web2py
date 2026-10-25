@@ -166,10 +166,10 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            import app_context
+            from sss.config import app_context
             import repo_factory
-            import sss_logging
-            import sss_config
+            from sss.config import sss_logging
+            from sss.config import sss_config
             factory = repo_factory
             cfg = app_context.require_config()
             _default = AgentsService(

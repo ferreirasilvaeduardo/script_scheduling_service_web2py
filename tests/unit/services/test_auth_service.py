@@ -15,7 +15,7 @@ from unittest import mock
 
 import auth_service
 import repo_factory
-import security
+from sss.core import security
 from auth_service import MSG_GENERIC
 
 MAX = 5

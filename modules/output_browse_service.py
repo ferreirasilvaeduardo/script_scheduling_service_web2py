@@ -12,7 +12,7 @@ import threading
 import zipfile
 
 import admin_crud
-import rbac
+from sss.core import rbac
 import ui_helpers
 from repo_errors import RepoNotFound
 
@@ -283,9 +283,9 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            import app_context
+            from sss.config import app_context
             import repo_factory
-            import sss_logging
+            from sss.config import sss_logging
             factory = repo_factory
             _default = OutputBrowseService(tickets=factory.get("tickets"), catalog=factory.get("catalog"),
                                            audit=factory.get("audit"),

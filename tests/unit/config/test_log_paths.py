@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-import log_paths
+from sss.config import log_paths
 
 
 class TestLogDirs(unittest.TestCase):
@@ -226,7 +226,7 @@ class TestLogDirs(unittest.TestCase):
             return rmtree_real(path, *args, **kw)
 
         failures = []
-        with mock.patch("log_paths.shutil.rmtree", side_effect=rmtree_falha):
+        with mock.patch("sss.config.log_paths.shutil.rmtree", side_effect=rmtree_falha):
             removed = log_paths.clean_app_retention(self.tmp, 30, ref_dt=datetime.date(2026, 10, 16),
                                                        failures=failures)
         self.assertEqual(removed, [os.path.join(self.tmp, "internal", "app", "2026", "09", "02")])
@@ -234,7 +234,7 @@ class TestLogDirs(unittest.TestCase):
         self.assertIn(day_1, failures[0])
         self.assertIn("Permission denied", failures[0])
         # Sem a lista, a falha nao interrompe a retencao.
-        with mock.patch("log_paths.shutil.rmtree", side_effect=OSError(5, "I/O error")):
+        with mock.patch("sss.config.log_paths.shutil.rmtree", side_effect=OSError(5, "I/O error")):
             self.assertEqual(log_paths.clean_app_retention(self.tmp, 30, ref_dt=datetime.date(2026, 10, 16)), [])
 
     # -----------------------------------------------------------------------

@@ -11,7 +11,7 @@ import shutil
 import signal
 import time
 
-import log_paths
+from sss.config import log_paths
 import os_platform
 
 _log = logging.getLogger("sss_scheduler")

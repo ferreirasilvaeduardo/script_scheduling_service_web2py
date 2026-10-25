@@ -7,7 +7,7 @@ Nao importa gluon.
 """
 import threading
 
-import rbac
+from sss.core import rbac
 import ui_menu
 from repo_errors import RepoNotFound
 
@@ -121,9 +121,9 @@ def _service():
     global _default
     with _default_lock:
         if _default is None:
-            import app_context
+            from sss.config import app_context
             import repo_factory
-            import sss_logging
+            from sss.config import sss_logging
             import ticket_service
             factory = repo_factory
             _default = PermissionsService(

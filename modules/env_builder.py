@@ -10,8 +10,8 @@ parametro) e nao toca no sistema de arquivos. So monta caminhos e o dicionario d
 import logging
 import os
 
-import masking
-import sss_config
+from sss.core import masking
+from sss.config import sss_config
 
 _log = logging.getLogger("sss_scheduler")
 

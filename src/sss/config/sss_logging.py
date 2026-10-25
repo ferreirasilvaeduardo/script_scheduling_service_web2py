@@ -13,7 +13,7 @@ import os
 import sys
 import threading
 
-import log_paths
+from sss.config import log_paths
 
 
 FMT_SSS = "%(asctime)s %(levelname)s [pid=%(process)d] [agent=%(agent)s] [ticket=%(ticket)s] [action=%(action)s] %(message)s"

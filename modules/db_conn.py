@@ -17,16 +17,13 @@ import sys
 import threading
 import time
 
-import sss_config
-import sss_logging
+from sss.config import sss_config
+from sss.config import sss_logging
 try:
     import os_platform
 except ImportError:
     from modules import os_platform
-try:
-    import sql_ident
-except ImportError:
-    from modules import sql_ident
+from sss.core import sql_ident
 
 logger = logging.getLogger("sss_db_conn")
 

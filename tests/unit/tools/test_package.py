@@ -37,7 +37,8 @@ class TestPack(unittest.TestCase):
             "controllers/default.py": "# default\n", "controllers/dev.py": "# dev\n",
             "scripts/run_web.py": "# servidor\n", "webapp/bootstrap.py": "# web\n",
             "views/dev/index.html": "x", "dev/scripts/a.py": "x",
-            "modules/repo_fake/__init__.py": "x", "modules/sss_config.py": "x",
+            "modules/repo_fake/__init__.py": "x", "src/sss/__init__.py": "", "src/sss/config/__init__.py": "",
+            "src/sss/config/sss_config.py": "x",
             "instance/config.ini": "[oracle]\nuser = sss_web\n",
             "instance/config.ini.example": "[retention]\npurge_user =                 ; vazio em DEV\n",
             "instance/secrets.cfg.example": "[oracle]\npassword = CHANGE_ME\n[web]\ncookie_key = CHANGE_ME\n"
@@ -174,16 +175,16 @@ class TestPack(unittest.TestCase):
 
     def test_rodando_de_dentro_da_copia_que_empacota(self):
         """Regressao do ensaio do CR-021f3: o package.py da copia limpa importava o sss_config e gravava
-        modules/__pycache__ na propria copia, e o pacote era recusado por bytecode."""
+        __pycache__ na propria copia, e o pacote era recusado por bytecode."""
         with open(os.path.join(_testenv.APP_DIR, "tools", "package.py"), encoding="utf-8") as f:
             self._write("tools/package.py", f.read())
-        self._write("modules/sss_config.py",
+        self._write("src/sss/config/sss_config.py",
                     f"SSS_VERSION = {empacotar.sss_config.SSS_VERSION!r}\n")
         p = subprocess.run([sys.executable, os.path.join(self.origem, "tools", "package.py"),
                             "--source", self.origem, "--out-dir", self.saida], check=False,
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
         self.assertEqual(p.returncode, 0, p.stdout.decode("utf-8", "replace"))
-        self.assertFalse(os.path.exists(os.path.join(self.origem, "modules", "__pycache__")))
+        self.assertFalse([d for d, _s, _f in os.walk(self.origem) if d.endswith("__pycache__")])
 
     def test_helper_ausente(self):
         os.remove(os.path.join(self.origem, "bin", "sss-helper"))
