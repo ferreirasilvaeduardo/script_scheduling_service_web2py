@@ -381,6 +381,34 @@ RODADAS["20261024_r6"] = {
     "servidor_web": u"servidor web próprio (scripts/run_web.py), sem web2py no repositório",
     "registros": RODADAS["20261023_r3"]["registros"].replace("tela_r3", "tela_r6"),
 }
+RODADAS["20261025_r2"] = {
+    "commit": u"289247c (CR-022a: aplicação na raiz do repositório, sem web2py/ nem applications/) mais a correção "
+              u"do roteiro, no mesmo commit deste documento",
+    "adaptacao": RODADAS["20261024_r2"]["adaptacao"],
+    "ressalva": RODADAS["20261024_r2"]["ressalva"],
+    "defeitos": [
+        (u"Roteiro reaproveitava o cadastro dos scripts de diagnóstico com o caminho antigo",
+         u"dev/homologation/tools/capture_evidence.js",
+         u"Na rodada 1 deste dia (evidence_20261025), os tickets do diag_gerar_saida e do diag_pasta_trabalho "
+         u"terminaram em PRECHECK_FAILED (NOT_FOUND), com 275 OK e 8 falhas no CT-26 e no CT-30. Os dois scripts "
+         u"foram cadastrados por rodadas anteriores com o caminho da pasta antiga do repositório "
+         u"(.../DEV/web2py/applications/...), e o roteiro reativava o cadastro sem conferir o arquivo.",
+         u"Corrigido: ao reaproveitar o cadastro, o roteiro grava pela tela o caminho atual do arquivo. Rodada 2: "
+         u"283 OK, 0 falha."),
+    ],
+    "observacoes": [
+        u"Rodada do CR-022a, com a aplicação na raiz do repositório e a pasta em "
+        u"/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service: servidor web subido pelo bin/start_local.sh, "
+        u"agente pelo bin/sss-scheduler.sh, Oracle. Marca %s." % STAMP,
+        u"Antes desta rodada, o link /opt/automacoes/scripts/utilitarios foi refeito para a pasta nova e o pacote "
+        u"foi gerado de uma cópia limpa do commit 289247c (só bin/ de produção e as pastas da aplicação).",
+        RODADAS["20261024_r6"]["observacoes"][2],
+    ],
+    "agente": RODADAS["20261024_r4"]["agente"],
+    "senhas": RODADAS["20261024_r2"]["senhas"],
+    "servidor_web": u"servidor web próprio (scripts/run_web.py), aplicação na raiz do repositório",
+    "registros": RODADAS["20261023_r3"]["registros"].replace("tela_r3", "tela_r2"),
+}
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]

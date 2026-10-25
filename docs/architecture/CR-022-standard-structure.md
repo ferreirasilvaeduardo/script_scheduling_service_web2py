@@ -31,12 +31,12 @@ Depois do CR-021, o repositório não tinha mais nada do web2py, mas mantinha a 
 
 | Passo | Conteúdo | Situação |
 |---|---|---|
-| 022a | Aplicação na raiz do repositório e pasta sem `web2py` (D1 a D5): launchers, `package.py` (lista de permissão), `posix.PACKAGE_HELPER` (`../../bin/sss-helper`), testes que subiam três níveis até o `bin/`, `.gitignore`, `Makefile`, `CLAUDE.md`, README, AGENTS, DEPLOYMENT (§18 com a primeira atualização para `/opt/sss/app`) e DEV_ENVIRONMENT. Defeito pego pela suíte: o `PACKAGE_HELPER` subia quatro níveis e não acharia o helper do pacote | Concluído |
+| 022a | Aplicação na raiz do repositório e pasta sem `web2py` (D1 a D5): launchers, `package.py` (lista de permissão), `posix.PACKAGE_HELPER` (`../../bin/sss-helper`), testes que subiam três níveis até o `bin/`, `.gitignore`, `Makefile`, `CLAUDE.md`, README, AGENTS, DEPLOYMENT (§18 com a primeira atualização para `/opt/sss/app`) e DEV_ENVIRONMENT. Defeito pego pela suíte: o `PACKAGE_HELPER` subia quatro níveis e não acharia o helper do pacote. Validação depois da renomeação da pasta (2026-10-25): suíte de 1470 testes OK em 3.6.0, 3.6.8 e 3.13.2; pacote gerado de cópia limpa; homologação real r1 com 275 OK e 8 falhas (scripts de diagnóstico cadastrados em rodadas anteriores com o caminho antigo; roteiro corrigido) e r2 com 283/283 (`docs/homologation/SSS_Homologation_Evidence_2026-10-25_r2.docx`) | Concluído |
 | 022b em diante | Estrutura interna padrão (`src/sss/` com subpacotes, `tests/` separado de `scripts/`, `pyproject.toml` só com configuração de ferramentas, imports sem mexer no `sys.path`, 99 colunas e tipagem gradual) | Pendente (plano próprio) |
 
 ---
 
 ## 4. Riscos
 
-* **Caminhos fora do repositório:** o link `/opt/automacoes/scripts/utilitarios` (do root) e os caminhos absolutos do `instance/config.ini` do DEV apontavam para a pasta antiga e são refeitos à mão; scripts cadastrados no DEV não rodam enquanto o link não for refeito.
+* **Caminhos fora do repositório:** o link `/opt/automacoes/scripts/utilitarios` (do root) e os caminhos absolutos do `instance/config.ini` do DEV apontavam para a pasta antiga e são refeitos à mão; scripts cadastrados no DEV não rodam enquanto o link não for refeito. Também os cadastros de script do banco do DEV com caminho absoluto da pasta antiga (caso dos `diag_*` da homologação, que o roteiro agora corrige ao reaproveitar).
 * **Servidores:** a primeira atualização para esta versão muda a pasta (`/opt/sss/web2py` → `/opt/sss/app`) e os caminhos de operação (DEPLOYMENT §18); o retorno é subir de novo pela pasta antiga, que fica intacta.

@@ -1645,6 +1645,12 @@ async function diagScript(name, file, description) {
     } else {
         await go(`/admin_scripts/form/${sid}`);
         if (await clickText('button', 'Reativar')) await confirmModal();
+        // Cadastro de rodada anterior pode ter o caminho da pasta antiga do repositorio (CR-022a)
+        await go(`/admin_scripts/form/${sid}`);
+        if ((await page.$eval('#field-path_file', (el) => el.value)) !== file) {
+            await fill('#field-path_file', file);
+            await submit('/admin_scripts/save');
+        }
     }
     await setHomologation(sid, ['GFPREPROD']);
     return sid;
