@@ -225,7 +225,7 @@ Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de da
 
 ## 5. Homologação, Perfis e Usuários Cadastrados no Oracle
 
-Na implantação do banco de dados (via `scripts/init_db.py` ou script SQL `docs/sql/01_deploy_sss.sql`):
+Na implantação do banco de dados (via `scripts/init_db.py` ou script SQL `docs/sql/01_deploy_sss_openrisow_tbsss.sql`):
 
 ### 5.1 Homologação Técnica nos Ambientes (`tbsss_script_env`)
 Todos os 14 scripts são automaticamente homologados para execução nos **5 ambientes padrão**:
@@ -295,7 +295,7 @@ No `config.ini` de cada agente: `[agent] script_base_dir = /opt/automacoes/scrip
 Para criar o esquema com o catálogo num banco vazio:
 
 ```bash
-sqlplus usuario_owner/senha@//host:porta/servico @docs/sql/01_deploy_sss.sql
+sqlplus usuario_owner/senha@//host:porta/servico @docs/sql/01_deploy_sss_openrisow_tbsss.sql
 ```
 
-O `01_deploy_sss.sql` não roda sobre um esquema existente (para do primeiro erro; reaplicar exige o `02_rollback_sss.sql` antes, apagando os dados). Num banco já instalado, o catálogo é atualizado pelo `scripts/init_db.py`, que pula os objetos existentes e reaplica o seed por `MERGE INTO`, atualizando descrições, parâmetros e caminhos sem duplicidade (DEPLOYMENT §18).
+O `01_deploy_sss_<owner>_<prefixo>.sql` não roda sobre um esquema existente (para do primeiro erro; reaplicar exige o `02_rollback_sss_<owner>_<prefixo>.sql` antes, apagando os dados). Num banco já instalado, o catálogo é atualizado pelo `scripts/init_db.py`, que pula os objetos existentes e reaplica o seed por `MERGE INTO`, atualizando descrições, parâmetros e caminhos sem duplicidade (DEPLOYMENT §18).

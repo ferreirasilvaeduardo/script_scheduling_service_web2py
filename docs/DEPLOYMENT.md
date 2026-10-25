@@ -173,7 +173,7 @@ Os três scripts saem do mesmo registro de identificadores, com o owner e o pref
 # na máquina de desenvolvimento ou num servidor com o pacote
 cd /opt/sss/app
 python3 scripts/generate_sql.py --grants-to web=sss_web,agent=sss_agente,purge=sss_purge,monitor=sss_monitor
-# gera docs/sql/01_deploy_sss.sql, 02_rollback_sss.sql, 99_validate_deploy.sql e 03_grants_sss.sql
+# gera docs/sql/01_deploy_sss_openrisow_tbsss.sql, 02_rollback_sss_<owner>_<prefixo>.sql, 99_validate_deploy_<owner>_<prefixo>.sql e 03_grants_sss_<owner>_<prefixo>.sql
 ```
 
 O DBA revisa o `01` (ou a saída de `python3 scripts/init_db.py --dry-run`, que imprime o DDL sem conectar) **antes** de executar. Depois:
@@ -181,17 +181,17 @@ O DBA revisa o `01` (ou a saída de `python3 scripts/init_db.py --dry-run`, que 
 ```sql
 -- como a conta dona do esquema, gravando a saída
 SPOOL /tmp/sss_01_deploy.log
-@docs/sql/01_deploy_sss.sql
+@docs/sql/01_deploy_sss_openrisow_tbsss.sql
 SPOOL OFF
 SPOOL /tmp/sss_99_validate.log
-@docs/sql/99_validate_deploy.sql
+@docs/sql/99_validate_deploy_openrisow_tbsss.sql
 SPOOL OFF
 ```
 
 * O `01` termina com "concluída com sucesso!" mesmo que um comando falhe (`WHENEVER SQLERROR CONTINUE`). Procure `ORA-` e `SP2-` nos dois logs antes de dar a implantação por concluída.
 * O `99` só lê. As duas linhas de resumo precisam dizer `OK: nenhuma falha`.
 * As contas `sss_web`, `sss_agente`, `sss_purge` e `sss_monitor` são criadas pelo DBA antes do `01`, com a política de senhas da empresa. Nenhum GRANT vai para PUBLIC.
-* **Rollback total** (só em instalação nova ou com autorização): `@docs/sql/02_rollback_sss.sql`. Ele apaga os dados.
+* **Rollback total** (só em instalação nova ou com autorização): `@docs/sql/02_rollback_sss_openrisow_tbsss.sql`. Ele apaga os dados.
 
 ### 5.3 Usuários iniciais
 
@@ -742,7 +742,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
      COMMENT ON COLUMN openrisow.tbsss_agents.script_base_dir IS 'Pasta base dos scripts com caminho relativo ([agent] script_base_dir); vazio sem base';
      COMMENT ON COLUMN openrisow.tbsss_scripts.path_file IS 'Caminho normalizado do script: absoluto ou relativo a [agent] script_base_dir de cada agente';
      ```
-     Para voltar à versão anterior, nada no banco precisa ser desfeito: ela não usa as colunas novas, e a CK nova aceita os caminhos absolutos que ela grava (um script já cadastrado com caminho relativo termina em `RELATIVE_PATH` nos agentes dela). Num banco já instalado, os 14 scripts de demonstração continuam com o caminho absoluto: o `01_deploy_sss.sql` não roda sobre um esquema existente, e só o `scripts/init_db.py` reaplica o seed (o `MERGE` passa os 14 para `utilitarios/<arquivo>`). Antes de reaplicar o seed, ou de cadastrar qualquer script com caminho relativo, configure `script_base_dir` em todos os agentes do ambiente.
+     Para voltar à versão anterior, nada no banco precisa ser desfeito: ela não usa as colunas novas, e a CK nova aceita os caminhos absolutos que ela grava (um script já cadastrado com caminho relativo termina em `RELATIVE_PATH` nos agentes dela). Num banco já instalado, os 14 scripts de demonstração continuam com o caminho absoluto: o `01_deploy_sss_<owner>_<prefixo>.sql` não roda sobre um esquema existente, e só o `scripts/init_db.py` reaplica o seed (o `MERGE` passa os 14 para `utilitarios/<arquivo>`). Antes de reaplicar o seed, ou de cadastrar qualquer script com caminho relativo, configure `script_base_dir` em todos os agentes do ambiente.
 5. Pare os agentes (`sss-stop.sh` ou `SIGTERM`) e o web, troque as pastas (`mv /opt/sss/app /opt/sss/app-<anterior> && mv /opt/sss/app-<versao> /opt/sss/app`) e suba de novo.
 6. Valide (§11). **Retorno:** pare, troque as pastas de volta e suba. Com migração de esquema, o retorno precisa do backup do banco (§17).
 
@@ -783,7 +783,7 @@ rm -rf /opt/sss /etc/sss /var/lib/sss /var/log/sss
 userdel sss; userdel sssprd; userdel ssshml
 ```
 
-O esquema do banco é removido pelo DBA com o `02_rollback_sss.sql` (§5.2), **depois** do backup.
+O esquema do banco é removido pelo DBA com o `02_rollback_sss_<owner>_<prefixo>.sql` (§5.2), **depois** do backup.
 
 ---
 

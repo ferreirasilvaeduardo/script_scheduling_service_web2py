@@ -541,9 +541,11 @@ class TestDdlSeedAndRollback(unittest.TestCase):
                 "--out-dir", tmp_dir,
             ])
             self.assertEqual(ret, 0)
-            self.assertTrue(os.path.isfile(os.path.join(tmp_dir, "01_deploy_sss.sql")))
-            self.assertTrue(os.path.isfile(os.path.join(tmp_dir, "02_rollback_sss.sql")))
-            self.assertTrue(os.path.isfile(os.path.join(tmp_dir, "99_validate_deploy.sql")))
+            suffix = "_%s_%s.sql" % (self.owner.lower(), self.prefixo.rstrip("_").lower())
+            for base in ("01_deploy_sss", "02_rollback_sss", "99_validate_deploy"):
+                self.assertTrue(os.path.isfile(os.path.join(tmp_dir, base + suffix)), base)
+            self.assertEqual(sorted(os.listdir(tmp_dir)),
+                             sorted(b + suffix for b in ("01_deploy_sss", "02_rollback_sss", "99_validate_deploy")))
 
         with tempfile.TemporaryDirectory() as tmp_dir2:
             ret = init_db.main([
@@ -551,8 +553,23 @@ class TestDdlSeedAndRollback(unittest.TestCase):
                 "--generate-sql", tmp_dir2,
             ])
             self.assertEqual(ret, 0)
-            self.assertTrue(os.path.isfile(os.path.join(tmp_dir2, "01_deploy_sss.sql")))
-            self.assertTrue(os.path.isfile(os.path.join(tmp_dir2, "02_rollback_sss.sql")))
+            self.assertTrue(os.path.isfile(os.path.join(tmp_dir2, "01_deploy_sss" + suffix)))
+            self.assertTrue(os.path.isfile(os.path.join(tmp_dir2, "02_rollback_sss" + suffix)))
+
+    def test_cr024_nome_dos_arquivos_com_owner_e_prefixo(self):
+        """CR-024: <base>_<owner>_<prefixo>.sql; esquemas diferentes lado a lado; o deploy cita o seu rollback."""
+        self.assertEqual(ddl_builder.sql_file_name("deploy", "OPENRISOW", "tbsss_"),
+                         "01_deploy_sss_openrisow_tbsss.sql")
+        self.assertEqual(ddl_builder.sql_file_name("grants", "sss_hml", "pfx_"), "03_grants_sss_sss_hml_pfx.sql")
+        self.assertEqual(ddl_builder.sql_file_name("validate", "owner_x", "tb"), "99_validate_deploy_owner_x_tb.sql")
+        from sss.cli import generate_sql as gerar_scripts_sql
+        with tempfile.TemporaryDirectory() as tmp:
+            for owner in ("OWNER_A", "OWNER_B"):
+                self.assertEqual(gerar_scripts_sql.main(["--owner", owner, "--prefix", "tbsss_", "--out-dir", tmp]), 0)
+            names = sorted(os.listdir(tmp))
+            self.assertEqual(len(names), 6, names)
+            with open(os.path.join(tmp, "01_deploy_sss_owner_b_tbsss.sql"), encoding="utf-8") as f:
+                self.assertIn("rode antes o 02_rollback_sss_owner_b_tbsss.sql", f.read())
 
 
 if __name__ == "__main__":

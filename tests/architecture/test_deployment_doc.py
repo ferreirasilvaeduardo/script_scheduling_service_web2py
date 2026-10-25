@@ -33,8 +33,9 @@ class TestDeploymentGuide(unittest.TestCase):
             for name in sorted(set(re.findall(r"\b%s/([A-Za-z0-9_]+\.py)\b" % folder, body))):
                 if not os.path.isfile(os.path.join(APP, folder, name)):
                     missing.append(folder + "/" + name)
+        # CR-024: <base>_<owner>_<prefixo>.sql; o 03_grants so existe com --grants-to (nao vai para docs/sql).
         for name in sorted(set(re.findall(r"\bdocs/sql/([0-9]{2}_[a-z_]+\.sql)\b", body))):
-            if not os.path.isfile(os.path.join(APP, "docs", "sql", name)) and name != "03_grants_sss.sql":
+            if not os.path.isfile(os.path.join(APP, "docs", "sql", name)) and not name.startswith("03_grants_sss"):
                 missing.append("docs/sql/" + name)
         self.assertEqual(missing, [])
 

@@ -5,10 +5,11 @@ Gera scripts .sql autocontidos prontos para execucao direta por DBAs via SQL*Plu
 SQL Developer em ambientes de homologacao e producao, sem depender de execucao Python
 no servidor de banco de dados.
 
-Produz:
-  - 01_deploy_sss.sql : DDL (189 objetos), DML Seed (5 ambientes + controle + perfil admin), Estatisticas
-  - 02_rollback_sss.sql  : Desinstalacao total e limpa (Drop triggers, tabelas CASCADE PURGE, sequences)
-  - 03_grants_sss.sql    : Privilegios minimos por papel (web, agente, purge, monitor) [opcional]
+Produz (CR-024: owner e prefixo no nome, ex.: 01_deploy_sss_openrisow_tbsss.sql):
+  - 01_deploy_sss_<owner>_<prefixo>.sql      : DDL, DML Seed (ambientes, controle, perfil admin), Estatisticas
+  - 02_rollback_sss_<owner>_<prefixo>.sql    : Desinstalacao total e limpa (Drop triggers, tabelas, sequences)
+  - 03_grants_sss_<owner>_<prefixo>.sql      : Privilegios minimos por papel (web, agente, purge, monitor) [opcional]
+  - 99_validate_deploy_<owner>_<prefixo>.sql : Conferencia do esquema implantado
 """
 import argparse
 import os
@@ -158,9 +159,12 @@ def main(argv=None):
     out_dir = os.path.abspath(args.out_dir)
     os.makedirs(out_dir, exist_ok=True)
 
-    file_deploy = os.path.join(out_dir, "01_deploy_sss.sql")
-    file_rollback = os.path.join(out_dir, "02_rollback_sss.sql")
-    file_validate = os.path.join(out_dir, "99_validate_deploy.sql")
+    def _file(kind):
+        return os.path.join(out_dir, ddl_builder.sql_file_name(kind, owner, prefix))
+
+    file_deploy = _file("deploy")
+    file_rollback = _file("rollback")
+    file_validate = _file("validate")
 
     with open(file_deploy, "w", encoding="utf-8") as f:
         f.write(script_deploy)
@@ -177,7 +181,7 @@ def main(argv=None):
     print("  - Validacao   : {}".format(file_validate))
 
     if script_grants:
-        file_grants = os.path.join(out_dir, "03_grants_sss.sql")
+        file_grants = _file("grants")
         with open(file_grants, "w", encoding="utf-8") as f:
             f.write(script_grants)
         print("  - Grants      : {}".format(file_grants))

@@ -782,7 +782,7 @@ class TestOracleTickets(unittest.TestCase):
         finally:
             c.close()
         if None in (script_id, environment, prm1, login) or prm1 == prm2:
-            self.skipTest("Seed do catalogo ausente no banco real (implante o 01_deploy_sss.sql)")
+            self.skipTest("Seed do catalogo ausente no banco real (implante o 01_deploy_sss_<owner>_<prefixo>.sql)")
         return script_id, environment, prm1, prm2, login
 
     def _clean(self, ids, ip_mark):
@@ -1032,7 +1032,7 @@ class TestOracleSchedules(unittest.TestCase):
         finally:
             c.close()
         if None in (script_id, environment, user_id):
-            self.skipTest("Seed do catalogo ausente no banco real (implante o 01_deploy_sss.sql)")
+            self.skipTest("Seed do catalogo ausente no banco real (implante o 01_deploy_sss_<owner>_<prefixo>.sql)")
         return script_id, environment, user_id, login
 
     def _clean(self, sch_ids, tck_ids, mark):

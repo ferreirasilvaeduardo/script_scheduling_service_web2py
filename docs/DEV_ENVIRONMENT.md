@@ -145,7 +145,7 @@ Para subir como nos servidores via launcher oficial:
 
 ### Usuários de homologação
 
-* **No Oracle:** os usuários `admin`, `op.prod`, `op.hml` e `consulta` vêm do seed do `01_deploy_sss.sql`, com a senha padrão de homologação do README §11.1. Troque-as depois da implantação.
+* **No Oracle:** os usuários `admin`, `op.prod`, `op.hml` e `consulta` vêm do seed do `01_deploy_sss_<owner>_<prefixo>.sql`, com a senha padrão de homologação do README §11.1. Troque-as depois da implantação.
 * **`SSS_DEV_SEED_PASSWORD`:** só vale para o FAKE dos testes automáticos. A aplicação não usa mais essa variável.
 * **Perfis, permissões e dados de apoio de cada usuário:** `docs/homologation/SSS_Homologation_Manual_UI_Freeze.docx`, capítulo 3.
 
@@ -271,8 +271,8 @@ O backend FAKE não precisa de banco. Para o backend ORACLE (README §2.3, CR-00
 * **Credencial:** só no `secrets.cfg` (`0600`, dono = usuário do processo), nunca no `config.ini`.
 * **Inicialização e DDL/DML:**
   * Via Python: `python3 scripts/init_db.py`
-  * Via SQL*Plus (autônomo): `sqlplus usuario/senha@//host:porta/servico @docs/sql/01_deploy_sss.sql`
-  * Rollback total: `sqlplus usuario/senha@//host:porta/servico @docs/sql/02_rollback_sss.sql`
+  * Via SQL*Plus (autônomo): `sqlplus usuario/senha@//host:porta/servico @docs/sql/01_deploy_sss_openrisow_tbsss.sql`
+  * Rollback total: `sqlplus usuario/senha@//host:porta/servico @docs/sql/02_rollback_sss_openrisow_tbsss.sql`
 * **Testes contra banco real:** só `SSS_TEST_ORACLE=1` (README §2.5). Owner, prefixo, DSN e conta vêm do `instance/config.ini`. O modo sai do owner: `SSS_TEST_*` é descartável e qualquer outro é compartilhado. Sem a chave, as partes de banco ficam `NÃO TESTADO` no relatório.
   * **No `GFPR`** (owner `openrisow`, modo compartilhado), o driver Oracle só está instalado no Python 3.6.15 desta máquina. Exemplo para um agregado do F7.3:
     ```bash
@@ -280,7 +280,7 @@ O backend FAKE não precisa de banco. Para o backend ORACLE (README §2.3, CR-00
       ~/.pyenv/versions/3.6.15/bin/python -m unittest tests.integration.oracle.test_repo_oracle_progressive -v
     ```
   * **Outro driver:** os testes usam o `[oracle] driver_mode` do config (`auto`, `thin`, `thick` ou `cx_oracle`).
-  * **Produção:** só os scripts SQL de `docs/sql/` (`01_deploy_sss.sql`, `02_rollback_sss.sql`, `99_validate_deploy.sql`), sem Python. Os testes acima são só para DEV.
+  * **Produção:** só os scripts SQL de `docs/sql/` (`01_deploy_sss_<owner>_<prefixo>.sql`, `02_rollback_sss_<owner>_<prefixo>.sql`, `99_validate_deploy_<owner>_<prefixo>.sql`), sem Python. Os testes acima são só para DEV.
 * `python scripts/check_env.py` mostra a combinação de driver escolhida.
 
 ---

@@ -42,3 +42,5 @@ dev/notas/sss-web-*_v*.sh
 # Evidencias reais (2026-10-22): capturas e estado da rodada; o .docx e o results.json sao versionados
 /dev/homologation/evidence_*/*.png
 /dev/homologation/evidence_*/state.json
+# Senha da homologacao do DEV (~/.sss_homolog_pw): nunca no git, nem copiada para dentro do repositorio
+.sss_homolog_pw

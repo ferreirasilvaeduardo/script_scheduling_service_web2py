@@ -1,7 +1,7 @@
 SET DEFINE OFF;
 SET SERVEROUTPUT ON;
 -- Qualquer erro interrompe a implantacao com codigo de saida diferente de zero e sem a mensagem de
--- sucesso. Para reaplicar sobre um esquema existente, rode antes o 02_rollback_sss.sql.
+-- sucesso. Para reaplicar sobre um esquema existente, rode antes o 02_rollback_sss_openrisow_tbsss.sql.
 WHENEVER SQLERROR EXIT FAILURE ROLLBACK;
 WHENEVER OSERROR EXIT FAILURE ROLLBACK;
 

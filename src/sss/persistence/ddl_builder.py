@@ -1607,6 +1607,24 @@ def build_validation_script(owner, prefix):
     return "\n".join(rows)
 
 
+# CR-024: nome base de cada arquivo SQL gerado; o owner e o prefixo (sem o '_' final) vao antes do .sql.
+SQL_FILE_BASES = {
+    "deploy": "01_deploy_sss",
+    "rollback": "02_rollback_sss",
+    "grants": "03_grants_sss",
+    "validate": "99_validate_deploy",
+}
+
+
+def sql_file_name(kind: str, owner: str, prefix: str) -> str:
+    """Nome do arquivo SQL gerado (CR-024): <base>_<owner>_<prefixo>.sql, em minusculas.
+
+    Ex.: ('deploy', 'OPENRISOW', 'tbsss_') -> '01_deploy_sss_openrisow_tbsss.sql'. Owner e prefixo ja sao
+    identificadores validados (sql_ident), entao o nome so tem letras, numeros e '_'.
+    """
+    return "%s_%s_%s.sql" % (SQL_FILE_BASES[kind], owner.lower(), prefix.rstrip("_").lower())
+
+
 def build_full_deploy_script(owner, prefix, lob_storage="SECUREFILE",
                                       admin_login=None, admin_name=None, admin_password_hash=None,
                                       user_roles=None):
@@ -1629,7 +1647,8 @@ def build_full_deploy_script(owner, prefix, lob_storage="SECUREFILE",
         "SET DEFINE OFF;",
         "SET SERVEROUTPUT ON;",
         "-- Qualquer erro interrompe a implantacao com codigo de saida diferente de zero e sem a mensagem de",
-        "-- sucesso. Para reaplicar sobre um esquema existente, rode antes o 02_rollback_sss.sql.",
+        "-- sucesso. Para reaplicar sobre um esquema existente, rode antes o %s." % (
+            sql_file_name("rollback", owner, prefix)),
         "WHENEVER SQLERROR EXIT FAILURE ROLLBACK;",
         "WHENEVER OSERROR EXIT FAILURE ROLLBACK;",
         "",
