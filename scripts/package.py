@@ -46,8 +46,8 @@ WEB2PY_APP_DIRS = ("sessions", "errors", "cache", "databases", "uploads", "priva
 EXCLUDE_APP = (
     "controllers/dev.py", "views/dev", "dev", "modules/repo_fake", "instance/config.ini", "instance/web.env",
     "log", "logs", "work", "exec", "dist", "scripts/logs",
-    "scripts/_testenv.py", "scripts/_oracle_test_support.py", "scripts/_output_memory.py",
 ) + WEB2PY_APP_DIRS
+# Os testes ficam em tests/, fora da lista de permissao (CR-022b1); um test_*.py perdido em scripts/ tambem fica fora.
 _RE_TEST = re.compile(r"^scripts/test_[^/]*\.py$")
 _RE_CREDENTIAL = re.compile(r"^\s*(password|cookie_key)\s*[=:]\s*(.*?)\s*$", re.IGNORECASE)
 _SECRETS_EXAMPLE = "instance/secrets.cfg.example"

@@ -82,7 +82,7 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 * HTML5, **Bootstrap 5.3.8** e JavaScript próprio, sem framework (o Alpine.js saiu no CR-021, `docs/architecture/CR-021-no-web2py-no-alpine.md`), servidos exclusivamente de `static/` com fontes locais.
 * **Identidade visual**, aplicada pelos tokens de `static/css/sss.css`:
   * **Cores:** Roxo Vivo `#5f0684` (ações primárias, links, cabeçalho), Azul Esverdeado `#4daf9a` (destaques, item ativo, faixa do cabeçalho) e Amarelo `#faba00` (avisos e faixa de ambiente). As variações claras e escuras do manual são usadas no modo escuro e nos estados de passar o mouse e de clique.
-  * **Contraste:** todo par texto/fundo atende WCAG AA (≥ 4,5:1, verificado por `scripts/test_color_contrast.py`). Por isso o Azul Esverdeado nunca é cor de texto sobre fundo claro (contraste de 2,6:1).
+  * **Contraste:** todo par texto/fundo atende WCAG AA (≥ 4,5:1, verificado por `tests/architecture/test_color_contrast.py`). Por isso o Azul Esverdeado nunca é cor de texto sobre fundo claro (contraste de 2,6:1).
   * **Tipografia:** Montserrat (OFL 1.1), em arquivos `woff2` locais em `static/fonts/montserrat/`, com a licença junto. A Cocomat Light do manual é comercial e não está disponível; os títulos usam Montserrat.
   * **Formas:** cantos levemente arredondados (`--sss-radius: 8px`) e ícones com traço arredondado.
   * **Logo:** a logo oficial não é desenhada nem aproximada (o manual proíbe distorção). Ela só entra quando houver os arquivos oficiais.
@@ -198,8 +198,8 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
 * **Exceção documentada (F7.3, AGENDAMENTOS):** `RepoSchedules.list` traz o `params_json` (CLOB pequeno com as respostas da regra), porque o service avalia cada regra com ele (tela de regras e Agenda). Ler por `get` faria uma consulta por regra ativa. Nenhuma listagem traz `log_output`.
 * **Concorrência das transições no FAKE:** as transições web de ticket rodam sob o lock do agregado, então o FAKE nunca chega a perder uma corrida. O tratamento de `rowcount = 0` (`RepoConflict`) nessas transições só é exercitado pelo `test_repo_contract.py` contra o Oracle (F7.3).
 * **Exceções de contrato** (`modules/repo_errors.py`): `RepoError`, `RepoNotFound`, `RepoConflict`, `RepoViolation` e `RepoUnavailable`.
-* A suíte `scripts/test_repo_contract.py` roda **a mesma bateria** contra os dois backends. Contra ORACLE, ela só executa se `SSS_TEST_DSN` estiver definido.
-* **Testes Oracle reais: uma chave só, `SSS_TEST_ORACLE=1`** (`scripts/_oracle_test_support.py`).
+* A suíte `tests/unit/persistence/test_repo_contract.py` roda **a mesma bateria** contra os dois backends. Contra ORACLE, ela só executa se `SSS_TEST_DSN` estiver definido.
+* **Testes Oracle reais: uma chave só, `SSS_TEST_ORACLE=1`** (`tests/support/_oracle_test_support.py`).
   * **Origem dos parâmetros:** owner, prefixo, DSN e conta vêm só do `instance/config.ini`, os mesmos da aplicação. Nada é repetido em variáveis de ambiente.
   * **Recusas antes de qualquer conexão:** sem a chave, os testes de banco ficam pulados (`NÃO TESTADO`). Fora de `sss_env = DEV`, ou com `[oracle] dsn`/`owner` inválidos, a execução é recusada. As variáveis da versão anterior (`SSS_TEST_DSN`, `SSS_TEST_OWNER`, `SSS_TEST_CONFIG`, `SSS_TEST_SCHEMA_DISPOSABLE`, `SSS_TEST_SCHEMA_COMPARTILHADO`) também são recusadas, para não serem ignoradas em silêncio.
   * **A partir do F7, aplicação e validações usam as tabelas reais** do owner e do prefixo do config. O FAKE fica só como dublê dos testes automáticos sem banco (os casos que dá para mockar). Desde o fim do F7.3, a aplicação não tem mais `data_backend`: é sempre Oracle.
@@ -290,7 +290,7 @@ Regras de topologia:
 
 ### 3.2 Estrutura de diretórios
 
-**Em migração (CR-022b):** a árvore abaixo é a atual. A estrutura alvo (pacote `src/sss/` com subpacotes por camada, `tests/` por tipo de teste e `tools/` para build) e a ordem dos passos estão em `docs/architecture/CR-022-standard-structure.md` §2b e §3; cada passo atualiza esta árvore.
+**Em migração (CR-022b):** a árvore abaixo é a atual. Os testes já estão em `tests/` (022b1). A estrutura alvo (pacote `src/sss/` com subpacotes por camada e `tools/` para build) e a ordem dos passos estão em `docs/architecture/CR-022-standard-structure.md` §2b e §3; cada passo atualiza esta árvore.
 
 Os itens marcados com `[F7.x]`, `[F8.x]` ou `[F9.x]` ainda não existem: são criados no prompt indicado (`docs/prompts/00_INDEX.md`).
 
@@ -345,7 +345,14 @@ bin/
     run_scheduler.py          # [F8.3] entrypoint do daemon
     run_web.py                # [CR-021e] entrypoint do servidor web (núcleo próprio, sem web2py)
     purge.py                  # [F9.1] retenção (§11.3)
-    test_*.py                 # testes unittest (AGENTS.md §7)
+    check_env.py, generate_sql.py, package.py  # diagnóstico do ambiente, SQL de implantação, pacote (§12.2)
+  tests/                      # [CR-022b1] testes unittest por recurso usado (AGENTS.md §7; nunca implantados)
+    unit/<camada>/            # sem banco real nem rede: config, core, platform, persistence, ui, services, scheduler, web, cli, tools
+    integration/oracle/       # Oracle real, só com SSS_TEST_ORACLE=1 (<arquivo>_oracle.py: a parte Oracle de um teste unitário)
+    integration/process/      # processos do sistema: spawn, sinais, helper, launchers
+    functional/               # aplicação inteira por requisição ou com o servidor real
+    architecture/             # regras lidas no código e nos documentos (Python 3.6, AST, pacote, contraste)
+    support/                  # _testenv (sys.path e APP_DIR), _oracle_test_support, _output_memory
   static/bootstrap/  static/js/app/ (dom.js primeiro)  static/css/  static/img/  static/fonts/
   views/                      # layout.html, components/*.html, <controller>/*.html
   instance/config.ini         # configuração sem segredos (§12)
@@ -2706,7 +2713,7 @@ END;
 
 ### 11.2 Esquema e testes
 
-`scripts/test_db_schema.py` consome o mesmo registro de identificadores do `init_db.py` e falha se qualquer nome expandido com o `table_prefix` configurado (e com o prefixo de pior caso de 8 caracteres) exceder 30 caracteres. Os demais requisitos estão no `AGENTS.md` §7.
+`tests/unit/core/test_db_schema.py` consome o mesmo registro de identificadores do `init_db.py` e falha se qualquer nome expandido com o `table_prefix` configurado (e com o prefixo de pior caso de 8 caracteres) exceder 30 caracteres. Os demais requisitos estão no `AGENTS.md` §7.
 
 ### 11.3 `scripts/purge.py` (retenção)
 
@@ -2911,14 +2918,14 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
 
 **Servidor web:** `python scripts/run_web.py [--config <config.ini>] [--host 127.0.0.1] [--port 8000] [--check]` (CR-021e). Atende em `127.0.0.1` (os usuários chegam pelo proxy reverso HTTPS ou por túnel), com até `[web] max_threads` requisições ao mesmo tempo e `[web] socket_timeout_s` por conexão. `SIGTERM` ou `SIGINT` param de aceitar conexões e esperam as requisições em andamento até `socket_timeout_s`. O endereço `/` responde 303 para `/script_scheduling_service/`, que é a tela inicial (sem sessão, o login), como no web2py. `--check` só confere configuração, segredos e montagem da aplicação, sem abrir a porta, e imprime `CONFIG_OK sss_env=<ambiente>`. Saída: 0 na parada normal ou no `--check` bem-sucedido, 2 configuração ou segredos inválidos, 3 endereço indisponível.
 
-**Daemon do agente:** `python scripts/run_scheduler.py [--config <config.ini>]` (F8.3). Sem `--config`, lê `instance/config.ini`, como a aplicação; com ele, o arquivo informado, o que permite **mais de um agente no mesmo servidor**, cada um com o seu `config.ini` (`agent_id`, `work_dir`, `log_dir` e `output_dir` próprios; a trava de instância é `work_dir/sss-<agent_id>.lock`). Os tempos do `critical_config` precisam ser iguais em todos os agentes (§8.12). Saída: 0 na parada normal, 10 a 19 na falha de um passo da subida, 20 em `REGISTRO_PERDIDO`. O teste com dois agentes reais contra o Oracle (`scripts/test_agents_concurrency.py`, F8.3d) usa essa forma.
+**Daemon do agente:** `python scripts/run_scheduler.py [--config <config.ini>]` (F8.3). Sem `--config`, lê `instance/config.ini`, como a aplicação; com ele, o arquivo informado, o que permite **mais de um agente no mesmo servidor**, cada um com o seu `config.ini` (`agent_id`, `work_dir`, `log_dir` e `output_dir` próprios; a trava de instância é `work_dir/sss-<agent_id>.lock`). Os tempos do `critical_config` precisam ser iguais em todos os agentes (§8.12). Saída: 0 na parada normal, 10 a 19 na falha de um passo da subida, 20 em `REGISTRO_PERDIDO`. O teste com dois agentes reais contra o Oracle (`tests/integration/oracle/test_agents_concurrency.py`, F8.3d) usa essa forma.
 
 `bin/sss-helper` (CR-007, D1) é o helper de execução do §8.0. O pacote o leva, mas ele só vale depois de copiado pelo root para `/opt/sss/bin/sss-helper` (dono root, `0755`), com a regra de sudoers do `DEPLOYMENT.md`.
 
 **Pacote de implantação (F9.1; sem web2py desde o CR-021f3):** `python scripts/package.py [--source <raiz do repositório>] [--out-dir <pasta>]`, só com a biblioteca padrão.
 * Gera `<saida>/sss-<version>.tar.gz` (padrão `<origem>/dist/`; versão `sss_config.SSS_VERSION`), com tudo sob `sss-<versao>/` e um `SHA256SUMS` de cada arquivo dentro do pacote, e `<saida>/SHA256SUMS` com o hash do `tar.gz` (`sha256sum -c SHA256SUMS`). O tar é reprodutível: ordem, dono (0), data e modos fixos (`0755` no `bin/`, `0644` nos demais arquivos).
 * **Entram (lista de permissão da raiz, CR-022a):** `bin/sss-web.sh`, `bin/sss-scheduler.sh`, `bin/sss-stop.sh`, `bin/sss-helper`, `AGENTS.md`, `README.md` e as pastas `controllers/`, `docs/`, `instance/` (só os `*.example`), `modules/`, `scripts/`, `static/`, `views/` e `webapp/`, todas no topo do pacote, como no repositório. O resto da raiz (`.git`, `Makefile`, `CLAUDE.md`, `dev/`, `input/`, `output/`, `logs/`, `work/`...) é da máquina de desenvolvimento e não entra. O servidor web é o `scripts/run_web.py` da própria aplicação; nada do web2py entra (nem pasta de runtime vazia), e `applications/` na origem recusa o pacote.
-* **Não entram:** `controllers/dev.py`, `views/dev/`, `dev/`, `modules/repo_fake/`, `instance/config.ini`, `instance/web.env`, `log/`, `logs/`, `work/`, `exec/`, os testes (`scripts/test_*.py` e os auxiliares `_testenv.py`, `_oracle_test_support.py`, `_output_memory.py`), as pastas de runtime que o web2py criava dentro da aplicação numa cópia antiga (`sessions`, `errors`, `cache`, `databases`, `uploads`, `private`, `cron`, `applications`, `deposit`, `site-packages`), os launchers de DEV e os demais arquivos da raiz.
+* **Não entram:** `controllers/dev.py`, `views/dev/`, `dev/`, `modules/repo_fake/`, `instance/config.ini`, `instance/web.env`, `log/`, `logs/`, `work/`, `exec/`, os testes (`tests/`, fora da lista de permissão desde o CR-022b1; um `scripts/test_*.py` perdido também fica fora), as pastas de runtime que o web2py criava dentro da aplicação numa cópia antiga (`sessions`, `errors`, `cache`, `databases`, `uploads`, `private`, `cron`, `applications`, `deposit`, `site-packages`), os launchers de DEV e os demais arquivos da raiz.
 * **Recusa** (código 1, sem gravar nada) se o pacote tiver um `secrets.cfg` real, `*.pyc`, `__pycache__`, `controllers/dev.py`, `repo_fake`, outra aplicação (`/admin/`, `welcome`, `examples`), resto do web2py (`gluon/`, `web2py.py`, `anyserver.py` ou `routes.py` na raiz, ou pasta de runtime dele), link simbólico, ou `password`/`cookie_key` com valor em `.ini`, `.cfg`, `.ini.example` ou `.cfg.example` (pelo nome do arquivo). A única exceção é o valor exato `CHANGE_ME` em `instance/secrets.cfg.example`. A mensagem cita arquivo e linha, nunca o valor.
 * O `package.py` não grava bytecode (`sys.dont_write_bytecode`), para poder rodar de dentro da própria cópia que empacota (CR-021f3). Uma árvore de desenvolvimento sempre tem `__pycache__` e o `secrets.cfg` local, então o pacote é gerado de uma cópia limpa: `git archive HEAD | tar -x -C <pasta>` e `python <pasta>/scripts/package.py --source <pasta>`.
 

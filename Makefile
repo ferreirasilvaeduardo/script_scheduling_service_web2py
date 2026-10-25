@@ -8,11 +8,11 @@ REQ_FILE   = ./.bkp/python_env_requirements_$(shell date +%Y%m%d_%H%M%S).txt
 # Lista de módulos de desenvolvimento no Python local
 REQUIRED_PACKAGES := isort autopep8 flake8 pylint mypy
 
-# Pastas e padrões a ignorar tanto no lint quanto no empacotamento
-EXCLUDES := .pytest_cache .mypy_cache .bkp tests .sql __pycache__ sss_dev_script_examples sss_packages
+# Pastas e padrões a ignorar no lint (tests/ é lintado: os testes saíram de scripts/ no CR-022b1)
+EXCLUDES := .pytest_cache .mypy_cache .bkp .sql __pycache__ sss_dev_script_examples sss_packages
 PY_FILES := $(shell find . -name "*.py" $(foreach d,$(EXCLUDES),! -path "./$(d)/*"))
 
-.PHONY: check-sqlplus check-runtime check-dev-deps check-deps freeze-req zip-deploy zip-deploy-zip list-deploy format lint type-check check-all
+.PHONY: check-sqlplus check-runtime check-dev-deps check-deps freeze-req zip-deploy zip-deploy-zip list-deploy format lint type-check check-all test-unit test-integration test-functional test-architecture test-all
 
 # Valida o sqlplus, ORACLE_HOME e bibliotecas partilhadas do Instant Client
 check-sqlplus:
@@ -180,17 +180,33 @@ list-deploy: ## Lista os arquivos contidos no pacote mais recente gerado
 
 # Formatação e organização de imports
 format: check-deps
-	$(PYTHON) -m isort . --skip .pytest_cache --skip .bkp --skip tests --skip .sql --skip sss_dev_script_examples --skip sss_packages
-	$(PYTHON) -m autopep8 --in-place --recursive --exclude .pytest_cache,.bkp,tests,.sql,sss_dev_script_examples,sss_packages .
+	$(PYTHON) -m isort . --skip .pytest_cache --skip .bkp --skip .sql --skip sss_dev_script_examples --skip sss_packages
+	$(PYTHON) -m autopep8 --in-place --recursive --exclude .pytest_cache,.bkp,.sql,sss_dev_script_examples,sss_packages .
 
 # Análise estática de código
 lint: check-deps
-	$(PYTHON) -m flake8 . --exclude=.pytest_cache,.bkp,tests,.sql,sss_dev_script_examples,sss_packages
+	$(PYTHON) -m flake8 . --exclude=.pytest_cache,.bkp,.sql,sss_dev_script_examples,sss_packages
 	$(PYTHON) -m pylint $(PY_FILES)
 
 # Verificação de tipagem
 type-check: check-deps
-	$(PYTHON) -m mypy --explicit-package-bases . --exclude '(\.pytest_cache|\.bkp|tests|\.sql|sss_dev_script_examples|sss_packages)'
+	$(PYTHON) -m mypy --explicit-package-bases . --exclude '(\.pytest_cache|\.bkp|\.sql|sss_dev_script_examples|sss_packages)'
+
+# Testes (AGENTS.md §7, CR-022b1): unittest a partir da raiz; o Oracle real só com SSS_TEST_ORACLE=1
+test-unit:
+	$(PYTHON) -m unittest discover -s tests/unit -t .
+
+test-integration:
+	$(PYTHON) -m unittest discover -s tests/integration -t .
+
+test-functional:
+	$(PYTHON) -m unittest discover -s tests/functional -t .
+
+test-architecture:
+	$(PYTHON) -m unittest discover -s tests/architecture -t .
+
+test-all:
+	$(PYTHON) -m unittest discover -s tests -t .
 
 # Executa todos os testes e verificações em sequência
 check-all: format lint type-check

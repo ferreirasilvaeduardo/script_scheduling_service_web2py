@@ -158,24 +158,34 @@ Para subir como nos servidores via launcher oficial:
 
 ---
 
-## 5. Execução dos Testes Unitários
+## 5. Execução dos Testes
 
 Todos os testes automatizados utilizam exclusivamente o framework nativo `unittest` do Python (o uso de `pytest` é proibido).
 
-Para executar os testes a partir da aplicação:
+Os testes ficam em `tests/`, separados pelo recurso que usam (AGENTS §7, item 1; CR-022b1). Rode-os da raiz do repositório:
 
 ```bash
 cd /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
-python -m unittest discover -s scripts -p "test_*.py"
+python -m unittest discover -s tests -t .                   # suíte completa (make test-all)
+python -m unittest discover -s tests/unit -t .              # só os unitários, sem banco (make test-unit)
+python -m unittest tests.unit.core.test_cron_parser         # um arquivo
 ```
 
-Resultado esperado hoje: `Ran ... tests ... OK (skipped=23)` (794 testes no fechamento do CR-007; o total cresce a cada passo). Os 23 ignorados são do contrato contra Oracle real (`SSS_TEST_DSN`). Rode a suíte na **3.6.0** e na **3.6.8** (AGENTS §7, item 3); a validação do fechamento do CR-005 também passou na 3.13.2, a versão mais nova validada:
+| Pasta | O que roda | Alvo |
+|---|---|---|
+| `tests/unit/` | Sem banco real nem rede | `make test-unit` |
+| `tests/integration/oracle/` | Oracle real, só com `SSS_TEST_ORACLE=1` (sem a chave, tudo pulado) | `make test-integration` |
+| `tests/integration/process/` | Processos do sistema (spawn, sinais, helper, launchers) | `make test-integration` |
+| `tests/functional/` | A aplicação inteira, por requisição ou com o servidor real | `make test-functional` |
+| `tests/architecture/` | Regras lidas no código e nos documentos | `make test-architecture` |
+
+Resultado esperado hoje, sem `SSS_TEST_ORACLE`: `Ran 1470 tests ... OK (skipped=62)` (CR-022b1; o total cresce a cada passo). Os pulados são, na maior parte, os de `tests/integration/oracle/`. Rode a suíte na **3.6.0** e na **3.6.8** (AGENTS §7, item 3) e, de preferência, também na 3.13.2:
 
 ```bash
-for v in 3.6.0 3.6.8 3.13.2; do PYENV_VERSION=$v python -m unittest discover -s scripts -p "test_*.py"; done
+for v in 3.6.0 3.6.8 3.13.2; do ~/.pyenv/versions/$v/bin/python -m unittest discover -s tests -t .; done
 ```
 
-O módulo `scripts/_testenv.py` é responsável por configurar o `sys.path` dinamicamente para permitir a importação da aplicação (raiz da aplicação e `modules/`) sem caminhos fixos.
+O `tests/support/_testenv.py` põe no `sys.path` a raiz da aplicação, `modules/` e `scripts/`, calculados a partir do próprio arquivo, e expõe `APP_DIR`. Todo teste o importa primeiro (`from tests.support import _testenv`). Cada pasta de `tests/` tem `__init__.py`: sem ele, o `unittest` do Python 3.6 não descobre os testes da pasta.
 
 ---
 
@@ -259,7 +269,7 @@ O backend FAKE não precisa de banco. Para o backend ORACLE (README §2.3, CR-00
   * **No `GFPR`** (owner `openrisow`, modo compartilhado), o driver Oracle só está instalado no Python 3.6.15 desta máquina. Exemplo para um agregado do F7.3:
     ```bash
     SSS_TEST_ORACLE=1 SSS_TEST_REPO_AGREGADO=TICKETS \
-      ~/.pyenv/versions/3.6.15/bin/python -m unittest discover -s scripts -p "test_repo_oracle_progressive.py" -v
+      ~/.pyenv/versions/3.6.15/bin/python -m unittest tests.integration.oracle.test_repo_oracle_progressive -v
     ```
   * **Outro driver:** os testes usam o `[oracle] driver_mode` do config (`auto`, `thin`, `thick` ou `cx_oracle`).
   * **Produção:** só os scripts SQL de `docs/sql/` (`01_deploy_sss.sql`, `02_rollback_sss.sql`, `99_validate_deploy.sql`), sem Python. Os testes acima são só para DEV.

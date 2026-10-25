@@ -69,7 +69,7 @@ O detalhe passa sempre pelo `masking` (segredos registrados e senha em connect s
 
 ## Testes mínimos por cadastro
 
-`scripts/test_admin_<entity>_service.py`, sobre o FAKE, cobre:
+`tests/unit/services/test_admin_<entity>_service.py`, sobre o FAKE, cobre:
 * inclusão;
 * chave duplicada;
 * campos inválidos, inclusive espaços em volta de identificador e caractere de controle em texto livre;

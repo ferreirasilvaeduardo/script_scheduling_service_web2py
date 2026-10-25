@@ -17,7 +17,7 @@ Regras **obrigatórias e inegociáveis** para qualquer agente de IA ou desenvolv
   * Sem código didático e sem comentários redundantes. Comente apenas o "porquê" não óbvio (invariantes, ordem de locks, armadilhas do 11g).
   * Docstrings curtas em funções públicas de `modules/`.
   * **Nomes em inglês (CR-016, README §2.8):** objetos do banco, valores gravados, arquivos, pastas, módulos, funções, classes, variáveis, chaves, configuração, variáveis de ambiente, opções de linha de comando e rotas têm nome em inglês. Ficam em português o conteúdo (texto de tela, mensagens, logs legíveis e documentação), os comentários e docstrings e os dados cadastrados. Código novo nasce em inglês. A tradução do legado está encerrada (2026-10-22, README §2.8): os nomes em português que restaram ficam como estão e só mudam junto com uma alteração funcional do mesmo trecho. Rota renomeada não ganha redirecionamento do nome antigo (CR-016d, D22), nem atributo de sessão ou campo de formulário renomeado ganha leitura do nome antigo (D26 a D28). Nome de campo que o JavaScript envia muda junto com o controller que o lê, e chave JSON que o JavaScript lê muda junto com o servidor que a devolve (o percurso confere esse contrato, CR-016d d2b). Variável de tela, entrada de componente e chave de dicionário que vai do serviço ou do repositório para a tela também são em inglês (CR-016d d2c), assim como classe e variável CSS, id HTML, atributo `data-*`, componente JS (`data-component`) e identificador JS (CR-016d d3a), e função, constante, parâmetro e variável local da camada web: `ui_helpers`, `ui_menu`, `models/`, controllers e locais dos templates (CR-016d d3b). Campo oculto de modal (`hidden_fields`) também é contrato com o controller e muda junto.
-* **Estrutura em migração (CR-022b, `docs/architecture/CR-022-standard-structure.md` §2b):** o código sai de `modules/`, `webapp/`, `controllers/`, `views/` e `static/` para o pacote `src/sss/` (subpacotes `config`, `core`, `platform`, `persistence`, `ui`, `services`, `scheduler`, `web`, `cli`), os testes saem de `scripts/` para `tests/` (`unit`, `integration/oracle`, `integration/process`, `functional`, `architecture`, `support`) e o `package.py` vai para `tools/`. Os caminhos citados neste documento são os **atuais** e mudam no passo que move cada camada. Enquanto o CR-022b estiver aberto:
+* **Estrutura em migração (CR-022b, `docs/architecture/CR-022-standard-structure.md` §2b):** o código sai de `modules/`, `webapp/`, `controllers/`, `views/` e `static/` para o pacote `src/sss/` (subpacotes `config`, `core`, `platform`, `persistence`, `ui`, `services`, `scheduler`, `web`, `cli`), os testes já saíram de `scripts/` para `tests/` (022b1, §7 item 1) e o `package.py` vai para `tools/`. Os caminhos citados neste documento são os **atuais** e mudam no passo que move cada camada. Enquanto o CR-022b estiver aberto:
   * um módulo só se move junto com a reescrita de **todos** os seus importadores, no mesmo commit (nunca o mesmo módulo com dois nomes de import);
   * as dependências entre camadas seguem o CR-022 §2b (`web → services → persistence, ui, core, config`; `scheduler → persistence, platform, core, config`);
   * os comandos de operação dos servidores (`scripts/run_web.py`, `scripts/run_scheduler.py`, `scripts/health.py`, `scripts/purge.py`, `scripts/init_db.py`) não mudam.
@@ -87,7 +87,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
   * `style=` inline com dado dinâmico;
   * `eval` e `new Function`;
   * `innerHTML`, `outerHTML`, `insertAdjacentHTML` e `document.write` em `static/js/app/` (texto só por `textContent`; marcação repetida vem de um `<template>` do servidor, copiado por `SSS.dom.clone`);
-  * framework de JavaScript (o Alpine.js saiu no CR-021) e qualquer sintaxe dele nas views (`x-*`, `@evento=`, `:atributo=`), conferido por `scripts/test_frontend_components.py`.
+  * framework de JavaScript (o Alpine.js saiu no CR-021) e qualquer sintaxe dele nas views (`x-*`, `@evento=`, `:atributo=`), conferido por `tests/architecture/test_frontend_components.py`.
 * **Componentes sem framework (CR-021, D7):**
   * a raiz tem `data-component="<nome>"` e a fábrica é registrada uma vez com `SSS.component('<nome>', function (root) { ... })` em `static/js/app/`; o `dom.js` monta cada raiz uma vez no `DOMContentLoaded`;
   * eventos só por delegação, `SSS.dom.on(root, '<evento>', '<ação>', fn)` com `data-action="<ação>"` no elemento; elementos por `data-ref` (`SSS.dom.ref`), que não enxerga os de um componente aninhado;
@@ -98,7 +98,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
   * lista dinâmica: o estado é um array e a lista é redesenhada a partir de um `<template>` do servidor só quando muda a estrutura (incluir, mover, remover). Digitar ou marcar só atualiza o estado, para não tirar o foco do campo; quem redesenha devolve o foco a um elemento equivalente;
   * modal: só por `SSS.modal({modal, backdrop, initialFocus, returnFocus})` (`components.js`), que fecha por Esc e por clique no fundo. O componente dono do modal o controla; nenhum componente lê o estado de outro;
   * fragmento `.load` (lista de tickets, painel de agentes): troca só por `SSS.dom.replaceFragment`, com o HTML renderizado e escapado pelo servidor;
-  * todo `data-component` das views tem registro, e todo registro é usado (`scripts/test_frontend_components.py`).
+  * todo `data-component` das views tem registro, e todo registro é usado (`tests/architecture/test_frontend_components.py`).
 * Toda requisição `fetch` que altera estado envia o cabeçalho `X-CSRF-Token`.
 * **Gráficos** (README §5.8):
   * SVG gerado no servidor (ex.: `ui_helpers.stacked_bars`), sem biblioteca de gráficos e sem `style=` inline;
@@ -316,8 +316,8 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 ## 5. Convenções da camada web (CR-021e)
 
 1. **Actions:** só funções **definidas no próprio controller**, sem `_` no início e sem parâmetro obrigatório (`webapp/bootstrap.actions`). Nome importado (`redirect`, `URL`, as guardas) nunca vira rota. Função auxiliar começa com `_`, mesmo com argumentos.
-2. **Contexto:** a configuração do processo é gravada por `webapp/bootstrap.load_config` (ou por um teste) em `app_context.set_config` e lida por `app_context.require_config()` (falha na hora se não foi carregada) ou `app_context.get_config()` (devolve `None`). **Nenhum arquivo de `modules/` importa `gluon`**, nem dentro de função (`scripts/test_app_context.py`). Os repositórios vêm do `import repo_factory` direto (§5.5). A requisição (`request`, `response`, `session`, o usuário e o `URL`) vem de `webapp/context.py`, por thread (D3), e **só** `webapp/` e `controllers/` a importam; `modules/` nunca.
-3. **Registro dos controllers:** todo controller entra no registro explícito de `webapp/bootstrap.controllers` (sem import dinâmico); o `dev` só com `sss_env = DEV` (`scripts/test_webapp.py` confere o registro contra os arquivos).
+2. **Contexto:** a configuração do processo é gravada por `webapp/bootstrap.load_config` (ou por um teste) em `app_context.set_config` e lida por `app_context.require_config()` (falha na hora se não foi carregada) ou `app_context.get_config()` (devolve `None`). **Nenhum arquivo de `modules/` importa `gluon`**, nem dentro de função (`tests/unit/config/test_app_context.py`). Os repositórios vêm do `import repo_factory` direto (§5.5). A requisição (`request`, `response`, `session`, o usuário e o `URL`) vem de `webapp/context.py`, por thread (D3), e **só** `webapp/` e `controllers/` a importam; `modules/` nunca.
+3. **Registro dos controllers:** todo controller entra no registro explícito de `webapp/bootstrap.controllers` (sem import dinâmico); o `dev` só com `sss_env = DEV` (`tests/functional/test_webapp.py` confere o registro contra os arquivos).
 4. **Camada web (`webapp/`):** `context` (requisição por thread e `URL`), `security` (hooks e guardas), `errors` (página de erro) e `bootstrap` (configuração, registro, views e o `Application`). Nenhum abre conexão no import; a conexão é obtida sob demanda via `db_conn`. As views recebem `request`, `response`, `session`, `URL`, `csrf_field` e `sss_ctx` (o usuário), além das variáveis da action.
 5. **Separação de camadas:**
    * Controllers não contêm SQL nem regra de negócio. Eles validam a requisição, chamam services/módulos e renderizam.
@@ -329,11 +329,11 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
    * **Exceção — repositórios internos de processos batch:** `modules/repo_oracle/scheduler_*.py` (fila, agenda e log), `modules/repo_oracle/purge.py` e `modules/repo_oracle/health.py` não fazem parte do contrato da UI e não têm versão FAKE. Eles são importados diretamente **apenas** por `scheduler_loop.py`, `log_pump.py`, `scripts/purge.py` e `scripts/health.py`, todos processos que exigem banco real (README §2.5), e não importam a camada web. Única exceção: `repo_oracle/agents.py` importa do `repo_oracle/health.py` o SQL da fila sem atendente e do rodando sem PID e o cálculo dos pares atendidos, para a tela de agentes e o monitoramento não divergirem (F9.1b).
    * Regras de negócio residem em `modules/` (rbac, params_compiler, recurrence, executor, *_service).
    * **Backend:** a aplicação usa sempre o Oracle do `[oracle]` (owner e prefixo); `[app] data_backend` foi removida no F7.3 e é recusada se aparecer. O FAKE só existe injetado por teste (`repo_factory.configure`) e só com `sss_env = DEV`. DEV e PROD se separam pelo owner e pelo prefixo; `sss_env` continua como trava de segurança.
-6. **Núcleo web próprio (`modules/web/`, CR-021d1):** pacote só com a biblioteca padrão, no padrão D8: linhas de até 99 colunas, funções e métodos públicos com anotações de tipo e docstring, imports relativos entre os módulos do pacote e nenhum `gluon` (`scripts/test_web_package.py`). Não conhece regra de negócio (CSRF, guardas e cabeçalhos de segurança entram por hooks no CR-021e). Regras dele:
+6. **Núcleo web próprio (`modules/web/`, CR-021d1):** pacote só com a biblioteca padrão, no padrão D8: linhas de até 99 colunas, funções e métodos públicos com anotações de tipo e docstring, imports relativos entre os módulos do pacote e nenhum `gluon` (`tests/architecture/test_web_package.py`). Não conhece regra de negócio (CSRF, guardas e cabeçalhos de segurança entram por hooks no CR-021e). Regras dele:
    * corpo da requisição lido só sob demanda, nunca além do `Content-Length` nem do limite (413 sem ler); multipart **em fluxo** (`web/multipart.py`); corpo malformado ou truncado é 400;
    * sessão só em cookie **assinado** (`web/session.py`, D1): JSON em base64url, HMAC-SHA256 com chave derivada do `cookie_key`, `hmac.compare_digest`; cookie inválido vira sessão vazia com o motivo; nunca objeto Python serializado;
    * `Set-Cookie` sempre `HttpOnly` e com `SameSite`; cabeçalho com quebra de linha é recusado; JSON de resposta só por `json_for_html` (escapa `<`, `>` e `&`);
-   * `url()` com saída igual à do `gluon.html.URL` nas formas usadas (tabela gravada em `scripts/test_web_routing.py`, CR-021f1).
+   * `url()` com saída igual à do `gluon.html.URL` nas formas usadas (tabela gravada em `tests/unit/web/test_web_routing.py`, CR-021f1).
    * raiz como no web2py (D4): `/` responde 303 para `/<app>/`, e `/<app>` e `/<app>/` são `default/index` (o login leva `next=/<app>/`) (CR-021e2);
    * o roteador recebe o `PATH_INFO` **já decodificado** (o servidor faz o `unquote`; `decode_path_info` só passa o latin-1 do WSGI para UTF-8). Decodificar de novo é dupla decodificação (`%252e%252e%252f` viraria `../`);
    * estáticos só por `web/static.py`: GET/HEAD, `realpath` dentro de `static/` (link para fora dá 404), sem arquivo oculto nem listagem, revalidação por `ETag`/`Last-Modified`;
@@ -371,13 +371,25 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 
 ## 7. Testes
 
-1. Framework **exclusivamente** `unittest`, executado a partir do diretório da aplicação: `python -m unittest discover -s scripts -p "test_*.py"`. O `pytest` é proibido.
-   * `scripts/_testenv.py` ajusta o `sys.path` para a raiz da aplicação e para `modules/`. Desde o CR-022a a aplicação **é** a raiz do repositório (`/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`, sem `web2py/` nem `applications/`): caminho calculado a partir de `__file__` sobe só até ela (ex.: `modules/os_platform/` → `../../bin/sss-helper`). Todo teste o importa primeiro.
+1. Framework **exclusivamente** `unittest`, executado a partir da raiz do repositório: `python -m unittest discover -s tests -t .` (suíte completa; `make test-all`). O `pytest` é proibido.
+   * **Organização (CR-022b1):** os testes ficam em `tests/`, fora de `scripts/` (que só tem as ferramentas de operação), separados pelo recurso que usam. Cada pasta é um pacote (`__init__.py`), sem o qual o `unittest` do Python 3.6 não descobre os testes dela:
+
+     | Pasta | Critério | Alvo do Makefile |
+     |---|---|---|
+     | `tests/unit/<camada>/` | Sem banco real e sem rede (FAKE, mocks, conexão roteirizada). Subpasta pela camada do código testado: `config`, `core`, `platform`, `persistence`, `ui`, `services`, `scheduler`, `web`, `cli`, `tools` | `make test-unit` |
+     | `tests/integration/oracle/` | Precisa do Oracle real, ligado só com `SSS_TEST_ORACLE=1` (item 2) | `make test-integration` |
+     | `tests/integration/process/` | O assunto é processo do sistema: spawn, sinais, grupo, helper, launchers | `make test-integration` |
+     | `tests/functional/` | A aplicação inteira, montada de verdade, por requisição (`webapp`) ou com o servidor real (`web/server`) | `make test-functional` |
+     | `tests/architecture/` | Lê código e documentos: compatibilidade com o 3.6, regras por AST, hermeticidade, conteúdo do pacote, contraste de cores, guia de implantação | `make test-architecture` |
+     | `tests/support/` | Auxiliares, sem testes: `_testenv`, `_oracle_test_support`, `_output_memory` | — |
+
+     Um teste unitário pode abrir um interpretador filho só para isolar imports; o que vai para `integration/process/` é o teste cujo assunto é o processo. A parte de um arquivo que precisa do Oracle real fica em `tests/integration/oracle/<arquivo>_oracle.py` (ex.: `test_repo_contract.py` roda a bateria no FAKE e `test_repo_contract_oracle.py` no Oracle) e importa as bases e dublês do arquivo unitário, nunca uma classe `TestCase` que tenha testes (rodaria duas vezes). Os testes de ponta a ponta são a homologação no navegador (item 6), fora do `unittest`.
+   * `tests/support/_testenv.py` põe no `sys.path` a raiz da aplicação, `modules/` e `scripts/` (as ferramentas de operação que os testes importam, até o CR-022b8) e expõe `APP_DIR`. Desde o CR-022a a aplicação **é** a raiz do repositório (`/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`, sem `web2py/` nem `applications/`). Todo teste o importa primeiro (`from tests.support import _testenv`) e usa `_testenv.APP_DIR` para achar arquivos da aplicação, nunca um caminho relativo à própria pasta. O mesmo vale para os auxiliares importados dentro de função (`from tests.support._oracle_test_support import ...`): eles só rodam com o Oracle ligado, e a suíte sem banco não os confere.
    * Nenhum arquivo de `modules/` importa a camada web da aplicação nem `gluon` (CR-021c, §5.2); desde o CR-021f, nenhum `.py` do repositório importa `gluon`.
-2. Testes que dependem de banco real devem usar mocks da interface de `db_conn` **ou** ser ligados só por `SSS_TEST_ORACLE=1` (`_oracle_test_support.real_db_configured()`), com owner, prefixo, DSN e conta lidos do `instance/config.ini` e a guarda de `scripts/_oracle_test_support.py` antes de qualquer escrita (README §2.5). Sem a chave, o veredito do relatório é `NÃO TESTADO` para a parte de banco. A partir do F7, aplicação e validações usam as tabelas reais; o FAKE fica só como dublê dos testes automáticos sem banco.
+2. Testes que dependem de banco real devem usar mocks da interface de `db_conn` **ou** ser ligados só por `SSS_TEST_ORACLE=1` (`_oracle_test_support.real_db_configured()`), com owner, prefixo, DSN e conta lidos do `instance/config.ini` e a guarda de `tests/support/_oracle_test_support.py` antes de qualquer escrita (README §2.5). Sem a chave, o veredito do relatório é `NÃO TESTADO` para a parte de banco. A partir do F7, aplicação e validações usam as tabelas reais; o FAKE fica só como dublê dos testes automáticos sem banco.
    * **Plataforma:** a implementação POSIX é testada de verdade, no Linux (CR-005).
 3. Os testes rodam em Python real, no mínimo na **3.6.0** (mínima suportada) e na **3.6.8** (referência de produção). Recomenda-se rodar também na mais nova disponível (3.13). Sem nenhum Python 3.6.x no ambiente, o veredito máximo é `NÃO TESTADO`, e o motivo deve constar nas observações.
-4. **Testes obrigatórios mínimos** (os marcados com `[F7.x]`/`[F8.x]` são criados no prompt indicado e ainda não existem):
+4. **Testes obrigatórios mínimos** (os marcados com `[F7.x]`/`[F8.x]` são criados no prompt indicado e ainda não existem). A tabela cita o arquivo pelo nome, que é o mesmo em qualquer pasta de `tests/` (item 1); onde ela fala de "Oracle real" ou "`SSS_TEST_ORACLE=1`", essa parte fica no `<arquivo>_oracle.py` de `tests/integration/oracle/`:
 
 | Arquivo | Cobertura obrigatória |
 |---|---|
@@ -477,7 +489,7 @@ RELATÓRIO DE EXECUÇÃO
    - caminho/do/arquivo2.ext
 
 3. Testes Executados:
-   - scripts/test_exemplo.py (OK / FALHA / NÃO TESTADO: motivo)
+   - tests/unit/<camada>/test_exemplo.py (OK / FALHA / NÃO TESTADO: motivo)
 
 4. Checklist §8:
    - Todos os itens OK | Itens não aplicáveis: <lista> | Itens violados: <lista>

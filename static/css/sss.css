@@ -2,7 +2,7 @@
    Identidade visual Kyros (Manual de Marca): Azul Esverdeado #4daf9a, Roxo Vivo #5f0684 e Amarelo
    #faba00, com as variacoes claras/escuras do manual; Montserrat local (OFL, static/fonts/montserrat).
    Pares texto/fundo dos tokens tem contraste WCAG AA (>= 4.5:1), verificado por
-   scripts/test_color_contrast.py: o azul esverdeado nunca e cor de texto sobre fundo claro. */
+   tests/architecture/test_color_contrast.py: o azul esverdeado nunca e cor de texto sobre fundo claro. */
 
 @font-face {
   font-family: "Montserrat";
