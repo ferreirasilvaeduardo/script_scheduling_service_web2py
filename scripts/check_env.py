@@ -23,8 +23,8 @@ def main():
     app_dir = os.path.dirname(scripts_dir)
     # Servidor web proprio (CR-021e); o web2py saiu do repositorio no CR-021f.
     web_server = os.path.join(scripts_dir, "run_web.py")
-    bootstrap_css = os.path.join(app_dir, "static", "bootstrap", "bootstrap.min.css")
-    bootstrap_js = os.path.join(app_dir, "static", "bootstrap", "bootstrap.bundle.min.js")
+    bootstrap_css = os.path.join(app_dir, "src", "sss", "web", "static", "bootstrap", "bootstrap.min.css")
+    bootstrap_js = os.path.join(app_dir, "src", "sss", "web", "static", "bootstrap", "bootstrap.bundle.min.js")
 
     results = []
 

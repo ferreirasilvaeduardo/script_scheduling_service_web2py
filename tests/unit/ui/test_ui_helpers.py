@@ -12,7 +12,7 @@ from sss.ui import ui_helpers
 from sss.ui import ui_menu
 
 
-_SPRITE = os.path.join(_testenv.APP_DIR,
+_SPRITE = os.path.join(_testenv.WEB_DIR,
                        "static", "img", "icons.svg")
 
 

@@ -5,8 +5,8 @@ import json
 import unittest
 
 from tests.support import _testenv  # noqa: F401 - ajusta sys.path sem importar gluon
-from web.response import Response
-from web.session import MAX_COOKIE_BYTES, Session, SessionCodec, connect
+from sss.web.framework.response import Response
+from sss.web.framework.session import MAX_COOKIE_BYTES, Session, SessionCodec, connect
 
 KEY = "chave-de-teste-com-mais-de-16-caracteres"
 DATA = {"user_id": 2, "login": "op.prod", "profile_id": 2, "perm_version": 1, "session_epoch": 3,

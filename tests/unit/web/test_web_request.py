@@ -7,10 +7,10 @@ import json
 import unittest
 
 from tests.support import _testenv  # noqa: F401 - ajusta sys.path sem importar gluon
-from web.errors import HTTP, redirect
-from web.request import MAX_FIELDS, Request, parse_query
-from web.response import Response, cookie_header, json_for_html
-from web.routing import Route
+from sss.web.framework.errors import HTTP, redirect
+from sss.web.framework.request import MAX_FIELDS, Request, parse_query
+from sss.web.framework.response import Response, cookie_header, json_for_html
+from sss.web.framework.routing import Route
 
 ROUTE = Route("tickets", "index", "html", ["17"])
 

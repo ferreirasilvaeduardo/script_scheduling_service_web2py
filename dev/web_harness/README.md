@@ -11,7 +11,7 @@ Roteiros Playwright que conferem as telas no navegador, contra a aplicação com
 
 ## Como rodar
 
-1. Suba a aplicação com o backend FAKE numa porta local, com a senha do seed em `SSS_DEV_SEED_PASSWORD` (o servidor e os roteiros leem a mesma variável). O runner versionado chega no CR-021e, com o servidor próprio (`modules/web/`); até lá, o servidor de teste é montado à parte.
+1. Suba a aplicação com o backend FAKE numa porta local, com a senha do seed em `SSS_DEV_SEED_PASSWORD` (o servidor e os roteiros leem a mesma variável). O runner versionado chega no CR-021e, com o servidor próprio (`src/sss/web/framework/`); até lá, o servidor de teste é montado à parte.
 2. Rode cada roteiro com a mesma variável:
 
 ```bash

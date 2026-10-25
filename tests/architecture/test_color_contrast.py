@@ -9,7 +9,7 @@ import os
 import re
 import unittest
 
-CSS = os.path.join(_testenv.APP_DIR, "static", "css", "sss.css")
+CSS = os.path.join(_testenv.WEB_DIR, "static", "css", "sss.css")
 _RE_TOKEN = re.compile(r"--(sss-[a-z0-9-]+):\s*(#[0-9a-fA-F]{6})\s*;")
 
 # Pares (texto, fundo) efetivamente usados pela interface.

@@ -4,8 +4,8 @@ import io
 import unittest
 
 from tests.support import _testenv  # noqa: F401 - ajusta sys.path sem importar gluon
-from web import multipart
-from web.errors import HTTP
+from sss.web.framework import multipart
+from sss.web.framework.errors import HTTP
 
 BOUNDARY = "----sssBoundary7MA4YWxk"
 CONTENT_TYPE = "multipart/form-data; boundary=%s" % BOUNDARY

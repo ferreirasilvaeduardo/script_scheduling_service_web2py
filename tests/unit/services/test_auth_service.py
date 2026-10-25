@@ -330,7 +330,7 @@ class TestAuthService(unittest.TestCase):
             self.assertEqual(auth_service.lock_message(), self.service.lockout_message)
 
     def test_controllers_so_usam_nomes_existentes_do_auth_service(self):
-        root = os.path.join(_testenv.APP_DIR, "controllers")
+        root = os.path.join(_testenv.WEB_DIR, "controllers")
         for name in sorted(os.listdir(root)):
             if name.endswith(".py"):
                 with io.open(os.path.join(root, name), encoding="utf-8") as f:

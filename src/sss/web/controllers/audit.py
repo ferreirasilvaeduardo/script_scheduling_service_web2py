@@ -2,7 +2,7 @@
 """Trilha de auditoria e painel de agentes (README §4.3.D VIEW_AUDIT, §4.4, §13). Somente leitura:
 nenhuma action altera agentes. Regras em modules/audit_service.py e modules/agents_service.py.
 
-CSRF e Origin de todo POST sao validados em webapp/security.py.
+CSRF e Origin de todo POST sao validados em app/security.py.
 """
 from sss.services import agents_service
 from sss.config import app_context
@@ -13,13 +13,13 @@ from sss.services.admin_crud import AccessDenied
 from sss.services.audit_service import InvalidFilters
 from sss.persistence.repo_errors import RepoError
 
-from webapp import security as _security
-from webapp.context import HTTP, URL, redirect, request, response, session
-from webapp.security import client_ip as _client_ip
-from webapp.security import denied as _denied
-from webapp.security import require_func as _require_func
-from webapp.security import require_method as _require_method
-from webapp.security import text as _text
+from sss.web.app import security as _security
+from sss.web.app.context import HTTP, URL, redirect, request, response, session
+from sss.web.app.security import client_ip as _client_ip
+from sss.web.app.security import denied as _denied
+from sss.web.app.security import require_func as _require_func
+from sss.web.app.security import require_method as _require_method
+from sss.web.app.security import text as _text
 
 _log = _security.LOG
 

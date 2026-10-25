@@ -2,7 +2,7 @@
 """Cadastro de perfis e matriz de permissoes (README §4.3, MANAGE_PROFILES). Padrao em docs/ADMIN_CRUD_PATTERN.md.
 
 Regras ficam em modules/admin_profiles_service.py; CSRF e Origin de todo POST sao validados
-em webapp/security.py. Nenhuma permissao e decidida no cliente: o POST da matriz e revalidado inteiro.
+em app/security.py. Nenhuma permissao e decidida no cliente: o POST da matriz e revalidado inteiro.
 """
 from sss.services import admin_crud
 from sss.services import admin_profiles_service as service
@@ -10,14 +10,14 @@ from sss.ui import ui_helpers
 from sss.services.admin_crud import AccessDenied, OperationDenied
 from sss.persistence.repo_errors import RepoConflict, RepoError, RepoNotFound
 
-from webapp import security as _security
-from webapp.context import URL, redirect, request, response, session
-from webapp.security import client_ip as _client_ip
-from webapp.security import denied as _denied
-from webapp.security import not_found as _not_found
-from webapp.security import require_func as _require_func
-from webapp.security import require_method as _require_method
-from webapp.security import text as _text
+from sss.web.app import security as _security
+from sss.web.app.context import URL, redirect, request, response, session
+from sss.web.app.security import client_ip as _client_ip
+from sss.web.app.security import denied as _denied
+from sss.web.app.security import not_found as _not_found
+from sss.web.app.security import require_func as _require_func
+from sss.web.app.security import require_method as _require_method
+from sss.web.app.security import text as _text
 
 _log = _security.LOG
 

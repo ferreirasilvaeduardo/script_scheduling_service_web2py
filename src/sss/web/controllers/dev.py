@@ -6,9 +6,9 @@ import re
 from sss.config import app_context
 from sss.ui import ui_helpers
 
-from webapp.context import HTTP, URL, request, response
-from webapp.security import require_func as _require_func
-from webapp.security import require_login as _require_login
+from sss.web.app.context import HTTP, URL, request, response
+from sss.web.app.security import require_func as _require_func
+from sss.web.app.security import require_login as _require_login
 
 
 def _require_dev():
@@ -111,7 +111,7 @@ def _demo_form():
 def components():
     _require_login()
     _require_dev()
-    # POST chega aqui ja validado (CSRF + Origin) por webapp/security.py.
+    # POST chega aqui ja validado (CSRF + Origin) por app/security.py.
     if request.env.request_method not in ("GET", "HEAD", "POST"):
         raise HTTP(405)
     response.title = u"Componentes — SSS"

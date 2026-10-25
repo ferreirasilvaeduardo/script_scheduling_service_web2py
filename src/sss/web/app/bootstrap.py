@@ -15,15 +15,16 @@ from typing import Any, Callable, Dict, Mapping, Optional
 from sss.config import app_context
 from sss.core import masking
 from sss.config import sss_config
-from web import Application, Context, Route, SessionCodec, Settings, Templates
+from sss.web.framework import Application, Context, Route, SessionCodec, Settings, Templates
 
 from . import context, errors, security
 from .context import APPLICATION, URL
 
-APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-VIEWS_DIR = os.path.join(APP_DIR, "views")
-STATIC_DIR = os.path.join(APP_DIR, "static")
-DEV_CONTROLLER = os.path.join(APP_DIR, "controllers", "dev.py")
+# src/sss/web/ (CR-022b7): templates, estaticos e controllers ficam no pacote da camada web.
+WEB_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+VIEWS_DIR = os.path.join(WEB_DIR, "templates")
+STATIC_DIR = os.path.join(WEB_DIR, "static")
+DEV_CONTROLLER = os.path.join(WEB_DIR, "controllers", "dev.py")
 _TEMPLATES = Templates(VIEWS_DIR)
 
 
@@ -40,16 +41,16 @@ def load_config(path: Optional[str] = None) -> Any:
 def controllers(cfg: Any) -> Dict[str, ModuleType]:
     """Registro dos controllers, por import explicito."""
     # pylint: disable=import-outside-toplevel
-    from controllers import (admin_environments, admin_parameters, admin_profiles,
-                             admin_scripts, admin_users, audit, default, inputs, logs, outputs,
-                             schedules, tickets)
+    from sss.web.controllers import (admin_environments, admin_parameters, admin_profiles,
+                                     admin_scripts, admin_users, audit, default, inputs, logs,
+                                     outputs, schedules, tickets)
     registry = {module.__name__.rsplit(".", 1)[1]: module for module in (
         admin_environments, admin_parameters, admin_profiles, admin_scripts, admin_users, audit,
         default, inputs, logs, outputs, schedules, tickets)}
     if cfg.app.sss_env == "DEV" and os.path.isfile(DEV_CONTROLLER):
         # Fora do pacote de implantacao (README §12.2): so em DEV e so se estiver presente (achado
         # no ensaio do pacote do CR-021f3: sem o arquivo, o servidor nao subia).
-        from controllers import dev
+        from sss.web.controllers import dev
         registry["dev"] = dev
     return registry
 

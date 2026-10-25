@@ -2,7 +2,7 @@
 """Cadastro de scripts, homologacao e vinculo de parametros (README §4.3.A, §6.3, §8.5, MANAGE_SCRIPTS).
 
 Padrao em docs/ADMIN_CRUD_PATTERN.md. Regras ficam em modules/admin_scripts_service.py; CSRF e Origin
-de todo POST sao validados em webapp/security.py. Listas enviadas pelo cliente sao revalidadas inteiras.
+de todo POST sao validados em app/security.py. Listas enviadas pelo cliente sao revalidadas inteiras.
 """
 from sss.services import admin_crud
 from sss.services import admin_scripts_service as service
@@ -11,14 +11,14 @@ from sss.ui import ui_helpers
 from sss.services.admin_crud import AccessDenied, OperationDenied
 from sss.persistence.repo_errors import RepoConflict, RepoError, RepoNotFound
 
-from webapp import security as _security
-from webapp.context import URL, redirect, request, response, session
-from webapp.security import client_ip as _client_ip
-from webapp.security import denied as _denied
-from webapp.security import not_found as _not_found
-from webapp.security import require_func as _require_func
-from webapp.security import require_method as _require_method
-from webapp.security import text as _text
+from sss.web.app import security as _security
+from sss.web.app.context import URL, redirect, request, response, session
+from sss.web.app.security import client_ip as _client_ip
+from sss.web.app.security import denied as _denied
+from sss.web.app.security import not_found as _not_found
+from sss.web.app.security import require_func as _require_func
+from sss.web.app.security import require_method as _require_method
+from sss.web.app.security import text as _text
 
 _log = _security.LOG
 

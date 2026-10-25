@@ -8,10 +8,10 @@ escape=False)``, ``{{=x}}`` vira ``response.write(x)``, codigo entra linha a lin
 'return'/'continue'/'break'/'raise' voltam na linha seguinte). A paridade e conferida em
 test_web_template.py nas views reais.
 
-Unica excecao a proibicao de exec do projeto (AGENTS §2.1): so codigo gerado de arquivos dentro de
-``views/`` (caminho real conferido), com ``include``/``extend`` so por nome literal (o yatl fazia
-eval da expressao; aqui expressao e recusada). ``block``, ``super`` e ``end`` nao sao usados e sao
-recusados.
+Unica excecao a proibicao de exec do projeto (AGENTS §2.1): so codigo gerado de arquivos dentro
+de ``templates/`` (caminho real conferido), com ``include``/``extend`` so por nome literal (o yatl
+fazia eval da expressao; aqui expressao e recusada). ``block``, ``super`` e ``end`` nao sao usados
+e sao recusados.
 """
 import ast
 import os
@@ -62,12 +62,12 @@ class _Loader:
         self.dependencies: List[str] = []
 
     def path(self, name: str) -> str:
-        """Caminho real de uma view pelo nome; fora de views/ ou fora do formato e erro."""
+        """Caminho real de uma view pelo nome; fora de templates/ ou fora do formato e erro."""
         if not _RE_VIEW_NAME.fullmatch(name):
             raise TemplateError(f"nome de view fora do formato: {name!r}")
         real = os.path.realpath(os.path.join(self.root, *name.split("/")))
         if os.path.commonpath([self.root, real]) != self.root or not os.path.isfile(real):
-            raise TemplateError(f"view inexistente ou fora de views/: {name!r}")
+            raise TemplateError(f"view inexistente ou fora de templates/: {name!r}")
         return real
 
     def read(self, name: str) -> str:
@@ -228,7 +228,7 @@ class Templates:  # pylint: disable=too-few-public-methods
                 text = handle.read()
             code, dependencies = generate(text, name, self.views_dir)
             try:
-                compiled = compile(code, f"views/{name}", "exec")
+                compiled = compile(code, f"templates/{name}", "exec")
             except SyntaxError as exc:
                 lines = code.split("\n")
                 inside = bool(exc.lineno) and exc.lineno <= len(lines)
@@ -244,6 +244,6 @@ class Templates:  # pylint: disable=too-few-public-methods
         compiled = self._compiled(name)
         response = context["response"]
         namespace = dict(context)
-        # Unico exec do projeto (D2): codigo gerado so de arquivos de views/, nunca de dado.
+        # Unico exec do projeto (D2): codigo gerado so de arquivos de templates/, nunca de dado.
         exec(compiled, namespace)  # pylint: disable=exec-used
         return response.take_view_output()

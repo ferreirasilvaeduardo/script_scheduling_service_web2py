@@ -471,6 +471,25 @@ RODADAS["20261025_r5"] = {
     "servidor_web": u"servidor web próprio (scripts/run_web.py), código em src/sss (CR-022b)",
     "registros": RODADAS["20261023_r3"]["registros"],
 }
+RODADAS["20261025_r6"] = {
+    "commit": u"1775507 (CR-022b6: camada scheduler em src/sss) mais o CR-022b7 (camada web em src/sss), "
+              u"no mesmo commit deste documento",
+    "adaptacao": RODADAS["20261024_r2"]["adaptacao"],
+    "ressalva": RODADAS["20261024_r2"]["ressalva"],
+    "defeitos": [],
+    "observacoes": [
+        u"Rodada do CR-022b7, depois de mover para o pacote src/sss a camada web: núcleo (framework), montagem "
+        u"(app), controllers, templates e arquivos estáticos. As URLs não mudaram; todas as telas e estáticos "
+        u"desta rodada saem das pastas novas. Servidor web pelo bin/start_local.sh, agente pelo "
+        u"bin/sss-scheduler.sh, Oracle. Marca %s." % STAMP,
+        RODADAS["20261025_r4"]["observacoes"][1],
+        RODADAS["20261024_r6"]["observacoes"][2],
+    ],
+    "agente": RODADAS["20261024_r4"]["agente"],
+    "senhas": RODADAS["20261024_r2"]["senhas"],
+    "servidor_web": u"servidor web próprio (scripts/run_web.py), código em src/sss (CR-022b)",
+    "registros": RODADAS["20261023_r3"]["registros"],
+}
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]

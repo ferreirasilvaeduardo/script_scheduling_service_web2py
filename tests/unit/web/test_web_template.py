@@ -14,12 +14,12 @@ import time
 import unittest
 
 from tests.support import _testenv  # noqa: F401 - ajusta sys.path (modules/ e a raiz da aplicacao)
-from web import template
-from web.markup import Markup, escape
-from web.response import Response
+from sss.web.framework import template
+from sss.web.framework.markup import Markup, escape
+from sss.web.framework.response import Response
 
 APP_DIR = _testenv.APP_DIR
-VIEWS_DIR = os.path.join(APP_DIR, "views")
+VIEWS_DIR = os.path.join(_testenv.WEB_DIR, "templates")
 
 
 def _views():
@@ -183,7 +183,7 @@ class SecurityTest(_ViewsCase):
         with io.open(outside, "w") as handle:
             handle.write("fora")
         os.symlink(outside, os.path.join(self.views, "link.html"))
-        self.assertRefused("{{include 'link.html'}}", "fora de views/")
+        self.assertRefused("{{include 'link.html'}}", "fora de templates/")
 
     def test_unsupported_tags(self):
         """block, end e super nao sao usados e sao recusados."""

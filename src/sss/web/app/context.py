@@ -3,14 +3,14 @@
 
 Os controllers importam estes nomes no lugar dos globais que o web2py injetava; cada thread do
 servidor atende uma requisicao por vez, e o hook inicial do app (``bind``) aponta os objetos para a
-dela. So ``webapp/`` e ``controllers/`` importam este modulo: ``modules/`` nunca le a requisicao
+dela. So ``app/`` e ``controllers/`` importam este modulo: o resto do pacote nunca le a requisicao
 (AGENTS §5).
 """
 import re
 import threading
 from typing import Any, Dict, Iterable, Mapping, Optional
 
-from web import HTTP, Context, Markup, redirect, url
+from sss.web.framework import HTTP, Context, Markup, redirect, url
 
 __all__ = ["APPLICATION", "HTTP", "URL", "bind", "redirect", "request", "response", "session",
            "set_user", "user"]

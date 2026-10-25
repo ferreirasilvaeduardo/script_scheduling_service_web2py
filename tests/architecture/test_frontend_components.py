@@ -15,13 +15,13 @@ import os
 import re
 import unittest
 
-from tests.support import _testenv  # noqa: F401 - ajusta sys.path sem importar gluon
+from tests.support import _testenv
 from sss.services import schedules_service
 
 APP_DIR = _testenv.APP_DIR
-VIEWS_DIR = os.path.join(APP_DIR, "views")
-JS_DIR = os.path.join(APP_DIR, "static", "js", "app")
-CSS_FILE = os.path.join(APP_DIR, "static", "css", "sss.css")
+VIEWS_DIR = os.path.join(_testenv.WEB_DIR, "templates")
+JS_DIR = os.path.join(_testenv.WEB_DIR, "static", "js", "app")
+CSS_FILE = os.path.join(_testenv.WEB_DIR, "static", "css", "sss.css")
 EVIDENCE_SCRIPT = os.path.join(APP_DIR, "dev", "homologation", "tools", "capture_evidence.js")
 UI_DIR = os.path.join(APP_DIR, "src", "sss", "ui")
 
@@ -87,7 +87,7 @@ class NoAlpineTest(unittest.TestCase):
 
     def test_alpine_bundle_is_gone(self):
         """O bundle do Alpine nao volta para static/js/."""
-        self.assertFalse(os.path.exists(os.path.join(APP_DIR, "static", "js", "alpine.min.js")))
+        self.assertFalse(os.path.exists(os.path.join(_testenv.WEB_DIR, "static", "js", "alpine.min.js")))
 
 
 class ComponentRegistryTest(unittest.TestCase):

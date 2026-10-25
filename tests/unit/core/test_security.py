@@ -8,7 +8,6 @@ import unittest
 
 from sss.core import security
 
-_MODULES = os.path.join(_testenv.APP_DIR, "modules")
 _RE_FORMATO = re.compile(r"pbkdf2_sha256\$200000\$[0-9a-f]{32}\$[0-9a-f]{64}")
 
 
@@ -107,7 +106,7 @@ class TestStripPasswords(unittest.TestCase):
 
     def test_controllers_nao_leem_senha_direto_de_request(self):
         # Regressao: login lia request.post_vars.get() do campo de senha e a senha ia parar no ticket de erro.
-        root = os.path.join(_testenv.APP_DIR, "controllers")
+        root = os.path.join(_testenv.WEB_DIR, "controllers")
         default = re.compile(r"request\.(post_vars|vars)\.get\(\s*[\'\"](password|current_password|new_password|confirmation)[\'\"]")
         for name in sorted(os.listdir(root)):
             if name.endswith(".py"):
@@ -243,7 +242,7 @@ class TestReferrerHeader(unittest.TestCase):
     """Regressao: 'no-referrer' faz o navegador enviar Origin: null e todo POST de formulario vira 403."""
 
     def test_referrer_policy_same_origin(self):
-        path = os.path.join(os.path.dirname(_MODULES), "webapp", "security.py")
+        path = os.path.join(_testenv.WEB_DIR, "app", "security.py")
         with open(path, encoding="utf-8") as f:
             code = f.read()
         self.assertRegex(code, r'"Referrer-Policy":\s*"same-origin"')
@@ -258,7 +257,7 @@ class TestTamanhoDoPost(unittest.TestCase):
 
     def test_limite_antes_da_leitura_do_corpo(self):
         # CR-021e: o hook confere o tamanho (_check_size) antes do CSRF, que le o corpo (post_vars).
-        path = os.path.join(os.path.dirname(_MODULES), "webapp", "security.py")
+        path = os.path.join(_testenv.WEB_DIR, "app", "security.py")
         with open(path, encoding="utf-8") as f:
             code = f.read()
         self.assertIn("raise HTTP(413)", code)

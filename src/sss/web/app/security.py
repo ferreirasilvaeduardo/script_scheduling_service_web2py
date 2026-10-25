@@ -20,7 +20,7 @@ from sss.config import sss_logging
 from sss.ui import ui_helpers
 from sss.ui import ui_menu
 from sss.persistence.repo_errors import RepoUnavailable
-from web import HTTP, Context, Markup, decode_path_info, escape, redirect
+from sss.web.framework import HTTP, Context, Markup, decode_path_info, escape, redirect
 
 from . import context
 from .context import URL, request, response, session

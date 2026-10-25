@@ -9,9 +9,9 @@ import unittest
 import wsgiref.util
 
 from tests.support import _testenv  # noqa: F401 - ajusta sys.path sem importar gluon
-from web.app import Application, Settings
-from web.errors import HTTP, redirect
-from web.session import COOKIE_NAME, SessionCodec
+from sss.web.framework.app import Application, Settings
+from sss.web.framework.errors import HTTP, redirect
+from sss.web.framework.session import COOKIE_NAME, SessionCodec
 
 APP = "script_scheduling_service"
 KEY = "chave-de-teste-com-mais-de-16-caracteres"

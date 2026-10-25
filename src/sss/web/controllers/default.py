@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Painel inicial, login e logout (README §4.2). CSRF e Origin de todo POST sao validados em webapp/security.py."""
+"""Painel inicial, login e logout (README §4.2). CSRF e Origin de todo POST sao validados em app/security.py."""
 import time
 
 from sss.services import agents_service
@@ -12,12 +12,12 @@ from sss.services import ticket_service
 from sss.ui import ui_helpers
 from sss.persistence.repo_errors import RepoError
 
-from webapp import context as _context
-from webapp import security as _security
-from webapp.context import URL, redirect, request, response, session
-from webapp.security import client_ip as _client_ip
-from webapp.security import require_login as _require_login
-from webapp.security import require_method as _require_method
+from sss.web.app import context as _context
+from sss.web.app import security as _security
+from sss.web.app.context import URL, redirect, request, response, session
+from sss.web.app.security import client_ip as _client_ip
+from sss.web.app.security import require_login as _require_login
+from sss.web.app.security import require_method as _require_method
 
 _log = _security.LOG
 

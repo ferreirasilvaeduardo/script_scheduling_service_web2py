@@ -28,9 +28,9 @@ for _path in (os.path.join(_APP_DIR, "modules"), os.path.join(_APP_DIR, "src"), 
 # pylint: disable=wrong-import-position
 from sss.platform import os_platform  # noqa: E402
 from sss.config import sss_config  # noqa: E402
-from web import make_server, serve  # noqa: E402
+from sss.web.framework import make_server, serve  # noqa: E402
 
-from webapp import bootstrap, security  # noqa: E402
+from sss.web.app import bootstrap, security  # noqa: E402
 
 # pylint: enable=wrong-import-position
 

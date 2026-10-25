@@ -19,9 +19,9 @@ if APP_DIR not in sys.path:
     sys.path.insert(0, APP_DIR)
 
 from sss.config import app_context  # noqa: E402
-from web import HTTP, Context, Markup, Request, Response, Route, Session  # noqa: E402
+from sss.web.framework import HTTP, Context, Markup, Request, Response, Route, Session  # noqa: E402
 
-from webapp import bootstrap, context, security  # noqa: E402
+from sss.web.app import bootstrap, context, security  # noqa: E402
 
 LOG = logging.getLogger("sss_test_webapp")
 LOG.addHandler(logging.NullHandler())
@@ -101,7 +101,7 @@ class RegistryTest(unittest.TestCase):
 
     def test_registry_matches_files_and_dev_only_in_dev(self):
         """Todo controllers/*.py esta no registro; o dev so com sss_env = DEV."""
-        files = {name[:-3] for name in os.listdir(os.path.join(APP_DIR, "controllers"))
+        files = {name[:-3] for name in os.listdir(os.path.join(_testenv.WEB_DIR, "controllers"))
                  if name.endswith(".py") and name != "__init__.py"}
         self.assertEqual(set(bootstrap.controllers(self._cfg("DEV"))), files)
         self.assertEqual(set(bootstrap.controllers(self._cfg("PROD"))), files - {"dev"})

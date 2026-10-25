@@ -14,7 +14,7 @@ import time
 import unittest
 
 from tests.support import _testenv  # noqa: F401 - ajusta sys.path sem importar gluon
-from web.server import make_server, serve
+from sss.web.framework.server import make_server, serve
 
 LOG = logging.getLogger("sss_test_web_server")
 LOG.addHandler(logging.NullHandler())

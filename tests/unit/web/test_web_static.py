@@ -7,8 +7,8 @@ import tempfile
 import unittest
 
 from tests.support import _testenv  # noqa: F401 - ajusta sys.path sem importar gluon
-from web import static
-from web.errors import HTTP
+from sss.web.framework import static
+from sss.web.framework.errors import HTTP
 
 
 class StaticTest(unittest.TestCase):

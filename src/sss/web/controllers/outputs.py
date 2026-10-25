@@ -10,13 +10,13 @@ from sss.services import output_browse_service as browse
 from sss.services.output_browse_service import InvalidRequest
 from sss.persistence.repo_errors import RepoError, RepoNotFound
 
-from webapp import security as _security
-from webapp.context import HTTP, request, response
-from webapp.security import client_ip as _client_ip
-from webapp.security import not_found as _not_found
-from webapp.security import require_func as _require_func
-from webapp.security import require_method as _require_method
-from webapp.security import text as _text
+from sss.web.app import security as _security
+from sss.web.app.context import HTTP, request, response
+from sss.web.app.security import client_ip as _client_ip
+from sss.web.app.security import not_found as _not_found
+from sss.web.app.security import require_func as _require_func
+from sss.web.app.security import require_method as _require_method
+from sss.web.app.security import text as _text
 
 _log = _security.LOG
 

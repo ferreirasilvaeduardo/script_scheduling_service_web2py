@@ -7,7 +7,7 @@ ocorrencia aparece para o suporte achar o erro no log (o stack trace nunca vai p
 from typing import Any, Callable, Dict, Optional
 
 from sss.ui import ui_helpers
-from web import Context
+from sss.web.framework import Context
 
 _MESSAGES = {
     400: ("O pedido enviado não é válido.", "Volte à página anterior e tente de novo."),

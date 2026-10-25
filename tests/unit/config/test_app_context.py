@@ -18,9 +18,10 @@ APP_DIR = _testenv.APP_DIR
 MODULES_DIR = os.path.join(APP_DIR, "modules")
 SRC_DIR = os.path.join(APP_DIR, "src")
 REPO_ROOT = APP_DIR  # CR-022a: a aplicacao e a raiz do repositorio
-# Codigo que roda: a aplicacao (sem docs/, que guarda o historico) e os launchers da raiz.
+# Codigo que roda: a aplicacao (sem docs/, que guarda o historico) e os launchers da raiz. Desde o CR-022b7
+# controllers, templates e a camada web ficam em src/ (antes controllers/, views/ e webapp/ na raiz).
 CODE_DIRS = (os.path.join(REPO_ROOT, "bin"),) + tuple(
-    os.path.join(APP_DIR, name) for name in ("controllers", "modules", "scripts", "tests", "views", "webapp"))
+    os.path.join(APP_DIR, name) for name in ("modules", "scripts", "src", "tests", "tools"))
 _RE_OLD_CONTEXT = re.compile(r"\bcurrent\.(?:sss_cfg|repo_factory)\b")
 
 
@@ -110,6 +111,8 @@ class ModulesWithoutGluonTest(unittest.TestCase):
         """Regressao: o bin/start_local.sh ainda lia current.sss_cfg depois do CR-021c e nao subia."""
         offenders = []
         this_file = os.path.abspath(__file__)
+        # Pasta ausente faria a regra passar sem conferir nada (achado no CR-022b7).
+        self.assertEqual([top for top in CODE_DIRS if not os.path.isdir(top)], [])
         for top in CODE_DIRS:
             for base, _dirs, files in os.walk(top):
                 for name in files:

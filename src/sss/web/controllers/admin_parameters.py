@@ -2,7 +2,7 @@
 """Dicionario de parametros (README §6, MANAGE_PARAMETERS). Padrao em docs/ADMIN_CRUD_PATTERN.md.
 
 Regras ficam em modules/admin_parameters_service.py; CSRF e Origin de todo POST sao validados em
-webapp/security.py. O editor de opcoes do cliente e conveniencia: o servidor revalida tudo.
+app/security.py. O editor de opcoes do cliente e conveniencia: o servidor revalida tudo.
 """
 from sss.services import admin_crud
 from sss.services import admin_parameters_service as service
@@ -10,14 +10,14 @@ from sss.ui import ui_helpers
 from sss.services.admin_crud import AccessDenied, OperationDenied
 from sss.persistence.repo_errors import RepoConflict, RepoError, RepoNotFound
 
-from webapp import security as _security
-from webapp.context import URL, redirect, request, response, session
-from webapp.security import client_ip as _client_ip
-from webapp.security import denied as _denied
-from webapp.security import not_found as _not_found
-from webapp.security import require_func as _require_func
-from webapp.security import require_method as _require_method
-from webapp.security import text as _text
+from sss.web.app import security as _security
+from sss.web.app.context import URL, redirect, request, response, session
+from sss.web.app.security import client_ip as _client_ip
+from sss.web.app.security import denied as _denied
+from sss.web.app.security import not_found as _not_found
+from sss.web.app.security import require_func as _require_func
+from sss.web.app.security import require_method as _require_method
+from sss.web.app.security import text as _text
 
 _log = _security.LOG
 

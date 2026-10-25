@@ -107,10 +107,10 @@ sha256sum -c SHA256SUMS                       # esperado: "sss-<versao>.tar.gz: 
 tar -xzf sss-<versao>.tar.gz -C /opt/sss
 mv /opt/sss/sss-<versao> /opt/sss/app         # na atualização, veja o §18
 cd /opt/sss/app && sha256sum -c --quiet SHA256SUMS && echo "conteúdo confere"
-ls                                            # esperado: AGENTS.md README.md SHA256SUMS bin controllers docs instance modules scripts static views webapp
+ls                                            # esperado: AGENTS.md README.md SHA256SUMS bin docs instance modules scripts src
 ```
 
-O pacote só tem o `bin/` e a aplicação: sem web2py (CR-021f), sem `controllers/dev.py`, sem `repo_fake` e sem testes. O servidor web é o `scripts/run_web.py` da própria aplicação, e a raiz `/` leva ao login.
+O pacote só tem o `bin/` e a aplicação (o código, os templates e os estáticos ficam em `src/sss/`, CR-022b): sem web2py (CR-021f), sem `src/sss/web/controllers/dev.py`, sem o FAKE (`src/sss/persistence/fake/`) e sem testes. O servidor web é o `scripts/run_web.py` da própria aplicação, e a raiz `/` leva ao login.
 
 ---
 
@@ -743,7 +743,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 - [ ] `[logging] level = INFO`
 - [ ] `fence_timeout_s` e `node_offline_timeout_s` iguais em todos os agentes, conferidos pela linha `tempos do fencing` de cada um
 - [ ] Combinação de driver registrada (linha `driver=... modo=... servidor=... cliente=...` de cada servidor)
-- [ ] `ls /opt/sss/app` sem `applications/`, `gluon/` nem `web2py.py`; `curl .../admin/...` dá 404; `controllers/dev.py` ausente
+- [ ] `ls /opt/sss/app` sem `applications/`, `gluon/` nem `web2py.py`; `curl .../admin/...` dá 404; `src/sss/web/controllers/dev.py` ausente
 - [ ] `secrets.cfg` com `0600` e dono `sss`, só com as seções do papel
 - [ ] Helper em `/opt/sss/bin/sss-helper` (root, `0755`) e `sudoers` de cada usuário de execução (§8)
 - [ ] Com `output_dir`, `input_dir` ou `script_work_dir`: a pasta de cada ambiente atendido criada pelo root, do usuário de execução, `0700` (§8)
@@ -780,7 +780,7 @@ Para demonstração ou homologação interna, web e agente podem ficar no mesmo 
 * `purge_user` vazio desliga o purge (código 2, §12).
 * Siga o §3 (pacote), o §7 (configuração), o §10.1 e o §10.2 (subida), o §10.4 (túnel SSH) e o §11 (validação). **Esse é o cenário ensaiado em 2026-10-21.**
 
-Os scripts `bin/start_local.sh` e `bin/stop_local.sh` do repositório são só da máquina de desenvolvimento e não vêm no pacote. Um DEV instalado pelo pacote não tem a vitrine `/dev/...` (o `controllers/dev.py` não vai no pacote): ela responde 404, e o resto sobe normalmente (CR-021f3).
+Os scripts `bin/start_local.sh` e `bin/stop_local.sh` do repositório são só da máquina de desenvolvimento e não vêm no pacote. Um DEV instalado pelo pacote não tem a vitrine `/dev/...` (o `src/sss/web/controllers/dev.py` não vai no pacote): ela responde 404, e o resto sobe normalmente (CR-021f3).
 
 ---
 

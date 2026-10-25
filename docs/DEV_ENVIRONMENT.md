@@ -88,9 +88,9 @@ O SSS adota arquitetura de frontend **100% hermética**, em conformidade com pol
 
 * **Sem conexões externas:** É estritamente proibido o uso de CDNs, Google Fonts, diretivas `@import` remotas ou quaisquer recursos baixados da internet em tempo de execução.
 * **Bootstrap 5.3.8:** Fornecido localmente nos caminhos:
-  * `static/bootstrap/bootstrap.min.css`
-  * `static/bootstrap/bootstrap.bundle.min.js`
-* **JavaScript próprio, sem framework:** `static/js/app/`, com o `dom.js` carregado primeiro (AGENTS §2.3). O Alpine.js saiu no CR-021.
+  * `src/sss/web/static/bootstrap/bootstrap.min.css`
+  * `src/sss/web/static/bootstrap/bootstrap.bundle.min.js`
+* **JavaScript próprio, sem framework:** `src/sss/web/static/js/app/`, com o `dom.js` carregado primeiro (AGENTS §2.3). O Alpine.js saiu no CR-021.
 
 ---
 

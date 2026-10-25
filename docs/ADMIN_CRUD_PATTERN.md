@@ -2,10 +2,10 @@
 
 Este padrão foi definido no F4.1 (ambientes) e vale para todos os cadastros do F4.2 ao F4.5. A referência de implementação está em:
 
-* `controllers/admin_environments.py`
+* `src/sss/web/controllers/admin_environments.py`
 * `src/sss/services/admin_environments_service.py`
 * `src/sss/services/admin_crud.py`
-* `views/admin_environments/`
+* `src/sss/web/templates/admin_environments/`
 
 As regras de negócio estão no README §4.4 e §10 (padrões globais e tabela 1).
 
@@ -13,7 +13,7 @@ As regras de negócio estão no README §4.4 e §10 (padrões globais e tabela 1
 
 | Camada | Arquivo | Responsabilidade |
 |---|---|---|
-| Controller | `controllers/admin_<entidade>.py` | Aplica o guarda `_require_func('<FUNC>')`, restringe o método HTTP, lê `request.vars` com um teto defensivo por campo (sempre **acima** do limite do campo, para que o service veja o excesso e o recuse; nada é cortado sem aviso), chama o service, define o flash e renderiza ou redireciona. Não contém regra de negócio. |
+| Controller | `src/sss/web/controllers/admin_<entidade>.py` | Aplica o guarda `_require_func('<FUNC>')`, restringe o método HTTP, lê `request.vars` com um teto defensivo por campo (sempre **acima** do limite do campo, para que o service veja o excesso e o recuse; nada é cortado sem aviso), chama o service, define o flash e renderiza ou redireciona. Não contém regra de negócio. |
 | Service | `src/sss/services/admin_<entity>_service.py` | Não importa `gluon` e recebe `ctx` e `ip` como parâmetros. Reconfirma a funcionalidade com `admin_crud.require_feature`, valida os campos, calcula a versão e o detalhe de auditoria e chama o repositório. O serviço padrão do processo é obtido sob demanda (`_servico()`). |
 | Base comum | `src/sss/services/admin_crud.py` | Fornece `version` (com `sensiveis=`), `esperado`, `texto`, `identificador`, `free_text`, `changes_detail`, `insert_detail`, `free_detail`, `auditoria`, `AccessDenied`, `OperationDenied` e as mensagens padrão (`MSG_CONFLICT` vem de `ui_helpers.MESSAGES`). |
 | Repositório | `repo_<agregado>` | A inclusão e a alteração recebem `audit=` e gravam a linha de `tbsss_audit` na **mesma** operação. A alteração recebe `esperado=` e faz um `UPDATE` condicional. O ator da auditoria também preenche as colunas de registro (`created_*` na inclusão, `updated_*` na alteração; CR-006, README §10); sem ator, a gravação é recusada. |

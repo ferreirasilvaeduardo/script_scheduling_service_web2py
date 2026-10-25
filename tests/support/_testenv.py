@@ -11,6 +11,8 @@ import sys
 _support_dir = os.path.dirname(os.path.abspath(__file__))
 _app_dir = os.path.dirname(os.path.dirname(_support_dir))
 APP_DIR = _app_dir
+# Camada web (CR-022b7): controllers, templates e estaticos ficam em src/sss/web/
+WEB_DIR = os.path.join(_app_dir, "src", "sss", "web")
 _modules_dir = os.path.join(_app_dir, "modules")
 # Pacote da aplicacao (CR-022b3): imports qualificados (from sss.core import masking)
 _src_dir = os.path.join(_app_dir, "src")

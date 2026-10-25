@@ -21,9 +21,9 @@ TOKEN_EXCEPTION_FILES = {
 }
 
 # Excecao por caminho (relativo a aplicacao) e so para o token indicado: o motor de templates e o
-# unico lugar com exec, so para o codigo gerado de arquivos de views/ (CR-021, D2).
+# unico lugar com exec, so para o codigo gerado de arquivos de templates/ (CR-021, D2; CR-022b7).
 TOKEN_EXCEPTIONS_BY_PATH = {
-    "modules/web/template.py": {"uso de 'exec()' proibido"},
+    "src/sss/web/framework/template.py": {"uso de 'exec()' proibido"},
 }
 
 # Tokens e chamadas proibidos em Python 3.6 / SSS (AGENTS §2.1, §3.2, §3.4)
@@ -356,12 +356,15 @@ class TestPy36Compat(unittest.TestCase):
         )
 
     def test_ausencia_urls_externas_frontend(self):
-        """Verifica que static/js/app/, static/css/ e views/ nao contem http:// ou https://."""
+        """Verifica que static/js/app/, static/css/ e templates/ (src/sss/web/) nao contem http:// ou https://."""
+        web_dir = os.path.join(self.app_dir, "src", "sss", "web")
         directories_target = [
-            os.path.join(self.app_dir, "static", "js", "app"),
-            os.path.join(self.app_dir, "static", "css"),
-            os.path.join(self.app_dir, "views"),
+            os.path.join(web_dir, "static", "js", "app"),
+            os.path.join(web_dir, "static", "css"),
+            os.path.join(web_dir, "templates"),
         ]
+        # Pasta ausente faria a regra passar sem conferir nada (achado no CR-022b7).
+        self.assertEqual([d for d in directories_target if not os.path.isdir(d)], [])
 
         files_for_check = []
         for d in directories_target:
@@ -387,7 +390,7 @@ class TestPy36Compat(unittest.TestCase):
         )
 
     def test_exec_and_compile_only_in_template_engine(self):
-        """CR-021 D2: exec() so no modules/web/template.py; compile() tambem, salvo nos testes.
+        """CR-021 D2: exec() so no motor de templates; compile() tambem, salvo nos testes.
 
         Teste pode usar compile() so para conferir sintaxe (ex.: test_sss_helper), sem executar.
         """
@@ -403,8 +406,8 @@ class TestPy36Compat(unittest.TestCase):
                 name = getattr(getattr(node, "func", None), "id", None) if isinstance(node, ast.Call) else None
                 if name == "exec" or (name == "compile" and not is_test):
                     found.append((relative, name))
-        self.assertEqual(sorted(found), [("modules/web/template.py", "compile"),
-                                         ("modules/web/template.py", "exec")])
+        self.assertEqual(sorted(found), [("src/sss/web/framework/template.py", "compile"),
+                                         ("src/sss/web/framework/template.py", "exec")])
 
     def test_negativo_detector_tokens_proibidos(self):
         """Verifica se detector de tokens proibidos identifica casos sinteticos."""

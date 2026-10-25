@@ -34,9 +34,10 @@ class TestPack(unittest.TestCase):
             "bin/sss-web.sh": "#!/bin/bash\n", "bin/sss-scheduler.sh": "#!/bin/bash\n",
             "bin/sss-stop.sh": "#!/bin/bash\n", "bin/sss-helper": "#!/usr/bin/env python3\n",
             "bin/start_local.sh": "#!/bin/bash\n", "CLAUDE.md": "x", "parameters_8000.py": "x",
-            "controllers/default.py": "# default\n", "controllers/dev.py": "# dev\n",
-            "scripts/run_web.py": "# servidor\n", "webapp/bootstrap.py": "# web\n",
-            "views/dev/index.html": "x", "dev/scripts/a.py": "x",
+            "src/sss/web/controllers/default.py": "# default\n", "src/sss/web/controllers/dev.py": "# dev\n",
+            "scripts/run_web.py": "# servidor\n", "src/sss/web/app/bootstrap.py": "# web\n",
+            "src/sss/web/templates/dev/index.html": "x", "src/sss/web/templates/layout.html": "x",
+            "src/sss/web/static/css/sss.css": "x", "dev/scripts/a.py": "x",
             "src/sss/persistence/fake/__init__.py": "x", "modules/repo_fake/__init__.py": "x", "src/sss/__init__.py": "", "src/sss/config/__init__.py": "",
             "src/sss/config/sss_config.py": "x",
             "instance/config.ini": "[oracle]\nuser = sss_web\n",
@@ -100,14 +101,16 @@ class TestPack(unittest.TestCase):
         self.assertEqual((members["bin/sss-helper"].uid, members["scripts/run_web.py"].mode),
                          (0, 0o644))
         for rel in ("bin/sss-web.sh", "bin/sss-scheduler.sh", "bin/sss-stop.sh",
-                    "controllers/default.py", "scripts/run_web.py",
-                    "webapp/bootstrap.py", "scripts/purge.py",
+                    "src/sss/web/controllers/default.py", "scripts/run_web.py",
+                    "src/sss/web/app/bootstrap.py", "src/sss/web/templates/layout.html",
+                    "src/sss/web/static/css/sss.css", "scripts/purge.py",
                     "instance/config.ini.example", "instance/secrets.cfg.example",
                     "docs/DEPLOYMENT.md"):
             self.assertIn(rel, files)
         forbidden = [n for n in members if any(n == p or n.startswith(p + "/") for p in (
-            "applications", "deposit", "logs", "site-packages", "scripts/logs", "work", "dev", "views/dev",
-            "src/sss/persistence/fake", "modules/repo_fake", "controllers/dev.py", "instance/config.ini", "scripts/test_purge.py",
+            "applications", "deposit", "logs", "site-packages", "scripts/logs", "work", "dev", "src/sss/web/templates/dev",
+            "src/sss/persistence/fake", "modules/repo_fake", "src/sss/web/controllers/dev.py", "instance/config.ini",
+            "scripts/test_purge.py",
             "tests", "tools", "sessions", "errors"))]
         self.assertEqual(forbidden, [])
         # CR-021f: nada do web2py, nem pasta de runtime vazia
@@ -168,7 +171,7 @@ class TestPack(unittest.TestCase):
         self.assertEqual(self._main()[0], 0, "sem os restos, o pacote sai")
 
     def test_verificar_codigo_de_dev_e_admin(self):
-        problems = empacotar.check(["controllers/dev.py", "src/sss/persistence/fake/a.py",
+        problems = empacotar.check(["src/sss/web/controllers/dev.py", "src/sss/persistence/fake/a.py",
                                         "applications/admin/x.py", "deposit/x", "sessions/s",
                                         "gluon/main.py", "web2py.py"], lambda rel: b"")
         self.assertEqual(len(problems), 7, problems)
@@ -193,9 +196,12 @@ class TestPack(unittest.TestCase):
     def test_pacote_da_arvore_real_sem_segredo_nem_dev(self):
         # Coleta da propria arvore: as regras de inclusao nunca puxam DEV, testes nem runtime.
         files, _problems = empacotar.collect(empacotar.DEFAULT_ROOT)
-        self.assertFalse([a for a in files if a.startswith("src/sss/persistence/fake/") or a.endswith("controllers/dev.py")
+        self.assertFalse([a for a in files if a.startswith(("src/sss/persistence/fake/", "src/sss/web/templates/dev/"))
+                          or a.endswith("controllers/dev.py")
                           or a.startswith(("tests/", "tools/", "scripts/test_")) or a.endswith("instance/config.ini")])
         self.assertIn("src/sss/persistence/oracle/purge.py", files)
+        self.assertIn("src/sss/web/templates/layout.html", files)
+        self.assertIn("src/sss/web/static/css/sss.css", files)
         self.assertIn("scripts/run_web.py", files)
         self.assertEqual(_problems, [], "a arvore real nao tem resto do web2py nem link (CR-021f)")
 

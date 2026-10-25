@@ -11,10 +11,10 @@ import unittest
 from urllib.parse import urlencode
 
 from sss.ui import ui_helpers
-from web.response import Response
-from web.template import Templates
+from sss.web.framework.response import Response
+from sss.web.framework.template import Templates
 
-_VIEWS = os.path.join(_testenv.APP_DIR, "views")
+_VIEWS = os.path.join(_testenv.WEB_DIR, "templates")
 _TEMPLATES = Templates(_VIEWS)
 
 

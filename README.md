@@ -29,7 +29,7 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 * **Python 3.6.0 ou superior**, só com a biblioteca padrão e o driver Oracle; **sem framework web** desde o CR-021 (`docs/architecture/CR-021-no-web2py-no-alpine.md`).
   * A sintaxe e a biblioteca padrão usadas são as da 3.6.0.
   * As versões validadas vão da 3.6.0 à 3.13, e a 3.6.8 é a referência de produção (AGENTS §2.1).
-  * O núcleo web é próprio (`modules/web/`: roteador, requisição e multipart em fluxo, resposta, sessão em cookie assinado, estáticos, motor de templates e servidor `wsgiref` com limite de threads), ligado à aplicação por `webapp/` e iniciado por `scripts/run_web.py`. As views mantêm a sintaxe de template do web2py (`{{=x}}`, `if`/`for`/`pass`, `extend`/`include`) e as URLs continuam `/script_scheduling_service/<controller>/<função>/<args>`.
+  * O núcleo web é próprio (`src/sss/web/framework/`: roteador, requisição e multipart em fluxo, resposta, sessão em cookie assinado, estáticos, motor de templates e servidor `wsgiref` com limite de threads), ligado à aplicação por `src/sss/web/app/` e iniciado por `scripts/run_web.py`. As views mantêm a sintaxe de template do web2py (`{{=x}}`, `if`/`for`/`pass`, `extend`/`include`) e as URLs continuam `/script_scheduling_service/<controller>/<função>/<args>`.
 * É proibido usar recursos de Python 3.7+. A lista normativa completa está no `AGENTS.md` §2.1.
 
 ### 2.2 Banco de dados
@@ -79,15 +79,15 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 
 ### 2.4 Frontend
 
-* HTML5, **Bootstrap 5.3.8** e JavaScript próprio, sem framework (o Alpine.js saiu no CR-021, `docs/architecture/CR-021-no-web2py-no-alpine.md`), servidos exclusivamente de `static/` com fontes locais.
-* **Identidade visual**, aplicada pelos tokens de `static/css/sss.css`:
+* HTML5, **Bootstrap 5.3.8** e JavaScript próprio, sem framework (o Alpine.js saiu no CR-021, `docs/architecture/CR-021-no-web2py-no-alpine.md`), servidos exclusivamente de `src/sss/web/static/` com fontes locais.
+* **Identidade visual**, aplicada pelos tokens de `src/sss/web/static/css/sss.css`:
   * **Cores:** Roxo Vivo `#5f0684` (ações primárias, links, cabeçalho), Azul Esverdeado `#4daf9a` (destaques, item ativo, faixa do cabeçalho) e Amarelo `#faba00` (avisos e faixa de ambiente). As variações claras e escuras do manual são usadas no modo escuro e nos estados de passar o mouse e de clique.
   * **Contraste:** todo par texto/fundo atende WCAG AA (≥ 4,5:1, verificado por `tests/architecture/test_color_contrast.py`). Por isso o Azul Esverdeado nunca é cor de texto sobre fundo claro (contraste de 2,6:1).
-  * **Tipografia:** Montserrat (OFL 1.1), em arquivos `woff2` locais em `static/fonts/montserrat/`, com a licença junto. A Cocomat Light do manual é comercial e não está disponível; os títulos usam Montserrat.
+  * **Tipografia:** Montserrat (OFL 1.1), em arquivos `woff2` locais em `src/sss/web/static/fonts/montserrat/`, com a licença junto. A Cocomat Light do manual é comercial e não está disponível; os títulos usam Montserrat.
   * **Formas:** cantos levemente arredondados (`--sss-radius: 8px`) e ícones com traço arredondado.
   * **Logo:** a logo oficial não é desenhada nem aproximada (o manual proíbe distorção). Ela só entra quando houver os arquivos oficiais.
 * Não há CDN, Google Fonts nem `@import` remoto.
-* **Componentes (CR-021, D7):** um componente é um elemento com `data-component="<nome>"`, montado uma vez no `DOMContentLoaded` pela fábrica registrada com `SSS.component(nome, fábrica)` em `static/js/app/` (base em `static/js/app/dom.js`). Os eventos chegam por delegação (`data-action`), os elementos por `data-ref` (e, dentro de um item copiado de um `<template>`, por `data-part`) e o texto só por `textContent`. Não há expressão no HTML, estado reativo nem `innerHTML`. Os modais são do Bootstrap, abertos e fechados por classe pelo `SSS.modal`, sem o JavaScript do Bootstrap. Campo que aparece conforme uma escolha declara em `data-types` os valores em que aparece (regra de agendamento).
+* **Componentes (CR-021, D7):** um componente é um elemento com `data-component="<nome>"`, montado uma vez no `DOMContentLoaded` pela fábrica registrada com `SSS.component(nome, fábrica)` em `src/sss/web/static/js/app/` (base em `src/sss/web/static/js/app/dom.js`). Os eventos chegam por delegação (`data-action`), os elementos por `data-ref` (e, dentro de um item copiado de um `<template>`, por `data-part`) e o texto só por `textContent`. Não há expressão no HTML, estado reativo nem `innerHTML`. Os modais são do Bootstrap, abertos e fechados por classe pelo `SSS.modal`, sem o JavaScript do Bootstrap. Campo que aparece conforme uma escolha declara em `data-types` os valores em que aparece (regra de agendamento).
 
 #### 2.4.1 Contrato de responsividade
 
@@ -286,7 +286,7 @@ Regras de topologia:
   * A regra vale para o **processo inteiro**, não só para o código do SSS. O daemon sobe por `scripts/run_scheduler.py`, em Python puro, sem o servidor web. A inicialização do daemon confere que só existe a thread principal (`threading.active_count() == 1`) antes do primeiro spawn, e aborta com CRITICAL se houver outra.
 * O nó web **nunca** sinaliza nem encerra processos do sistema operacional.
 * **Usuários do sistema operacional (CR-007, D1):** o nó web e o agente rodam com contas dedicadas, sem login interativo nem privilégio administrativo. O script de cada ambiente roda com o **usuário de execução** daquele ambiente (`[agent] exec_users`, §8.0), diferente do usuário do agente. O agente nunca roda como root e só troca de usuário pelo helper `sss-helper`, chamado por `sudo` com regra fixa. Assim, o script não lê os segredos, os logs nem o ambiente do agente.
-* O servidor web (`scripts/run_web.py`, CR-021e) e o daemon são processos separados; `webapp/` e os controllers não podem executar DDL, abrir conexão no import nem fazer I/O pesado.
+* O servidor web (`scripts/run_web.py`, CR-021e) e o daemon são processos separados; `src/sss/web/app/` e os controllers não podem executar DDL, abrir conexão no import nem fazer I/O pesado.
 
 ### 3.2 Estrutura de diretórios
 
@@ -302,8 +302,6 @@ bin/
   start_local.sh, stop_local.sh  # somente DEV, pelo sss-web.sh; fora do pacote
   sss-helper                  # [F8.0] helper de execução com o usuário de execução (run/term/kill/clean/stop-ticket/pack/clean-output/purge-output), instalado pelo root em /opt/sss/bin (§8.0, CR-007)
 ./                            # raiz do repositório = a própria aplicação (CR-022a; antes ficava em web2py/applications/script_scheduling_service/)
-  controllers/                # default.py (login), tickets.py, logs.py, agendamentos.py, admin_*.py, auditoria.py, dev.py (somente DEV)
-  webapp/                     # [CR-021e] camada web: requisição por thread e URL, sessão/CSRF/cabeçalhos/guardas, página de erro, montagem do servidor
   src/sss/                    # [CR-022b] pacote da aplicação, importado pelo nome qualificado (from sss.core import masking)
     config/                   # [CR-022b3] configuração, contexto do processo e caminhos de log
       sss_config.py           # parser e validação tipada do config.ini e do secrets.cfg
@@ -347,8 +345,13 @@ bin/
       log_pump.py             # [F8.2] arquivo local -> CLOB com mascaramento (§8.10)
       schedule_expansion.py   # [F8.4b] desdobro das regras de agendamento em tickets (§7)
       input_phase.py, output_phase.py  # entrega dos arquivos de entrada e empacotamento da saída (CR-020, CR-012)
-  modules/
-    web/                      # [CR-021d1/d2] núcleo web próprio (WSGI, request, multipart, response, sessão assinada, rotas, templates); ligado no CR-021e
+    web/                      # [CR-022b7] camada web; as URLs não dependem destas pastas
+      framework/              # [CR-021d1/d2] núcleo web próprio (WSGI, request, multipart, response, sessão assinada, rotas, templates); só biblioteca padrão
+      app/                    # [CR-021e] montagem: requisição por thread e URL, sessão/CSRF/cabeçalhos/guardas, página de erro, registro dos controllers
+      controllers/            # default.py (login), tickets.py, logs.py, schedules.py, admin_*.py, audit.py, inputs.py, outputs.py, dev.py (somente DEV)
+      templates/              # layout.html, components/*.html, <controller>/*.html e *.load (antes views/)
+      static/                 # bootstrap/, js/app/ (dom.js primeiro), css/, img/, fonts/; servidos em /script_scheduling_service/static/
+  modules/                    # só o __init__.py; sai no CR-022b8
   scripts/
     init_db.py                # [F7.1] bootstrap idempotente de DDL e seed, versão do esquema e migrações (§11)
     migrations/               # [F7.1] migrações numeradas m<NNNN>_<descricao>.py (§11.1, CR-007)
@@ -367,8 +370,6 @@ bin/
     functional/               # aplicação inteira por requisição ou com o servidor real
     architecture/             # regras lidas no código e nos documentos (Python 3.6, AST, pacote, contraste)
     support/                  # _testenv (sys.path e APP_DIR), _oracle_test_support, _output_memory
-  static/bootstrap/  static/js/app/ (dom.js primeiro)  static/css/  static/img/  static/fonts/
-  views/                      # layout.html, components/*.html, <controller>/*.html
   instance/config.ini         # configuração sem segredos (§12)
   dev/scripts/                # árvore de scripts de exemplo para DEV/testes (nunca implantada)
   dev/homologation/            # ferramentas de homologação: figuras do manual de UI Freeze e evidências reais no DEV
@@ -460,7 +461,7 @@ password = ...
   * O rehash da senha (iterações abaixo do vigente) é gravado na mesma operação do sucesso do login.
   * Senhas com mais de 1.024 caracteres são recusadas sem calcular o hash (proteção contra negação de serviço).
 * **Sessão:**
-  * Armazenada no cookie `sss_session` **assinado** (CR-021e, D1; `modules/web/session.py`): `v1.<payload>.<assinatura>`, JSON em base64url e HMAC-SHA256 com uma chave derivada do `cookie_key`. Dispensa banco e funciona com N nós web sem sessão aderente. O conteúdo pode ser lido por quem tem o cookie, mas não alterado; a revogação continua pelo `session_epoch`. Atributos `HttpOnly`, `SameSite=Lax`, `Path=/script_scheduling_service/` e `Secure` (com a exceção de DEV sobre HTTP). Cookie inválido vira sessão vazia, com o motivo em WARN. A troca do cookie do web2py pelo `sss_session` encerrou uma vez as sessões abertas.
+  * Armazenada no cookie `sss_session` **assinado** (CR-021e, D1; `src/sss/web/framework/session.py`): `v1.<payload>.<assinatura>`, JSON em base64url e HMAC-SHA256 com uma chave derivada do `cookie_key`. Dispensa banco e funciona com N nós web sem sessão aderente. O conteúdo pode ser lido por quem tem o cookie, mas não alterado; a revogação continua pelo `session_epoch`. Atributos `HttpOnly`, `SameSite=Lax`, `Path=/script_scheduling_service/` e `Secure` (com a exceção de DEV sobre HTTP). Cookie inválido vira sessão vazia, com o motivo em WARN. A troca do cookie do web2py pelo `sss_session` encerrou uma vez as sessões abertas.
   * O payload é mínimo: `user_id`, `login`, `profile_id`, `perm_version`, `session_epoch`, `login_at`, `csrf_token` e `last_access`.
   * A sessão é renovada no login (`session.renew()`).
   * O timeout por inatividade é `session_idle_timeout_s`. A expiração por inatividade é registrada só no log (INFO), sem auditoria.
@@ -988,7 +989,7 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
   * a **última execução** que o usuário pode ver: o nome simples da situação, "há {tempo}" e o link para o ticket. Sem nenhuma: "Ainda não rodou";
   * o link "Ver histórico".
 * **Leitura do catálogo (CR-018c):** os cartões, o disparo, "O que eu posso fazer" e a nova regra montam os ambientes de cada script a partir de um retrato único do catálogo por tela (`ticket_service._catalog_view`: a lista de ambientes e a de scripts, que traz a homologação em lote), sem ler a homologação e os ambientes script a script. A decisão continua em `rbac.can_execute`, ambiente a ambiente. Um script além do teto da listagem (1.000, o mesmo limite da matriz, §4.3.B.1) tem a homologação lida só para ele. Os vínculos de parâmetros (as perguntas de cada cartão) continuam lidos por script.
-* Uma busca no topo filtra os cartões por nome, descrição, grupo e categoria, no navegador (componente `scriptSearch`, `static/js/app/components.js`). A lista completa já vem do servidor. Os cartões ficam agrupados por grupo, como no disparo.
+* Uma busca no topo filtra os cartões por nome, descrição, grupo e categoria, no navegador (componente `scriptSearch`, `src/sss/web/static/js/app/components.js`). A lista completa já vem do servidor. Os cartões ficam agrupados por grupo, como no disparo.
 * O **escopo da última execução** é o mesmo da lista de tickets (§4.3.C): com `VIEW_LOGS`, os tickets dos ambientes autorizados (admin: todos); sem `VIEW_LOGS`, só os próprios.
 * **Contrato (leitura nova):** `RepoTickets.last_runs(script_ids, environment_scope=None, requested_by=None)` devolve `{script_id: {id, status, status_reason, created_at, finished_at}}` com o ticket mais recente (`created_at DESC, id DESC`) de cada script no escopo. No Oracle, a consulta usa `ix_tbsss_tck_scr` e um `ROW_NUMBER()` por script, que é sintaxe 11gR2 e não carrega `log_output`.
 * O menu Operação tem um único item para rodar, "Rodar um script" (`EXEC_SCRIPT`), que abre esta tela (CR-017b). A funcionalidade correspondente se chama "Rodar Scripts" (CR-018b), e o disparo abre pelos cartões.
@@ -1004,7 +1005,7 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
   * **duração típica** (mediana) e **mais demorada**, só dos que terminaram com `started_at`, em linguagem simples ("cerca de 4 minutos");
   * **gráfico de barras por dia**, empilhado por situação, como SVG gerado no servidor (`ui_helpers.stacked_bars`). As cores vêm por classe CSS e não há `style=` inline:
     * quatro séries, sempre na mesma ordem e com a mesma cor: Deu certo, Deu erro, Cancelado e Esperando ou rodando;
-    * as cores são tokens de `static/css/sss.css`, com valores próprios para o modo escuro:
+    * as cores são tokens de `src/sss/web/static/css/sss.css`, com valores próprios para o modo escuro:
 
       | Token | Série | Claro | Escuro |
       |---|---|---|---|
@@ -1041,7 +1042,7 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
 * **Níveis:** Ambientes (os do perfil, ativos) → Scripts (os do perfil, ativos e homologados no ambiente) → a pasta do script, com as subpastas navegáveis (`?dir=`). Fora do escopo ou parâmetro fora do formato: **404**.
 * **Pasta:** montada a partir dos retratos (`tbsss_input_listing`) de todos os agentes: subpastas, e cada arquivo com tamanho, data e os servidores em que está. Para cada agente, quando o retrato foi feito e se um novo foi pedido. **Atualizar retrato** (`inputs/refresh`, POST) pede um retrato novo a cada servidor no ar do ambiente.
 * **Enviar arquivo** (`inputs/upload`, POST multipart):
-  * arquivo, subpasta (preenchida com a pasta atual; em branco é a própria pasta do script) e **Substituir se já existir**. Com a caixa marcada, uma janela explica o efeito antes do envio (`static/js/app/inputs.js`; sem JavaScript, o envio segue direto, porque a caixa já é a escolha explícita);
+  * arquivo, subpasta (preenchida com a pasta atual; em branco é a própria pasta do script) e **Substituir se já existir**. Com a caixa marcada, uma janela explica o efeito antes do envio (`src/sss/web/static/js/app/inputs.js`; sem JavaScript, o envio segue direto, porque a caixa já é a escolha explícita);
   * nome e subpasta seguem a regra do helper `put-input` (§8.0) e são conferidos antes de gravar; o nome é o do arquivo no computador (só o último nível);
   * **tamanho máximo** `[web] input_upload_max_bytes` (padrão 50 MiB). O modelo de segurança recusa com **413** qualquer POST com `Content-Length` acima dele (mais 64 KiB de folga do formulário) **antes** de ler o corpo; o serviço confere de novo o tamanho real;
   * o SHA-256 é calculado na web e o envio vai para todos os agentes vivos do ambiente (§10, tabelas 19 e 20). Sem nenhum: "Nenhum servidor deste ambiente está no ar agora. Tente de novo mais tarde." e nada é gravado.
@@ -1445,7 +1446,7 @@ Todas recebem a conexão da transação do ciclo e nunca fazem `COMMIT` sozinhas
 
 ### 7.6 Cadastro de regras na UI (decisões do F5.2)
 
-Implementação: `controllers/schedules.py`, `src/sss/services/schedules_service.py` e `views/schedules/`. O questionário de parâmetros é o mesmo do disparo (`views/components/questionnaire.html`).
+Implementação: `src/sss/web/controllers/schedules.py`, `src/sss/services/schedules_service.py` e `src/sss/web/templates/schedules/`. O questionário de parâmetros é o mesmo do disparo (`src/sss/web/templates/components/questionnaire.html`).
 
 * **Validação estrita (sem truncamento):** todo campo recebido é validado no tamanho e no formato exatos. Um valor mais longo ou fora do formato é **recusado** com mensagem no campo, nunca cortado. Exemplos: dia do mês `100` ou `311`, hora `03:000`, data com segundos ou frações (`…T10:00:00.999`).
 * **Escolha de script e ambiente:** na inclusão, a escolha é feita em etapas e usa os mesmos filtros do disparo (§4.3.A): só aparecem scripts e ambientes em que o editor tem `can_execute`. Por isso, quem não é admin precisa também de `EXEC_SCRIPT`.
@@ -2938,14 +2939,14 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
 
 **Pacote de implantação (F9.1; sem web2py desde o CR-021f3):** `python tools/package.py [--source <raiz do repositório>] [--out-dir <pasta>]`, só com a biblioteca padrão. Fica em `tools/` (CR-022b2), fora do pacote que gera.
 * Gera `<saida>/sss-<version>.tar.gz` (padrão `<origem>/dist/`; versão `sss_config.SSS_VERSION`), com tudo sob `sss-<versao>/` e um `SHA256SUMS` de cada arquivo dentro do pacote, e `<saida>/SHA256SUMS` com o hash do `tar.gz` (`sha256sum -c SHA256SUMS`). O tar é reprodutível: ordem, dono (0), data e modos fixos (`0755` no `bin/`, `0644` nos demais arquivos).
-* **Entram (lista de permissão da raiz, CR-022a):** `bin/sss-web.sh`, `bin/sss-scheduler.sh`, `bin/sss-stop.sh`, `bin/sss-helper`, `AGENTS.md`, `README.md` e as pastas `controllers/`, `docs/`, `instance/` (só os `*.example`), `modules/`, `scripts/`, `src/` (CR-022b3), `static/`, `views/` e `webapp/`, todas no topo do pacote, como no repositório. O resto da raiz (`.git`, `Makefile`, `CLAUDE.md`, `dev/`, `input/`, `output/`, `logs/`, `work/`...) é da máquina de desenvolvimento e não entra. O servidor web é o `scripts/run_web.py` da própria aplicação; nada do web2py entra (nem pasta de runtime vazia), e `applications/` na origem recusa o pacote.
-* **Não entram:** `controllers/dev.py`, `views/dev/`, `dev/`, `src/sss/persistence/fake/`, `instance/config.ini`, `instance/web.env`, `log/`, `logs/`, `work/`, `exec/`, os testes (`tests/`, fora da lista de permissão desde o CR-022b1; um `scripts/test_*.py` perdido também fica fora), as ferramentas de build (`tools/`, CR-022b2), as pastas de runtime que o web2py criava dentro da aplicação numa cópia antiga (`sessions`, `errors`, `cache`, `databases`, `uploads`, `private`, `cron`, `applications`, `deposit`, `site-packages`), os launchers de DEV e os demais arquivos da raiz.
-* **Recusa** (código 1, sem gravar nada) se o pacote tiver um `secrets.cfg` real, `*.pyc`, `__pycache__`, `controllers/dev.py`, o FAKE (`src/sss/persistence/fake/`), outra aplicação (`/admin/`, `welcome`, `examples`), resto do web2py (`gluon/`, `web2py.py`, `anyserver.py` ou `routes.py` na raiz, ou pasta de runtime dele), link simbólico, ou `password`/`cookie_key` com valor em `.ini`, `.cfg`, `.ini.example` ou `.cfg.example` (pelo nome do arquivo). A única exceção é o valor exato `CHANGE_ME` em `instance/secrets.cfg.example`. A mensagem cita arquivo e linha, nunca o valor.
-* O `package.py` não grava bytecode (`sys.dont_write_bytecode`), para poder rodar de dentro da própria cópia que empacota (CR-021f3). Uma árvore de desenvolvimento sempre tem `__pycache__` e o `secrets.cfg` local, então o pacote é gerado de uma cópia limpa: `git archive HEAD | tar -x -C <pasta>` e `python <pasta>/scripts/package.py --source <pasta>`.
+* **Entram (lista de permissão da raiz, CR-022a):** `bin/sss-web.sh`, `bin/sss-scheduler.sh`, `bin/sss-stop.sh`, `bin/sss-helper`, `AGENTS.md`, `README.md` e as pastas `docs/`, `instance/` (só os `*.example`), `modules/`, `scripts/` e `src/` (CR-022b3; desde o CR-022b7 com a camada web, os templates e os estáticos em `src/sss/web/`), todas no topo do pacote, como no repositório. O resto da raiz (`.git`, `Makefile`, `CLAUDE.md`, `dev/`, `input/`, `output/`, `logs/`, `work/`...) é da máquina de desenvolvimento e não entra. O servidor web é o `scripts/run_web.py` da própria aplicação; nada do web2py entra (nem pasta de runtime vazia), e `applications/` na origem recusa o pacote.
+* **Não entram:** `src/sss/web/controllers/dev.py`, `src/sss/web/templates/dev/`, `dev/`, `src/sss/persistence/fake/`, `instance/config.ini`, `instance/web.env`, `log/`, `logs/`, `work/`, `exec/`, os testes (`tests/`, fora da lista de permissão desde o CR-022b1; um `scripts/test_*.py` perdido também fica fora), as ferramentas de build (`tools/`, CR-022b2), as pastas de runtime que o web2py criava dentro da aplicação numa cópia antiga (`sessions`, `errors`, `cache`, `databases`, `uploads`, `private`, `cron`, `applications`, `deposit`, `site-packages`), os launchers de DEV e os demais arquivos da raiz.
+* **Recusa** (código 1, sem gravar nada) se o pacote tiver um `secrets.cfg` real, `*.pyc`, `__pycache__`, `src/sss/web/controllers/dev.py`, o FAKE (`src/sss/persistence/fake/`), outra aplicação (`/admin/`, `welcome`, `examples`), resto do web2py (`gluon/`, `web2py.py`, `anyserver.py` ou `routes.py` na raiz, ou pasta de runtime dele), link simbólico, ou `password`/`cookie_key` com valor em `.ini`, `.cfg`, `.ini.example` ou `.cfg.example` (pelo nome do arquivo). A única exceção é o valor exato `CHANGE_ME` em `instance/secrets.cfg.example`. A mensagem cita arquivo e linha, nunca o valor.
+* O `package.py` não grava bytecode (`sys.dont_write_bytecode`), para poder rodar de dentro da própria cópia que empacota (CR-021f3). Uma árvore de desenvolvimento sempre tem `__pycache__` e o `secrets.cfg` local, então o pacote é gerado de uma cópia limpa: `git archive HEAD | tar -x -C <pasta>` e `python <pasta>/tools/package.py --source <pasta>`.
 
 **Sem web2py (CR-021f):** o repositório e o pacote não têm `gluon/`, `web2py.py`, `anyserver.py` nem `routes.py`, e o servidor não cria pastas de runtime (sessão em cookie assinado, erros no log da aplicação). Em HML e PROD:
 * só a aplicação `script_scheduling_service` existe, e `/` responde 303 para ela (§12.2);
-* `controllers/dev.py` não é implantado. Um DEV instalado pelo pacote sobe sem ele, e `/dev/...` responde 404.
+* `src/sss/web/controllers/dev.py` não é implantado. Um DEV instalado pelo pacote sobe sem ele, e `/dev/...` responde 404.
 
 ---
 
