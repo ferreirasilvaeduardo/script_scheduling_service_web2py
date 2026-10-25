@@ -183,10 +183,11 @@ format: check-deps
 	$(PYTHON) -m isort . --skip .pytest_cache --skip .bkp --skip .sql --skip sss_dev_script_examples --skip sss_packages
 	$(PYTHON) -m autopep8 --in-place --recursive --exclude .pytest_cache,.bkp,.sql,sss_dev_script_examples,sss_packages .
 
-# Análise estática de código (CR-022b9, D7): portão com zero achados nos arquivos versionados.
-# Configuração no .flake8 (99 colunas e a dívida por arquivo, que só diminui).
+# Análise estática de código (CR-022b9, D7): portão com zero achados na árvore inteira.
+# Configuração no .flake8 (99 colunas, a dívida por arquivo, que só diminui, e dev/scripts/ fora).
+# Sem lista de arquivos na linha de comando: o flake8 ignora o exclude para arquivo passado à mão.
 lint: check-dev-deps
-	$(PYTHON) -m flake8 $$(git ls-files '*.py')
+	$(PYTHON) -m flake8 .
 
 # pylint fora do portão (muito ruído na dívida atual); configuração no pyproject.toml
 lint-pylint: check-dev-deps

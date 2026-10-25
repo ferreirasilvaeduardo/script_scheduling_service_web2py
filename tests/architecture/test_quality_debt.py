@@ -21,15 +21,19 @@ from tests.support import _testenv
 APP_DIR = _testenv.APP_DIR
 MAX_COLUMNS = 99
 # Tetos medidos no CR-022b9 (2026-10-25); so podem descer.
-FLAKE8_DEBT_MAX = 200
+FLAKE8_DEBT_MAX = 192
 MYPY_DEBT_MAX = 107
+
+
+def _flake8_section(path=os.path.join(APP_DIR, ".flake8")):
+    parser = configparser.ConfigParser()
+    parser.read(path, encoding="utf-8")
+    return parser["flake8"]
 
 
 def _flake8_debt(path=os.path.join(APP_DIR, ".flake8")):
     """(max-line-length, {arquivo: {codigos}}) do .flake8."""
-    parser = configparser.ConfigParser()
-    parser.read(path, encoding="utf-8")
-    section = parser["flake8"]
+    section = _flake8_section(path)
     debt = {}
     for line in section.get("per-file-ignores", "").splitlines():
         if line.strip():
@@ -70,6 +74,12 @@ class QualityDebtTest(unittest.TestCase):
                       if "E501" in codes and os.path.isfile(os.path.join(APP_DIR, name))
                       and not _has_long_line(os.path.join(APP_DIR, name)))
         self.assertEqual(paid, [], "sem linha acima de 99 colunas: tire o E501 do .flake8")
+
+    def test_so_dev_scripts_fora_do_lint(self):
+        """A unica pasta fora do lint e dev/scripts/ (scripts de negocio que o SSS executa)."""
+        section = _flake8_section()
+        self.assertEqual(section.get("extend-exclude", "").strip(), "dev/scripts")
+        self.assertNotIn("exclude", section)
 
     def test_mypy_estrito_e_divida_real(self):
         text, modules = _mypy_config()

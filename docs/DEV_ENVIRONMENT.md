@@ -190,7 +190,7 @@ O `tests/support/_testenv.py` põe no `sys.path` a raiz da aplicação, `src/` (
 **Lint e tipos (CR-022b9, AGENTS §1):** `flake8`, `mypy`, `pylint`, `isort` e `autopep8` ficam no Python 3.11 da máquina de desenvolvimento (o 3.6 não tem as versões atuais), que não precisa de driver Oracle para isso:
 
 ```bash
-make lint PYTHON=~/.pyenv/versions/3.11.11/bin/python3        # flake8 nos .py versionados: zero achados
+make lint PYTHON=~/.pyenv/versions/3.11.11/bin/python3        # flake8 na árvore (fora dev/scripts/): zero achados
 make type-check PYTHON=~/.pyenv/versions/3.11.11/bin/python3  # mypy estrito em src/sss: zero achados
 ```
 

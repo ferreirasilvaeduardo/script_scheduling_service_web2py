@@ -1,21 +1,15 @@
 # Lint (CR-022b9, D7): 99 colunas para todo arquivo. Os arquivos de per-file-ignores tem divida
 # anterior ao CR-022b9 e ignoram so os codigos que ja violavam. A lista so diminui
 # (tests/architecture/test_quality_debt.py): ao limpar um arquivo, apague a linha dele.
-# Nunca acrescente arquivo nem codigo.
+# Nunca acrescente arquivo nem codigo. dev/scripts/ fica fora do lint: sao os scripts de negocio que o
+# SSS executa (exemplos e scripts do responsavel), nao a aplicacao, e nao vao no pacote.
 [flake8]
 max-line-length = 99
+extend-exclude = dev/scripts
 per-file-ignores =
     dev/homologation/tools/build_evidence_docx.py: E128,E302,E501,E741,F841
     dev/homologation/tools/update_docx_images.py: E261,E302,E305,E501,W293
     dev/homologation/tools/verify_docx_images.py: E501
-    dev/scripts/infra/longo.py: E501
-    dev/scripts/utilitarios/converter_encoding.py: E501
-    dev/scripts/utilitarios/descompactar_zip.py: E501
-    dev/scripts/utilitarios/gerar_hash_arquivo.py: E501
-    dev/scripts/utilitarios/juntar_arquivos.py: E501
-    dev/scripts/utilitarios/quebrar_arquivo.py: E501
-    dev/scripts/utilitarios/remover_duplicadas.py: E501
-    dev/scripts/utilitarios/zipar_arquivos.py: E501
     dev/web_harness/compare_servers.py: E501
     src/sss/__init__.py: E501
     src/sss/cli/check_env.py: E501
