@@ -92,7 +92,7 @@ class TestPackageLayout(unittest.TestCase):
             self.assertIn(name, moved)
 
     def test_detector_pega_import_curto(self):
-        """Caso negativo: o detector acha import, from, fallback de modules/ e import de template."""
+        """Caso negativo: o detector acha import, from, o antigo fallback de modules/ e import de template."""
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             py = os.path.join(tmp, "a.py")

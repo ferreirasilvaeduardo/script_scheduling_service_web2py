@@ -549,7 +549,7 @@ class TestRepoSchedulerLog(unittest.TestCase):
 _CHILD = r'''
 import json, os, sys, warnings
 warnings.simplefilter("ignore")
-sys.path[:0] = [sys.argv[1], os.path.join(os.path.dirname(sys.argv[1]), "src")]
+sys.path[:0] = [sys.argv[1]]
 from sss.persistence import db_conn
 from sss.config import sss_config
 from sss.persistence.oracle.scheduler_log import RepoSchedulerLog

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Contexto do processo (CR-021c): app_context no lugar do gluon.current.
 
-Confere o comportamento do modulo e as regras de arquitetura: nenhum arquivo de modules/ importa
+Confere o comportamento do modulo e as regras de arquitetura: nenhum arquivo de src/ importa
 gluon, nem dentro de funcao (AGENTS §5.2); desde o CR-021f, nenhum .py da aplicacao (scripts,
 testes e dev/ inclusive) nem dos launchers.
 """

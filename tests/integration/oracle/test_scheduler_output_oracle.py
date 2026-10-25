@@ -100,15 +100,15 @@ class TestSchedulerOutputOracle(unittest.TestCase):
         self.conn.rollback()
 
     def test_combinacoes_de_driver(self):
-        # O filho poe modules/ e src/ (irmao de modules/) no caminho (_CHILD)
-        modules = os.path.join(_testenv.APP_DIR, "modules")
+        # O filho poe src/ no caminho (_CHILD)
+        src = os.path.join(_testenv.APP_DIR, "src")
         part = bytes(bytearray(range(256))) * 1200
         results = {}
         for mode in ("thin", "thick", "cx_oracle"):
             tid = self._agent_ticket()
-            p = subprocess.run([sys.executable, "-c", _CHILD, modules, mode, str(tid), self.agent],
+            p = subprocess.run([sys.executable, "-c", _CHILD, src, mode, str(tid), self.agent],
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180,
-                               cwd=os.path.dirname(modules))
+                               cwd=_testenv.APP_DIR)
             rows = [x for x in p.stdout.decode("utf-8", "replace").splitlines() if x.startswith("{")]
             self.assertTrue(rows, "%s: %s" % (mode, p.stderr.decode("utf-8", "replace")[-500:]))
             output = json.loads(rows[-1])

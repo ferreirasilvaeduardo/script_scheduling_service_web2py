@@ -508,6 +508,24 @@ RODADAS["20261025_r7"] = {
     "servidor_web": u"servidor web próprio (scripts/run_web.py → sss.cli.run_web), código em src/sss (CR-022b)",
     "registros": RODADAS["20261023_r3"]["registros"],
 }
+RODADAS["20261025_r8"] = {
+    "commit": u"f76563a (CR-022b9: pyproject.toml, 99 colunas e mypy estrito graduais) mais o CR-022b10 "
+              u"(revisão da documentação e encerramento do CR-022b), no mesmo commit deste documento",
+    "adaptacao": RODADAS["20261024_r2"]["adaptacao"],
+    "ressalva": RODADAS["20261024_r2"]["ressalva"],
+    "defeitos": [],
+    "observacoes": [
+        u"Rodada final do CR-022b (estrutura padrão): todo o código em src/sss, scripts/ só com os involucros, "
+        u"portões de lint e de tipos com zero achados. Servidor web pelo bin/start_local.sh, agente pelo "
+        u"bin/sss-scheduler.sh, Oracle. Marca %s." % STAMP,
+        RODADAS["20261025_r4"]["observacoes"][1],
+        RODADAS["20261024_r6"]["observacoes"][2],
+    ],
+    "agente": RODADAS["20261024_r4"]["agente"],
+    "senhas": RODADAS["20261024_r2"]["senhas"],
+    "servidor_web": u"servidor web próprio (scripts/run_web.py → sss.cli.run_web), código em src/sss (CR-022b)",
+    "registros": RODADAS["20261023_r3"]["registros"],
+}
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]

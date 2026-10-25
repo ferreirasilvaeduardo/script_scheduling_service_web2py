@@ -198,7 +198,7 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
 * **Exceção documentada (F7.3, AGENDAMENTOS):** `RepoSchedules.list` traz o `params_json` (CLOB pequeno com as respostas da regra), porque o service avalia cada regra com ele (tela de regras e Agenda). Ler por `get` faria uma consulta por regra ativa. Nenhuma listagem traz `log_output`.
 * **Concorrência das transições no FAKE:** as transições web de ticket rodam sob o lock do agregado, então o FAKE nunca chega a perder uma corrida. O tratamento de `rowcount = 0` (`RepoConflict`) nessas transições só é exercitado pelo `test_repo_contract.py` contra o Oracle (F7.3).
 * **Exceções de contrato** (`src/sss/persistence/repo_errors.py`): `RepoError`, `RepoNotFound`, `RepoConflict`, `RepoViolation` e `RepoUnavailable`.
-* A suíte `tests/unit/persistence/test_repo_contract.py` roda **a mesma bateria** contra os dois backends. Contra ORACLE, ela só executa se `SSS_TEST_DSN` estiver definido.
+* A suíte `tests/unit/persistence/test_repo_contract.py` roda **a mesma bateria** contra os dois backends. Contra ORACLE, ela só executa com `SSS_TEST_ORACLE=1` (abaixo).
 * **Testes Oracle reais: uma chave só, `SSS_TEST_ORACLE=1`** (`tests/support/_oracle_test_support.py`).
   * **Origem dos parâmetros:** owner, prefixo, DSN e conta vêm só do `instance/config.ini`, os mesmos da aplicação. Nada é repetido em variáveis de ambiente.
   * **Recusas antes de qualquer conexão:** sem a chave, os testes de banco ficam pulados (`NÃO TESTADO`). Fora de `sss_env = DEV`, ou com `[oracle] dsn`/`owner` inválidos, a execução é recusada. As variáveis da versão anterior (`SSS_TEST_DSN`, `SSS_TEST_OWNER`, `SSS_TEST_CONFIG`, `SSS_TEST_SCHEMA_DISPOSABLE`, `SSS_TEST_SCHEMA_COMPARTILHADO`) também são recusadas, para não serem ignoradas em silêncio.
@@ -238,7 +238,7 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
 
 * O SQL é escrito diretamente na sintaxe aceita pelo **Oracle 11gR2**, em `src/sss/persistence/oracle/`. O CR-002 revogou a camada de dialeto e o SQL ANSI do CR-001.
 * **Permitido:** `ROWNUM`, `SYSDATE`, `seq.NEXTVAL FROM DUAL`, `FOR UPDATE WAIT n` (n ≤ 5), `DBMS_LOB.WRITEAPPEND`, `DBMS_LOB.SUBSTR`, `EMPTY_CLOB()`, `MERGE`, `CASE`, `NVL` e `DECODE`. A comparação nula-segura continua `(c = :v OR (c IS NULL AND :v IS NULL))`.
-* **Proibido (12c+):** ver AGENTS §4.3. A varredura `test_sql_oracle11g.py` rejeita essa sintaxe em `src/sss/persistence/oracle/` e em `scripts/init_db.py`.
+* **Proibido (12c+):** ver AGENTS §4.3. A varredura `test_sql_oracle11g.py` rejeita essa sintaxe em `src/sss/persistence/oracle/` e em `src/sss/cli/init_db.py`.
 * A aplicação **sempre informa o `id`** na inclusão (`seq.NEXTVAL` lido antes do `INSERT`). A trigger condicional do §10 continua existindo como defesa.
 * Os blocos SQL deste README estão na forma que vai para o código.
 
@@ -290,9 +290,7 @@ Regras de topologia:
 
 ### 3.2 Estrutura de diretórios
 
-**Em migração (CR-022b):** a árvore abaixo é a atual. Os testes já estão em `tests/` (022b1). A estrutura alvo (pacote `src/sss/` com subpacotes por camada e `tools/` para build) e a ordem dos passos estão em `docs/architecture/CR-022-standard-structure.md` §2b e §3; cada passo atualiza esta árvore.
-
-Os itens marcados com `[F7.x]`, `[F8.x]` ou `[F9.x]` ainda não existem: são criados no prompt indicado (`docs/prompts/00_INDEX.md`).
+**Estrutura padrão (CR-022, encerrado):** pacote `src/sss/` com uma pasta por camada (a ordem das dependências está no AGENTS §1 e em `docs/architecture/CR-022-standard-structure.md` §2b), `scripts/` só com os involucros das ferramentas, `tools/` para build e `tests/` separados pelo recurso que usam. Os marcadores `[F7.x]`, `[F8.x]`, `[F9.x]` e `[CR-...]` dizem em que fase cada item nasceu (`docs/prompts/00_INDEX.md`).
 
 ```text
 bin/
@@ -378,12 +376,13 @@ bin/
   Makefile                    # alvos de teste (test-*), lint (portão flake8), type-check (mypy) e pacote; só DEV
   dev/scripts/                # árvore de scripts de exemplo para DEV/testes (nunca implantada)
   dev/homologation/            # ferramentas de homologação: figuras do manual de UI Freeze e evidências reais no DEV
-  dev/web_harness/             # [CR-021] roteiros Playwright das telas contra o backend FAKE (nunca implantados)
                               # (capture_evidence.js + build_evidence_docx.py; Puppeteer e .docx; nunca implantadas)
+  dev/web_harness/             # [CR-021] roteiros Playwright das telas contra o backend FAKE e o run_fake_web.py (nunca implantados)
+  dev/notas/                   # anotações antigas de desenvolvimento (fora do pacote; sem valor normativo)
 docs/
   prompts/                    # histórico: prompts com que as fases F0 a F9 foram construídas (caminhos de antes do CR-022a)
   homologation/               # manual de homologação (UI Freeze, histórico) e evidências reais no DEV (2026-10-22)
-/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/instance          # segredos fora do repositório, modo 0600, um arquivo por papel (§4.1)
+instance/secrets.cfg          # segredos do DEV, fora do git (.gitignore), modo 0600; nos servidores, um arquivo por papel (§4.1)
 /opt/sss/bin/sss-helper       # cópia do bin/sss-helper, dono root, 0755 (§8.0)
 ```
 
@@ -394,7 +393,7 @@ docs/
 ### 4.1 Gestão de segredos
 
 * **Nenhum segredo** reside no `config.ini`, no repositório ou no banco.
-* Os segredos ficam em `secrets_file` (padrão `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/instance`). Cada servidor tem o **seu** arquivo, só com os segredos do papel do processo que roda nele (CR-007, D1b). Na inicialização, web e daemon validam o arquivo pela camada de plataforma e **recusam a subida** caso ele:
+* Os segredos ficam em `secrets_file` (no DEV, `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/instance/secrets.cfg`). Cada servidor tem o **seu** arquivo, só com os segredos do papel do processo que roda nele (CR-007, D1b). Na inicialização, web e daemon validam o arquivo pela camada de plataforma e **recusam a subida** caso ele:
   * não seja um arquivo regular;
   * tenha dono diferente de `os.geteuid()` ou `mode & 0o077 != 0`.
 
@@ -474,7 +473,7 @@ password = ...
   * **Revogação (CR-008, E2/R-23):** `tbsss_users.session_epoch` é gravado na sessão no login e comparado na revalidação. Incrementam o valor, na mesma transação da operação: sair (`LOGOUT`), trocar a própria senha, ter a senha redefinida, ser desativado e ter o perfil trocado. Uma sessão com `session_epoch` diferente do banco é encerrada pela revalidação e volta ao login, com log INFO `sessão revogada`; não há nova auditoria, porque a operação que revogou já foi auditada na origem (`LOGOUT`, `UPDATE` ou `DEACTIVATE`). Consequência declarada: sair em um navegador encerra **todas** as sessões daquele usuário, inclusive um cookie copiado.
   * Cookies com `HttpOnly` e `Secure`.
     * **Exceção de DEV:** com `sss_env = DEV` sobre HTTP (servidor de desenvolvimento), o atributo `Secure` é omitido, porque o navegador descartaria o cookie. Em HML e PROD, `Secure` é sempre enviado.
-  * **`SameSite=Lax`:** o `http.cookies.Morsel` do 3.6 não aceita o atributo, então o núcleo web escreve o `Set-Cookie` sozinho (`web/response.py`, CR-021d1), sempre com `HttpOnly` e `SameSite`. A proteção cross-site continua com duas camadas além dele:
+  * **`SameSite=Lax`:** o `http.cookies.Morsel` do 3.6 não aceita o atributo, então o núcleo web escreve o `Set-Cookie` sozinho (`src/sss/web/framework/response.py`, CR-021d1), sempre com `HttpOnly` e `SameSite`. A proteção cross-site continua com duas camadas além dele:
     * o token CSRF;
     * a checagem obrigatória de `Origin`, ou de `Referer` quando `Origin` estiver ausente, contra `[web] allowed_origins` em todo `POST`.
 
@@ -2791,7 +2790,7 @@ pool_min = 1
 pool_max = 4
 
 [secrets]
-secrets_file = /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/instance
+secrets_file = /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/instance/secrets.cfg
 
 [agent]
 agent_id = srv-linux-prod-01

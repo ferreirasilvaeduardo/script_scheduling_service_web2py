@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Testes de modules/os_platform (README §8.0, AGENTS §3.2 e §7): processos reais em grupo proprio, trava,
+"""Testes de src/sss/platform/os_platform (README §8.0, AGENTS §3.2 e §7): processos reais em grupo proprio, trava,
 estado local, validacoes de arquivos e caminhos e dubles do sudo/helper. Somente POSIX (CR-005)."""
 from tests.support import _testenv  # noqa: F401
 

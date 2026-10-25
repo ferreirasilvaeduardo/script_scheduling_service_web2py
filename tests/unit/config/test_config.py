@@ -136,7 +136,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(cfg.oracle.pool_max, 4)
 
         # [secrets]
-        self.assertEqual(cfg.secrets.secrets_file, "/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/instance")
+        self.assertEqual(cfg.secrets.secrets_file, "/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/instance/secrets.cfg")
 
         # [agent]
         self.assertEqual(cfg.agent.agent_id, "srv-linux-prod-01")

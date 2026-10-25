@@ -23,6 +23,7 @@ secrets.cfg
 *.env
 # Launchers locais de desenvolvimento (podem conter dados da maquina do desenvolvedor)
 bin/sss-web-*_v*.sh
+dev/notas/sss-web-*_v*.sh
 # Sobras do web2py (removido no CR-021f) numa copia antiga: parameters_<porta>.py guarda o hash da
 # senha do painel dele e nunca pode ir para o git
 /parameters_*.py

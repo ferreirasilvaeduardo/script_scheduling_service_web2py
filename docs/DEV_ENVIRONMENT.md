@@ -152,7 +152,7 @@ Para subir como nos servidores via launcher oficial:
 ### Regras Mandatórias de Execução:
 
 1. **Escuta estrita em 127.0.0.1:**
-   O parâmetro `-i 127.0.0.1` é obrigatório. Nunca utilize `0.0.0.0` em ambiente de desenvolvimento, garantindo isolamento na máquina local.
+   O servidor escuta só em `127.0.0.1` (padrão do `--host`). Nunca utilize `0.0.0.0` em ambiente de desenvolvimento, garantindo isolamento na máquina local.
 2. **Sem FAKE na aplicação:** desde o F7.3, a aplicação usa sempre o Oracle (pool de conexões por processo). O FAKE em memória só existe nos testes automáticos.
    * **Trava de segurança:** o FAKE dos testes só é aceito com `sss_env = DEV`; fora de DEV, a `repo_factory` o recusa.
 
@@ -179,7 +179,7 @@ python -m unittest tests.unit.core.test_cron_parser         # um arquivo
 | `tests/functional/` | A aplicação inteira, por requisição ou com o servidor real | `make test-functional` |
 | `tests/architecture/` | Regras lidas no código e nos documentos | `make test-architecture` |
 
-Resultado esperado hoje, sem `SSS_TEST_ORACLE`: `Ran 1470 tests ... OK (skipped=62)` (CR-022b1; o total cresce a cada passo). Os pulados são, na maior parte, os de `tests/integration/oracle/`. Rode a suíte na **3.6.0** e na **3.6.8** (AGENTS §7, item 3) e, de preferência, também na 3.13.2:
+Resultado esperado no encerramento do CR-022b, sem `SSS_TEST_ORACLE`: `Ran 1484 tests ... OK (skipped=62)` (o total cresce com os testes novos). Os pulados são, na maior parte, os de `tests/integration/oracle/`. Rode a suíte na **3.6.0** e na **3.6.8** (AGENTS §7, item 3) e, de preferência, também na 3.13.2:
 
 ```bash
 for v in 3.6.0 3.6.8 3.13.2; do ~/.pyenv/versions/$v/bin/python -m unittest discover -s tests -t .; done
@@ -245,7 +245,7 @@ Sem `sudo`, cadastre os scripts com o caminho real de `dev/scripts`.
 
   ```bash
   LOG_DIR=/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/logs     # o [logging] log_dir do seu config.ini
-  tail -f "$(find "$LOG_DIR/app" -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)"
+  tail -f "$(find "$LOG_DIR/internal/app" -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)"
   ```
 
   A ordem é pela última escrita (`%T@`), e não pelo nome: com dois processos no mesmo minuto, a ordem do nome segue o texto do PID e pode apontar o arquivo errado.

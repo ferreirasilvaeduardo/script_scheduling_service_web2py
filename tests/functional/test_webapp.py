@@ -12,7 +12,7 @@ import types
 import unittest
 from unittest import mock
 
-from tests.support import _testenv  # noqa: F401 - ajusta sys.path (modules/ e a raiz da aplicacao)
+from tests.support import _testenv  # noqa: F401 - ajusta sys.path (src/ e a raiz da aplicacao)
 
 APP_DIR = _testenv.APP_DIR
 if APP_DIR not in sys.path:

@@ -13,7 +13,7 @@ pool_min = 1
 pool_max = 4
 
 [secrets]
-secrets_file = /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/instance
+secrets_file = /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/instance/secrets.cfg
 
 [agent]
 agent_id = srv-linux-prod-01

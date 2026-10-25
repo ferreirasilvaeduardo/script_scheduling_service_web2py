@@ -53,7 +53,7 @@ Fora de DEV, a conta da aplicação igual à dona do esquema é recusada (CR-008
 
 **Convenções:**
 * Comandos com `sudo` ou "como root" são do administrador do servidor. Os demais rodam como o usuário de serviço `sss` (`sudo -u sss -H bash`).
-* `W` = `APP` = `/opt/sss/app` (raiz do pacote extraído, que é a própria aplicação desde o CR-022a; até o CR-021 era `/opt/sss/app` com a aplicação em ``).
+* `W` = `APP` = `/opt/sss/app` (raiz do pacote extraído, que é a própria aplicação desde o CR-022a; até o CR-021 era `/opt/sss/web2py`, com a aplicação em `applications/script_scheduling_service/`).
 * Caminhos padrão (podem ser trocados, desde que no `config.ini` também):
 
 | Caminho | Conteúdo | Dono | Modo | Chave do `config.ini` |
@@ -485,13 +485,13 @@ Depois:
   15 2 * * * cd /opt/sss/app && umask 077 && LANG=C.UTF-8 LC_ALL=C.UTF-8 /usr/bin/python3 scripts/purge.py > /dev/null
   ```
   O resumo vai para o stdout; o registro completo vai para `log_dir/internal/app/.../purge_<PID>.log`.
-* **Alvos:** `--target tickets|audit|local_logs|output|script_work|all` (padrão `all`). `script_work` (CR-019) remove as pastas de trabalho dos scripts mais antigas que `[logging] script_work_retention_days`.
+* **Alvos:** `--target tickets|audit|inputs|local_logs|output|script_work|all` (padrão `all`; `inputs` é o conteúdo dos envios da tela de Entrada, CR-020e). `script_work` (CR-019) remove as pastas de trabalho dos scripts mais antigas que `[logging] script_work_retention_days`.
 * **Arquivamento da auditoria:** `--export-audit <pasta>` grava antes de apagar um `auditoria_purge_AAAAMMDD_HHMMSS.csv` com `0600`. A pasta precisa existir.
 * **Códigos de saída:**
   * 0: sucesso, inclusive "outro nó está purgando" ou "outro purge neste servidor";
   * 1: falha de banco, inclusive concessão perdida;
   * 2: configuração inválida;
-  * 3: falha ao remover logs locais ou pastas de saída.
+  * 3: falha ao remover logs locais, pastas de saída ou pastas de trabalho.
 * A cada execução com a concessão, o purge audita uma linha `PURGE` por tabela, inclusive com `0 linhas`. O `health.py` alerta sem `PURGE` em 2 dias.
 
 ---
@@ -666,7 +666,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 
 | Sintoma | Linha / onde ver | Causa | Ação |
 |---|---|---|---|
-| HTTP 500 em todas as telas | `CRITICAL ... Subida abortada: configuracao invalida: ...` no `sss_web_<PID>.log` (ou no stderr, se o `log_dir` não aceita escrita) | Configuração, segredos ou banco | Corrija pelo motivo da linha; tickets do web2py em `APP/errors/` |
+| HTTP 500 em todas as telas | `CRITICAL ... Subida abortada: configuracao invalida: ...` no `sss_web_<PID>.log` (ou no stderr, se o `log_dir` não aceita escrita) | Configuração, segredos ou banco | Corrija pelo motivo da linha; o detalhe de cada erro 500 fica no log `sss_web` (§14), com o id de ocorrência mostrado na tela |
 | "Requisição recusada." (HTTP 403) nos formulários | `requisicao rejeitada (reason=origem ...)` | URL de acesso fora de `allowed_origins` | §10.4 |
 | Idem | `reason=csrf` | Página aberta há muito tempo | Recarregue e repita |
 | Ninguém entra com HTTPS ausente | — | `sss_env = HML/PROD` exige cookie `Secure` | Acesse por HTTPS (§10.4) |
@@ -727,6 +727,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
    * **Pasta de trabalho (CR-019):** o helper anterior ignora o campo `work` da especificação: a pasta não é criada e o script recebe em `SSS_WORK_DIR` um caminho que não existe. Antes de ligar `[agent] script_work_dir`, instale o helper novo e crie `script_work_dir/<ambiente>/` de cada ambiente atendido (§8); com a chave vazia, nada muda.
    * **Sem web2py (CR-021f):** o `bin/sss-web.sh` novo só aceita as opções do `scripts/run_web.py` e recusa `web2py.py`/`anyserver.py` (código 2). Troque, junto com a versão, a linha que sobe o web na unit do `systemd` ou no script de operação: `bin/sss-web.sh <python3> --host 127.0.0.1 --port <porta>` (§10.1). Confira antes com `bin/sss-web.sh <python3> --check`. A sessão passa a ser o cookie assinado `sss_session` (CR-021e, D1): quem estiver logado na hora da atualização entra de novo. O `httpserver.log`, os `parameters_<porta>.py` e o painel `/admin` do web2py deixam de existir: tire o `httpserver.log` do `logrotate` (§14.4) e não copie nada disso para a pasta nova.
    * **Aplicação na raiz do pacote (CR-022a):** o pacote não tem mais `applications/script_scheduling_service/`; tudo fica direto em `/opt/sss/app` (antes `/opt/sss/web2py`). Na primeira atualização com esta versão, extraia em `/opt/sss/app` (sem renomear a pasta antiga para ela), copie o `config.ini` de `/opt/sss/web2py/applications/script_scheduling_service/instance/` para `/opt/sss/app/instance/` e troque nos caminhos de operação (unit do `systemd`, `cron` do purge, `sudoers` do monitoramento, scripts de subida) `/opt/sss/web2py` por `/opt/sss/app` e `.../applications/script_scheduling_service/scripts/` por `.../scripts/`. Caminhos absolutos do `config.ini` que apontavam para dentro da pasta antiga (ex.: `log_dir`, `work_dir`) também mudam. O retorno é subir de novo pela pasta antiga, que fica intacta.
+   * **Código no pacote `src/sss/` (CR-022b):** para a operação nada muda: os comandos continuam `bin/*.sh` e `scripts/<nome>.py` (agora involucros que chamam `src/sss/cli/`), com as mesmas opções e códigos de saída. O pacote passa a ter só `bin/`, `docs/`, `instance/`, `scripts/` e `src/` (§3); as pastas `modules/`, `webapp/`, `controllers/`, `views/` e `static/` saíram, e templates e estáticos ficam em `src/sss/web/`. Automação local que apontava para arquivos dessas pastas (cópia de CSS, inspeção de template) precisa do caminho novo; as URLs não mudam.
 5. Pare os agentes (`sss-stop.sh` ou `SIGTERM`) e o web, troque as pastas (`mv /opt/sss/app /opt/sss/app-<anterior> && mv /opt/sss/app-<versao> /opt/sss/app`) e suba de novo.
 6. Valide (§11). **Retorno:** pare, troque as pastas de volta e suba. Com migração de esquema, o retorno precisa do backup do banco (§17).
 

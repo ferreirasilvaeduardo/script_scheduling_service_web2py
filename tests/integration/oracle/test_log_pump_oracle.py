@@ -147,15 +147,15 @@ class TestSchedulerLogOracle(unittest.TestCase):
         self.assertGreater(len(expected), 8000, "mais de um bloco")
 
     def test_combinacoes_de_driver(self):
-        # O filho poe modules/ e src/ (irmao de modules/) no caminho (_CHILD)
-        modules = os.path.join(_testenv.APP_DIR, "modules")
+        # O filho poe src/ no caminho (_CHILD)
+        src = os.path.join(_testenv.APP_DIR, "src")
         offset = 0
         results = {}
         for mode in ("thin", "thick", "cx_oracle"):
             chunk = "driver %s ação \U0001F600\n" % mode
-            p = subprocess.run([sys.executable, "-c", _CHILD, modules, mode, str(self.ticket_id), self.AGENT,
+            p = subprocess.run([sys.executable, "-c", _CHILD, src, mode, str(self.ticket_id), self.AGENT,
                                 str(offset), chunk], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               timeout=180, cwd=os.path.dirname(modules),
+                               timeout=180, cwd=_testenv.APP_DIR,
                                env=dict(os.environ, PYTHONIOENCODING="utf-8"))
             output_txt = p.stdout.decode("utf-8", "replace")
             rows = [x for x in output_txt.splitlines() if x.startswith("{")]

@@ -13,7 +13,7 @@ import tempfile
 import time
 import unittest
 
-from tests.support import _testenv  # noqa: F401 - ajusta sys.path (modules/ e a raiz da aplicacao)
+from tests.support import _testenv  # noqa: F401 - ajusta sys.path (src/ e a raiz da aplicacao)
 from sss.web.framework import template
 from sss.web.framework.markup import Markup, escape
 from sss.web.framework.response import Response

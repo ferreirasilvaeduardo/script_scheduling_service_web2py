@@ -6,7 +6,7 @@ repositorio (CR-021f1): as views geram os mesmos links que geravam no web2py.
 """
 import unittest
 
-from tests.support import _testenv  # noqa: F401 - ajusta sys.path (modules/ e a raiz da aplicacao)
+from tests.support import _testenv  # noqa: F401 - ajusta sys.path (src/ e a raiz da aplicacao)
 from sss.web.framework import routing
 
 APP = "script_scheduling_service"
