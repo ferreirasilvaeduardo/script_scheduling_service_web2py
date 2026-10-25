@@ -290,6 +290,8 @@ Regras de topologia:
 
 ### 3.2 Estrutura de diretórios
 
+**Em migração (CR-022b):** a árvore abaixo é a atual. A estrutura alvo (pacote `src/sss/` com subpacotes por camada, `tests/` por tipo de teste e `tools/` para build) e a ordem dos passos estão em `docs/architecture/CR-022-standard-structure.md` §2b e §3; cada passo atualiza esta árvore.
+
 Os itens marcados com `[F7.x]`, `[F8.x]` ou `[F9.x]` ainda não existem: são criados no prompt indicado (`docs/prompts/00_INDEX.md`).
 
 ```text
