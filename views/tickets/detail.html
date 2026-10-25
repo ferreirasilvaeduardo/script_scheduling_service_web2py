@@ -2,7 +2,7 @@
 {{
 # Detalhe do ticket. Botões de ação só aparecem quando o servidor calculou que RBAC e status
 # permitem (can_cancel/can_rerun); as actions POST reautorizam tudo de novo.
-import ui_helpers
+from sss.ui import ui_helpers
 icons = URL('static', 'img/icons.svg')
 _t = ticket
 _hidden = {'ticket_id': _t['id']}
@@ -152,7 +152,7 @@ _info = ui_helpers.status_info(_t['status'])
 {{
 # Visor de log (README §8.10): o texto chega por logs/chunk e só é exibido por textContent (componente logViewer).
 import json
-import ticket_service
+from sss.services import ticket_service
 _vl = log_viewer
 _viewer_status = dict((_s, ui_helpers.status_info(_s)) for _s in ticket_service.STATUS_TICKET)
 _viewer_status = dict((_s, {'label': _i['label'], 'css_class': _i['css_class']}) for _s, _i in _viewer_status.items())

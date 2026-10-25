@@ -1,7 +1,7 @@
 {{extend 'layout.html'}}
 {{
 # Lista de tickets com filtros (GET) e atualização automática opcional da tabela.
-import ui_helpers
+from sss.ui import ui_helpers
 _opt_status = [(_st, ui_helpers.status_info(_st)['label']) for _st in options['status']]
 _opt_environments = [('', 'Todos')] + [(_a, _a) for _a in options['environments']]
 _opt_scripts = [('', 'Todos')] + list(options['scripts'])

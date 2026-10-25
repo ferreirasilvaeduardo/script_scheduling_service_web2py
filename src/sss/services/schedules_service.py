@@ -15,16 +15,16 @@ import json
 import re
 import threading
 
-import admin_crud
+from sss.services import admin_crud
 from sss.core import cron_parser
 from sss.core import params_compiler
 from sss.core import rbac
 from sss.core import recurrence
-import ui_helpers
-from admin_crud import GENERAL_FIELD, OperationDenied
+from sss.ui import ui_helpers
+from sss.services.admin_crud import GENERAL_FIELD, OperationDenied
 from sss.core.cron_parser import CronError
 from sss.persistence.repo_errors import RepoConflict, RepoNotFound, RepoViolation
-from ticket_service import AccessDenied as DisparoNegado
+from sss.services.ticket_service import AccessDenied as DisparoNegado
 
 FEATURE = "MANAGE_SCHEDULES"
 NAME_MAX_LENGTH = 60
@@ -952,7 +952,7 @@ def _service():
             from sss.config import app_context
             from sss.persistence import repo_factory
             from sss.config import sss_logging
-            import ticket_service
+            from sss.services import ticket_service
             factory = repo_factory
             cfg = app_context.require_config()
             tickets = factory.get("tickets")

@@ -6,8 +6,8 @@ invalido: 404 (nunca 403, para nao revelar o que existe). Todo download e audita
 """
 from urllib.parse import quote
 
-import output_browse_service as browse
-from output_browse_service import InvalidRequest
+from sss.services import output_browse_service as browse
+from sss.services.output_browse_service import InvalidRequest
 from sss.persistence.repo_errors import RepoError, RepoNotFound
 
 from webapp import security as _security

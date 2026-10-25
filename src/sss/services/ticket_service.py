@@ -15,7 +15,7 @@ import threading
 from sss.core import params_compiler
 from sss.platform import path_guard
 from sss.core import rbac
-import ui_helpers
+from sss.ui import ui_helpers
 from sss.persistence.repo_errors import RepoError, RepoNotFound
 
 GENERAL_FIELD = params_compiler.GENERAL_KEY

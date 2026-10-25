@@ -1,7 +1,7 @@
 {{extend 'layout.html'}}
 {{
 # Inclusão e edição de perfil (padrão de CRUD administrativo, docs/ADMIN_CRUD_PATTERN.md).
-import ui_helpers
+from sss.ui import ui_helpers
 _new = not profile.get('id')
 _state = ui_helpers.active_info(profile.get('active'))
 _fields = [

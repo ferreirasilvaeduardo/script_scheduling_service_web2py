@@ -3,9 +3,9 @@
 
 Regras de escopo ficam em modules/ticket_service.py; aqui so se valida a requisicao e se responde.
 """
-import ticket_service
+from sss.services import ticket_service
 from sss.persistence.repo_errors import RepoError, RepoNotFound
-from ticket_service import InvalidOffset
+from sss.services.ticket_service import InvalidOffset
 
 from webapp import security as _security
 from webapp.context import HTTP, request, response

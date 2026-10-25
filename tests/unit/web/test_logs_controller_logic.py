@@ -8,11 +8,11 @@ import os
 import unittest
 from unittest import mock
 
-import auth_service
+from sss.services import auth_service
 from sss.persistence import repo_factory
 from sss.core import security
 from sss.persistence.repo_errors import RepoUnavailable, RepoNotFound
-from ticket_service import LOG_MAX_CHARS, DOWNLOAD_INTERRUPTED_MARKER, InvalidOffset, TicketService
+from sss.services.ticket_service import LOG_MAX_CHARS, DOWNLOAD_INTERRUPTED_MARKER, InvalidOffset, TicketService
 
 SESSIONS = {
     "admin": {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0},

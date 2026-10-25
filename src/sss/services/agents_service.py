@@ -7,9 +7,9 @@ pelo relogio do no web, com os mesmos limiares do daemon (README §8.8 e §8.9).
 import collections
 import threading
 
-import admin_crud
-import ui_helpers
-from admin_crud import AccessDenied  # noqa: F401  (reexportado para o controller)
+from sss.services import admin_crud
+from sss.ui import ui_helpers
+from sss.services.admin_crud import AccessDenied  # noqa: F401  (reexportado para o controller)
 
 FEATURE = "VIEW_AUDIT"
 

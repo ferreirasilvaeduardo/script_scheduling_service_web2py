@@ -8,7 +8,7 @@ Nao importa gluon.
 import threading
 
 from sss.core import rbac
-import ui_menu
+from sss.ui import ui_menu
 from sss.persistence.repo_errors import RepoNotFound
 
 ADMIN_PHRASE = (u"Seu perfil é de administrador: você pode usar todas as telas e rodar qualquer script ativo, "
@@ -124,7 +124,7 @@ def _service():
             from sss.config import app_context
             from sss.persistence import repo_factory
             from sss.config import sss_logging
-            import ticket_service
+            from sss.services import ticket_service
             factory = repo_factory
             _default = PermissionsService(
                 rbac_repo=factory.get("rbac"),

@@ -11,7 +11,7 @@ import threading
 
 from sss.core import rbac
 from sss.core import security
-import ui_helpers
+from sss.ui import ui_helpers
 from sss.persistence.repo_errors import RepoNotFound
 
 # Mensagens-padrao em duas partes (README §2.4.2); o bloqueio informa os minutos configurados.

@@ -2,7 +2,7 @@
 {{
 # Inclusão e edição de script. interpretador é um select fixo da allowlist lógica (o servidor revalida o valor exato);
 # o caminho é absoluto, em qualquer pasta fora das do sistema (README §8.5, CR-005).
-import ui_helpers
+from sss.ui import ui_helpers
 _s = scr
 _new = not _s.get('id')
 _state = ui_helpers.active_info(_s.get('active'))

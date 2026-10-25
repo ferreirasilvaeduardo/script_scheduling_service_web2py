@@ -5,8 +5,8 @@ A regra fica em modules/input_browse_service.py. CSRF, Origin e o tamanho maximo
 webapp/security.py (o POST acima do limite e recusado com 413 antes de o corpo ser lido). Fora do escopo ou
 com parametro invalido: 404. Envio e pedido de retrato sao POST com redirecionamento para a pasta.
 """
-import input_browse_service as browse
-from input_browse_service import InvalidRequest
+from sss.services import input_browse_service as browse
+from sss.services.input_browse_service import InvalidRequest
 from sss.persistence.repo_errors import RepoError, RepoNotFound
 
 from webapp import security as _security

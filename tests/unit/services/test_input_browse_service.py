@@ -8,12 +8,12 @@ import os
 import unittest
 from unittest import mock
 
-import admin_crud
-import auth_service
-import input_browse_service as browse
+from sss.services import admin_crud
+from sss.services import auth_service
+from sss.services import input_browse_service as browse
 from sss.persistence import repo_factory
 from sss.core import security
-from input_browse_service import InputBrowseService, InvalidRequest
+from sss.services.input_browse_service import InputBrowseService, InvalidRequest
 from sss.persistence.repo_errors import RepoNotFound
 
 IP = "10.1.2.3"

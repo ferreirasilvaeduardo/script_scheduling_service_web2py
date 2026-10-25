@@ -11,16 +11,16 @@ import os
 import unittest
 from unittest import mock
 
-import agents_service
-import audit_service
-import auth_service
+from sss.services import agents_service
+from sss.services import audit_service
+from sss.services import auth_service
 from sss.core import masking
 from sss.persistence import repo_factory
 from sss.core import security
-from admin_crud import AccessDenied
-from agents_service import DELAYED, AT_RISK, OFFLINE, OK, Thresholds, AgentsService
-from audit_service import InvalidFilters, AuditService
-from ticket_service import TicketService
+from sss.services.admin_crud import AccessDenied
+from sss.services.agents_service import DELAYED, AT_RISK, OFFLINE, OK, Thresholds, AgentsService
+from sss.services.audit_service import InvalidFilters, AuditService
+from sss.services.ticket_service import TicketService
 
 IP = "10.7.8.9"
 DEV_PASSWORD = "senha-dev-de-teste-123"

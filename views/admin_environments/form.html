@@ -2,7 +2,7 @@
 {{
 # Inclusão e edição de ambiente (padrão de CRUD administrativo, docs/ADMIN_CRUD_PATTERN.md).
 # Na edição o nome é somente leitura e o servidor ignora qualquer valor enviado para ele.
-import ui_helpers
+from sss.ui import ui_helpers
 _new = not env.get('id')
 _state = ui_helpers.active_info(env.get('active'))
 _fields = [

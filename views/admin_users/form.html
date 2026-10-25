@@ -2,7 +2,7 @@
 {{
 # Inclusão e edição de usuário. login fica somente leitura na edição (o servidor o ignora);
 # senhas usam type="password", nunca são reapresentadas e não saem do servidor.
-import ui_helpers
+from sss.ui import ui_helpers
 _u = user
 _new = not _u.get('id')
 _state = ui_helpers.active_info(_u.get('active'))

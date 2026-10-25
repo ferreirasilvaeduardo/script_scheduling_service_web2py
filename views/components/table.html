@@ -11,7 +11,7 @@
 #     rows          -- lista de dicts indexados pela 'key' de cada coluna;
 #     error         -- opcional; mensagem segura ao usuário (sem ORA-, SQL ou stack trace, AGENTS §3.1);
 #     empty_message -- opcional; padrão "Nenhum registro encontrado".
-import ui_helpers
+from sss.ui import ui_helpers
 _tab_columns = table['columns']
 _tab_rows = table.get('rows') or []
 }}<div class="table-responsive">

@@ -7,12 +7,12 @@ import os
 import unittest
 from unittest import mock
 
-import auth_service
-import permissions_service as svc_mod
+from sss.services import auth_service
+from sss.services import permissions_service as svc_mod
 from sss.persistence import repo_factory
 from sss.core import security
-from permissions_service import PermissionsService
-from ticket_service import TicketService
+from sss.services.permissions_service import PermissionsService
+from sss.services.ticket_service import TicketService
 
 SESSIONS = {
     "admin": {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0},

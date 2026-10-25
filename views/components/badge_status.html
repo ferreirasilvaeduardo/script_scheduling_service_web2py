@@ -4,7 +4,7 @@
 #   status        -- código do status ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'CANCELLED');
 #                    código desconhecido vira "Desconhecido".
 #   status_reason -- opcional; código de status_reason (README §5.2) exibido como tooltip textual.
-import ui_helpers
+from sss.ui import ui_helpers
 _badge = ui_helpers.status_info(status)
 _badge_reason = globals().get('status_reason')
 }}<span class="sss-status {{=_badge['css_class']}}"{{if _badge_reason:}} title="Motivo: {{=_badge_reason}}"{{pass}}>

@@ -4,10 +4,10 @@
 Regras ficam em modules/admin_profiles_service.py; CSRF e Origin de todo POST sao validados
 em webapp/security.py. Nenhuma permissao e decidida no cliente: o POST da matriz e revalidado inteiro.
 """
-import admin_crud
-import admin_profiles_service as service
-import ui_helpers
-from admin_crud import AccessDenied, OperationDenied
+from sss.services import admin_crud
+from sss.services import admin_profiles_service as service
+from sss.ui import ui_helpers
+from sss.services.admin_crud import AccessDenied, OperationDenied
 from sss.persistence.repo_errors import RepoConflict, RepoError, RepoNotFound
 
 from webapp import security as _security

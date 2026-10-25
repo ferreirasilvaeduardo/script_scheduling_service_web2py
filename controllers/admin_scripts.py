@@ -4,11 +4,11 @@
 Padrao em docs/ADMIN_CRUD_PATTERN.md. Regras ficam em modules/admin_scripts_service.py; CSRF e Origin
 de todo POST sao validados em webapp/security.py. Listas enviadas pelo cliente sao revalidadas inteiras.
 """
-import admin_crud
-import admin_scripts_service as service
+from sss.services import admin_crud
+from sss.services import admin_scripts_service as service
 from sss.platform import path_guard
-import ui_helpers
-from admin_crud import AccessDenied, OperationDenied
+from sss.ui import ui_helpers
+from sss.services.admin_crud import AccessDenied, OperationDenied
 from sss.persistence.repo_errors import RepoConflict, RepoError, RepoNotFound
 
 from webapp import security as _security

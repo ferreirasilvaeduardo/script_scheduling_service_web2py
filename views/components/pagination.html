@@ -10,7 +10,7 @@
 #   query_params -- dict com os filtros ativos, preservados em todos os links.
 # 'page' e 'size' em query_params são sobrescritos pelos valores do link. Os links nunca herdam
 # a extensão da requisição (o componente também é usado em fragmentos .load).
-import ui_helpers
+from sss.ui import ui_helpers
 _pg = ui_helpers.pagination_info(page, size, total, total_capped, page_count)
 _pg_vars = dict((k, v) for k, v in (query_params or {}).items() if k not in ('page', 'size') and v not in (None, ''))
 _pg_vars['size'] = _pg['size']

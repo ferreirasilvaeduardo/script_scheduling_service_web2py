@@ -67,7 +67,7 @@
 </header>
 
 <main id="content" class="sss-main" tabindex="-1">
-  {{import ui_helpers
+  {{from sss.ui import ui_helpers
   alert = ui_helpers.alert_info(response.flash)}}
   {{include 'components/alert.html'}}
   {{include}}

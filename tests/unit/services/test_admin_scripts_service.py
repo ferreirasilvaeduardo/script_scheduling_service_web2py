@@ -12,15 +12,15 @@ import tempfile
 import unittest
 from unittest import mock
 
-import admin_crud
+from sss.services import admin_crud
 from sss.platform import path_guard
-import admin_scripts_service as scr_mod
-import auth_service
+from sss.services import admin_scripts_service as scr_mod
+from sss.services import auth_service
 from sss.persistence import repo_factory
 from sss.core import security
-from admin_crud import GENERAL_FIELD, AccessDenied, OperationDenied
-from admin_profiles_service import AdminProfilesService
-from admin_scripts_service import AdminScriptsService
+from sss.services.admin_crud import GENERAL_FIELD, AccessDenied, OperationDenied
+from sss.services.admin_profiles_service import AdminProfilesService
+from sss.services.admin_scripts_service import AdminScriptsService
 from sss.platform.path_guard import Code
 from sss.persistence.repo_errors import RepoConflict, RepoNotFound, RepoViolation
 

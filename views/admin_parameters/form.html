@@ -2,14 +2,14 @@
 {{
 # Inclusão e edição de parâmetro. Campos condicionais por tipo (componente 'parameterForm'); o editor de
 # opções só monta o JSON por conveniência e o servidor revalida tudo. A regex nunca roda no cliente.
-import ui_helpers
+from sss.ui import ui_helpers
 _p = prm
 _new = not _p.get('id')
 _sensitive = _p.get('sensitive') == 'Y'
 _state = ui_helpers.active_info(_p.get('active'))
 _icons = URL('static', 'img/icons.svg')
 import json
-import admin_parameters_service
+from sss.services import admin_parameters_service
 _pairs = admin_parameters_service.options_as_pairs(_p['options_json'])
 if not _new:
     _deactivate = _p.get('active') == 'Y'

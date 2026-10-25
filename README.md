@@ -329,20 +329,23 @@ bin/
       contracts/              # contratos abstratos por agregado, sem SQL: repo_users.py, repo_tickets.py...
       oracle/                 # implementação SQL Oracle 11gR2 (único local com SQL, §2.7) [F7.3]
       fake/                   # implementação em memória + seed (somente DEV)
+    ui/                       # [CR-022b5] apresentação sem web, usada pelos serviços e pelas views
+      ui_menu.py              # menu por permissão
+      ui_helpers.py           # catálogo de mensagens; formatação de status, datas e paginação para as views
+    services/                 # [CR-022b5] regras de negócio chamadas pelos controllers e pelas ferramentas de operação
+      auth_service.py         # autenticação, bloqueio, revalidação de sessão
+      ticket_service.py       # criação, cancelamento e reexecução de ticket (§5); rotinas disponíveis e histórico (CR-004)
+      admin_*_service.py      # cadastros (ADMIN_CRUD_PATTERN.md); admin_crud.py: validação comum
+      schedules_service.py, agents_service.py, permissions_service.py  # regras, painel de agentes, O que eu posso fazer
+      input_browse_service.py, output_browse_service.py  # telas Entrada e Saídas (CR-020)
+      audit_service.py        # catálogo de ações, consulta e exportação da trilha (§4.4). A escrita de tbsss_audit
+                              # é feita pelo próprio repositório, na operação que recebe audit= (não existe audit.py)
   modules/
     web/                      # [CR-021d1/d2] núcleo web próprio (WSGI, request, multipart, response, sessão assinada, rotas, templates); ligado no CR-021e
-    auth_service.py           # autenticação, bloqueio, revalidação de sessão
-    ticket_service.py         # criação, cancelamento e reexecução de ticket (§5); rotinas disponíveis e histórico (CR-004)
-    admin_*_service.py        # cadastros (ADMIN_CRUD_PATTERN.md); admin_crud.py: validação comum
-    schedules_service.py, agents_service.py, permissions_service.py  # regras, painel de agentes, O que eu posso fazer
-    ui_menu.py                # menu por permissão
-    ui_helpers.py             # formatação de status, datas e paginação para as views
     env_builder.py            # [F8.1] montagem do ambiente limpo (§8.6)
     executor.py               # [F8.1] spawn, timeout, kill, finalização
     log_pump.py               # [F8.2] arquivo local -> CLOB com mascaramento (§8.10)
     scheduler_loop.py         # [F8.3] laço principal do daemon
-    audit_service.py          # catálogo de ações, consulta e exportação da trilha (§4.4). A escrita de tbsss_audit
-                              # é feita pelo próprio repositório, na operação que recebe audit= (não existe audit.py)
   scripts/
     init_db.py                # [F7.1] bootstrap idempotente de DDL e seed, versão do esquema e migrações (§11)
     migrations/               # [F7.1] migrações numeradas m<NNNN>_<descricao>.py (§11.1, CR-007)
@@ -1439,7 +1442,7 @@ Todas recebem a conexão da transação do ciclo e nunca fazem `COMMIT` sozinhas
 
 ### 7.6 Cadastro de regras na UI (decisões do F5.2)
 
-Implementação: `controllers/schedules.py`, `modules/schedules_service.py` e `views/schedules/`. O questionário de parâmetros é o mesmo do disparo (`views/components/questionnaire.html`).
+Implementação: `controllers/schedules.py`, `src/sss/services/schedules_service.py` e `views/schedules/`. O questionário de parâmetros é o mesmo do disparo (`views/components/questionnaire.html`).
 
 * **Validação estrita (sem truncamento):** todo campo recebido é validado no tamanho e no formato exatos. Um valor mais longo ou fora do formato é **recusado** com mensagem no campo, nunca cortado. Exemplos: dia do mês `100` ou `311`, hora `03:000`, data com segundos ou frações (`…T10:00:00.999`).
 * **Escolha de script e ambiente:** na inclusão, a escolha é feita em etapas e usa os mesmos filtros do disparo (§4.3.A): só aparecem scripts e ambientes em que o editor tem `can_execute`. Por isso, quem não é admin precisa também de `EXEC_SCRIPT`.

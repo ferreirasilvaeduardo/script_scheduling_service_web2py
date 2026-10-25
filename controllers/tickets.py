@@ -4,10 +4,10 @@
 CSRF e Origin de todo POST sao validados em webapp/security.py.
 """
 from sss.config import app_context
-import ticket_service
-import ui_helpers
+from sss.services import ticket_service
+from sss.ui import ui_helpers
 from sss.persistence.repo_errors import RepoError, RepoNotFound
-from ticket_service import AccessDenied, RerunError
+from sss.services.ticket_service import AccessDenied, RerunError
 
 from webapp import security as _security
 from webapp.context import HTTP, URL, redirect, request, response, session

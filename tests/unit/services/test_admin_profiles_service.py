@@ -10,13 +10,13 @@ import os
 import unittest
 from unittest import mock
 
-import admin_crud
-import admin_profiles_service as perfis_mod
-import auth_service
+from sss.services import admin_crud
+from sss.services import admin_profiles_service as perfis_mod
+from sss.services import auth_service
 from sss.persistence import repo_factory
 from sss.core import security
-from admin_crud import GENERAL_FIELD, AccessDenied, OperationDenied
-from admin_profiles_service import AdminProfilesService
+from sss.services.admin_crud import GENERAL_FIELD, AccessDenied, OperationDenied
+from sss.services.admin_profiles_service import AdminProfilesService
 from sss.persistence.repo_errors import RepoConflict, RepoNotFound
 
 IP = "10.7.7.7"

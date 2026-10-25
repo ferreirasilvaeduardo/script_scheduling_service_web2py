@@ -2,7 +2,7 @@
 {{
 # Lista de regras de agendamento (README §7; padrão de lista em docs/ADMIN_CRUD_PATTERN.md).
 # Pausar e retomar abrem components/confirm_modal.html com POST real.
-import ui_helpers
+from sss.ui import ui_helpers
 icons = URL('static', 'img/icons.svg')
 _opt_active = [('', 'Todas'), ('Y', 'Ativas'), ('N', 'Pausadas')]
 filters = {'id': 'filter-schedules', 'url_base': ('schedules', 'index'), 'keep': {'size': size}, 'fields': [

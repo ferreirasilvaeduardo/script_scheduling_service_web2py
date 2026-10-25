@@ -9,15 +9,15 @@ import os
 import unittest
 from unittest import mock
 
-import admin_crud
-import schedules_service as svc_mod
-import auth_service
+from sss.services import admin_crud
+from sss.services import schedules_service as svc_mod
+from sss.services import auth_service
 from sss.persistence import repo_factory
 from sss.core import security
-from admin_crud import GENERAL_FIELD, AccessDenied, OperationDenied
-from schedules_service import SchedulesService
+from sss.services.admin_crud import GENERAL_FIELD, AccessDenied, OperationDenied
+from sss.services.schedules_service import SchedulesService
 from sss.persistence.repo_errors import RepoConflict, RepoNotFound
-from ticket_service import TicketService
+from sss.services.ticket_service import TicketService
 
 IP = "10.4.5.6"
 # Quinta-feira; os microssegundos provam que nenhuma data gravada os carrega (README §7.1).

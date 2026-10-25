@@ -4,12 +4,12 @@ modules/schedules_service.py; padrao de telas em docs/ADMIN_CRUD_PATTERN.md.
 
 CSRF e Origin de todo POST sao validados em webapp/security.py.
 """
-import admin_crud
-import schedules_service as service
-import ui_helpers
-from admin_crud import AccessDenied, OperationDenied
+from sss.services import admin_crud
+from sss.services import schedules_service as service
+from sss.ui import ui_helpers
+from sss.services.admin_crud import AccessDenied, OperationDenied
 from sss.persistence.repo_errors import RepoConflict, RepoError, RepoNotFound
-from ticket_service import AccessDenied as TriggerDenied
+from sss.services.ticket_service import AccessDenied as TriggerDenied
 
 from webapp import security as _security
 from webapp.context import URL, redirect, request, response, session

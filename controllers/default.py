@@ -2,14 +2,14 @@
 """Painel inicial, login e logout (README §4.2). CSRF e Origin de todo POST sao validados em webapp/security.py."""
 import time
 
-import agents_service
-import auth_service
-import permissions_service
+from sss.services import agents_service
+from sss.services import auth_service
+from sss.services import permissions_service
 from sss.core import rbac
-import schedules_service
+from sss.services import schedules_service
 from sss.core import security
-import ticket_service
-import ui_helpers
+from sss.services import ticket_service
+from sss.ui import ui_helpers
 from sss.persistence.repo_errors import RepoError
 
 from webapp import context as _context

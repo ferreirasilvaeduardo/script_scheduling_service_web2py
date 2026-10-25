@@ -8,8 +8,8 @@ import re
 import sys
 import unittest
 
-import ui_helpers
-import ui_menu
+from sss.ui import ui_helpers
+from sss.ui import ui_menu
 
 
 _SPRITE = os.path.join(_testenv.APP_DIR,
@@ -405,7 +405,7 @@ class TestBuildMenu(unittest.TestCase):
 class TestPureModulesWithoutGluon(unittest.TestCase):
 
     def test_nao_importam_gluon(self):
-        for name in ("ui_helpers", "ui_menu"):
+        for name in ("sss.ui.ui_helpers", "sss.ui.ui_menu"):
             path = sys.modules[name].__file__
             with open(path, "r", encoding="utf-8") as f:
                 self.assertNotRegex(f.read(), r"^\s*(from|import)\s+gluon", name)

@@ -10,12 +10,12 @@ import json
 import re
 import threading
 
-import admin_crud
+from sss.services import admin_crud
 from sss.core import params_compiler
-import ui_helpers
+from sss.ui import ui_helpers
 from sss.core import rbac
-import schedules_service
-from admin_crud import GENERAL_FIELD, OperationDenied
+from sss.services import schedules_service
+from sss.services.admin_crud import GENERAL_FIELD, OperationDenied
 from sss.core.params_compiler import ParamError, COMPONENT_TYPES
 from sss.persistence.repo_errors import RepoConflict, RepoNotFound, RepoViolation
 

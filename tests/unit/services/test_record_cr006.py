@@ -7,17 +7,17 @@ import os
 import unittest
 from unittest import mock
 
-import auth_service
+from sss.services import auth_service
 from sss.persistence import repo_factory
 from sss.core import security
-import ui_helpers
-from admin_environments_service import AdminEnvironmentsService
-from admin_parameters_service import AdminParametersService
-from admin_profiles_service import AdminProfilesService
-from admin_scripts_service import AdminScriptsService
-from admin_users_service import AdminUsersService
-from schedules_service import SchedulesService
-from ticket_service import TicketService
+from sss.ui import ui_helpers
+from sss.services.admin_environments_service import AdminEnvironmentsService
+from sss.services.admin_parameters_service import AdminParametersService
+from sss.services.admin_profiles_service import AdminProfilesService
+from sss.services.admin_scripts_service import AdminScriptsService
+from sss.services.admin_users_service import AdminUsersService
+from sss.services.schedules_service import SchedulesService
+from sss.services.ticket_service import TicketService
 
 IP = "10.9.8.7"
 ADMIN_SESSION = {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0}

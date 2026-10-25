@@ -6,7 +6,7 @@ ocorrencia aparece para o suporte achar o erro no log (o stack trace nunca vai p
 """
 from typing import Any, Callable, Dict, Optional
 
-import ui_helpers
+from sss.ui import ui_helpers
 from web import Context
 
 _MESSAGES = {

@@ -7,10 +7,10 @@ processo web le a configuracao do app_context (_service). Nao importa gluon.
 import re
 import threading
 
-import admin_crud
+from sss.services import admin_crud
 from sss.config import log_paths
-import ui_helpers
-from admin_crud import GENERAL_FIELD
+from sss.ui import ui_helpers
+from sss.services.admin_crud import GENERAL_FIELD
 from sss.persistence.repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 FEATURE = "MANAGE_ENVIRONMENTS"

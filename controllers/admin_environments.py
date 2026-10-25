@@ -4,10 +4,10 @@
 Regras ficam em modules/admin_environments_service.py; CSRF e Origin de todo POST sao validados
 em webapp/security.py.
 """
-import admin_crud
-import admin_environments_service as service
-import ui_helpers
-from admin_crud import AccessDenied
+from sss.services import admin_crud
+from sss.services import admin_environments_service as service
+from sss.ui import ui_helpers
+from sss.services.admin_crud import AccessDenied
 from sss.persistence.repo_errors import RepoConflict, RepoError, RepoNotFound
 
 from webapp import security as _security

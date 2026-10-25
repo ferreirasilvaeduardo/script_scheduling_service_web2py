@@ -7,11 +7,11 @@ auditoria registra apenas o fato ('senha redefinida'). Nao importa gluon.
 import re
 import threading
 
-import admin_crud
-import auth_service
+from sss.services import admin_crud
+from sss.services import auth_service
 from sss.core import security
-import ui_helpers
-from admin_crud import GENERAL_FIELD, OperationDenied
+from sss.ui import ui_helpers
+from sss.services.admin_crud import GENERAL_FIELD, OperationDenied
 from sss.persistence.repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 FEATURE = "MANAGE_USERS"

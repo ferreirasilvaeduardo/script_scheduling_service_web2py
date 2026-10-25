@@ -2,7 +2,7 @@
 # Fragmento dos cartões de agentes: resposta de audit/agents.load (atualização automática) e
 # incluído por audit/agents.html. O controller aplica os mesmos guardas nas duas extensões.
 # Variáveis: painel ({agentes, resumo, agora}), erro.
-import ui_helpers
+from sss.ui import ui_helpers
 _agent_icons = URL('static', 'img/icons.svg')
 }}<div data-sss-fragment="agentes">
   {{if error:}}

@@ -13,10 +13,10 @@ import threading
 import unittest
 from unittest import mock
 
-import auth_service
+from sss.services import auth_service
 from sss.persistence import repo_factory
 from sss.core import security
-from auth_service import MSG_GENERIC
+from sss.services.auth_service import MSG_GENERIC
 
 MAX = 5
 LOCKOUT_S = 900

@@ -12,13 +12,13 @@ import time
 from typing import Any, Dict, Optional
 
 from sss.config import app_context
-import auth_service
+from sss.services import auth_service
 from sss.core import rbac
 from sss.core import security
 from sss.config import sss_config
 from sss.config import sss_logging
-import ui_helpers
-import ui_menu
+from sss.ui import ui_helpers
+from sss.ui import ui_menu
 from sss.persistence.repo_errors import RepoUnavailable
 from web import HTTP, Context, Markup, decode_path_info, escape, redirect
 
@@ -241,7 +241,7 @@ def require_query() -> Dict[str, Any]:
 
     Exige VIEW_LOGS ou EXEC_SCRIPT.
     """
-    import ticket_service  # pylint: disable=import-outside-toplevel
+    from sss.services import ticket_service  # pylint: disable=import-outside-toplevel
     revalidated = require_login()
     if not ticket_service.can_query(revalidated):
         log().warning("acesso negado (login=%s funcionalidade=VIEW_LOGS|EXEC_SCRIPT caminho=%s "

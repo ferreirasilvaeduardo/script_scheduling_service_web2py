@@ -1,8 +1,8 @@
 {{extend 'layout.html'}}
 {{
 # Trilha de auditoria (README §4.4, §10 tabela 16). Somente leitura; o detalhe é sempre escapado.
-import audit_service
-import ui_helpers
+from sss.services import audit_service
+from sss.ui import ui_helpers
 icons = URL('static', 'img/icons.svg')
 _opt_actions = [('', 'Todas')] + sorted(((_a, audit_service.action_label(_a)) for _a in actions), key=lambda o: o[1])
 _opt_entities = [('', 'Todas')] + sorted(((_e, audit_service.entity_label(_e)) for _e in entities), key=lambda o: o[1])

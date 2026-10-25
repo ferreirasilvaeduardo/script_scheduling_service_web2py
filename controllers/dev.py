@@ -4,7 +4,7 @@ import datetime
 import re
 
 from sss.config import app_context
-import ui_helpers
+from sss.ui import ui_helpers
 
 from webapp.context import HTTP, URL, request, response
 from webapp.security import require_func as _require_func

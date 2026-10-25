@@ -9,7 +9,7 @@ import re
 
 from sss.core import masking
 from sss.core import rbac
-import ui_helpers
+from sss.ui import ui_helpers
 
 GENERAL_FIELD = "_geral"
 MSG_CONFLICT = ui_helpers.message("conflict")

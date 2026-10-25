@@ -2,7 +2,7 @@
 # Fragmento da tabela de tickets: resposta de tickets/index.load (atualização automática) e
 # incluído por tickets/index.html. O controller aplica os mesmos guardas nas duas extensões.
 # Variáveis: result, error, page, size, query_params.
-import ui_helpers
+from sss.ui import ui_helpers
 _lt_items = result['items']
 _lt_ncol = 10
 total = result['total']

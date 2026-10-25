@@ -8,9 +8,9 @@ import collections
 import re
 import threading
 
-import admin_crud
-import ui_helpers
-from admin_crud import GENERAL_FIELD, OperationDenied
+from sss.services import admin_crud
+from sss.ui import ui_helpers
+from sss.services.admin_crud import GENERAL_FIELD, OperationDenied
 from sss.persistence.repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 FEATURE = "MANAGE_PROFILES"

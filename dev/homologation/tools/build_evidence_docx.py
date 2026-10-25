@@ -432,6 +432,26 @@ RODADAS["20261025_r3"] = {
     "servidor_web": u"servidor web próprio (scripts/run_web.py), código em src/sss (CR-022b)",
     "registros": RODADAS["20261023_r3"]["registros"],
 }
+RODADAS["20261025_r4"] = {
+    "commit": u"8e04490 (CR-022b4: camadas platform e persistence em src/sss) mais o CR-022b5 (camadas ui e "
+              u"services em src/sss), no mesmo commit deste documento",
+    "adaptacao": RODADAS["20261024_r2"]["adaptacao"],
+    "ressalva": RODADAS["20261024_r2"]["ressalva"],
+    "defeitos": [],
+    "observacoes": [
+        u"Rodada do CR-022b5, depois de mover para o pacote src/sss as camadas ui (catálogo de mensagens e menu) "
+        u"e services (regras de negócio das telas e das ferramentas de operação), inclusive os imports feitos "
+        u"dentro dos templates. Servidor web pelo bin/start_local.sh, agente pelo bin/sss-scheduler.sh, Oracle. "
+        u"Marca %s." % STAMP,
+        u"Antes desta rodada: suíte nas versões 3.6.0, 3.6.8 e 3.13.2 e bateria contra o Oracle real no 3.6.15 "
+        u"(driver oracledb, modo Thick), com o agente do DEV parado; pacote gerado de cópia limpa, sem o FAKE.",
+        RODADAS["20261024_r6"]["observacoes"][2],
+    ],
+    "agente": RODADAS["20261024_r4"]["agente"],
+    "senhas": RODADAS["20261024_r2"]["senhas"],
+    "servidor_web": u"servidor web próprio (scripts/run_web.py), código em src/sss (CR-022b)",
+    "registros": RODADAS["20261023_r3"]["registros"],
+}
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]

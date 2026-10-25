@@ -10,15 +10,15 @@ import time
 import unittest
 from unittest import mock
 
-import admin_profiles_service as perfis_mod
-import admin_users_service as usr_mod
-import auth_service
+from sss.services import admin_profiles_service as perfis_mod
+from sss.services import admin_users_service as usr_mod
+from sss.services import auth_service
 from sss.core import params_compiler
 from sss.persistence import repo_factory
 from sss.core import security
-from admin_crud import GENERAL_FIELD, OperationDenied
-from admin_profiles_service import AdminProfilesService
-from admin_users_service import AdminUsersService
+from sss.services.admin_crud import GENERAL_FIELD, OperationDenied
+from sss.services.admin_profiles_service import AdminProfilesService
+from sss.services.admin_users_service import AdminUsersService
 from sss.core.params_compiler import ParamError
 
 IP = "10.8.8.8"

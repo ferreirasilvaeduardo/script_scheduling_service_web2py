@@ -16,14 +16,14 @@ import re
 import unittest
 
 from tests.support import _testenv  # noqa: F401 - ajusta sys.path sem importar gluon
-import schedules_service
+from sss.services import schedules_service
 
 APP_DIR = _testenv.APP_DIR
 VIEWS_DIR = os.path.join(APP_DIR, "views")
 JS_DIR = os.path.join(APP_DIR, "static", "js", "app")
 CSS_FILE = os.path.join(APP_DIR, "static", "css", "sss.css")
 EVIDENCE_SCRIPT = os.path.join(APP_DIR, "dev", "homologation", "tools", "capture_evidence.js")
-MODULES_DIR = os.path.join(APP_DIR, "modules")
+UI_DIR = os.path.join(APP_DIR, "src", "sss", "ui")
 
 _RE_TEMPLATE_CODE = re.compile(r"\{\{.*?\}\}", re.S)
 _RE_ALPINE_SYNTAX = re.compile(r"(?<![\w-])(?:x-[a-z]+(?:[:.][\w.-]+)?|@[a-z][\w.-]*=|:[a-z][\w-]*=)")
@@ -163,11 +163,9 @@ class EvidenceScriptContractTest(unittest.TestCase):
     def test_selector_data_attributes_exist(self):
         """Todo [data-*] dos seletores do capture_evidence.js aparece no HTML ou no JS da aplicacao."""
         markup = "".join(_views().values()) + "".join(_scripts().values())
-        # ui_*.py em modules/ ate o CR-022b5 e em src/sss/ui/ depois
-        for folder in (MODULES_DIR, os.path.join(APP_DIR, "src", "sss", "ui")):
-            for name in sorted(os.listdir(folder)) if os.path.isdir(folder) else ():
-                if name.startswith("ui_") and name.endswith(".py"):
-                    markup += _read(os.path.join(folder, name))
+        for name in sorted(os.listdir(UI_DIR)):
+            if name.startswith("ui_") and name.endswith(".py"):
+                markup += _read(os.path.join(UI_DIR, name))
         used = set(_RE_SELECTOR_DATA_ATTR.findall(_read(EVIDENCE_SCRIPT)))
         self.assertTrue(used, "nenhum seletor data-* no roteiro")
         self.assertEqual(sorted(a for a in used if a not in markup), [])

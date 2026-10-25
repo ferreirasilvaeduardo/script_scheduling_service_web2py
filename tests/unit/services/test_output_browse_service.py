@@ -9,12 +9,12 @@ import unittest
 import zipfile
 from unittest import mock
 
-import admin_crud
-import auth_service
-import output_browse_service as browse
+from sss.services import admin_crud
+from sss.services import auth_service
+from sss.services import output_browse_service as browse
 from sss.persistence import repo_factory
 from sss.core import security
-from output_browse_service import BlobReader, InvalidRequest, OutputBrowseService
+from sss.services.output_browse_service import BlobReader, InvalidRequest, OutputBrowseService
 from sss.persistence.repo_errors import RepoNotFound
 
 IP = "10.1.2.3"

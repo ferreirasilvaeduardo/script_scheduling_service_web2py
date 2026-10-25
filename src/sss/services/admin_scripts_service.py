@@ -11,14 +11,14 @@ import json
 import re
 import threading
 
-import admin_crud
+from sss.services import admin_crud
 from sss.core import params_compiler
 from sss.config import log_paths
 from sss.platform import path_guard
 from sss.core import rbac
-import schedules_service
-import ui_helpers
-from admin_crud import GENERAL_FIELD, OperationDenied
+from sss.services import schedules_service
+from sss.ui import ui_helpers
+from sss.services.admin_crud import GENERAL_FIELD, OperationDenied
 from sss.core.params_compiler import ParamError, PARAM_TYPES
 from sss.platform.path_guard import Code, PathGuardError
 from sss.persistence.repo_errors import RepoConflict, RepoNotFound, RepoViolation
@@ -650,7 +650,7 @@ def _service():
             factory = repo_factory
             cfg = app_context.require_config()
             tickets = factory.get("tickets")
-            import admin_profiles_service
+            from sss.services import admin_profiles_service
             _default = AdminScriptsService(
                 catalog=factory.get("catalog"),
                 schedules=factory.get("schedules"),

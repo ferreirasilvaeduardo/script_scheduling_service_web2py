@@ -4,10 +4,10 @@
 Regras ficam em modules/admin_parameters_service.py; CSRF e Origin de todo POST sao validados em
 webapp/security.py. O editor de opcoes do cliente e conveniencia: o servidor revalida tudo.
 """
-import admin_crud
-import admin_parameters_service as service
-import ui_helpers
-from admin_crud import AccessDenied, OperationDenied
+from sss.services import admin_crud
+from sss.services import admin_parameters_service as service
+from sss.ui import ui_helpers
+from sss.services.admin_crud import AccessDenied, OperationDenied
 from sss.persistence.repo_errors import RepoConflict, RepoError, RepoNotFound
 
 from webapp import security as _security

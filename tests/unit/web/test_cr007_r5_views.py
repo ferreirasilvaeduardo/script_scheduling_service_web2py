@@ -10,7 +10,7 @@ import os
 import unittest
 from urllib.parse import urlencode
 
-import ui_helpers
+from sss.ui import ui_helpers
 from web.response import Response
 from web.template import Templates
 

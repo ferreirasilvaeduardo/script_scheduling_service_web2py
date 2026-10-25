@@ -11,8 +11,8 @@ import json
 import re
 import threading
 
-import admin_crud
-import ui_helpers
+from sss.services import admin_crud
+from sss.ui import ui_helpers
 from sss.persistence.repo_errors import RepoNotFound
 from sss.persistence.contracts.repo_inputs import NoLiveAgent
 

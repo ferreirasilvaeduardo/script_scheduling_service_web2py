@@ -8,10 +8,10 @@ import os
 import unittest
 from unittest import mock
 
-import auth_service
+from sss.services import auth_service
 from sss.persistence import repo_factory
 from sss.core import security
-from ticket_service import TicketService
+from sss.services.ticket_service import TicketService
 
 SESSIONS = {
     "admin": {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0},
@@ -202,7 +202,7 @@ class TestScriptHistory(_Base):
 class TestStackedBars(unittest.TestCase):
 
     def test_geometria(self):
-        import ui_helpers
+        from sss.ui import ui_helpers
         days = [{"label": "01/10", "succeeded": 2, "error": 1, "cancelled": 0, "in_progress": 0},
                 {"label": "02/10", "succeeded": 0, "error": 0, "cancelled": 0, "in_progress": 0}]
         g = ui_helpers.stacked_bars(days, width=200, height=100)

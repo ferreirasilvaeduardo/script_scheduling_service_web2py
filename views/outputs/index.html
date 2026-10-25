@@ -1,7 +1,7 @@
 {{extend 'layout.html'}}
 {{
 # Saídas (README §5.9, CR-020a): navegação ambiente > script > dia > ticket, só leitura, a partir do banco.
-import ui_helpers
+from sss.ui import ui_helpers
 _lv = level
 _q = dict(environment=environment, script_id=script_id)
 }}

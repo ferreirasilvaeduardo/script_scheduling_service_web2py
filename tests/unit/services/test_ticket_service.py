@@ -12,15 +12,15 @@ import tempfile
 import unittest
 from unittest import mock
 
-import auth_service
+from sss.services import auth_service
 from sss.core import params_compiler
 from sss.platform import path_guard
 from sss.persistence import repo_factory
 from sss.core import security
-import ticket_service
-import ui_helpers
+from sss.services import ticket_service
+from sss.ui import ui_helpers
 from sss.persistence.repo_errors import RepoNotFound
-from ticket_service import AccessDenied, RerunError, TicketService
+from sss.services.ticket_service import AccessDenied, RerunError, TicketService
 
 # UID fictício do agente: o dono dos arquivos de teste é o usuário do teste (CR-007, R-15).
 FAKE_AGENT = 2 ** 31 - 3

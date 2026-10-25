@@ -7,14 +7,14 @@ import os
 import unittest
 from unittest import mock
 
-import auth_service
+from sss.services import auth_service
 from sss.core import rbac
 from sss.persistence import repo_factory
 from sss.core import security
 from sss.core import sql_ident
-import ui_helpers
-from schedules_service import SchedulesService
-from ticket_service import TicketService
+from sss.ui import ui_helpers
+from sss.services.schedules_service import SchedulesService
+from sss.services.ticket_service import TicketService
 
 ADMIN_SESSION = {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0}
 

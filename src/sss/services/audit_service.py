@@ -12,11 +12,11 @@ import io
 import re
 import threading
 
-import admin_crud
+from sss.services import admin_crud
 from sss.core import masking
 from sss.core import rbac
-import ui_helpers
-from admin_crud import AccessDenied  # noqa: F401  (reexportado para o controller)
+from sss.ui import ui_helpers
+from sss.services.admin_crud import AccessDenied  # noqa: F401  (reexportado para o controller)
 
 FEATURE = "VIEW_AUDIT"
 

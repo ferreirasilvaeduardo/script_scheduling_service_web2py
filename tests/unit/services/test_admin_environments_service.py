@@ -7,14 +7,14 @@ import os
 import unittest
 from unittest import mock
 
-import admin_environments_service as svc_mod
-import admin_crud
-import auth_service
+from sss.services import admin_environments_service as svc_mod
+from sss.services import admin_crud
+from sss.services import auth_service
 from sss.core import masking
 from sss.persistence import repo_factory
 from sss.core import security
-from admin_environments_service import AdminEnvironmentsService
-from admin_crud import GENERAL_FIELD, AccessDenied
+from sss.services.admin_environments_service import AdminEnvironmentsService
+from sss.services.admin_crud import GENERAL_FIELD, AccessDenied
 from sss.persistence.repo_errors import RepoConflict, RepoNotFound
 
 IP = "10.9.8.7"
