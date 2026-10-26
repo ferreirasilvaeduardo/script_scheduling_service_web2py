@@ -312,7 +312,8 @@ sss ALL=(ssshml) NOPASSWD: /opt/sss/bin/sss-helper
 * Pode ser um link simbólico. O arquivo **real** precisa existir no servidor do agente, ser arquivo regular, ser legível pelo usuário de execução e **não** ter escrita de grupo nem de outros (`chmod go-w`).
 * O conteúdo e a versão do script são controlados pelo ambiente: o SSS não confere hash nem dono (CR-011). Quem grava na pasta do script muda o que vai rodar.
 * O nó web confere o formato do caminho e, no caminho absoluto, as pastas do sistema e a da aplicação (o relativo só pelo formato). A conferência do arquivo é feita pelo agente, antes de cada execução; uma recusa aparece como `PRECHECK_FAILED` (§15).
-* O interpretador do script (`PYTHON3`, `BASH`, `SH`) precisa estar mapeado em `[agent] interpreters` de pelo menos um agente saudável do ambiente. Senão, o ticket fica `PENDING` (§15, "fila sem atendente").
+* O interpretador do script (`PYTHON3`, `PYTHON`, `BASH`, `SH`) precisa estar mapeado em `[agent] interpreters` de pelo menos um agente saudável do ambiente (os "definido no script", `PYTHON_SCRIPT` e `SHELL_SCRIPT`, não precisam: usam o `#!` do script). Senão, o ticket fica `PENDING` (§15, "fila sem atendente").
+* **Interpretador informado no disparo (CR-025):** o operador pode digitar, só naquela execução, o caminho absoluto de um interpretador ou só o nome (ex.: `python3.13`), procurado no `PATH` do **serviço do agente**: confira o `PATH` da unit do systemd ou do `bin/sss-scheduler.sh` em cada servidor. O agente só confere se o executável existe e é executável. **Risco aceito pelo responsável pelo produto:** quem pode disparar escolhe o programa que roda o script, e o `#!` dos scripts "definido no script" troca o interpretador sem passar pelo cadastro. O digitado e o usado ficam no ticket e na auditoria (README §8.5).
 
 ---
 
@@ -641,6 +642,8 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | ↳ `NO_BASE_DIR` | | Script com caminho relativo e **este** agente sem `[agent] script_base_dir` (CR-023) | Configure a pasta base no agente (§9) e suba de novo |
 | ↳ `RELATIVE_PATH` | | Agente de versão anterior ao CR-023 diante de script com caminho relativo | Atualize todos os agentes do ambiente (§18) |
 | ↳ `INTERPRETER_UNAVAILABLE` | | O interpretador do script não está mapeado **neste** agente | `[agent] interpreters` |
+| ↳ `INTERPRETER_NOT_FOUND` | | O interpretador digitado no disparo, ou o do `#!`, não existe ou não é executável neste servidor (o nome é procurado no `PATH` do agente; CR-025) | Corrija o valor e dispare de novo, instale o interpretador ou ajuste o `PATH` do serviço |
+| ↳ `NO_SHEBANG` | | Script "definido no script" sem `#!` com caminho absoluto na primeira linha (CR-025) | Corrija a primeira linha do script ou o cadastro |
 | ↳ `UNSUPPORTED_VERSION` | | Ticket criado por uma versão anterior (snapshot antes da versão 5) | Dispare de novo pela tela |
 | ↳ `REGISTRATION_CHANGED`, `SCRIPT_INACTIVE`, `NOT_HOMOLOGATED`, `ENVIRONMENT_INACTIVE`, `NO_PERMISSION` | | O cadastro mudou entre o disparo e a execução | Confira o cadastro e dispare de novo |
 | ↳ `DB_ERROR: ORA-nnnnn` | `falha antes do spawn: DB_ERROR: ...` | Erro de banco na pré-validação | Veja o código ORA |
@@ -731,6 +734,15 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
    * **Sem web2py (CR-021f):** o `bin/sss-web.sh` novo só aceita as opções do `scripts/run_web.py` e recusa `web2py.py`/`anyserver.py` (código 2). Troque, junto com a versão, a linha que sobe o web na unit do `systemd` ou no script de operação: `bin/sss-web.sh <python3> --host 127.0.0.1 --port <porta>` (§10.1). Confira antes com `bin/sss-web.sh <python3> --check`. A sessão passa a ser o cookie assinado `sss_session` (CR-021e, D1): quem estiver logado na hora da atualização entra de novo. O `httpserver.log`, os `parameters_<porta>.py` e o painel `/admin` do web2py deixam de existir: tire o `httpserver.log` do `logrotate` (§14.4) e não copie nada disso para a pasta nova.
    * **Aplicação na raiz do pacote (CR-022a):** o pacote não tem mais `applications/script_scheduling_service/`; tudo fica direto em `/opt/sss/app` (antes `/opt/sss/web2py`). Na primeira atualização com esta versão, extraia em `/opt/sss/app` (sem renomear a pasta antiga para ela), copie o `config.ini` de `/opt/sss/web2py/applications/script_scheduling_service/instance/` para `/opt/sss/app/instance/` e troque nos caminhos de operação (unit do `systemd`, `cron` do purge, `sudoers` do monitoramento, scripts de subida) `/opt/sss/web2py` por `/opt/sss/app` e `.../applications/script_scheduling_service/scripts/` por `.../scripts/`. Caminhos absolutos do `config.ini` que apontavam para dentro da pasta antiga (ex.: `log_dir`, `work_dir`) também mudam. O retorno é subir de novo pela pasta antiga, que fica intacta.
    * **Código no pacote `src/sss/` (CR-022b):** para a operação nada muda: os comandos continuam `bin/*.sh` e `scripts/<nome>.py` (agora involucros que chamam `src/sss/cli/`), com as mesmas opções e códigos de saída. O pacote passa a ter só `bin/`, `docs/`, `instance/`, `scripts/` e `src/` (§3); as pastas `modules/`, `webapp/`, `controllers/`, `views/` e `static/` saíram, e templates e estáticos ficam em `src/sss/web/`. Automação local que apontava para arquivos dessas pastas (cópia de CSS, inspeção de template) precisa do caminho novo; as URLs não mudam.
+   * **Interpretador no disparo e "definido no script" (CR-025):** atualize **todos** os agentes antes de liberar a versão nova da web: o ticket passa à versão 6 do snapshot, que o agente anterior recusa (`UNSUPPORTED_VERSION`). Num banco já instalado, o DBA aplica antes da subida (troque `openrisow` e `tbsss_`):
+     ```sql
+     ALTER TABLE openrisow.tbsss_scripts DROP CONSTRAINT ck_tbsss_scr_int;
+     ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_int
+       CHECK (interpreter IN ('PYTHON3','PYTHON','BASH','SH','PYTHON_SCRIPT','SHELL_SCRIPT'));
+     ALTER TABLE openrisow.tbsss_tickets ADD (interpreter_path VARCHAR2(1000 CHAR));
+     COMMENT ON COLUMN openrisow.tbsss_tickets.interpreter_path IS 'Interpretador executado (configurado, do #! ou digitado no disparo, CR-025); vazio antes do inicio';
+     ```
+     Para usar a opção Python, acrescente `PYTHON=<executável>` em `[agent] interpreters` dos agentes do ambiente.
    * **Caminho relativo à pasta base (CR-023):** atualize **todos** os agentes antes de cadastrar o primeiro script com caminho relativo (o agente anterior termina o ticket em `PRECHECK_FAILED`, `RELATIVE_PATH`) e configure `[agent] script_base_dir` em cada um (§9). O esquema continua na versão 1, sem migração: num banco já instalado, o DBA aplica antes da subida (troque `openrisow` e `tbsss_` pelo owner e prefixo do ambiente):
      ```sql
      ALTER TABLE openrisow.tbsss_scripts DROP CONSTRAINT ck_tbsss_scr_path;

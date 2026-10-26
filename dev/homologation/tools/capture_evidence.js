@@ -1628,7 +1628,7 @@ CTS['CT-27'] = async () => {
 const DIAG = 'diagnostico';
 
 // Cadastra (ou reativa) um script de diagnostico pela tela, liberado so no GFPREPROD; devolve o id.
-async function diagScript(name, file, description) {
+async function diagScript(name, file, description, interpreter = 'SH') {
     await login('admin');
     const find = async () => {
         await go(`/admin_scripts/index?name=${name}`);
@@ -1642,7 +1642,7 @@ async function diagScript(name, file, description) {
         await go('/admin_scripts/form');
         await fill('#field-name', name);
         await fill('#field-description', description);
-        await fill('#field-interpreter', 'SH');
+        await fill('#field-interpreter', interpreter);
         await fill('#field-path_file', file);
         await submit('/admin_scripts/save');
         sid = await find();
@@ -1651,8 +1651,10 @@ async function diagScript(name, file, description) {
         if (await clickText('button', 'Reativar')) await confirmModal();
         // Cadastro de rodada anterior pode ter outro caminho (pasta antiga do repositorio, CR-022a; absoluto, CR-023)
         await go(`/admin_scripts/form/${sid}`);
-        if ((await page.$eval('#field-path_file', (el) => el.value)) !== file) {
+        if ((await page.$eval('#field-path_file', (el) => el.value)) !== file ||
+            (await page.$eval('#field-interpreter', (el) => el.value)) !== interpreter) {
             await fill('#field-path_file', file);
+            await fill('#field-interpreter', interpreter);
             await submit('/admin_scripts/save');
         }
     }
@@ -1669,11 +1671,12 @@ async function deactivateScript(sid) {
 }
 
 // Disparo direto pela URL (script e ambiente ja escolhidos) e confirmacao; devolve o id do ticket.
-async function runDirect(sid, env, answers) {
+async function runDirect(sid, env, answers, interpreter) {
     await go(`/tickets/new?script_id=${sid}&environment=${env}`);
     for (const [code, value] of Object.entries(answers || {})) {
         await fill(`[name="p_${code}"]`, value);
     }
+    if (interpreter) await fill('#field-interpreter', interpreter);  // CR-025
     await clickText('[data-component="ticketTrigger"] [data-action="open"]', 'Criar ticket', { wait: 1500 });
     await confirmModal();
     return ticketFromUrl();
@@ -1889,6 +1892,76 @@ CTS['CT-31'] = async () => {
     note('Agente sem pasta base (NO_BASE_DIR) e link para fora da pasta base: cobertos pelos testes automatizados (o DEV tem um agente só, com pasta base).');
 };
 
+CTS['CT-32'] = async () => {
+    begin('CT-32', 'CR-025: interpretador informado no disparo e "definido no script"');
+    const PY36 = '/home/eduardof/.pyenv/versions/3.6.0/bin/python3.6';
+    const PY313 = '/home/eduardof/.pyenv/versions/3.13.2/bin/python3.13';
+    await login('admin');
+    await go('/admin_scripts/form');
+    const opcoes = await page.$$eval('#field-interpreter option', (os) => os.map((o) => o.value).filter((v) => v));
+    check('Cadastro com as seis opções de interpretador',
+        JSON.stringify(opcoes) === JSON.stringify(['PYTHON3', 'PYTHON', 'BASH', 'SH', 'PYTHON_SCRIPT', 'SHELL_SCRIPT']),
+        opcoes.join(','));
+    // (1) Python definido no script: o #! (Python 3.6 do pyenv) escolhe o interpretador
+    const py36 = await diagScript('diag_interp_py36', 'diagnostico/interp_py36.py',
+        'Diagnostico do CR-025: Python definido no script (#!)', 'PYTHON_SCRIPT');
+    const t1 = await runDirect(py36, 'GFPREPROD', {});
+    // (2) caminho completo digitado no disparo, em script cadastrado como Python 3
+    const info = await diagScript('diag_interp_info', 'diagnostico/interp_info.py',
+        'Diagnostico do CR-025: mostra o interpretador usado', 'PYTHON3');
+    await go(`/tickets/new?script_id=${info}&environment=GFPREPROD`);
+    await expectText('Campo Interpretador opcional, em branco, com a ajuda do cadastrado', 'Interpretador (opcional)',
+        'Em branco, roda como cadastrado (Python 3)');
+    await fill('#field-interpreter', PY313);
+    await clickText('[data-component="ticketTrigger"] [data-action="open"]', 'Criar ticket', { wait: 1500 });
+    await expectText('Confirmação mostra o interpretador informado e o comando com ele', 'Interpretador:', PY313);
+    await snap('Disparo com o interpretador informado (caminho completo)');
+    await confirmModal();
+    const t2 = ticketFromUrl();
+    // (3) só o nome, procurado no PATH do agente; (4) nome que não existe
+    const t3 = await runDirect(info, 'GFPREPROD', {}, 'python3.12');
+    const t4 = await runDirect(info, 'GFPREPROD', {}, 'python9.99');
+    // (5) Shell definido no script sem #!
+    const sem = await diagScript('diag_interp_sem_shebang', 'diagnostico/interp_sem_shebang.sh',
+        'Diagnostico do CR-025: shell definido no script sem #!', 'SHELL_SCRIPT');
+    const t5 = await runDirect(sem, 'GFPREPROD', {});
+    state.tickets.ct32 = [t1, t2, t3, t4, t5];
+    saveState();
+    const fim = [];
+    for (const t of [t1, t2, t3, t4, t5]) {
+        fim.push(await waitStatus(t, ['Deu certo', 'Deu erro', 'Não conseguiu', 'Arquivo não encontrado'], 120));
+    }
+    await sleep(3000);
+    const casos = [
+        [t1, true, ['Como cadastrado', PY36], ['Interpretador: ' + PY36 + ' 3.6.0'], 'Python definido no script (#! 3.6)'],
+        [t2, true, [PY313, PY313], ['Interpretador: ' + PY313 + ' 3.13.2'], 'caminho completo digitado (3.13)'],
+        [t3, true, ['python3.12', '/usr/bin/python3.12'], ['Interpretador: /usr/bin/python3.12'], 'só o nome digitado (python3.12)'],
+        [t4, false, ['python9.99', 'Ainda não executado'], ['INTERPRETER_NOT_FOUND'], 'nome que não existe no servidor'],
+        [t5, false, ['Como cadastrado', 'Ainda não executado'], ['NO_SHEBANG'], 'definido no script sem #!'],
+    ];
+    for (let i = 0; i < casos.length; i++) {
+        const [t, ok, detalhe, log, nome] = casos[i];
+        check(`Ticket #${t} (${nome}) ${ok ? 'deu certo' : 'não rodou'}`, ok === fim[i].includes('Deu certo'), fim[i]);
+        await go(`/tickets/detail/${t}`);
+        await sleep(1500);
+        await expectText(`Detalhe do ticket #${t}: interpretador informado e usado`, 'Interpretador informado',
+            'Interpretador usado', ...detalhe);
+        await expectText(`Log do ticket #${t}`, ...log);
+        if (i === 0 || i === 3) await snap(`Detalhe: ${nome}`, { full: true });
+    }
+    await go(`/tickets/new?script_id=${info}&environment=GFPREPROD`);
+    await fill('#field-interpreter', 'py thon');
+    await clickText('[data-component="ticketTrigger"] [data-action="open"]', 'Criar ticket', { wait: 1500 });
+    await expectText('Formato inválido recusado na confirmação', 'Informe o caminho completo do interpretador');
+    await go('/audit/index?action=TICKET_CREATE');
+    // Detalhe longo fica recolhido em "ver mais" (<details>): le o texto completo de cada linha.
+    const detalhes = await page.$$eval('.sss-audit-detail', (tds) => tds.map((td) => td.textContent).join(' | '));
+    check('Auditoria do disparo com o interpretador informado (detalhe completo, em "ver mais")',
+        detalhes.includes('interpretador informado: ' + PY313), detalhes.slice(0, 300));
+    for (const sid of [py36, info, sem]) check(`Script de diagnóstico ${sid} desativado ao final`, await deactivateScript(sid));
+    note('Risco aceito pelo responsável (README §8.5): quem dispara escolhe o executável. No DEV, o agente herda o PATH do terminal que o subiu; os casos usam caminhos do pyenv e o python3.12 do sistema, para não depender dos shims do pyenv.');
+};
+
 CTS['ENCERRAMENTO'] = async () => {
     begin('ENCERRAMENTO', 'Encerramento: regras da homologação pausadas (ficam como evidência, sem rodar)');
     await login('admin');
@@ -1906,7 +1979,7 @@ CTS['ENCERRAMENTO'] = async () => {
 
 const ORDER = ['CT-01', 'CT-02', 'CT-03', 'MASSA', 'CT-04', 'CT-05', 'CT-06', 'CT-07', 'CT-08', 'CT-09', 'CT-10',
     'CT-11', 'CT-12', 'CT-13', 'CT-14', 'CT-15', 'CT-16', 'CT-17', 'CT-18', 'CT-19', 'CT-20', 'CT-21', 'CT-22',
-    'CT-23', 'CT-24', 'CT-25', 'CT-26', 'CT-27', 'CT-28', 'CT-29', 'CT-30', 'CT-31', 'ENCERRAMENTO'];
+    'CT-23', 'CT-24', 'CT-25', 'CT-26', 'CT-27', 'CT-28', 'CT-29', 'CT-30', 'CT-31', 'CT-32', 'ENCERRAMENTO'];
 
 module.exports = { CTS };
 

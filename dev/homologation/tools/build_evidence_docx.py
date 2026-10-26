@@ -43,7 +43,7 @@ AMBAR = RGBColor(0x8A, 0x5A, 0x00)
 ORDEM = ["CT-01", "CT-02", "CT-03", "MASSA", "CT-04", "CT-05", "CT-06", "CT-07", "CT-08", "CT-09", "CT-10",
          "CT-11", "CT-12", "CT-13", "CT-14", "CT-15", "CT-16", "CT-17", "CT-18", "CT-19", "CT-20", "CT-21",
          "CT-22", "CT-23", "CT-24", "CT-25", "CT-26", "CT-27", "CT-28", "CT-29", "CT-30", "CT-31",
-         "ENCERRAMENTO"]
+         "CT-32", "ENCERRAMENTO"]
 
 # Adaptacao de cada caso ao DEV real (o manual de 18/10 foi escrito sobre a massa simulada do FAKE).
 ADAPTACAO = {
@@ -554,6 +554,37 @@ RODADAS["20261025_r9"] = {
     "seed_scripts": u"Scripts do seed e diagnósticos com caminho relativo (CR-023): utilitarios/<arquivo> e "
                     u"diagnostico/<arquivo>, resolvidos pelo agente na pasta base [agent] script_base_dir = dev/scripts "
                     u"do repositório.",
+    "registros": RODADAS["20261023_r3"]["registros"],
+}
+RODADAS["20261026"] = {
+    "commit": u"382e403 (CR-025b: telas do interpretador informado no disparo) mais o CR-025c (documentação com os "
+              u"riscos e o CT-32), no mesmo commit deste documento",
+    "adaptacao": dict(RODADAS["20261025_r9"]["adaptacao"], **{
+        "CT-01": ADAPTACAO["CT-01"] + u" As tabelas do DEV foram recriadas no CR-025a, então o admin voltou à senha "
+                                      u"inicial.",
+        "CT-32": u"Caso novo do CR-025, com o agente real: diagnósticos dev/scripts/diagnostico/interp_*.* cadastrados "
+                 u"pela tela (só GFPREPROD). Python definido no script com #! do Python 3.6 do pyenv; caminho completo "
+                 u"do Python 3.13 do pyenv digitado no disparo; só o nome python3.12 (o do sistema, no PATH do agente); "
+                 u"nome inexistente (INTERPRETER_NOT_FOUND) e shell definido no script sem #! (NO_SHEBANG). Detalhe com o "
+                 u"interpretador informado e o usado, log com o interpretador que rodou e auditoria do disparo.",
+    }),
+    "ressalva": RODADAS["20261024_r2"]["ressalva"],
+    "defeitos": [],
+    "observacoes": [
+        u"Rodada do CR-025 (interpretador informado no disparo e opções \"definido no script\"). As tabelas do DEV "
+        u"foram recriadas a pedido do responsável; o agente do DEV tem PYTHON3, PYTHON (Python 3.6 do pyenv), BASH "
+        u"e SH em [agent] interpreters. Servidor web pelo bin/start_local.sh, agente pelo bin/sss-scheduler.sh, "
+        u"Oracle. Marca %s." % STAMP,
+        u"Risco aceito pelo responsável pelo produto (README §8.5): quem pode disparar escolhe o executável que roda "
+        u"o script; o digitado e o usado ficam no ticket e na auditoria.",
+        u"Na primeira passada, a verificação da auditoria do CT-32 falhou: o detalhe longo fica recolhido em \"ver "
+        u"mais\" e o roteiro lia só o texto visível (a linha estava gravada certa no banco). O roteiro passou a ler o "
+        u"detalhe completo e o CT-32 foi rodado de novo; os resultados abaixo são os da segunda passada.",
+    ],
+    "agente": RODADAS["20261024_r4"]["agente"],
+    "senhas": RODADAS["20261025_r9"]["senhas"],
+    "servidor_web": RODADAS["20261025_r9"]["servidor_web"],
+    "seed_scripts": RODADAS["20261025_r9"]["seed_scripts"],
     "registros": RODADAS["20261023_r3"]["registros"],
 }
 RODADA = RODADAS[RUN_TAG]

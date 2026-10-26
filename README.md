@@ -844,7 +844,7 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
 1. Validar o CSRF e `rbac.can_execute(user, script_id, environment)`.
 2. Carregar o vínculo `tbsss_script_param` + `tbsss_parameters` (ativos) do script.
 3. Validar as respostas e compilar o snapshot (§6). Em caso de erro, retornar o erro por campo, sem gravar nada.
-4. Gravar o `scheduled_at` informado (opcional, padrão `SYSDATE`).
+4. Gravar o `scheduled_at` informado (opcional, padrão `SYSDATE`). O interpretador digitado (opcional, CR-025, §8.5) vai no snapshot e na auditoria.
    * Ele deve ser `>= SYSDATE` **exato**, sem tolerância de minuto: um horário no minuto corrente, mas anterior ao `SYSDATE`, é recusado.
    * O limite superior é `SYSDATE + 366` dias (CR-007, D2). Acima disso, o campo é recusado: "Escolha uma data até {data}."
    * O valor digitado no campo de data e hora do navegador é interpretado como horário de parede do servidor Oracle (§7.1). A tela informa isso ao lado do campo.
@@ -1152,14 +1152,20 @@ Para todos os tipos, **nesta ordem**:
 O catálogo guarda um **interpretador lógico** (CR-001, D1). O nó web compila apenas os **argumentos** (`args`). O **agente** monta o `argv` real no claim, com o executável **dele**:
 
 ```text
-PYTHON3    -> [<exe PYTHON3>, "-I", <script_real>, ...args]
-BASH       -> [<exe BASH>, <script_real>, ...args]
-SH         -> [<exe SH>, <script_real>, ...args]
+PYTHON3        -> [<exe PYTHON3>, "-I", <script_real>, ...args]
+PYTHON         -> [<exe PYTHON>, "-E", "-s", <script_real>, ...args]          (CR-025)
+BASH           -> [<exe BASH>, <script_real>, ...args]
+SH             -> [<exe SH>, <script_real>, ...args]
+PYTHON_SCRIPT  -> [<exe do #!>, "-E", "-s", [<arg do #!>], <script_real>, ...args]   (CR-025)
+SHELL_SCRIPT   -> [<exe do #!>, [<arg do #!>], <script_real>, ...args]               (CR-025)
+digitado       -> [<exe digitado>, ("-E", "-s" se o cadastro for Python), <script_real>, ...args]  (CR-025)
 ```
 
 * `<exe X>` vem de `[agent] interpreters` do agente (§12.1).
+* **Interpretador informado no disparo (CR-025):** quando o operador digita um interpretador, ele vence o cadastro e o `#!`. Caminho absoluto é usado como está; só o nome (ex.: `python3.13`) é procurado no `PATH` do processo do agente. "Definido no script" (`PYTHON_SCRIPT`, `SHELL_SCRIPT`) usa o caminho do `#!` da primeira linha e, no máximo, um argumento depois dele. Regras e riscos no §8.5.
+* **`-I` só no `PYTHON3` configurado:** os demais Python (o `PYTHON`, que pode ser o Python 2; o do `#!`; o digitado, de versão desconhecida) rodam com `-E -s`, que também isolam das variáveis `PYTHON*` e do site do usuário e existem no Python 2 e no 3.
 * `<script_real>` é o `realpath` de `path_file`: o caminho absoluto cadastrado (CR-005, D2) ou o relativo junto da `[agent] script_base_dir` do agente (CR-023), conferido pelo `path_guard` do agente (§8.5).
-* A UI mostra o `argv` **lógico**, por exemplo `PYTHON3 -I /opt/automacoes/scripts/carga.py --data 2026-10-13`, com o caminho cadastrado para todos (CR-005, D8). Com caminho relativo, aparece o relativo (`PYTHON3 -I faturamento/carga.py ...`); o caminho real executado fica em "Caminho executado", no detalhe do ticket (CR-023).
+* A UI mostra o `argv` **lógico**, por exemplo `PYTHON3 -I /opt/automacoes/scripts/carga.py --data 2026-10-13`, com o caminho cadastrado para todos (CR-005, D8). Com caminho relativo, aparece o relativo (`PYTHON3 -I faturamento/carga.py ...`); com interpretador digitado, aparece o digitado (`python3.13 -E -s ...`, CR-025); o caminho real executado fica em "Caminho executado", no detalhe do ticket (CR-023).
 * Fora de DEV, o `argv` é executado pelo helper com o usuário de execução do ambiente (§8.0, §8.4); o `argv` em si não muda.
 
 ### 6.5 Snapshot imutável (`tbsss_tickets.submitted_params`)
@@ -1187,6 +1193,7 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
 * **Versão 3 (CR-003, várias pastas base):** acrescentava `base_dir`, o nome lógico da pasta onde o script ficava.
 * **Versão 4 (CR-005, caminho livre):** sai `base_dir`; `path_file` é o caminho **absoluto** cadastrado. O agente o confere pelo `path_guard` local (§8.5) e monta o `argv` (§6.4, §8.4). O executável do interpretador continua fora do snapshot.
 * **Versão 5 (CR-016c2, D20):** as chaves passam a inglês (`script_name`, `answers`, `sensitive`, `compiled_at`). O agente recusa as versões 1 a 4 (`UNSUPPORTED_VERSION`); como o CR-016a recria o banco, não há ticket v4 num ambiente atualizado. Desde o CR-023, `path_file` pode ser relativo à pasta base do agente, sem mudar a versão (D9): o agente anterior recusa o relativo com `RELATIVE_PATH`.
+* **Versão 6 (CR-025):** acrescenta `interpreter_override`, o interpretador digitado no disparo (caminho ou nome), ou nulo (como cadastrado). O agente aceita as versões 5 e 6; um agente anterior recusa a 6 (`UNSUPPORTED_VERSION`) em vez de ignorar a escolha do operador.
 * Snapshots das versões 1 a 3 foram gerados apenas em DEV/FAKE e não são aceitos pelo agente. O claim os rejeita com `PRECHECK_FAILED`.
 
 * O snapshot é **compilado na criação do ticket** (manual ou desdobro). O agente **nunca** recompila nem lê `tbsss_script_param` e `tbsss_parameters` para executar.
@@ -1660,10 +1667,10 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
 
 1. **Pré-validação do snapshot e do contexto.** Qualquer falha leva a `FAILED` com `PRECHECK_FAILED` e `-4`, com a linha `[SSS]` do §5.2 no log (o código entre parênteses):
    * o JSON é válido e tem `version` suportada (`UNSUPPORTED_VERSION`);
-   * `version == 5`, e `interpreter` consta na allowlist lógica **e** no mapeamento deste agente (`INTERPRETER_UNAVAILABLE`);
+   * `version` 5 ou 6, e `interpreter` consta na allowlist lógica e, quando não há interpretador digitado e não é "definido no script", no mapeamento deste agente (`INTERPRETER_UNAVAILABLE`);
    * `path_file` e `interpreter` do snapshot são iguais aos do cadastro atual do script (`REGISTRATION_CHANGED`, CR-007 R-24);
    * `path_file` (absoluto, ou relativo junto da `[agent] script_base_dir` deste agente, CR-023) passa na §8.5 neste agente, que fornece o `script_real` (códigos do `path_guard`);
-   * o `argv` é montado pelo agente (§6.4) a partir de `interpreter`, `script_real` e `args`;
+   * o `argv` é montado pelo agente (§6.4) a partir de `interpreter`, `script_real`, `args` e, no CR-025, do interpretador digitado ou do `#!` (`INTERPRETER_NOT_FOUND` se não existir ou não for executável; `NO_SHEBANG` se o "definido no script" não tiver `#!` com caminho absoluto); o executável usado é gravado em `interpreter_path` junto com o PID (passo 5);
    * o script segue `active = 'Y'` (`SCRIPT_INACTIVE`) e homologado para o ambiente (`NOT_HOMOLOGATED`);
    * o ambiente do ticket segue ativo (`ENVIRONMENT_INACTIVE`) e o **solicitante** ainda tem `rbac.can_execute` para o script e o ambiente, com o mesmo contexto de RBAC do desdobro (`NO_PERMISSION`, CR-007 D2).
 
@@ -1738,7 +1745,18 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
 
 **Princípio (CR-011):** o ambiente controla o conteúdo e a versão dos scripts; o SSS agenda e executa. O agente confere só o essencial do arquivo, no servidor onde o script roda. Não há hash do conteúdo nem conferência do dono dos arquivos.
 
-**Interpretadores lógicos (somente POSIX):** `PYTHON3`, `BASH` e `SH`.
+**Interpretadores lógicos (somente POSIX):** `PYTHON3`, `PYTHON`, `BASH` e `SH`, mapeados por agente em `[agent] interpreters`, e os "definido no script" `PYTHON_SCRIPT` e `SHELL_SCRIPT` (CR-025), que usam o `#!` da primeira linha do script e não são configurados.
+
+**Interpretador informado no disparo e `#!` (CR-025)**
+
+* **No disparo**, todo script tem o campo opcional **Interpretador**, em branco por padrão (roda como cadastrado). O operador pode digitar o caminho absoluto (`/opt/py311/bin/python3`) ou só o nome (`python3.13`). No nó web só o formato é conferido: caminho absoluto sem caractere de controle, ou nome com letras, números, `.`, `_`, `+` e `-` (`INTERPRETER_INVALID`, mostrado no campo). A reexecução repete o valor; o agendamento roda como cadastrado.
+* **No agente**, a conferência é mínima e não restringe: o digitado, ou o caminho do `#!`, precisa existir e ser executável (`INTERPRETER_NOT_FOUND`). O nome sem `/` é procurado no `PATH` do processo do agente (o da unit do systemd ou do `bin/sss-scheduler.sh`). "Definido no script" sem `#!` com caminho absoluto na primeira linha: `NO_SHEBANG`. `#!/usr/bin/env python3` é aceito e roda o `env`, que procura o `python3` no `PATH` fixo do filho (§8.6).
+* **Registro:** o snapshot guarda o digitado (versão 6); o agente grava o executável usado em `tbsss_tickets.interpreter_path`; o detalhe do ticket mostra o cadastrado, o informado e o usado; a auditoria do disparo e da reexecução registra "interpretador informado: …".
+* **Riscos (aceitos pelo responsável pelo produto em 2026-10-26):**
+  * **executável escolhido pelo operador:** quem pode disparar (`EXEC_SCRIPT`) escolhe qual programa roda o script, inclusive um que não seja interpretador; isso substitui a lista fixa de interpretadores do servidor naquela execução;
+  * **versão errada:** o script pode rodar numa versão diferente daquela para a qual foi feito e falhar no meio, ou terminar com resultado errado;
+  * **`#!` sob controle de quem edita o script:** nos "definido no script", trocar a primeira linha do arquivo troca o interpretador sem passar pelo cadastro;
+  * **mitigações que ficam:** o digitado e o usado gravados no ticket e na auditoria; a conferência mínima (existe e é executável); o Python isolado (`-I` ou `-E -s`); a execução com o usuário de execução do ambiente, nunca como root (§8.0); o perfil decide quem tem `EXEC_SCRIPT`.
 
 * O executável de cada interpretador vem de `[agent] interpreters`. Na inicialização, o agente confere, por `path_guard.validate_executable`: caminho absoluto e normalizado, existe, é arquivo executável e fica fora de `log_dir`, `work_dir` e `exec_work_dir`. Pode ser link simbólico (como `/usr/bin/python3`) e pode ficar nas pastas do sistema. Falha: `INTERPRETER_UNSAFE` (ou `NOT_FOUND`), CRITICAL.
 
@@ -1770,7 +1788,7 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
 * **Cadastro na UI** (`admin_scripts`, F4.5):
   * o formato e as pastas do sistema são conferidos ao salvar e ao reativar, com os códigos traduzidos para português; o estado do arquivo no nó web não impede salvar, editar, desativar nem reativar;
   * `path_file` é um campo de texto com o caminho absoluto ou relativo à pasta base de cada agente (CR-023); a ajuda dá os dois exemplos (`/opt/automacoes/scripts/carga.py` e `faturamento/carga.py`), diz que o relativo é resolvido por cada agente no seu servidor e informa que o arquivo é conferido pelo agente, no servidor onde o script roda, e que pode ser link simbólico; o caminho dentro da pasta da aplicação é recusado (`APP_DIR`; no DEV, `dev/` é aceito);
-  * `interpreter` é um select fixo da allowlist lógica, e o servidor exige o valor exato, mesmo que o HTML tenha sido adulterado;
+  * `interpreter` é um select fixo das seis opções (Python 3, Python, Bash, Sh, Python e Shell "definido no script", CR-025), e o servidor exige o valor exato, mesmo que o HTML tenha sido adulterado;
   * **caminho visível a todos (D8):** o caminho cadastrado (completo ou relativo, CR-023) aparece no cadastro, na prévia do argv, no disparo e no detalhe do ticket, junto do caminho executado, para todos que veem o script ou o ticket (a R-f foi revogada);
   * **nome reservado (D7):** o nome cuja pasta de log (§8.4, passo 3) seria `app` é recusado: "Este nome é reservado pelo sistema. Escolha outro.";
   * o `name` do script é texto livre de 1 a 60 caracteres (sem caracteres de controle), único e editável, porque o snapshot guarda o nome da época e tickets e agendamentos referenciam o `script_id`. Renomear um script muda a pasta dos **próximos** logs de execução; os antigos ficam onde estão;
@@ -2008,7 +2026,7 @@ O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualqu
 3. **Segredos:** validar o `secrets.cfg` (§4.1).
 4. **Diretórios e interpretadores:**
    * `log_dir` e `work_dir` existem, são graváveis pelo agente e não ficam dentro das pastas do sistema (§8.5);
-   * cada entrada de `[agent] interpreters` é uma chave da allowlist com caminho absoluto e executável, que passa por `path_guard.validate_executable` (§8.5);
+   * cada entrada de `[agent] interpreters` é uma chave configurável (`PYTHON3`, `PYTHON`, `BASH`, `SH`; CR-025) com caminho absoluto e executável, que passa por `path_guard.validate_executable` (§8.5);
    * fora de DEV, `os_platform.validate_execution()` (§8.0): helper, regra de sudoers, usuários de execução e `exec_work_dir`;
    * com `output_dir` (CR-012): fora de DEV, `output_dir/<ambiente>/` de cada ambiente atendido existe, é diretório, pertence ao usuário de execução do ambiente e não tem escrita de grupo nem de outros; em DEV, `output_dir` existe e é gravável pelo agente.
    * com `input_dir` (CR-014): a mesma conferência, para `input_dir/<ambiente>/` (CRITICAL `pasta de entrada: <falha>`).
@@ -2884,7 +2902,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[agent]` | `exec_users` (CR-007) | lista `AMBIENTE=usuario` | obrigatória fora de DEV, cobrindo todos os `environments`; usuário `^[a-z_][a-z0-9_-]{0,31}$`, diferente de `root`. Vazia em DEV = execução com o próprio usuário, com WARN |
 | `[agent]` | `exec_work_dir` (CR-007) | caminho | obrigatório fora de DEV; fora das pastas do sistema e diferente de `work_dir` e `log_dir` |
 | `[agent]` | `queue_aging_min` (CR-007) | inteiro | 0 a 1.440 (0 desliga) |
-| `[agent]` | `interpreters` (F8.0) | lista `CHAVE=caminho` | conforme §8.5 |
+| `[agent]` | `interpreters` (F8.0) | lista `CHAVE=caminho` | conforme §8.5: `PYTHON3`, `PYTHON` (CR-025: segundo Python do servidor, ex.: `/usr/bin/python`), `BASH` e `SH`; os "definido no script" não entram |
 | `[agent]` | `work_dir` | caminho | obrigatório |
 | `[agent]` | `max_parallel_jobs`, `max_parallel_hard_limit` | inteiro | 1 a 999, com `max_parallel_jobs <= max_parallel_hard_limit` |
 | `[agent]` | `claim_batch_size`, `schedule_batch_size` | inteiro | 1 a 1.000 |
