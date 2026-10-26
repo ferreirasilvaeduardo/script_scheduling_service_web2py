@@ -411,7 +411,7 @@ def _convert_value(section_name, key_name, cdef, raw_val):
     raise ConfigError(section_name, key_name, "Tipo de campo desconhecido no schema: '%s'" % cdef.kind)
 
 
-def load(ini_path):
+def load(ini_path: str) -> "Config":
     """Carrega e valida o config.ini de forma declarativa e fail-fast.
 
     Retorna uma instancia imutavel de Config.
@@ -1006,7 +1006,7 @@ def load_secrets(path, cfg=None, sss_env=None, data_backend=None, role="web"):
 _CONFIG_CACHE = None
 
 
-def default_config_path():
+def default_config_path() -> str:
     """Caminho canonico do config.ini da aplicacao (instance/config.ini)."""
     # src/sss/config/ -> raiz da aplicacao (CR-022b3)
     app_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))

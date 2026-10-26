@@ -36,7 +36,7 @@ def script_dir(name, script_id=None):
     return text
 
 
-def environment_dir(name):
+def environment_dir(name: str) -> str:
     """Pasta do ambiente no topo do caminho do log (CR-009): minusculo, sem acento, sem espaco e sem
     caractere especial (mesma regra da pasta do script). Ambiente vazio ou sem nenhum caractere
     aproveitavel: ValueError (nos logs de script o ambiente e obrigatorio). 'internal' e reservado."""

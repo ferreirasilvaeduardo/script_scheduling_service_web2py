@@ -608,6 +608,34 @@ RODADAS["20261026_r2"] = dict(RODADAS["20261026"], **{
         u"o script; o digitado fica no snapshot e na auditoria do disparo, o usado no ticket.",
     ],
 })
+RODADAS["20261026_r4"] = dict(RODADAS["20261026"], **{
+    "commit": u"dev/others (b911942) mais o CR-026 (ef6d90e: config simplificado e interpretador so no cadastro) "
+              u"e a documentacao do CR-026d, no mesmo commit deste documento",
+    "adaptacao": dict(RODADAS["20261026"]["adaptacao"], **{
+        "CT-01": ADAPTACAO["CT-01"] + u" As tabelas do DEV foram recriadas no CR-026a, e a rodada r3 (incompleta, "
+                                      u"ver as observações) já tinha trocado a senha: o admin começou com a senha "
+                                      u"escolhida (SSS_ADMIN_START=new).",
+        "CT-20": u"CR-026: o cartão do agente não tem mais lista de interpretadores; a verificação passou a conferir "
+                 u"a pasta base dos scripts.",
+        "CT-32": (u"Refeito no CR-026, com o agente real: cadastro com os quatro nomes (python3, python, bash, sh); "
+                  u"diagnósticos dev/scripts/diagnostico/interp_*.* cadastrados pela tela (só GFPREPROD). #! do Python "
+                  u"3.6 sem nada digitado; sem #!, o caminho do Python 3.13 digitado, só o nome python3.12, um nome "
+                  u"inexistente (INTERPRETER_NOT_FOUND) e o Python de um virtualenv; sem #! e sem digitado, o "
+                  u"cadastro (sh); #!/usr/bin/env python3; o #! vencendo o digitado; e o #! inexistente ignorado, com "
+                  u"a linha [SSS] no log. Detalhe com o cadastrado, o informado e o usado; auditoria do disparo."),
+    }),
+    "observacoes": [
+        u"Rodada do CR-026d (config simplificado e interpretador só no cadastro). As tabelas do DEV foram recriadas "
+        u"no CR-026a; o config.ini do DEV ficou só com as chaves obrigatórias e as que fogem do padrão, sem "
+        u"[agent] interpreters. Marca %s." % STAMP,
+        u"A rodada r3 do mesmo dia ficou incompleta: a massa de teste (input/ na raiz) não existia mais, e o config.ini "
+        u"do DEV tinha passado a usar outro agent_id e as pastas dev/input e dev/work. O roteiro passou a ler o "
+        u"agent_id e as pastas do config.ini, a massa passou a ser gerada por tools/gerar_massa.py no input_dir (lote "
+        u"de 4,5 GB para o ticket longo) e a rodada foi refeita como r4.",
+        u"Risco aceito pelo responsável pelo produto (README §8.5): quem dispara escolhe o executável quando o "
+        u"script não tem #! válido, e o #! vence o digitado.",
+    ],
+})
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]

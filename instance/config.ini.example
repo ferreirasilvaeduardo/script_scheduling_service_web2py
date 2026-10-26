@@ -1,78 +1,83 @@
+; config.ini de referencia do SSS (README §12.1; CR-026: config simplificado).
+; As linhas ativas sao as que precisam de valor em cada servidor. As comentadas tem o padrao ao lado:
+; so descomente para usar outro valor. O SSS nao cria as pastas configuradas (crie antes, DEPLOYMENT §8).
+
 [app]
 sss_env = DEV                     ; DEV | HML | PROD
 
 [oracle]
-user = sss_web                    ; conta do papel deste nó: sss_web no web, sss_agente no agente (README §4.1)
+user = sss_web                    ; conta do papel deste no: sss_web no web, sss_agente no agente (README §4.1)
 dsn = localhost:2424/servico_homolog
 owner = openrisow
 table_prefix = tbsss_
-driver_mode = thick               ; thick (recomendado) | cx_oracle | auto (Thin -> Thick -> cx_Oracle) | thin; o Thin exige a biblioteca cryptography, que o projeto nao usa (README §2.3)
-oracle_client_lib_dir =           ; somente macOS (dev); no Linux/Unix usar ldconfig/LD_LIBRARY_PATH
-call_timeout_ms = 30000
-pool_min = 1
-pool_max = 4
+driver_mode = thick               ; thick (recomendado) | cx_oracle | auto (padrao: Thin -> Thick -> cx_Oracle) | thin; o Thin exige a biblioteca cryptography, que o projeto nao usa (README §2.3)
+; oracle_client_lib_dir =         ; somente macOS (dev); no Linux/Unix usar ldconfig/LD_LIBRARY_PATH
+; call_timeout_ms = 30000
+; pool_min = 1
+; pool_max = 4
 
-[secrets]
-secrets_file = /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/instance/secrets.cfg
+; [secrets]
+; secrets_file = /etc/sss/secrets.cfg   ; padrao: o secrets.cfg da mesma pasta deste config.ini
 
 [agent]
 agent_id = srv-linux-prod-01
 environments = PRODUCAO,HOMOLOGACAO
 work_dir = /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/work
-exec_users =               ; AMBIENTE=usuario do SO por ambiente (README §8.0); obrigatório fora de DEV, ex.: PRODUCAO=sssprd,HOMOLOGACAO=ssshml
-exec_work_dir =                   ; pasta base dos diretórios de trabalho dos scripts (obrigatória fora de DEV), ex.: /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/exec
 max_parallel_jobs = 4
-max_parallel_hard_limit = 32
-claim_batch_size = 20
-schedule_batch_size = 50
-orchestrator_interval_s = 10
-cancel_poll_interval_s = 2
-heartbeat_interval_s = 10
-fence_timeout_s = 90
-node_offline_timeout_s = 180
-kill_grace_s = 5
-script_timeout_s = 21600
-shutdown_mode = TERMINATE         ; TERMINATE | DRAIN
-shutdown_grace_s = 30
-misfire_policy = RUN_ONCE         ; RUN_ONCE | SKIP
-misfire_tolerance_s = 300
-cron_horizon_days = 1461
-queue_aging_min = 60       ; a cada N minutos na fila a prioridade sobe 1 nível (README §5.3); 0 desliga
-log_dir_min_free_mb = 1024       ; abaixo disso em log_dir o agente não reserva tickets (CR-008, R-25)
-output_dir =                       ; CR-012: pasta de saida dos scripts (README §8.13); vazio desliga
-output_max_bytes = 20971520        ; limite do zip da saida (1 MiB a 200 MiB)
-output_max_files = 1000         ; limite de arquivos da saida (1 a 10.000)
-input_dir =                     ; CR-014: pasta de entrada dos scripts (README §8.14); vazio desliga
-script_work_dir =               ; CR-019: pasta de trabalho dos scripts, por ticket, mantida ate a retencao (README §8.15); vazio desliga
-script_base_dir =               ; CR-023: pasta base dos scripts cadastrados com caminho relativo (README §8.5); vazio: so caminho absoluto
-child_locale = C.UTF-8
+exec_users =                      ; AMBIENTE=usuario do SO por ambiente (README §8.0); obrigatorio fora de DEV, ex.: PRODUCAO=sssprd,HOMOLOGACAO=ssshml
+exec_work_dir =                   ; pasta base dos diretorios de trabalho dos scripts (obrigatoria fora de DEV), ex.: /opt/sss/exec
+script_base_dir =                 ; CR-023: pasta base dos scripts com caminho relativo (README §8.5); vazio: so caminho absoluto
+output_dir =                      ; CR-012: pasta de saida dos scripts (README §8.13); vazio desliga
+input_dir =                       ; CR-014: pasta de entrada dos scripts (README §8.14); vazio desliga
+script_work_dir =                 ; CR-019: pasta de trabalho dos scripts, por ticket (README §8.15); vazio desliga
 env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
+; max_parallel_hard_limit = 32
+; claim_batch_size = 20
+; schedule_batch_size = 50
+; orchestrator_interval_s = 10
+; cancel_poll_interval_s = 2
+; heartbeat_interval_s = 10         ; os tempos do critical_config precisam ser iguais em todos os agentes (README §8.12)
+; fence_timeout_s = 90
+; node_offline_timeout_s = 180
+; kill_grace_s = 5
+; script_timeout_s = 21600
+; shutdown_mode = TERMINATE         ; TERMINATE | DRAIN
+; shutdown_grace_s = 30
+; misfire_policy = RUN_ONCE         ; RUN_ONCE | SKIP
+; misfire_tolerance_s = 300
+; cron_horizon_days = 1461
+; queue_aging_min = 60              ; a cada N minutos na fila a prioridade sobe 1 nivel (README §5.3); 0 desliga
+; log_dir_min_free_mb = 1024        ; abaixo disso em log_dir o agente nao reserva tickets (CR-008, R-25)
+; output_max_bytes = 20971520       ; limite do zip da saida (1 MiB a 200 MiB)
+; output_max_files = 1000           ; limite de arquivos da saida (1 a 10.000)
+; child_locale = C.UTF-8
 
 [logging]
 log_dir = /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/logs
-level = INFO                      ; DEBUG | INFO | WARN | ERROR
-app_log_max_bytes = 10485760
-app_log_retention_days = 30
-max_log_size_bytes = 5242880
-max_local_log_size_bytes = 52428800
-local_log_retention_days = 30
-output_retention_days = 7          ; CR-012: pastas de saida que ficaram no disco
-script_work_retention_days = 7     ; CR-019: pastas de trabalho dos scripts
+; level = INFO                      ; DEBUG | INFO | WARN | ERROR
+; app_log_max_bytes = 10485760
+; app_log_retention_days = 30
+; max_log_size_bytes = 5242880
+; max_local_log_size_bytes = 52428800
+; local_log_retention_days = 30
+; output_retention_days = 7         ; CR-012: pastas de saida que ficaram no disco
+; script_work_retention_days = 7    ; CR-019: pastas de trabalho dos scripts
 
 [web]
-session_idle_timeout_s = 1800
-session_max_hours = 12   ; vida máxima da sessão desde o login, mesmo com uso contínuo (CR-008, E2)
-login_max_attempts = 5
-login_lockout_s = 900
-log_poll_interval_s = 3
-trusted_proxies =
-input_upload_max_bytes = 52428800   ; CR-020d: maior arquivo enviado pela tela de Entrada (1 MiB a 200 MiB)
-allowed_origins = http://127.0.0.1:18000   ; Ex. https://sss.empresa.local lista separada por vírgula, validada contra Origin/Referer
-max_threads = 16                 ; CR-021e: conexões atendidas ao mesmo tempo pelo servidor web (1 a 256)
-socket_timeout_s = 30            ; CR-021e: segundos que uma conexão espera o cliente; o cliente lento é derrubado (5 a 300)
+allowed_origins = http://127.0.0.1:18000   ; ex.: https://sss.empresa.local; lista separada por virgula, validada contra Origin/Referer
+; trusted_proxies =
+; session_idle_timeout_s = 1800
+; session_max_hours = 12            ; vida maxima da sessao desde o login (CR-008, E2)
+; login_max_attempts = 5
+; login_lockout_s = 900
+; log_poll_interval_s = 3
+; input_upload_max_bytes = 52428800 ; CR-020d: maior arquivo enviado pela tela de Entrada (1 MiB a 200 MiB)
+; max_threads = 16                  ; CR-021e: conexoes atendidas ao mesmo tempo (1 a 256)
+; socket_timeout_s = 30             ; CR-021e: segundos que uma conexao espera o cliente (5 a 300)
 
 [retention]
-ticket_retention_days = 180
-audit_retention_days = 730
-purge_batch_size = 1000
-purge_user =                      ; conta Oracle do papel purge, ex.: sss_purge (obrigatória fora de DEV; vazia em DEV = purge desligado)
+purge_user =                      ; conta Oracle do papel purge, ex.: sss_purge (obrigatoria fora de DEV; vazia em DEV = purge desligado)
+; ticket_retention_days = 180
+; audit_retention_days = 730
+; purge_batch_size = 1000
+; input_retention_days = 30

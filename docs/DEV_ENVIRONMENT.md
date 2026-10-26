@@ -214,8 +214,8 @@ A pasta `dev/scripts/` contém scripts de exemplo **sem lógica perigosa**, usad
 | `diagnostico/pasta_trabalho.sh` | Diagnóstico do CR-019: confere `SSS_WORK_DIR`, grava `diagnostico.txt` e `sub/arquivo.txt` na pasta de trabalho e lista o que gravou. Sai com 1 sem a variável e com 2 se a pasta não existir |
 | `diagnostico/gerar_saida.sh` | Diagnóstico do CR-020a: grava `resumo.txt` e `detalhes/relatório de testes.csv` em `SSS_OUTPUT_DIR`, para gerar uma saída real e testar a tela de Saídas. Sai com 1 sem a variável |
 | `diagnostico/interp_info.py` | Diagnóstico do CR-025: imprime o interpretador que rodou o script (`sys.executable`, versão e `sys.prefix`), para o interpretador digitado no disparo e o virtualenv |
-| `diagnostico/interp_py36.py`, `diagnostico/interp_env.py` | Diagnóstico do CR-025, "Python (definido no script)": `#!` com o Python 3.6 do pyenv e `#!/usr/bin/env python3` |
-| `diagnostico/interp_sem_shebang.sh` | Diagnóstico do CR-025: "Shell (definido no script)" sem `#!`, que termina em `PRECHECK_FAILED` (`NO_SHEBANG`) |
+| `diagnostico/interp_py36.py`, `diagnostico/interp_env.py` | Diagnóstico do CR-025 e do CR-026: `#!` com o Python 3.6 do pyenv e `#!/usr/bin/env python3`, que vencem o cadastro e o digitado |
+| `diagnostico/interp_sem_shebang.sh` | Diagnóstico do CR-026: sem `#!`, roda pelo digitado no disparo ou pelo cadastro (`sh`) |
 
 ### 6.1 O que o `path_guard` confere (CR-005, CR-011, CR-023)
 
@@ -255,7 +255,7 @@ Os arquivos precisam de modo `0644` ou `0755` (`chmod -R go-w dev/scripts`). Uma
 
 ### 6.3 Agente em DEV (a partir do F8, CR-007)
 
-* **`[agent] interpreters` é obrigatório (CR-018d):** sem ele, o agente recusa subir ("[agent] interpreters vazio: o agente nao executaria nada"). O `instance/config.ini` do DEV leva `interpreters = PYTHON3=/usr/bin/python3,PYTHON=~/.pyenv/versions/3.6.0/bin/python3.6,BASH=/bin/bash,SH=/bin/sh` (o `PYTHON`, opcional, é a opção Python do CR-025; no DEV, o Python 3.6 do pyenv), e o agente sobe com o config padrão: `PYTHON=~/.pyenv/versions/3.6.15/bin/python3 bin/sss-scheduler.sh` (sem `--config`). Para parar, `SIGTERM` no PID do agente: ele encerra pela máquina de estados (README §8.11).
+* **Config enxuto (CR-026):** o `instance/config.ini` do DEV só tem as chaves obrigatórias e as que fogem do padrão (`sss_env = DEV`, `[oracle]`, `agent_id`, `environments`, as pastas `dev/...`, `script_base_dir = <repositório>/dev/scripts`, `level = DEBUG` e `allowed_origins`); as demais valem pelo padrão (README §12.1). Não há `[agent] interpreters`: o agente procura `python3`, `bash`... no `PATH` do terminal que o subiu. O agente sobe com o config padrão: `PYTHON=~/.pyenv/versions/3.6.15/bin/python3 bin/sss-scheduler.sh` (sem `--config`). Para parar, `SIGTERM` no PID do agente: ele encerra pela máquina de estados (README §8.11).
 * **Pasta de trabalho dos scripts (CR-019):** o `instance/config.ini` do DEV leva `script_work_dir = .../script_scheduling_service/script_work` (pasta ignorada pelo git, criada à mão com `0700` antes da primeira subida, porque o agente confere que ela existe). Cada ticket recebe `SSS_WORK_DIR` em `script_work/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, que fica depois do ticket. Com `[retention] purge_user` vazio, o `purge.py` não roda no DEV; a retenção dessa pasta foi conferida chamando a etapa `script_work` do purge diretamente.
 * Em DEV, `[agent] exec_users` pode ficar vazio: o agente executa os scripts com o próprio usuário e registra WARN `SEM_USUARIO_EXECUCAO`. Para testar o helper e o `sudo` como nos servidores, siga o `DEPLOYMENT.md` §8 numa VM.
 * `cron_horizon_days` vai de 1.461 a 36.500 (CR-008, R-32), `max_log_size_bytes` até 64 MiB e `audit_retention_days` de 365 a 3.650 (e não menor que `ticket_retention_days`); o `table_prefix` só aceita minúsculas. Um `config.ini` antigo fora dessas faixas aborta a subida com a chave no log.

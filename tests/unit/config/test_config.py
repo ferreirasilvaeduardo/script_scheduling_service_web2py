@@ -711,6 +711,28 @@ class TestConfigCR007(unittest.TestCase):
             self.assertIn("[agent] %s ignorada" % key, "\n".join(logs.output))
             self.assertFalse(hasattr(cfg.agent, "interpreters"))
 
+    def test_cr026_readme_tabela_igual_ao_schema(self):
+        """CR-026: a tabela do README §12.1 lista toda chave do SCHEMA, com a obrigatoriedade e o padrao do codigo."""
+        with open(os.path.join(self.app_dir, "README.md"), "r", encoding="utf-8") as f:
+            text = f.read()
+        section = text[text.index("### 12.1 `instance/config.ini`"):text.index("### 12.2 Launchers")]
+        rows = {}
+        for line in section.splitlines():
+            m = re.match(r"^\| `\[(\w+)\]` \| (.+?) \| (sim|não|fora de DEV) \| (.+?) \| .+ \|$", line)
+            if not m:
+                continue
+            keys = re.findall(r"`(\w+)`", m.group(2).split(" (")[0])
+            defaults = [d.strip().strip("`") for d in m.group(4).split(",")] if len(keys) > 1 else [m.group(4)]
+            for i, key in enumerate(keys):
+                rows[(m.group(1), key)] = (m.group(3), defaults[i] if i < len(defaults) else None)
+        expected = set((sec, k) for sec, fields in sss_config.SCHEMA.items() for k in fields)
+        self.assertEqual(set(rows), expected)
+        for (sec, key), (required, default) in rows.items():
+            cdef = sss_config.SCHEMA[sec][key]
+            self.assertEqual(required == "sim", cdef.required, (sec, key))
+            if cdef.default not in (None, ()) and key != "secrets_file":
+                self.assertEqual(default.strip("`"), str(cdef.default), (sec, key))
+
     def test_cr026_config_minimo_com_padroes(self):
         """CR-026 (D8, D9): sem os ajustes finos nem [secrets], valem os padroes do config.ini.example."""
         optional = [(sec, k) for sec, fields in sss_config.SCHEMA.items() for k, cdef in fields.items()

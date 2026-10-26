@@ -414,7 +414,7 @@ def load_seed(store, force=False, dev_password=None):
                                 # 10. Agentes (2)
                                 # ---------------------------------------------------------
                                 agents = [
-                                    {"id": 1, "code": "agt-host01", "hostname": "worker01.internal", "daemon_pid": 1001, "version": "1.0.0", "environments": "PRODUCAO,HOMOLOGACAO", "platform": "LINUX", "script_base_dir": "/opt/automacoes/scripts", "status": "ACTIVE", "started_at": base_dt - datetime.timedelta(days=3), "heartbeat_at": base_dt, "created_at": base_dt - datetime.timedelta(days=3)},
+                                    {"id": 1, "code": "agt-host01", "hostname": "worker01.internal", "daemon_pid": 1001, "version": "1.0.0", "environments": "PRODUCAO", "platform": "LINUX", "script_base_dir": "/opt/automacoes/scripts", "status": "ACTIVE", "started_at": base_dt - datetime.timedelta(days=3), "heartbeat_at": base_dt, "created_at": base_dt - datetime.timedelta(days=3)},
                                     {"id": 2, "code": "agt-host02", "hostname": "worker02.internal", "daemon_pid": 1002, "version": "1.0.0", "environments": "HOMOLOGACAO,DESENV", "platform": "UNIX", "status": "ACTIVE", "started_at": base_dt - datetime.timedelta(days=2), "heartbeat_at": base_dt - datetime.timedelta(seconds=_HB_FROZEN_S), "created_at": base_dt - datetime.timedelta(days=2)},
                                 ]
                                 # Quadros de atencao do painel (CR-007, R-18): o agt-host02 ficou com a configuracao

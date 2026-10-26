@@ -24,20 +24,20 @@ Para atender aos cenários operacionais frequentes de manipulação de arquivos 
 
 | # | Nome da Rotina | Interpretador | Tipo Param | Grupo / Categoria / Etapa | Timeout (s) | Max Paralelo | Arquivo Físico |
 |:---:|:---|:---:|:---:|:---|:---:|:---:|:---|
-| 1 | `zipar_arquivos` | `PYTHON3` | `NAMED` | `UTILITARIOS` / `FILES` / `COMPACTACAO` | 1800 | 2 | `zipar_arquivos.py` |
-| 2 | `descompactar_zip` | `PYTHON3` | `NAMED` | `UTILITARIOS` / `FILES` / `DESCOMPACTACAO` | 1800 | 2 | `descompactar_zip.py` |
-| 3 | `quebrar_arquivo` | `PYTHON3` | `NAMED` | `UTILITARIOS` / `FILES` / `DIVISAO` | 1800 | 2 | `quebrar_arquivo.py` |
-| 4 | `juntar_arquivos` | `PYTHON3` | `NAMED` | `UTILITARIOS` / `FILES` / `CONCATENACAO` | 1800 | 2 | `juntar_arquivos.py` |
-| 5 | `converter_encoding` | `PYTHON3` | `NAMED` | `UTILITARIOS` / `FILES` / `CONVERSAO` | 1800 | 2 | `converter_encoding.py` |
-| 6 | `substituir_texto` | `PYTHON3` | `NAMED` | `UTILITARIOS` / `FILES` / `TRANSFORMACAO` | 1800 | 2 | `substituir_texto.py` |
-| 7 | `remover_duplicadas` | `PYTHON3` | `NAMED` | `UTILITARIOS` / `FILES` / `HIGIENIZACAO` | 1800 | 2 | `remover_duplicadas.py` |
-| 8 | `gerar_hash_arquivo` | `PYTHON3` | `NAMED` | `UTILITARIOS` / `FILES` / `AUDITORIA` | 1800 | 2 | `gerar_hash_arquivo.py` |
-| 9 | `compactar_targz` | `BASH` | `NAMED` | `UTILITARIOS` / `FILES` / `COMPACTACAO` | 1800 | 2 | `compactar_targz.sh` |
-| 10 | `descompactar_targz` | `BASH` | `NAMED` | `UTILITARIOS` / `FILES` / `DESCOMPACTACAO` | 1800 | 2 | `descompactar_targz.sh` |
-| 11 | `contar_linhas_arquivo` | `SH` | `POSITIONAL` | `UTILITARIOS` / `FILES` / `ANALISE` | 600 | 2 | `contar_linhas_arquivo.sh` |
-| 12 | `filtrar_linhas` | `BASH` | `NAMED` | `UTILITARIOS` / `FILES` / `FILTRAGEM` | 1800 | 2 | `filtrar_linhas.sh` |
-| 13 | `ordenar_arquivo` | `SH` | `NAMED` | `UTILITARIOS` / `FILES` / `ORGANIZACAO` | 1800 | 2 | `ordenar_arquivo.sh` |
-| 14 | `limpar_linhas_vazias` | `BASH` | `NAMED` | `UTILITARIOS` / `FILES` / `HIGIENIZACAO` | 1800 | 2 | `limpar_linhas_vazias.sh` |
+| 1 | `zipar_arquivos` | `python3` | `NAMED` | `UTILITARIOS` / `FILES` / `COMPACTACAO` | 1800 | 2 | `zipar_arquivos.py` |
+| 2 | `descompactar_zip` | `python3` | `NAMED` | `UTILITARIOS` / `FILES` / `DESCOMPACTACAO` | 1800 | 2 | `descompactar_zip.py` |
+| 3 | `quebrar_arquivo` | `python3` | `NAMED` | `UTILITARIOS` / `FILES` / `DIVISAO` | 1800 | 2 | `quebrar_arquivo.py` |
+| 4 | `juntar_arquivos` | `python3` | `NAMED` | `UTILITARIOS` / `FILES` / `CONCATENACAO` | 1800 | 2 | `juntar_arquivos.py` |
+| 5 | `converter_encoding` | `python3` | `NAMED` | `UTILITARIOS` / `FILES` / `CONVERSAO` | 1800 | 2 | `converter_encoding.py` |
+| 6 | `substituir_texto` | `python3` | `NAMED` | `UTILITARIOS` / `FILES` / `TRANSFORMACAO` | 1800 | 2 | `substituir_texto.py` |
+| 7 | `remover_duplicadas` | `python3` | `NAMED` | `UTILITARIOS` / `FILES` / `HIGIENIZACAO` | 1800 | 2 | `remover_duplicadas.py` |
+| 8 | `gerar_hash_arquivo` | `python3` | `NAMED` | `UTILITARIOS` / `FILES` / `AUDITORIA` | 1800 | 2 | `gerar_hash_arquivo.py` |
+| 9 | `compactar_targz` | `bash` | `NAMED` | `UTILITARIOS` / `FILES` / `COMPACTACAO` | 1800 | 2 | `compactar_targz.sh` |
+| 10 | `descompactar_targz` | `bash` | `NAMED` | `UTILITARIOS` / `FILES` / `DESCOMPACTACAO` | 1800 | 2 | `descompactar_targz.sh` |
+| 11 | `contar_linhas_arquivo` | `sh` | `POSITIONAL` | `UTILITARIOS` / `FILES` / `ANALISE` | 600 | 2 | `contar_linhas_arquivo.sh` |
+| 12 | `filtrar_linhas` | `bash` | `NAMED` | `UTILITARIOS` / `FILES` / `FILTRAGEM` | 1800 | 2 | `filtrar_linhas.sh` |
+| 13 | `ordenar_arquivo` | `sh` | `NAMED` | `UTILITARIOS` / `FILES` / `ORGANIZACAO` | 1800 | 2 | `ordenar_arquivo.sh` |
+| 14 | `limpar_linhas_vazias` | `bash` | `NAMED` | `UTILITARIOS` / `FILES` / `HIGIENIZACAO` | 1800 | 2 | `limpar_linhas_vazias.sh` |
 
 ---
 

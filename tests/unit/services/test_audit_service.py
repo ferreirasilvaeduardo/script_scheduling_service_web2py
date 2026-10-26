@@ -430,9 +430,7 @@ class TestAgentsDashboard(_Base):
         self.assertEqual([t["id"] for t in dashboard["running_without_pid"]], [16])
         self.assertEqual(dashboard["unattended_queue"], [])  # agt-host02 ainda DELAYED
         self.now = self.base + datetime.timedelta(seconds=61)  # agt-host02 AT_RISK
-        # CR-026: HOMOLOGACAO continua atendida pelo agt-host01; sem ele, o ticket 4 fica sem atendente.
-        self.assertEqual(self.svc_agentes.dashboard(self.ctx["admin"])["unattended_queue"], [])
-        self.store.agents[1]["status"] = "STOPPED"
+        # CR-026: HOMOLOGACAO so e atendida pelo agt-host02 (o agt-host01 atende so PRODUCAO).
         queue_value = self.svc_agentes.dashboard(self.ctx["admin"])["unattended_queue"]
         self.assertEqual([(g["environment"], g["interpreter"], g["quantity"]) for g in queue_value],
                          [("HOMOLOGACAO", "sh", 1)])

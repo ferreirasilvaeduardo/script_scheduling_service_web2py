@@ -1,1 +1,1 @@
-echo "Diagnostico do CR-025: script sem #!, cadastrado como Shell (definido no script)"
+echo "Diagnostico do CR-026: script sem #!, roda pelo digitado no disparo ou pelo cadastro (sh)"

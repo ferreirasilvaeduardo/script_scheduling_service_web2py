@@ -44,3 +44,9 @@ dev/others/notas/sss-web-*_v*.sh
 /dev/others/homologation/evidence_*/state.json
 # Senha da homologacao do DEV (~/.sss_homolog_pw): nunca no git, nem copiada para dentro do repositorio
 .sss_homolog_pw
+
+# Pastas de execucao do DEV quando o config.ini aponta para dev/ (CR-026d): massa de teste e saidas, nunca versionadas
+/dev/input/
+/dev/output/
+/dev/work/
+/dev/logs/

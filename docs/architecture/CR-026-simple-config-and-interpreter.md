@@ -23,6 +23,7 @@
 | D8 | Cerca de 35 chaves de ajuste fino passam a ser opcionais, com o valor do `config.ini.example` como padrão |
 | D9 | Sem a linha `secrets_file` (ou sem a seção `[secrets]`), vale o `secrets.cfg` da pasta do `config.ini` |
 | D10 | Tabelas do DEV recriadas (rollback do SSS + `init_db`): os dados de teste são apagados e o admin volta à senha do seed |
+| D12 | `scripts/prepare_dirs.py` (pedido do responsável em 2026-10-26): lê o `config.ini` e **aplica direto** (como root) as pastas com o dono e o modo da implantação, inclusive `script_base_dir`; usuário do serviço `sss` por padrão (`--service-user`); `--dry-run` só mostra. A pasta existente tem dono e modo ajustados; nada é apagado; usuário inexistente para antes de criar qualquer pasta |
 | D11 | Snapshot versão 7 (o `interpreter` guarda o nome do cadastro). O agente aceita v5 e v6 pendentes, traduzindo a chave anterior (`PYTHON3` → `python3`, `PYTHON` → `python`, `BASH` → `bash`, `SH` → `sh`, `PYTHON_SCRIPT` → `python3`, `SHELL_SCRIPT` → `sh`); um agente anterior recusa a v7 (`UNSUPPORTED_VERSION`) |
 
 ## 2. Passos
@@ -30,8 +31,9 @@
 | Passo | Conteúdo | Situação |
 |---|---|---|
 | 026a | Config (D1, D8, D9), agente e banco (D2 a D7, D11), telas (cadastro com os quatro nomes, ajuda do disparo, detalhe com cadastrado, informado e usado, painel de agentes sem interpretadores), `docs/sql` regenerados, tabelas do DEV recriadas (D10). Os passos 026a a 026c do plano foram juntados a pedido do responsável. Validação: suíte de 1518 testes em 3.6.0, 3.6.8 e 3.13.2; bateria Oracle (1516, com o banco recriado: esquema 100% compatível); `make lint` e `make type-check` com zero achados; subida real do agente no DEV sem `interpreters`. As telas e a execução real ficam para a homologação do 026d. Achados no caminho: a variável `SSS_INTERPRETER` do script passa a trazer o nome do cadastro (`python3`), e o README §4.1 chama de "cifrado" o cookie de sessão, que é só assinado (a corrigir no 026d) | Concluído |
-| 026d | Documentação, com a tabela dos campos opcionais do config e seus padrões; `config.ini.example` enxuto; `ALTER` no DEPLOYMENT §18; homologação real (CT-32 refeito para a nova ordem) | Pendente |
-| 026e | Validação da documentação contra o código (revisão independente) e encerramento | Pendente |
+| 026d | Documentação: README §12.1 com o config mínimo, a tabela de todas as chaves (obrigatória, padrão e faixa; conferida contra o `SCHEMA` por teste) e a regra das pastas que o SSS não cria; README §5, §6.4, §6.5, §8.4, §8.5, §8.6, §8.12, §10, §13, §14 e o cookie de sessão (assinado, não cifrado); `config.ini.example` enxuto, com os opcionais comentados e o padrão ao lado; DEPLOYMENT §7.1, §9, §15, §18 (os `ALTER` e o retorno) e §19; DEV_ENVIRONMENT; AGENTS. Seed do FAKE: o `agt-host01` atende só `PRODUCAO`, para o quadro da fila sem atendente continuar demonstrável. Homologação real r4 329/329 (`docs/homologation/SSS_Homologation_Evidence_2026-10-26_r4.docx`), com o CT-32 refeito; a r3 ficou incompleta porque a massa de teste da raiz não existia mais e o `config.ini` do DEV tinha outro `agent_id` e pastas em `dev/`: o roteiro passou a ler o config e a massa passou a ser gerada por `tools/gerar_massa.py` | Concluído |
+| 026e | `scripts/prepare_dirs.py` (D12): plano a partir do `config.ini`, `--dry-run`, aplicação como root (fora de DEV, exigido), usuário inexistente sem criar nada, pasta existente com dono e modo ajustados, arquivo ou link no lugar da pasta recusados; testes em `test_prepare_dirs.py`; README §12.1 e DEPLOYMENT §8 | Concluído |
+| 026f | Validação da documentação contra o código (revisão independente, inclusive do `prepare_dirs.py`) e encerramento | Pendente |
 
 ## 3. Riscos
 

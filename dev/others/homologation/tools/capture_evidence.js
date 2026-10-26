@@ -40,10 +40,26 @@ const RUN_DATE = process.env.SSS_EVIDENCE_DATE || '20261023';
 const RUN_DATE_BR = `${RUN_DATE.slice(6, 8)}/${RUN_DATE.slice(4, 6)}/${RUN_DATE.slice(0, 4)}`;
 const ROUND = process.env.SSS_EVIDENCE_ROUND || '';
 const OUT_DIR = process.env.SSS_EVIDENCE_DIR ||
-    path.join(APP, 'dev', 'homologation', `evidence_${RUN_DATE}${ROUND ? '_r' + ROUND : ''}`);
+    path.join(__dirname, '..', `evidence_${RUN_DATE}${ROUND ? '_r' + ROUND : ''}`);  // dev/others/homologation
 const CHROME = process.env.SSS_CHROME ||
     path.join(os.homedir(), '.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome');
-const INPUT = path.join(APP, 'input');
+// Agente e pastas lidos do instance/config.ini do DEV (o roteiro nao fixa agent_id nem pastas; CR-026d).
+function readAgentConfig(file) {
+    const values = {};
+    let section = '';
+    for (const raw of fs.readFileSync(file, 'utf8').split('\n')) {
+        const line = raw.replace(/\s[;#].*$/, '').trim();
+        const sec = line.match(/^\[(.+)\]$/);
+        if (sec) { section = sec[1]; continue; }
+        const kv = line.match(/^([A-Za-z_]+)\s*=\s*(.*)$/);
+        if (kv && section === 'agent') values[kv[1]] = kv[2].trim();
+    }
+    return values;
+}
+const AGENT_CFG = readAgentConfig(path.join(APP, 'instance', 'config.ini'));
+const AGENT_ID = AGENT_CFG.agent_id;
+const INPUT = AGENT_CFG.input_dir || path.join(APP, 'input');
+const SCRIPT_WORK = AGENT_CFG.script_work_dir || path.join(APP, 'script_work');
 const STAMP = `HOMOLOG_${RUN_DATE}${ROUND ? 'R' + ROUND : ''}`;
 const ADMIN_STARTS_NEW = process.env.SSS_ADMIN_START === 'new';
 
@@ -299,7 +315,8 @@ async function waitStatus(id, labels, timeoutS) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Massa: tickets reais criados pelas telas e executados pelo agente srv-linux-local-01
+// Massa: tickets reais criados pelas telas e executados pelo agente do DEV (AGENT_ID). Arquivos de entrada:
+// tools/gerar_massa.py, no input_dir do config.ini.
 // ---------------------------------------------------------------------------------------------
 const FILE_CLIENTES = path.join(INPUT, 'gfpreprod', 'contar_linhas_arquivo', 'clientes_20261022.txt');
 const FILE_NOTAS = path.join(INPUT, 'clone6', 'contar_linhas_arquivo', 'notas_20261022.txt');
@@ -1247,8 +1264,9 @@ CTS['CT-20'] = async () => {
     begin('CT-20', 'Painel de agentes');
     await login('admin');
     await go('/audit/agents');
-    await expectText('Agente real srv-linux-local-01 com saúde, heartbeat, ambientes e interpretadores',
-        'srv-linux-local-01', 'GFPREPROD', 'PYTHON3');
+    // CR-026: o agente nao tem mais lista de interpretadores; o cartao mostra a pasta base dos scripts.
+    await expectText(`Agente real ${AGENT_ID} com saúde, heartbeat, ambientes e pasta base`,
+        AGENT_ID, 'GFPREPROD', 'Pasta base dos scripts');
     await expectText('Legenda de saúde e limiares', 'Legenda');
     check('Título Agentes e item Agentes ativo no menu (CR-017c)', await page.evaluate(() =>
         document.querySelector('h1').innerText.trim() === 'Agentes' &&
@@ -1322,7 +1340,7 @@ CTS['CT-23'] = async () => {
     }
     await go(`/tickets/detail/${state.tickets.ok_prod}`);
     const r3 = await registroTexto();
-    check('Ticket: criado por op.prod; última alteração pelo agente que finalizou', r3.includes('op.prod') && r3.includes('srv-linux-local-01'), r3);
+    check('Ticket: criado por op.prod; última alteração pelo agente que finalizou', r3.includes('op.prod') && r3.includes(AGENT_ID), r3);
     await snap('Quadro Registro no detalhe do ticket', { selector: 'section[aria-labelledby="title-record"]' });
     await go('/admin_environments/form');
     check('Inclusão não mostra o quadro Registro', !(await registroTexto()));
@@ -1628,7 +1646,7 @@ CTS['CT-27'] = async () => {
 const DIAG = 'diagnostico';
 
 // Cadastra (ou reativa) um script de diagnostico pela tela, liberado so no GFPREPROD; devolve o id.
-async function diagScript(name, file, description, interpreter = 'SH') {
+async function diagScript(name, file, description, interpreter = 'sh') {
     await login('admin');
     const find = async () => {
         await go(`/admin_scripts/index?name=${name}`);
@@ -1782,9 +1800,9 @@ CTS['CT-29'] = async () => {
     await clickText('a', 'contar_linhas_arquivo', { navigate: true });
     await snap('Entrada: pasta do script', { full: true });
     await sendForm(folder, false);
-    await expectText('Envio aceito para o servidor no ar', 'Arquivo enviado para 1 servidor(es): srv-linux-local-01');
+    await expectText('Envio aceito para o servidor no ar', `Arquivo enviado para 1 servidor(es): ${AGENT_ID}`);
     let row = await lastUpload();
-    check('Últimos envios: Entregue no srv-linux-local-01', row.includes('Entregue') && row.includes(`${folder}/${name}`), row);
+    check(`Últimos envios: Entregue no ${AGENT_ID}`, row.includes('Entregue') && row.includes(`${folder}/${name}`), row);
     const disk = path.join(INPUT, 'gfpreprod', 'contar_linhas_arquivo', folder, name);
     check('Arquivo na pasta de entrada do agente, igual ao enviado e com 0600', fs.existsSync(disk) &&
         fs.readFileSync(disk).equals(fs.readFileSync(local)) && (fs.statSync(disk).mode & 0o777) === 0o600, disk.replace(APP, ''));
@@ -1798,7 +1816,7 @@ CTS['CT-29'] = async () => {
     }
     check('O retrato mostra a subpasta nova', seen);
     await clickText('a', folder + '/', { navigate: true });
-    await expectText('Na subpasta: o arquivo e o servidor em que está', name, 'srv-linux-local-01');
+    await expectText('Na subpasta: o arquivo e o servidor em que está', name, AGENT_ID);
     await snap('Entrada: subpasta pelo retrato do agente', { full: true });
     await sendForm(folder, false);
     row = await lastUpload();
@@ -1830,7 +1848,7 @@ CTS['CT-29'] = async () => {
     check('consulta sem Enviar Arquivos: 403', (await go('/inputs/index')) === 403);
     await login('admin');
     await go('/audit/index?action=INPUT_DELIVERY');
-    await expectText('Auditoria: "Entrega na entrada" pelo agente', 'Entrega na entrada', 'SYSTEM:srv-linux-local-01');
+    await expectText('Auditoria: "Entrega na entrada" pelo agente', 'Entrega na entrada', `SYSTEM:${AGENT_ID}`);
     fs.unlinkSync(local);
 };
 
@@ -1846,11 +1864,11 @@ CTS['CT-30'] = async () => {
     await go(`/tickets/detail/${tid}`);
     check(`Ticket #${tid} (diag_pasta_trabalho) deu certo`, fim.includes('Deu certo'));
     await expectText('Log: SSS_WORK_DIR na estrutura da saída e HOME na pasta descartável',
-        'Pasta de trabalho:', `script_work/gfpreprod/diag_pasta_trabalho/`, `ticket_${tid}`, 'HOME:', `work/ticket_${tid}/exec`);
+        'Pasta de trabalho:', `${path.basename(SCRIPT_WORK)}/gfpreprod/diag_pasta_trabalho/`, `ticket_${tid}`, 'HOME:', `work/ticket_${tid}/exec`);
     await snap('Log do ticket com a pasta de trabalho', { full: true });
     const d = new Date();
     const p2 = (n) => String(n).padStart(2, '0');
-    const base = path.join(APP, 'script_work', 'gfpreprod', 'diag_pasta_trabalho', String(d.getFullYear()), p2(d.getMonth() + 1), p2(d.getDate()));
+    const base = path.join(SCRIPT_WORK, 'gfpreprod', 'diag_pasta_trabalho', String(d.getFullYear()), p2(d.getMonth() + 1), p2(d.getDate()));
     const found = [];
     const walk = (dir) => { if (!fs.existsSync(dir)) return; for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, e.name); if (e.isDirectory()) { if (e.name === `ticket_${tid}`) found.push(full); else walk(full); } } };
@@ -1893,7 +1911,7 @@ CTS['CT-31'] = async () => {
 };
 
 CTS['CT-32'] = async () => {
-    begin('CT-32', 'CR-025: interpretador informado no disparo e "definido no script"');
+    begin('CT-32', 'CR-025/CR-026: interpretador do #!, do disparo e do cadastro');
     const PY36 = '/home/eduardof/.pyenv/versions/3.6.0/bin/python3.6';
     const PY313 = '/home/eduardof/.pyenv/versions/3.13.2/bin/python3.13';
     // 025d: virtualenv sem pip criado fora do repositorio (/usr/bin/python3 -m venv --without-pip ~/.sss_homolog_venv)
@@ -1901,64 +1919,74 @@ CTS['CT-32'] = async () => {
     await login('admin');
     await go('/admin_scripts/form');
     const opcoes = await page.$$eval('#field-interpreter option', (os) => os.map((o) => o.value).filter((v) => v));
-    check('Cadastro com as seis opções de interpretador',
-        JSON.stringify(opcoes) === JSON.stringify(['PYTHON3', 'PYTHON', 'BASH', 'SH', 'PYTHON_SCRIPT', 'SHELL_SCRIPT']),
-        opcoes.join(','));
-    // (1) Python definido no script: o #! (Python 3.6 do pyenv) escolhe o interpretador
+    check('Cadastro com os quatro nomes de interpretador (CR-026)',
+        JSON.stringify(opcoes) === JSON.stringify(['python3', 'python', 'bash', 'sh']), opcoes.join(','));
+    await expectText('Ajuda do cadastro com a ordem #!, disparo e cadastro', 'Na execução vale, nesta ordem');
+    // Diagnosticos cadastrados pela tela (so GFPREPROD)
     const py36 = await diagScript('diag_interp_py36', 'diagnostico/interp_py36.py',
-        'Diagnostico do CR-025: Python definido no script (#!)', 'PYTHON_SCRIPT');
-    const t1 = await runDirect(py36, 'GFPREPROD', {});
-    // (2) caminho completo digitado no disparo, em script cadastrado como Python 3
+        'Diagnostico do CR-026: #! do Python 3.6', 'python3');
     const info = await diagScript('diag_interp_info', 'diagnostico/interp_info.py',
-        'Diagnostico do CR-025: mostra o interpretador usado', 'PYTHON3');
+        'Diagnostico do CR-026: mostra o interpretador usado', 'python3');
+    const sem = await diagScript('diag_interp_sem_shebang', 'diagnostico/interp_sem_shebang.sh',
+        'Diagnostico do CR-026: shell sem #!', 'sh');
+    const envpy = await diagScript('diag_interp_env', 'diagnostico/interp_env.py',
+        'Diagnostico do CR-026: #!/usr/bin/env python3', 'python3');
+    const ausente = await diagScript('diag_interp_shebang_ausente', 'diagnostico/interp_shebang_ausente.py',
+        'Diagnostico do CR-026: #! inexistente', 'python3');
+    // (1) #! existente, nada digitado
+    const t1 = await runDirect(py36, 'GFPREPROD', {});
+    // (2) sem #!: caminho completo digitado pela tela, com a ajuda da ordem e o modal
     await go(`/tickets/new?script_id=${info}&environment=GFPREPROD`);
-    await expectText('Campo Interpretador opcional, em branco, com a ajuda do cadastrado', 'Interpretador (opcional)',
-        'Em branco, roda como cadastrado (Python 3)');
+    await expectText('Campo Interpretador opcional com a ajuda da ordem (CR-026)', 'Interpretador (opcional)',
+        'Na execução vale primeiro o #!', 'Em branco, vale o cadastrado (python3)');
     await fill('#field-interpreter', PY313);
     await clickText('[data-component="ticketTrigger"] [data-action="open"]', 'Criar ticket', { wait: 1500 });
     await expectText('Confirmação mostra o interpretador informado e o comando com ele', 'Interpretador:', PY313);
     await snap('Disparo com o interpretador informado (caminho completo)');
     await confirmModal();
     const t2 = ticketFromUrl();
-    // (3) só o nome, procurado no PATH do agente; (4) nome que não existe
+    // (3) so o nome, no PATH do agente; (4) nome que nao existe; (5) sem #! e sem digitado: cadastro (sh)
     const t3 = await runDirect(info, 'GFPREPROD', {}, 'python3.12');
     const t4 = await runDirect(info, 'GFPREPROD', {}, 'python9.99');
-    // (5) Shell definido no script sem #!
-    const sem = await diagScript('diag_interp_sem_shebang', 'diagnostico/interp_sem_shebang.sh',
-        'Diagnostico do CR-025: shell definido no script sem #!', 'SHELL_SCRIPT');
     const t5 = await runDirect(sem, 'GFPREPROD', {});
-    // (6) 025d: Python definido no script com #!/usr/bin/env python3 (o -E -s vai depois do python3)
-    const envpy = await diagScript('diag_interp_env', 'diagnostico/interp_env.py',
-        'Diagnostico do CR-025: Python definido no script com env', 'PYTHON_SCRIPT');
+    // (6) #!/usr/bin/env python3; (7) Python de virtualenv digitado (link, sem resolver)
     const t6 = await runDirect(envpy, 'GFPREPROD', {});
-    // (7) 025d: Python de virtualenv digitado (link): executado sem resolver o link, acha o venv
     const t7 = await runDirect(info, 'GFPREPROD', {}, VENV + '/bin/python3');
-    state.tickets.ct32 = [t1, t2, t3, t4, t5, t6, t7];
+    // (8) #! existente vence o digitado; (9) #! inexistente e ignorado, vale o cadastro (python3)
+    const t8 = await runDirect(py36, 'GFPREPROD', {}, PY313);
+    const t9 = await runDirect(ausente, 'GFPREPROD', {});
+    const todos = [t1, t2, t3, t4, t5, t6, t7, t8, t9];
+    state.tickets.ct32 = todos;
     saveState();
     const fim = [];
-    for (const t of [t1, t2, t3, t4, t5, t6, t7]) {
+    for (const t of todos) {
         fim.push(await waitStatus(t, ['Deu certo', 'Deu erro', 'Não conseguiu', 'Arquivo não encontrado'], 120));
     }
     await sleep(3000);
     const casos = [
-        [t1, true, ['Como cadastrado', PY36], ['Interpretador: ' + PY36 + ' 3.6.0'], 'Python definido no script (#! 3.6)'],
-        [t2, true, [PY313, PY313], ['Interpretador: ' + PY313 + ' 3.13.2'], 'caminho completo digitado (3.13)'],
-        [t3, true, ['python3.12', '/usr/bin/python3.12'], ['Interpretador: /usr/bin/python3.12'], 'só o nome digitado (python3.12)'],
-        [t4, false, ['python9.99', 'Ainda não executado'], ['INTERPRETER_NOT_FOUND'], 'nome que não existe no servidor'],
-        [t5, false, ['Como cadastrado', 'Ainda não executado'], ['NO_SHEBANG'], 'definido no script sem #!'],
-        [t6, true, ['Como cadastrado', '/usr/bin/env'], ['Interpretador: /usr/bin/python3 '], 'definido no script com #!/usr/bin/env python3'],
+        [t1, true, ['Não informado', PY36], ['interpretador usado: ' + PY36, 'Interpretador: ' + PY36 + ' 3.6.0'],
+            '#! do Python 3.6, nada digitado'],
+        [t2, true, [PY313, PY313], ['Interpretador: ' + PY313 + ' 3.13.2'], 'sem #!, caminho completo digitado (3.13)'],
+        [t3, true, ['python3.12', '/usr/bin/python3.12'], ['Interpretador: /usr/bin/python3.12'], 'sem #!, só o nome digitado'],
+        [t4, false, ['python9.99', 'Ainda não executado'], ['INTERPRETER_NOT_FOUND'], 'nome digitado que não existe'],
+        [t5, true, ['Não informado'], ['interpretador usado: ', 'Diagnostico do CR-026: script sem #!'],
+            'sem #! e sem digitado: o cadastro (sh)'],
+        [t6, true, ['Não informado', '/usr/bin/env'], ['Interpretador: /usr/bin/python3 '], '#!/usr/bin/env python3'],
         [t7, true, [VENV + '/bin/python3', VENV + '/bin/python3'], ['Interpretador: ' + VENV + '/bin/python3', 'Prefixo: ' + VENV],
             'Python de virtualenv digitado (link)'],
+        [t8, true, [PY313, PY36], ['Interpretador: ' + PY36 + ' 3.6.0'], '#! existente vence o digitado'],
+        [t9, true, ['Não informado'], ['#! ignorado: /nao/existe/python3', 'interpretador usado: '],
+            '#! inexistente ignorado, vale o cadastro (python3)'],
     ];
     for (let i = 0; i < casos.length; i++) {
         const [t, ok, detalhe, log, nome] = casos[i];
         check(`Ticket #${t} (${nome}) ${ok ? 'deu certo' : 'não rodou'}`, ok === fim[i].includes('Deu certo'), fim[i]);
         await go(`/tickets/detail/${t}`);
         await sleep(1500);
-        await expectText(`Detalhe do ticket #${t}: interpretador informado e usado`, 'Interpretador informado',
-            'Interpretador usado', ...detalhe);
+        await expectText(`Detalhe do ticket #${t}: interpretador cadastrado, informado e usado`, 'Interpretador cadastrado',
+            'Interpretador informado', 'Interpretador usado', ...detalhe);
         await expectText(`Log do ticket #${t}`, ...log);
-        if (i === 0 || i === 3 || i >= 5) await snap(`Detalhe: ${nome}`, { full: true });
+        if (i === 0 || i === 3 || i >= 7) await snap(`Detalhe: ${nome}`, { full: true });
     }
     await go(`/tickets/new?script_id=${info}&environment=GFPREPROD`);
     await fill('#field-interpreter', 'py thon');
@@ -1969,8 +1997,10 @@ CTS['CT-32'] = async () => {
     const detalhes = await page.$$eval('.sss-audit-detail', (tds) => tds.map((td) => td.textContent).join(' | '));
     check('Auditoria do disparo com o interpretador informado (detalhe completo, em "ver mais")',
         detalhes.includes('interpretador informado: ' + PY313), detalhes.slice(0, 300));
-    for (const sid of [py36, info, sem, envpy]) check(`Script de diagnóstico ${sid} desativado ao final`, await deactivateScript(sid));
-    note('Risco aceito pelo responsável (README §8.5): quem dispara escolhe o executável. No DEV, o agente herda o PATH do terminal que o subiu; os casos usam caminhos do pyenv e o python3.12 do sistema, para não depender dos shims do pyenv.');
+    for (const sid of [py36, info, sem, envpy, ausente]) {
+        check(`Script de diagnóstico ${sid} desativado ao final`, await deactivateScript(sid));
+    }
+    note('Risco aceito pelo responsável (README §8.5): quem dispara escolhe o executável quando o script não tem #! válido, e o #! vence o digitado. No DEV, o agente herda o PATH do terminal que o subiu; os casos usam caminhos do pyenv e o python3.12 do sistema.');
 };
 
 CTS['ENCERRAMENTO'] = async () => {

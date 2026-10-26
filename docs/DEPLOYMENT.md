@@ -239,7 +239,18 @@ cd /opt/sss/app/instance
 cp config.ini.example config.ini && chmod 0640 config.ini
 ```
 
-Ajuste em cada servidor: `[app] sss_env`, `[oracle]` (`user` do papel do servidor, `dsn`, `owner`, `table_prefix`, `driver_mode`), `[secrets] secrets_file = /etc/sss/secrets.cfg`, `[logging] log_dir`, `[web] allowed_origins` e `trusted_proxies` (nó web) e `[agent]` (agentes: `agent_id` único, `environments`, `exec_users`, `exec_work_dir`, `work_dir`, `interpreters` e, com script de caminho relativo, `script_base_dir`, §9). A descrição de cada chave está no README §12.1.
+O exemplo traz só as chaves que **precisam** de valor (CR-026); as demais têm padrão e ficam comentadas, com o valor padrão, no próprio exemplo. Ajuste em cada servidor:
+
+| Seção | Chaves a preencher |
+|---|---|
+| `[app]` | `sss_env` (`HML` ou `PROD`) |
+| `[oracle]` | `user` (a conta do papel do servidor, §5), `dsn`, `owner`, `table_prefix`; `driver_mode` se não for `auto` |
+| `[agent]` (agentes) | `agent_id` único, `environments`, `work_dir`, `max_parallel_jobs`, `exec_users`, `exec_work_dir`; com script de caminho relativo, `script_base_dir` (§9); com as telas de Saídas, Entrada e a pasta de trabalho, `output_dir`, `input_dir` e `script_work_dir` |
+| `[logging]` | `log_dir` |
+| `[web]` (nó web) | `allowed_origins`; atrás de proxy, `trusted_proxies` |
+| `[retention]` (agente do purge) | `purge_user` |
+
+`[secrets] secrets_file` só é preciso quando o `secrets.cfg` não fica na mesma pasta do `config.ini` (ex.: `/etc/sss/secrets.cfg`). A tabela completa, com o padrão e a faixa de cada chave, está no README §12.1. **O SSS não cria as pastas configuradas:** crie-as antes da primeira subida (§8); sem elas, o agente recusa subir (código 13, §15). `[agent] interpreters` não existe mais (CR-026): uma linha antiga só gera aviso.
 
 **Tempos que precisam ser idênticos em todos os agentes (README §8.9, D7):** copie `fence_timeout_s` e `node_offline_timeout_s` do arquivo de referência **sem alterar**, assim como os outros valores do `critical_config` (`heartbeat_interval_s`, `call_timeout_ms`, `kill_grace_s`, `misfire_policy`, `misfire_tolerance_s`, `cron_horizon_days`, `queue_aging_min`). Cada agente registra na subida:
 
@@ -288,6 +299,16 @@ install -o sssprd -g sssprd -m 0700 -d /var/lib/sss/script_work/producao
 visudo -f /etc/sudoers.d/sss
 ```
 
+**Pastas pelo `config.ini` (CR-026e):** em vez dos `install -d` acima (exceto o do helper), rode como root, depois de criar o usuário `sss` e os usuários de execução (§4):
+
+```bash
+# como root, em cada agente (e no nó web, para o log_dir)
+python3 /opt/sss/app/scripts/prepare_dirs.py --config /opt/sss/app/instance/config.ini --dry-run   # confere
+python3 /opt/sss/app/scripts/prepare_dirs.py --config /opt/sss/app/instance/config.ini             # cria
+```
+
+Ele cria, a partir do `config.ini`, `log_dir` (`sss`, `0750`), `work_dir` (`sss`, `0700`), `exec_work_dir` (`root`, `0755`) com uma pasta `0700` por usuário de execução, `output_dir`, `input_dir` e `script_work_dir` (`sss`, `0755`) com a pasta `0700` de cada ambiente, do usuário de execução dele (nome em minúsculo, como no log), e `script_base_dir` (`sss`, `0755`). A pasta que já existe tem o dono e o modo ajustados; o conteúdo nunca é mexido e nada é apagado. Usuário inexistente: para antes de criar qualquer pasta (código 2). Fora de DEV, sem root: código 3. `--service-user` troca o usuário do serviço (padrão `sss`). No DEV, roda com o próprio usuário, sem `chown`.
+
 Conteúdo do `/etc/sudoers.d/sss`, com uma linha por usuário de execução:
 
 ```text
@@ -312,8 +333,7 @@ sss ALL=(ssshml) NOPASSWD: /opt/sss/bin/sss-helper
 * Pode ser um link simbólico. O arquivo **real** precisa existir no servidor do agente, ser arquivo regular, ser legível pelo usuário de execução e **não** ter escrita de grupo nem de outros (`chmod go-w`).
 * O conteúdo e a versão do script são controlados pelo ambiente: o SSS não confere hash nem dono (CR-011). Quem grava na pasta do script muda o que vai rodar.
 * O nó web confere o formato do caminho e, no caminho absoluto, as pastas do sistema e a da aplicação (o relativo só pelo formato). A conferência do arquivo é feita pelo agente, antes de cada execução; uma recusa aparece como `PRECHECK_FAILED` (§15).
-* O interpretador do script (`PYTHON3`, `PYTHON`, `BASH`, `SH`) precisa estar mapeado em `[agent] interpreters` de pelo menos um agente saudável do ambiente (os "definido no script", `PYTHON_SCRIPT` e `SHELL_SCRIPT`, não precisam: usam o `#!` do script e contam como atendidos por todo agente saudável do ambiente). Senão, o ticket fica `PENDING` (§15, "fila sem atendente").
-* **Interpretador informado no disparo (CR-025):** o operador pode digitar, só naquela execução, o caminho absoluto de um interpretador ou só o nome (ex.: `python3.13`), procurado no `PATH` herdado pelo **processo do agente**: o da unit do systemd (o padrão do systemd, ou `Environment=PATH=...` na unit) ou o do shell que rodou o `bin/sss-scheduler.sh`, que não o altera. Confira esse `PATH` em cada servidor. O agente só confere, como o usuário do agente, se o executável existe e é executável, e o executa sem resolver links (o Python de um virtualenv funciona). No `#!`, `#!/usr/bin/env python3` funciona. **Risco aceito pelo responsável pelo produto:** quem pode disparar escolhe o programa que roda o script, e o `#!` dos scripts "definido no script" troca o interpretador sem passar pelo cadastro. O digitado fica no snapshot e na auditoria do disparo; o usado, em `tbsss_tickets.interpreter_path`; os dois no detalhe do ticket (README §8.5).
+* **Interpretador (CR-025, CR-026):** o cadastro guarda só o nome (`python`, `python3`, `sh` ou `bash`). Na execução vale, nesta ordem: o `#!` da primeira linha do script, se o executável existir no servidor; o interpretador digitado no disparo (caminho absoluto ou só o nome, ex.: `python3.13`); o nome do cadastro. Os nomes são procurados no `PATH` herdado pelo **processo do agente**: o da unit do systemd (o padrão do systemd, ou `Environment=PATH=...` na unit) ou o do shell que rodou o `bin/sss-scheduler.sh`, que não o altera. **Confira esse `PATH` em cada servidor:** ele precisa achar `python3`, `bash` e os demais que os scripts usam. O agente atende qualquer interpretador; num servidor sem ele, o ticket termina em `PRECHECK_FAILED` (`INTERPRETER_NOT_FOUND`). O agente só confere, como o usuário do agente, se o executável existe e é executável, e o executa sem resolver links (o Python de um virtualenv funciona); `#!/usr/bin/env python3` funciona. **Risco aceito pelo responsável pelo produto:** quem pode disparar escolhe o programa que roda o script (quando ele não tem `#!` válido), e quem edita a primeira linha troca o interpretador sem passar pelo cadastro. O digitado fica no snapshot, em `tbsss_tickets.interpreter_path` e na auditoria do disparo; o usado, em `tbsss_tickets.interpreter_used` e na linha `[SSS] interpretador usado` do log (README §8.5).
 
 ---
 
@@ -534,7 +554,7 @@ WARNING: nenhum PURGE auditado nos ultimos 2 dias (README §11.3)
 | `agente X ATIVO sem heartbeat ha N s` | O agente caiu ou perdeu o banco: veja o log dele (§14) e o §15.3. Depois de `node_offline_timeout_s`, outro agente finaliza os tickets dele como `NODE_OFFLINE` |
 | `agente X em risco` | Heartbeat atrasado além do fence: o agente já deve ter se isolado (`FENCED`) |
 | `ambiente X ativo sem nenhum agente saudavel` | Nenhum agente saudável atende o ambiente: suba um agente com o ambiente em `environments`, ou desative o ambiente |
-| `fila sem atendente: N tickets de AMB/INTERP` | Nenhum agente saudável do ambiente mapeia o interpretador: ajuste `[agent] interpreters`. Com `PYTHON_SCRIPT` ou `SHELL_SCRIPT`, que todo agente atende, não há agente saudável no ambiente |
+| `fila sem atendente: N tickets de AMB/INTERP` | Nenhum agente saudável atende o ambiente (CR-026: o interpretador não conta mais; INTERP é o do cadastro): suba um agente para o ambiente ou confira os agentes em risco |
 | `fila vencida: N tickets PENDING, espera maxima M min` | Agentes sem vaga: veja `max_parallel_jobs` e o teto por script, e os scripts presos em `RUNNING` |
 | `ticket N RUNNING sem PID` | O agente reservou e não iniciou: veja o log do agente para esse ticket |
 | `agente X com configuracao divergente` | Tempos diferentes do `config.ini` de referência: corrija e reinicie o agente |
@@ -593,8 +613,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | 11 | `configuracao invalida: [secao] chave: <motivo>` | Chave ausente, desconhecida ou fora da faixa | Compare com o `config.ini.example`; uma chave removida pede "apague a linha" |
 | 11 | `child_locale <x> nao consta em locale -a (CR-007, R-17)` | Locale do filho não instalado | Instale o locale ou ajuste `[agent] child_locale` |
 | 12 | `secrets.cfg invalido: <reason>` (ex.: `Arquivo de segredos possui permissoes inseguras (mode 644, ...)`, `... deve pertencer ao usuario corrente`, `Secao [web] nao pertence ao papel 'agente'`) | Modo, dono ou seções do `secrets.cfg` | `chmod 0600`, `chown sss`, e só as seções do papel (§7.2) |
-| 13 | `interpreter SH (/bin/sh) recusado: <código>` | Interpretador mapeado inexistente ou inseguro | Ajuste `[agent] interpreters` (caminho absoluto, executável, fora das pastas do SSS) |
-| 13 | `[agent] interpreters vazio: o agente nao executaria nada` | Chave vazia | Preencha |
+| 13 | `log_dir <pasta> recusado: NOT_FOUND` (ou `work_dir`, `output_dir`, `input_dir`, `script_work_dir`) | A pasta configurada não existe: o SSS não cria as pastas (README §12.1) | Crie a pasta com o dono e o modo do §8 e suba de novo |
 | 13 | Linhas `execucao fora de DEV: <falha>` e depois `N falha(s) na conferencia do helper e do sudoers` | Helper ou `sudoers` incompletos: `helper ... nao pertence ao root`, `... deve ter modo 0755`, `sudo -n -l sem a regra do helper para <usuário>`, `<pasta> deve pertencer a <usuário> com modo 0700`, `usuario de execucao <x> nao existe` | §8 e §4.2 |
 | 13 | `<nome> <caminho> recusado: <código>` (`log_dir`, `work_dir`...), `output_dir ... recusado` / `pasta de saida: <falha>` e `input_dir ... recusado` / `pasta de entrada: <falha>` e `script_work_dir ... recusado` / `pasta de trabalho: <falha>` | Pasta ausente, sem escrita ou nas pastas do sistema | §4 e §8 |
 | 14 | `Outra instancia do agente ja esta em execucao (<work_dir>/sss-<agent_id>.lock)` | Outro agente com o mesmo `work_dir` e `agent_id` | Pare o outro, ou use `config.ini` próprio (§7.1) |
@@ -633,7 +652,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 
 | Status/motivo | Linha no log do agente (e `[SSS]` no log do ticket) | Causa provável | Ação |
 |---|---|---|---|
-| `PENDING` que nunca sai | Nenhuma linha. No `health.py` e na tela de agentes: `fila sem atendente: N tickets de AMB/INTERP` | Nenhum agente saudável do ambiente mapeia o interpretador do script (o do cadastro, CR-008 R-15) | Mapeie o interpretador em `[agent] interpreters` (os "definido no script" não são mapeados: todo agente saudável os atende) ou suba um agente para o ambiente |
+| `PENDING` que nunca sai | Nenhuma linha. No `health.py` e na tela de agentes: `fila sem atendente: N tickets de AMB/INTERP` | Nenhum agente saudável atende o ambiente do ticket (CR-026: o interpretador não conta) | Suba um agente para o ambiente ou recupere o agente em risco |
 | `PENDING` que demora | `DISCO_LOG: N MB livres em log_dir (minimo M): sem claim` ou `DISCO_SAIDA: ...` | Disco quase cheio | Libere espaço (purge, §12) ou aumente a partição |
 | `FAILED` / `PRECHECK_FAILED` | `pre-validacao recusada: <código>` e `[SSS] pre-validacao recusada: <código> (agente X)` | Ver os códigos abaixo | Ver abaixo |
 | ↳ `NOT_FOUND`, `NO_ACCESS`, `NOT_A_FILE` | | O arquivo real não existe, não é legível ou não é arquivo, no servidor do agente | Corrija o arquivo no agente (§9) |
@@ -641,10 +660,10 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | ↳ `SYSTEM_DIR`, `SSS_DIR`, `APP_DIR` | | Script nas pastas do sistema, nas do SSS (inclusive `output_dir`, `input_dir` e `script_work_dir`, CR-014 e CR-019) ou na pasta da aplicação (CR-023) | Mova o script e corrija o cadastro |
 | ↳ `NO_BASE_DIR` | | Script com caminho relativo e **este** agente sem `[agent] script_base_dir` (CR-023) | Configure a pasta base no agente (§9) e suba de novo |
 | ↳ `RELATIVE_PATH` | | Agente de versão anterior ao CR-023 diante de script com caminho relativo | Atualize todos os agentes do ambiente (§18) |
-| ↳ `INTERPRETER_UNAVAILABLE` | | O interpretador do script não está mapeado **neste** agente | `[agent] interpreters` |
-| ↳ `INTERPRETER_NOT_FOUND` | | O interpretador digitado no disparo, ou o do `#!`, não existe ou não é executável neste servidor (o nome é procurado no `PATH` do agente; CR-025) | Corrija o valor e dispare de novo, instale o interpretador ou ajuste o `PATH` do serviço |
-| ↳ `NO_SHEBANG` | | Script "definido no script" sem `#!` com caminho absoluto na primeira linha (CR-025) | Corrija a primeira linha do script ou o cadastro |
-| ↳ `UNSUPPORTED_VERSION` | | Ticket criado por uma versão anterior (snapshot antes da versão 5), ou agente anterior ao CR-025 diante de um ticket com snapshot versão 6 | Dispare de novo pela tela; no segundo caso, atualize os agentes (§18) |
+| ↳ `INTERPRETER_NOT_FOUND` | | Nem o `#!` do script, nem o digitado no disparo, nem o nome do cadastro existem e são executáveis neste servidor (os nomes são procurados no `PATH` do agente; CR-026). O log do ticket mostra `[SSS] #! ignorado` quando o `#!` aponta para algo que não existe | Instale o interpretador, ajuste o `PATH` do serviço, corrija o `#!` ou dispare de novo com outro interpretador |
+| ↳ `INTERPRETER_NOT_ALLOWED` | | O snapshot traz um interpretador fora da allowlist (ticket muito antigo ou gravado à mão) | Dispare de novo pela tela |
+| ↳ `INTERPRETER_UNAVAILABLE`, `NO_SHEBANG`, `INTERPRETER_UNSAFE` | | Só de agente anterior ao CR-026 | Atualize os agentes (§18) |
+| ↳ `UNSUPPORTED_VERSION` | | Ticket criado por uma versão anterior (snapshot antes da versão 5), ou agente anterior ao CR-026 diante de um ticket com snapshot versão 7 (ou anterior ao CR-025 com a 6) | Dispare de novo pela tela; no segundo caso, atualize os agentes (§18) |
 | ↳ `REGISTRATION_CHANGED`, `SCRIPT_INACTIVE`, `NOT_HOMOLOGATED`, `ENVIRONMENT_INACTIVE`, `NO_PERMISSION` | | O cadastro mudou entre o disparo e a execução | Confira o cadastro e dispare de novo |
 | ↳ `DB_ERROR: ORA-nnnnn` | `falha antes do spawn: DB_ERROR: ...` | Erro de banco na pré-validação | Veja o código ORA |
 | `FAILED` / `SPAWN_ERROR` | `falha antes do spawn: <erro>` e `[SSS] falha ao iniciar: <erro> (agente X)` | Não foi possível criar o log ou o processo (disco, permissão, `sudo`) | Veja o erro; confira o §8 |
@@ -734,6 +753,26 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
    * **Sem web2py (CR-021f):** o `bin/sss-web.sh` novo só aceita as opções do `scripts/run_web.py` e recusa `web2py.py`/`anyserver.py` (código 2). Troque, junto com a versão, a linha que sobe o web na unit do `systemd` ou no script de operação: `bin/sss-web.sh <python3> --host 127.0.0.1 --port <porta>` (§10.1). Confira antes com `bin/sss-web.sh <python3> --check`. A sessão passa a ser o cookie assinado `sss_session` (CR-021e, D1): quem estiver logado na hora da atualização entra de novo. O `httpserver.log`, os `parameters_<porta>.py` e o painel `/admin` do web2py deixam de existir: tire o `httpserver.log` do `logrotate` (§14.4) e não copie nada disso para a pasta nova.
    * **Aplicação na raiz do pacote (CR-022a):** o pacote não tem mais `applications/script_scheduling_service/`; tudo fica direto em `/opt/sss/app` (antes `/opt/sss/web2py`). Na primeira atualização com esta versão, extraia em `/opt/sss/app` (sem renomear a pasta antiga para ela), copie o `config.ini` de `/opt/sss/web2py/applications/script_scheduling_service/instance/` para `/opt/sss/app/instance/` e troque nos caminhos de operação (unit do `systemd`, `cron` do purge, `sudoers` do monitoramento, scripts de subida) `/opt/sss/web2py` por `/opt/sss/app` e `.../applications/script_scheduling_service/scripts/` por `.../scripts/`. Caminhos absolutos do `config.ini` que apontavam para dentro da pasta antiga (ex.: `log_dir`, `work_dir`) também mudam. O retorno é subir de novo pela pasta antiga, que fica intacta.
    * **Código no pacote `src/sss/` (CR-022b):** para a operação nada muda: os comandos continuam `bin/*.sh` e `scripts/<nome>.py` (agora involucros que chamam `src/sss/cli/`), com as mesmas opções e códigos de saída. O pacote passa a ter só `bin/`, `docs/`, `instance/`, `scripts/` e `src/` (§3); as pastas `modules/`, `webapp/`, `controllers/`, `views/` e `static/` saíram, e templates e estáticos ficam em `src/sss/web/`. Automação local que apontava para arquivos dessas pastas (cópia de CSS, inspeção de template) precisa do caminho novo; as URLs não mudam.
+   * **Config simplificado e interpretador só no cadastro (CR-026):** atualize **todos** os agentes antes de liberar a versão nova da web: o ticket passa à versão 7 do snapshot, que o agente anterior recusa (`UNSUPPORTED_VERSION`). No `config.ini`, a linha `[agent] interpreters` pode ser apagada (só gera aviso), e as chaves com o valor padrão também (README §12.1). Confira o `PATH` do serviço de cada agente (§9). Num banco já instalado, o DBA aplica antes da subida (troque `openrisow` e `tbsss_`):
+     ```sql
+     ALTER TABLE openrisow.tbsss_scripts DROP CONSTRAINT ck_tbsss_scr_int;
+     ALTER TABLE openrisow.tbsss_scripts MODIFY (interpreter VARCHAR2(100 CHAR));
+     UPDATE openrisow.tbsss_scripts SET interpreter = CASE interpreter
+       WHEN 'PYTHON3' THEN 'python3' WHEN 'PYTHON' THEN 'python' WHEN 'BASH' THEN 'bash' WHEN 'SH' THEN 'sh'
+       WHEN 'PYTHON_SCRIPT' THEN 'python3' WHEN 'SHELL_SCRIPT' THEN 'sh' ELSE interpreter END;
+     ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_int
+       CHECK (interpreter IN ('python','python3','sh','bash'));
+     ALTER TABLE openrisow.tbsss_tickets ADD (interpreter_used VARCHAR2(1000 CHAR));
+     -- interpreter_path guardava o usado (CR-025); passa a ser o digitado, que o snapshot ja guarda
+     UPDATE openrisow.tbsss_tickets SET interpreter_used = interpreter_path, interpreter_path = NULL
+      WHERE interpreter_path IS NOT NULL;
+     COMMIT;
+     ALTER TABLE openrisow.tbsss_agents DROP COLUMN interpreters;
+     COMMENT ON COLUMN openrisow.tbsss_scripts.interpreter IS 'Interpretador do cadastro (python, python3, sh, bash), usado sem #! valido nem digitado no disparo';
+     COMMENT ON COLUMN openrisow.tbsss_tickets.interpreter_path IS 'Interpretador digitado no disparo (caminho ou nome, CR-026); vazio quando nao informado';
+     COMMENT ON COLUMN openrisow.tbsss_tickets.interpreter_used IS 'Interpretador executado (#!, digitado ou do cadastro, CR-026); vazio antes do inicio';
+     ```
+     Os scripts "definido no script" viram `python3` ou `sh` e continuam rodando pelo `#!`, que agora vem primeiro. **Retorno:** a versão anterior precisa da coluna `tbsss_agents.interpreters` (`ALTER TABLE ... ADD (interpreters VARCHAR2(100 CHAR))`), da CK anterior e dos nomes anteriores no cadastro (o `UPDATE` inverso), além da linha `interpreters` no `config.ini`; os tickets com snapshot versão 7 ainda na fila são recusados por ela (`UNSUPPORTED_VERSION`). Prefira o backup do esquema (§17).
    * **Interpretador no disparo e "definido no script" (CR-025):** atualize **todos** os agentes antes de liberar a versão nova da web: o ticket passa à versão 6 do snapshot, que o agente anterior recusa (`UNSUPPORTED_VERSION`). Num banco já instalado, o DBA aplica antes da subida (troque `openrisow` e `tbsss_`):
      ```sql
      ALTER TABLE openrisow.tbsss_scripts DROP CONSTRAINT ck_tbsss_scr_int;
@@ -778,7 +817,8 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 - [ ] Helper em `/opt/sss/bin/sss-helper` (root, `0755`) e `sudoers` de cada usuário de execução (§8)
 - [ ] Com `output_dir`, `input_dir` ou `script_work_dir`: a pasta de cada ambiente atendido criada pelo root, do usuário de execução, `0700` (§8)
 - [ ] Com script de caminho relativo (CR-023): `[agent] script_base_dir` em **todos** os agentes do ambiente, a pasta existente e a linha `pasta base dos scripts` no log de subida e no painel de agentes (§9)
-- [ ] Interpretador no disparo (CR-025): o `PATH` do processo do agente (unit ou shell que roda o `sss-scheduler.sh`) com os interpretadores que os operadores vão digitar só pelo nome, e `PYTHON=` em `[agent] interpreters` se a opção Python for usada (§9)
+- [ ] Interpretador (CR-025, CR-026): o `PATH` do processo do agente (unit ou shell que roda o `sss-scheduler.sh`) acha `python3`, `bash` e os demais interpretadores dos scripts e os que os operadores vão digitar só pelo nome (§9); nenhuma linha `[agent] interpreters` (só gera aviso)
+- [ ] `config.ini` só com as chaves obrigatórias e as que fogem do padrão (README §12.1); todas as pastas configuradas criadas antes da primeira subida (§8)
 - [ ] `log_dir` em partição própria, com alerta de uso (§4.3)
 - [ ] Senha inicial do seed trocada (§5.3)
 - [ ] `cron` do purge e `health.py` no monitoramento (§12, §13)
