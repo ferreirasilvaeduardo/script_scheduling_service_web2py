@@ -22,7 +22,7 @@ APP_DIR = _testenv.APP_DIR
 VIEWS_DIR = os.path.join(_testenv.WEB_DIR, "templates")
 JS_DIR = os.path.join(_testenv.WEB_DIR, "static", "js", "app")
 CSS_FILE = os.path.join(_testenv.WEB_DIR, "static", "css", "sss.css")
-EVIDENCE_SCRIPT = os.path.join(APP_DIR, "dev", "homologation", "tools", "capture_evidence.js")
+EVIDENCE_SCRIPT = os.path.join(APP_DIR, "dev", "others", "homologation", "tools", "capture_evidence.js")
 UI_DIR = os.path.join(APP_DIR, "src", "sss", "ui")
 
 _RE_TEMPLATE_CODE = re.compile(r"\{\{.*?\}\}", re.S)

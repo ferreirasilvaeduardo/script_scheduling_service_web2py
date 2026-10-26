@@ -3,7 +3,7 @@ import shutil
 import zipfile
 import struct
 
-DOCX_PATH = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'docs', 'homologacao', 'SSS_Homologation_Manual_UI_Freeze.docx'))
+DOCX_PATH = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', 'docs', 'homologacao', 'SSS_Homologation_Manual_UI_Freeze.docx'))
 BACKUP_PATH = DOCX_PATH + '.bak'
 SCREENSHOTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'telas')
 

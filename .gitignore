@@ -23,7 +23,7 @@ secrets.cfg
 *.env
 # Launchers locais de desenvolvimento (podem conter dados da maquina do desenvolvedor)
 bin/sss-web-*_v*.sh
-dev/notas/sss-web-*_v*.sh
+dev/others/notas/sss-web-*_v*.sh
 # Sobras do web2py (removido no CR-021f) numa copia antiga: parameters_<porta>.py guarda o hash da
 # senha do painel dele e nunca pode ir para o git
 /parameters_*.py
@@ -37,10 +37,10 @@ dev/notas/sss-web-*_v*.sh
 /docs/sss_packages/*.tar.gz
 /docs/sss_packages/*.sha256
 /docs/sss_dev_script_examples/
-# Capturas do manual de homologacao: ja ficam dentro do .docx (dev/homologation/README.md)
-/dev/homologation/screens/
+# Capturas do manual de homologacao: ja ficam dentro do .docx (dev/others/homologation/README.md)
+/dev/others/homologation/screens/
 # Evidencias reais (2026-10-22): capturas e estado da rodada; o .docx e o results.json sao versionados
-/dev/homologation/evidence_*/*.png
-/dev/homologation/evidence_*/state.json
+/dev/others/homologation/evidence_*/*.png
+/dev/others/homologation/evidence_*/state.json
 # Senha da homologacao do DEV (~/.sss_homolog_pw): nunca no git, nem copiada para dentro do repositorio
 .sss_homolog_pw

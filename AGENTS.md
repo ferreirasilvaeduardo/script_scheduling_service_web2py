@@ -458,7 +458,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 | `test_db_conn.py` `[F7.0]` | Com módulos falsos de driver: cadeia `auto` Thin → Thick → cx_Oracle, parada em erro de autenticação, valores forçados, senha fora de argv/ambiente/log, mapa de erros por driver e modo, inclusive *call timeout* e erros de failover (CR-007, R-12), reconexão sem `sleep`; cálculo do orçamento de abertura do DSN descritor (CR-008, R-17); sondagem com a conta do papel que conecta (`--user` no argv, senha só no stdin; o `connect` do papel `monitor` sonda com a conta do monitor, F9.1d); primeira conexão em INFO (`Conectando`/`Conexao estabelecida`) e o WARN `Tentando reconexao` só nas reconexões (F9.1d) |
 
 5. Cada correção de defeito acompanha um teste de regressão.
-6. **Homologação real no DEV:** `dev/homologation/tools/capture_evidence.js` executa os casos de teste do manual no navegador contra o DEV (Oracle e agente reais) e confere o resultado esperado de cada passo na própria página; `build_evidence_docx.py` gera o documento de evidências (`docs/homologation/`). Use-o depois de mudanças de tela ou de contrato JavaScript × servidor, que os testes `unittest` não exercitam (o JavaScript não roda neles).
+6. **Homologação real no DEV:** `dev/others/homologation/tools/capture_evidence.js` executa os casos de teste do manual no navegador contra o DEV (Oracle e agente reais) e confere o resultado esperado de cada passo na própria página; `build_evidence_docx.py` gera o documento de evidências (`docs/homologation/`). Use-o depois de mudanças de tela ou de contrato JavaScript × servidor, que os testes `unittest` não exercitam (o JavaScript não roda neles).
 
 ---
 

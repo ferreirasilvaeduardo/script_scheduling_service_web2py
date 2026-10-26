@@ -2,7 +2,7 @@ import os
 import zipfile
 import struct
 
-DOCX_PATH = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'docs', 'homologacao', 'SSS_Homologation_Manual_UI_Freeze.docx'))
+DOCX_PATH = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', 'docs', 'homologacao', 'SSS_Homologation_Manual_UI_Freeze.docx'))
 
 with zipfile.ZipFile(DOCX_PATH, 'r') as z:
     names = [f for f in z.namelist() if f.startswith('word/media/image') and f.endswith('.png')]

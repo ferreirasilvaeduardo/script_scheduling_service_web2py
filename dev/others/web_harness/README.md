@@ -11,7 +11,7 @@ Roteiros Playwright que conferem as telas no navegador, contra a aplicação com
 
 ## Como rodar
 
-1. Suba a aplicação com o backend FAKE numa porta local, com a senha do seed em `SSS_DEV_SEED_PASSWORD` (o servidor e os roteiros leem a mesma variável). O runner é o `run_fake_web.py` (CR-021e): `SSS_DEV_SEED_PASSWORD=<senha> python dev/web_harness/run_fake_web.py --port 8791`, com o `instance/config.ini` do DEV e o FAKE injetado no `repo_factory`.
+1. Suba a aplicação com o backend FAKE numa porta local, com a senha do seed em `SSS_DEV_SEED_PASSWORD` (o servidor e os roteiros leem a mesma variável). O runner é o `run_fake_web.py` (CR-021e): `SSS_DEV_SEED_PASSWORD=<senha> python dev/others/web_harness/run_fake_web.py --port 8791`, com o `instance/config.ini` do DEV e o FAKE injetado no `repo_factory`.
 2. Rode cada roteiro com a mesma variável:
 
 ```bash

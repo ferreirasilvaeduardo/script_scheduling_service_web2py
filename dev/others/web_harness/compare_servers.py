@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Paridade de HTML entre dois servidores do SSS com o backend FAKE (somente DEV, CR-021e).
 
-Uso: SSS_DEV_SEED_PASSWORD=<senha> python dev/web_harness/compare_servers.py <url_referencia> <url_nova>
+Uso: SSS_DEV_SEED_PASSWORD=<senha> python dev/others/web_harness/compare_servers.py <url_referencia> <url_nova>
 
 Cada URL e a raiz da aplicacao (ex.: http://127.0.0.1:8791/script_scheduling_service). Entra como
 admin, op.prod e consulta nos dois, busca as mesmas paginas GET e compara o HTML (sem o token CSRF e

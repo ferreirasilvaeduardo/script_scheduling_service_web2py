@@ -16,7 +16,7 @@ Geram e conferem as figuras dos documentos de homologação em `docs/homologatio
 Pré-requisitos: servidor web do DEV no ar (`bin/start_local.sh 18000`), agente do DEV no ar com `interpreters` configurado, o agente com `[agent] script_base_dir` = `dev/scripts` do repositório (CR-023: o seed e os diagnósticos são cadastrados com caminho relativo, como `utilitarios/zipar_arquivos.py` e `diagnostico/gerar_saida.sh`) e os arquivos de entrada em `input/<ambiente>/<script>/` (ver o documento, seção 2). Para o CT-32 (CR-025): `PYTHON=` em `[agent] interpreters`, os Pythons 3.6.0 e 3.13.2 do pyenv, o `python3.12` no `PATH` do agente e em `/usr/bin` (para o `#!/usr/bin/env python3`), e o virtualenv `~/.sss_homolog_venv` (`/usr/bin/python3 -m venv --without-pip ~/.sss_homolog_venv`).
 
 ```bash
-cd dev/homologation/tools
+cd dev/others/homologation/tools
 node capture_evidence.js                 # todos os casos, na ordem
 node capture_evidence.js CT-05 CT-08     # só os casos pedidos (o estado fica em state.json)
 python3 build_evidence_docx.py
@@ -41,7 +41,7 @@ Figuras do `docs/homologation/SSS_Homologation_Manual_UI_Freeze.docx`, capturada
 Uso, com o servidor de DEV em `http://127.0.0.1:8000`:
 
 ```bash
-cd dev/homologation/tools
+cd dev/others/homologation/tools
 read -s -p "Senha do admin do DEV: " SSS_HOMOLOG_PASSWORD && export SSS_HOMOLOG_PASSWORD && echo
 node capture_all_screens.js
 python3 update_docx_images.py && python3 verify_docx_images.py

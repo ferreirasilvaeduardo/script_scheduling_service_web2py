@@ -24,7 +24,7 @@ from docx.shared import Cm, Pt, RGBColor
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 HOMOLOG = os.path.dirname(AQUI)
-APP = os.path.dirname(os.path.dirname(HOMOLOG))
+APP = os.path.dirname(os.path.dirname(os.path.dirname(HOMOLOG)))
 RUN_DATE = os.environ.get("SSS_EVIDENCE_DATE", "20261023")
 DATE_ISO = "%s-%s-%s" % (RUN_DATE[:4], RUN_DATE[4:6], RUN_DATE[6:])
 DATE_BR = "%s/%s/%s" % (RUN_DATE[6:], RUN_DATE[4:6], RUN_DATE[:4])
@@ -287,7 +287,7 @@ RODADAS["20261024_r2"] = {
     "ressalva": dict((k, v) for k, v in _RESSALVA_1022.items() if k != "CT-05"),
     "defeitos": [
         (u"Roteiro sem o botão Criar ticket",
-         u"dev/homologation/tools/capture_evidence.js",
+         u"dev/others/homologation/tools/capture_evidence.js",
          u"O roteiro clicava em button[data-summary-trigger], gancho do JavaScript antigo que saiu com o Alpine "
          u"(CR-021b2). Na rodada 1 deste dia o modal de disparo não abriu, nenhum ticket foi criado e 48 verificações "
          u"falharam em cascata (227 OK).",
@@ -359,7 +359,7 @@ RODADAS["20261024_r6"] = {
     "ressalva": RODADAS["20261024_r2"]["ressalva"],
     "defeitos": [
         (u"Roteiro lia a situação do ticket na página inteira",
-         u"dev/homologation/tools/capture_evidence.js",
+         u"dev/others/homologation/tools/capture_evidence.js",
          u"Na rodada 5 deste dia (evidence_20261024_r5), o filtro pela situação Rodando do CT-06 saiu vazio (282 OK, "
          u"1 falha). O roteiro esperava o ticket longo \"rodando\" procurando a palavra na página inteira do detalhe, "
          u"mas a barra de etapas sempre tem \"Rodando\": o ticket ainda estava na fila quando o filtro rodou (o "
@@ -389,7 +389,7 @@ RODADAS["20261025_r2"] = {
     "ressalva": RODADAS["20261024_r2"]["ressalva"],
     "defeitos": [
         (u"Roteiro reaproveitava o cadastro dos scripts de diagnóstico com o caminho antigo",
-         u"dev/homologation/tools/capture_evidence.js",
+         u"dev/others/homologation/tools/capture_evidence.js",
          u"Na rodada 1 deste dia (evidence_20261025), os tickets do diag_gerar_saida e do diag_pasta_trabalho "
          u"terminaram em PRECHECK_FAILED (NOT_FOUND), com 275 OK e 8 falhas no CT-26 e no CT-30. Os dois scripts "
          u"foram cadastrados por rodadas anteriores com o caminho da pasta antiga do repositório "
@@ -744,7 +744,7 @@ def main():
                     u"interpretadores PYTHON3, BASH e SH"),
         (u"Base", u"Manual de Homologação — UI Freeze 2.5 (17/10/2026), adaptado aos dados do DEV"),
         (u"Commit de referência", RODADA["commit"]),
-        (u"Execução", u"Roteiro dev/homologation/tools/capture_evidence.js (Chrome headless), %d verificações, "
+        (u"Execução", u"Roteiro dev/others/homologation/tools/capture_evidence.js (Chrome headless), %d verificações, "
                       u"%d figuras" % (total_chk, total_fig)),
         (u"Resultado geral", u"%d de %d verificações OK" % (total_ok, total_chk)),
         (u"Responsável pela homologação", u""),
@@ -910,8 +910,8 @@ def resumo_md(res, ids, inicio, fim, total_ok, total_chk, total_fig):
         u"**Ambiente:** DEV, banco Oracle, %s em `127.0.0.1:18000`, agente `srv-linux-local-01`" % SERVIDOR_WEB,
         u"**Resultado geral:** %d de %d verificações OK; %d figuras." % (total_ok, total_chk, total_fig), u"",
         u"Documento completo, com as telas: `%s` (mesma pasta). "
-        u"Gerado por `dev/homologation/tools/capture_evidence.js` e `build_evidence_docx.py`; o resultado bruto "
-        u"de cada verificação está em `dev/homologation/evidence_%s/results.json`. Nenhuma senha foi "
+        u"Gerado por `dev/others/homologation/tools/capture_evidence.js` e `build_evidence_docx.py`; o resultado bruto "
+        u"de cada verificação está em `dev/others/homologation/evidence_%s/results.json`. Nenhuma senha foi "
         u"registrada." % (os.path.basename(SAIDA), RUN_TAG), u"",
         u"## Resultado por caso", u"",
         u"| Caso | Título | Verificações | Figuras | Resultado |", u"|---|---|---|---|---|",

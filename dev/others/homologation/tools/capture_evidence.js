@@ -17,7 +17,7 @@
  *     a senha nova por ela mesma.
  * Data da rodada: SSS_EVIDENCE_DATE (AAAAMMDD, padrao 20261023): carimbo HOMOLOG_<data> dos registros criados.
  * Rodada no mesmo dia: SSS_EVIDENCE_ROUND (ex.: 2): carimbo HOMOLOG_<data>R<n> e pasta evidence_<data>_r<n>.
- * Saida: SSS_EVIDENCE_DIR (padrao dev/homologation/evidence_<data>[_r<n>]): <CT>_<n>.png, results.json, state.json.
+ * Saida: SSS_EVIDENCE_DIR (padrao dev/others/homologation/evidence_<data>[_r<n>]): <CT>_<n>.png, results.json, state.json.
  */
 const fs = require('fs');
 const os = require('os');
@@ -34,7 +34,7 @@ function loadPuppeteer() {
 }
 const puppeteer = loadPuppeteer();
 
-const APP = path.resolve(__dirname, '..', '..', '..');
+const APP = path.resolve(__dirname, '..', '..', '..', '..');
 const BASE_URL = process.env.SSS_BASE_URL || 'http://127.0.0.1:18000/script_scheduling_service';
 const RUN_DATE = process.env.SSS_EVIDENCE_DATE || '20261023';
 const RUN_DATE_BR = `${RUN_DATE.slice(6, 8)}/${RUN_DATE.slice(4, 6)}/${RUN_DATE.slice(0, 4)}`;

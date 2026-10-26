@@ -375,10 +375,11 @@ bin/
   pyproject.toml              # [CR-022b9] só configuração de ferramentas (mypy estrito com a dívida por módulo, isort, autopep8, pylint); sem [project], sem pip install
   Makefile                    # alvos de teste (test-*), lint (portão flake8), type-check (mypy) e pacote; só DEV
   dev/scripts/                # árvore de scripts de exemplo para DEV/testes (nunca implantada)
-  dev/homologation/            # ferramentas de homologação: figuras do manual de UI Freeze e evidências reais no DEV
-                              # (capture_evidence.js + build_evidence_docx.py; Puppeteer e .docx; nunca implantadas)
-  dev/web_harness/             # [CR-021] roteiros Playwright das telas contra o backend FAKE e o run_fake_web.py (nunca implantados)
-  dev/notas/                   # anotações antigas de desenvolvimento (fora do pacote; sem valor normativo)
+  dev/others/                 # apoio ao desenvolvimento, nunca implantado (reunido aqui em 2026-10-26):
+    homologation/             # ferramentas de homologação: figuras do manual de UI Freeze e evidências reais no DEV
+                              # (capture_evidence.js + build_evidence_docx.py; Puppeteer e .docx)
+    web_harness/              # [CR-021] roteiros Playwright das telas contra o backend FAKE e o run_fake_web.py
+    notas/                    # anotações antigas de desenvolvimento (sem valor normativo)
 docs/
   prompts/                    # histórico: prompts com que as fases F0 a F9 foram construídas (caminhos de antes do CR-022a)
   homologation/               # manual de homologação (UI Freeze, histórico) e evidências reais no DEV (2026-10-22)
