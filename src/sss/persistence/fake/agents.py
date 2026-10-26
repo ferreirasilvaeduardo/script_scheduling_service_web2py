@@ -4,6 +4,7 @@ import copy
 import datetime
 
 from sss.persistence.contracts.repo_agents import RepoAgents
+from sss.platform import path_guard
 
 
 class RepoAgentsFake(RepoAgents):
@@ -45,8 +46,10 @@ class RepoAgentsFake(RepoAgents):
             age = max(0, int((now - hb).total_seconds()))  # mesmo arredondamento de agents_service.saude
             if age >= 2 * thresholds.heartbeat_interval_s and age > thresholds.fence_timeout_s:
                 continue
-            served.update((a.strip(), i.strip()) for a in (ag.get("environments") or "").split(",")
-                             for i in (ag.get("interpreters") or "").split(",") if a.strip() and i.strip())
+            # Os "definido no script" (CR-025) nao sao configurados: todo agente saudavel os atende.
+            interpreters = [i.strip() for i in (ag.get("interpreters") or "").split(",")] + list(path_guard.SCRIPT_DEFINED)
+            served.update((a.strip(), i) for a in (ag.get("environments") or "").split(",")
+                             for i in interpreters if a.strip() and i)
         groups = {}
         interpreters = dict((sid, s.get("interpreter")) for sid, s in self._store.scripts.items())
         with self._store.lock_tickets:

@@ -9,6 +9,7 @@ import datetime
 
 from sss.persistence import db_conn
 from sss.core import sql_ident
+from sss.platform import path_guard
 
 _RUN = "(" + sql_ident.FBI_TCK_RUN_AGENT_CASE + ")"
 _START = sql_ident.FBI_TCK_QUEUE_START
@@ -46,7 +47,8 @@ _SQL_VERSION = "SELECT schema_version FROM {ctl} WHERE id = 1"
 
 def served_pairs(agents, now, thresholds):
     """(ambiente, interpretador) servidos por agente ATIVO com saude OK ou DELAYED (README §13), com o mesmo
-    arredondamento de agents_service.health."""
+    arredondamento de agents_service.health. Os "definido no script" (CR-025) nao sao configurados: todo agente
+    saudavel do ambiente os atende."""
     served = set()
     for ag in agents:
         hb = ag.get("heartbeat_at")
@@ -55,8 +57,9 @@ def served_pairs(agents, now, thresholds):
         age = max(0, int((now - hb).total_seconds()))
         if age >= 2 * thresholds.heartbeat_interval_s and age > thresholds.fence_timeout_s:
             continue
-        served.update((a.strip(), i.strip()) for a in (ag.get("environments") or "").split(",")
-                         for i in (ag.get("interpreters") or "").split(",") if a.strip() and i.strip())
+        interpreters = [i.strip() for i in (ag.get("interpreters") or "").split(",")] + list(path_guard.SCRIPT_DEFINED)
+        served.update((a.strip(), i) for a in (ag.get("environments") or "").split(",")
+                         for i in interpreters if a.strip() and i)
     return served
 
 

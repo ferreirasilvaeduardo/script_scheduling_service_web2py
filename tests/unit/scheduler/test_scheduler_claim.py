@@ -443,16 +443,16 @@ class TestExecution(_Base):
         self.assertEqual(self.db.tickets[tid]["script_path"], real)
 
     def test_cr025_definido_no_script_e_digitado(self):
-        # CR-025: SHELL_SCRIPT roda pelo #!; o digitado no disparo (so o nome) vence; o usado vai com o PID.
+        # CR-025: SHELL_SCRIPT roda pelo #!; o digitado no disparo (so o nome) vence; o usado (sem resolver links) vai com o PID.
         sid = self.db.script("#!/bin/sh\necho \"rodou $0\"\n", interpreter="SHELL_SCRIPT")
         by_shebang = self.db.ticket(sid, version=6)
         typed = self.db.ticket(self.db.script("echo digitado\n"), version=6, override="sh")
         self.start_agent()
         self.run_loop(lambda: self.finished(by_shebang)() and self.finished(typed)())
         self.assertEqual(self.final(by_shebang), ("SUCCESS", "EXIT_OK", 0))
-        self.assertEqual(self.db.tickets[by_shebang]["interpreter_path"], os.path.realpath("/bin/sh"))
+        self.assertEqual(self.db.tickets[by_shebang]["interpreter_path"], "/bin/sh")
         self.assertEqual(self.final(typed), ("SUCCESS", "EXIT_OK", 0))
-        self.assertEqual(self.db.tickets[typed]["interpreter_path"], os.path.realpath(shutil.which("sh")))
+        self.assertEqual(self.db.tickets[typed]["interpreter_path"], os.path.abspath(shutil.which("sh")))
 
     def test_cr025_shebang_invalido_e_nome_inexistente(self):
         sem = self.db.ticket(self.db.script("echo sem shebang\n", interpreter="SHELL_SCRIPT"), version=6)

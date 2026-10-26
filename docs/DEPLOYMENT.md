@@ -312,8 +312,8 @@ sss ALL=(ssshml) NOPASSWD: /opt/sss/bin/sss-helper
 * Pode ser um link simbólico. O arquivo **real** precisa existir no servidor do agente, ser arquivo regular, ser legível pelo usuário de execução e **não** ter escrita de grupo nem de outros (`chmod go-w`).
 * O conteúdo e a versão do script são controlados pelo ambiente: o SSS não confere hash nem dono (CR-011). Quem grava na pasta do script muda o que vai rodar.
 * O nó web confere o formato do caminho e, no caminho absoluto, as pastas do sistema e a da aplicação (o relativo só pelo formato). A conferência do arquivo é feita pelo agente, antes de cada execução; uma recusa aparece como `PRECHECK_FAILED` (§15).
-* O interpretador do script (`PYTHON3`, `PYTHON`, `BASH`, `SH`) precisa estar mapeado em `[agent] interpreters` de pelo menos um agente saudável do ambiente (os "definido no script", `PYTHON_SCRIPT` e `SHELL_SCRIPT`, não precisam: usam o `#!` do script). Senão, o ticket fica `PENDING` (§15, "fila sem atendente").
-* **Interpretador informado no disparo (CR-025):** o operador pode digitar, só naquela execução, o caminho absoluto de um interpretador ou só o nome (ex.: `python3.13`), procurado no `PATH` do **serviço do agente**: confira o `PATH` da unit do systemd ou do `bin/sss-scheduler.sh` em cada servidor. O agente só confere se o executável existe e é executável. **Risco aceito pelo responsável pelo produto:** quem pode disparar escolhe o programa que roda o script, e o `#!` dos scripts "definido no script" troca o interpretador sem passar pelo cadastro. O digitado e o usado ficam no ticket e na auditoria (README §8.5).
+* O interpretador do script (`PYTHON3`, `PYTHON`, `BASH`, `SH`) precisa estar mapeado em `[agent] interpreters` de pelo menos um agente saudável do ambiente (os "definido no script", `PYTHON_SCRIPT` e `SHELL_SCRIPT`, não precisam: usam o `#!` do script e contam como atendidos por todo agente saudável do ambiente). Senão, o ticket fica `PENDING` (§15, "fila sem atendente").
+* **Interpretador informado no disparo (CR-025):** o operador pode digitar, só naquela execução, o caminho absoluto de um interpretador ou só o nome (ex.: `python3.13`), procurado no `PATH` herdado pelo **processo do agente**: o da unit do systemd (o padrão do systemd, ou `Environment=PATH=...` na unit) ou o do shell que rodou o `bin/sss-scheduler.sh`, que não o altera. Confira esse `PATH` em cada servidor. O agente só confere, como o usuário do agente, se o executável existe e é executável, e o executa sem resolver links (o Python de um virtualenv funciona). No `#!`, `#!/usr/bin/env python3` funciona. **Risco aceito pelo responsável pelo produto:** quem pode disparar escolhe o programa que roda o script, e o `#!` dos scripts "definido no script" troca o interpretador sem passar pelo cadastro. O digitado fica no snapshot e na auditoria do disparo; o usado, em `tbsss_tickets.interpreter_path`; os dois no detalhe do ticket (README §8.5).
 
 ---
 
@@ -534,7 +534,7 @@ WARNING: nenhum PURGE auditado nos ultimos 2 dias (README §11.3)
 | `agente X ATIVO sem heartbeat ha N s` | O agente caiu ou perdeu o banco: veja o log dele (§14) e o §15.3. Depois de `node_offline_timeout_s`, outro agente finaliza os tickets dele como `NODE_OFFLINE` |
 | `agente X em risco` | Heartbeat atrasado além do fence: o agente já deve ter se isolado (`FENCED`) |
 | `ambiente X ativo sem nenhum agente saudavel` | Nenhum agente saudável atende o ambiente: suba um agente com o ambiente em `environments`, ou desative o ambiente |
-| `fila sem atendente: N tickets de AMB/INTERP` | Nenhum agente saudável do ambiente mapeia o interpretador: ajuste `[agent] interpreters` |
+| `fila sem atendente: N tickets de AMB/INTERP` | Nenhum agente saudável do ambiente mapeia o interpretador: ajuste `[agent] interpreters`. Com `PYTHON_SCRIPT` ou `SHELL_SCRIPT`, que todo agente atende, não há agente saudável no ambiente |
 | `fila vencida: N tickets PENDING, espera maxima M min` | Agentes sem vaga: veja `max_parallel_jobs` e o teto por script, e os scripts presos em `RUNNING` |
 | `ticket N RUNNING sem PID` | O agente reservou e não iniciou: veja o log do agente para esse ticket |
 | `agente X com configuracao divergente` | Tempos diferentes do `config.ini` de referência: corrija e reinicie o agente |
@@ -633,7 +633,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 
 | Status/motivo | Linha no log do agente (e `[SSS]` no log do ticket) | Causa provável | Ação |
 |---|---|---|---|
-| `PENDING` que nunca sai | Nenhuma linha. No `health.py` e na tela de agentes: `fila sem atendente: N tickets de AMB/INTERP` | Nenhum agente saudável do ambiente mapeia o interpretador do script (o do cadastro, CR-008 R-15) | Mapeie o interpretador em `[agent] interpreters` ou suba um agente para o ambiente |
+| `PENDING` que nunca sai | Nenhuma linha. No `health.py` e na tela de agentes: `fila sem atendente: N tickets de AMB/INTERP` | Nenhum agente saudável do ambiente mapeia o interpretador do script (o do cadastro, CR-008 R-15) | Mapeie o interpretador em `[agent] interpreters` (os "definido no script" não são mapeados: todo agente saudável os atende) ou suba um agente para o ambiente |
 | `PENDING` que demora | `DISCO_LOG: N MB livres em log_dir (minimo M): sem claim` ou `DISCO_SAIDA: ...` | Disco quase cheio | Libere espaço (purge, §12) ou aumente a partição |
 | `FAILED` / `PRECHECK_FAILED` | `pre-validacao recusada: <código>` e `[SSS] pre-validacao recusada: <código> (agente X)` | Ver os códigos abaixo | Ver abaixo |
 | ↳ `NOT_FOUND`, `NO_ACCESS`, `NOT_A_FILE` | | O arquivo real não existe, não é legível ou não é arquivo, no servidor do agente | Corrija o arquivo no agente (§9) |
@@ -644,7 +644,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | ↳ `INTERPRETER_UNAVAILABLE` | | O interpretador do script não está mapeado **neste** agente | `[agent] interpreters` |
 | ↳ `INTERPRETER_NOT_FOUND` | | O interpretador digitado no disparo, ou o do `#!`, não existe ou não é executável neste servidor (o nome é procurado no `PATH` do agente; CR-025) | Corrija o valor e dispare de novo, instale o interpretador ou ajuste o `PATH` do serviço |
 | ↳ `NO_SHEBANG` | | Script "definido no script" sem `#!` com caminho absoluto na primeira linha (CR-025) | Corrija a primeira linha do script ou o cadastro |
-| ↳ `UNSUPPORTED_VERSION` | | Ticket criado por uma versão anterior (snapshot antes da versão 5) | Dispare de novo pela tela |
+| ↳ `UNSUPPORTED_VERSION` | | Ticket criado por uma versão anterior (snapshot antes da versão 5), ou agente anterior ao CR-025 diante de um ticket com snapshot versão 6 | Dispare de novo pela tela; no segundo caso, atualize os agentes (§18) |
 | ↳ `REGISTRATION_CHANGED`, `SCRIPT_INACTIVE`, `NOT_HOMOLOGATED`, `ENVIRONMENT_INACTIVE`, `NO_PERMISSION` | | O cadastro mudou entre o disparo e a execução | Confira o cadastro e dispare de novo |
 | ↳ `DB_ERROR: ORA-nnnnn` | `falha antes do spawn: DB_ERROR: ...` | Erro de banco na pré-validação | Veja o código ORA |
 | `FAILED` / `SPAWN_ERROR` | `falha antes do spawn: <erro>` e `[SSS] falha ao iniciar: <erro> (agente X)` | Não foi possível criar o log ou o processo (disco, permissão, `sudo`) | Veja o erro; confira o §8 |
@@ -741,8 +741,10 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
        CHECK (interpreter IN ('PYTHON3','PYTHON','BASH','SH','PYTHON_SCRIPT','SHELL_SCRIPT'));
      ALTER TABLE openrisow.tbsss_tickets ADD (interpreter_path VARCHAR2(1000 CHAR));
      COMMENT ON COLUMN openrisow.tbsss_tickets.interpreter_path IS 'Interpretador executado (configurado, do #! ou digitado no disparo, CR-025); vazio antes do inicio';
+     COMMENT ON COLUMN openrisow.tbsss_scripts.interpreter IS 'Interpretador logico (PYTHON3, PYTHON, BASH, SH; PYTHON_SCRIPT e SHELL_SCRIPT usam o #! do script)';
+     COMMENT ON COLUMN openrisow.tbsss_agents.interpreters IS 'Interpretadores configurados no agente (PYTHON3, PYTHON, BASH, SH); os definidos no script nao aparecem';
      ```
-     Para usar a opção Python, acrescente `PYTHON=<executável>` em `[agent] interpreters` dos agentes do ambiente.
+     Para usar a opção Python, acrescente `PYTHON=<executável>` em `[agent] interpreters` dos agentes do ambiente. Para voltar à versão anterior, nada no banco precisa ser desfeito (ela não usa a coluna nova); os agentes dela recusam os tickets com snapshot versão 6 (`UNSUPPORTED_VERSION`) e não pegam scripts `PYTHON`, `PYTHON_SCRIPT` nem `SHELL_SCRIPT` (ficam `PENDING`).
    * **Caminho relativo à pasta base (CR-023):** atualize **todos** os agentes antes de cadastrar o primeiro script com caminho relativo (o agente anterior termina o ticket em `PRECHECK_FAILED`, `RELATIVE_PATH`) e configure `[agent] script_base_dir` em cada um (§9). O esquema continua na versão 1, sem migração: num banco já instalado, o DBA aplica antes da subida (troque `openrisow` e `tbsss_` pelo owner e prefixo do ambiente):
      ```sql
      ALTER TABLE openrisow.tbsss_scripts DROP CONSTRAINT ck_tbsss_scr_path;
@@ -776,6 +778,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 - [ ] Helper em `/opt/sss/bin/sss-helper` (root, `0755`) e `sudoers` de cada usuário de execução (§8)
 - [ ] Com `output_dir`, `input_dir` ou `script_work_dir`: a pasta de cada ambiente atendido criada pelo root, do usuário de execução, `0700` (§8)
 - [ ] Com script de caminho relativo (CR-023): `[agent] script_base_dir` em **todos** os agentes do ambiente, a pasta existente e a linha `pasta base dos scripts` no log de subida e no painel de agentes (§9)
+- [ ] Interpretador no disparo (CR-025): o `PATH` do processo do agente (unit ou shell que roda o `sss-scheduler.sh`) com os interpretadores que os operadores vão digitar só pelo nome, e `PYTHON=` em `[agent] interpreters` se a opção Python for usada (§9)
 - [ ] `log_dir` em partição própria, com alerta de uso (§4.3)
 - [ ] Senha inicial do seed trocada (§5.3)
 - [ ] `cron` do purge e `health.py` no monitoramento (§12, §13)

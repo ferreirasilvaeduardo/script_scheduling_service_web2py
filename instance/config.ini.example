@@ -19,7 +19,7 @@ secrets_file = /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/instance/
 agent_id = srv-linux-prod-01
 environments = PRODUCAO,HOMOLOGACAO
 work_dir = /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/work
-interpreters = PYTHON3=/usr/bin/python3,BASH=/bin/bash,SH=/bin/sh ; executavel local de cada interpretador logico (README §8.5); o agente exige na subida (F8.3)
+interpreters = PYTHON3=/usr/bin/python3,BASH=/bin/bash,SH=/bin/sh ; executavel local de cada interpretador logico (README §8.5); o agente exige na subida (F8.3); PYTHON=<executavel> opcional (CR-025); PYTHON_SCRIPT e SHELL_SCRIPT usam o #! e nao entram aqui
 exec_users =               ; AMBIENTE=usuario do SO por ambiente (README §8.0); obrigatório fora de DEV, ex.: PRODUCAO=sssprd,HOMOLOGACAO=ssshml
 exec_work_dir =                   ; pasta base dos diretórios de trabalho dos scripts (obrigatória fora de DEV), ex.: /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/exec
 max_parallel_jobs = 4

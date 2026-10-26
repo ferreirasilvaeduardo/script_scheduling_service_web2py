@@ -244,7 +244,7 @@ class _Base(unittest.TestCase):
 
 class TestExpansion(_Base):
 
-    def test_ticket_com_ocorrencia_snapshot_v5_e_um_commit(self):
+    def test_ticket_com_ocorrencia_snapshot_v6_e_um_commit(self):
         self.rule()
         with self.assertLogs("sss_scheduler", "INFO") as logs:
             self.assertEqual(self.process(), "TICKET")

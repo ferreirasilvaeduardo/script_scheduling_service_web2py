@@ -587,6 +587,26 @@ RODADAS["20261026"] = {
     "seed_scripts": RODADAS["20261025_r9"]["seed_scripts"],
     "registros": RODADAS["20261023_r3"]["registros"],
 }
+RODADAS["20261026_r2"] = dict(RODADAS["20261026"], **{
+    "commit": u"a8d122e (CR-025c) mais o CR-025d (correções da revisão independente da documentação), no mesmo "
+              u"commit deste documento",
+    "adaptacao": dict(RODADAS["20261026"]["adaptacao"], **{
+        "CT-01": ADAPTACAO["CT-01"] + u" O banco não foi recriado desde a rodada de 26/10: o admin já estava com a "
+                                      u"senha escolhida (SSS_ADMIN_START=new).",
+        "CT-32": RODADAS["20261026"]["adaptacao"]["CT-32"] + u" No CR-025d entraram mais dois casos: Python definido "
+                 u"no script com #!/usr/bin/env python3 (o -E -s passou para depois do python3, porque o env não "
+                 u"aceita -E) e o Python de um virtualenv digitado no disparo (~/.sss_homolog_venv/bin/python3, um "
+                 u"link), executado sem resolver o link: o log mostra o prefixo do venv.",
+    }),
+    "observacoes": [
+        u"Rodada do CR-025d. A revisão independente da documentação contra o código achou três defeitos de código, "
+        u"corrigidos antes desta rodada: #!/usr/bin/env python3 no Python definido no script falhava (env -E); a "
+        u"fila sem atendente acusava os \"definido no script\" como sem agente; o interpretador digitado era "
+        u"executado pelo caminho real, e o Python de um virtualenv perdia o venv. Marca %s." % STAMP,
+        u"Risco aceito pelo responsável pelo produto (README §8.5): quem pode disparar escolhe o executável que roda "
+        u"o script; o digitado fica no snapshot e na auditoria do disparo, o usado no ticket.",
+    ],
+})
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]

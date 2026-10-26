@@ -187,8 +187,9 @@ def validate_override(text: object) -> None:
 
 def find_executable(text: str, search_path: Optional[str]) -> str:
     """Executavel do interpretador digitado ou do #! (CR-025): caminho absoluto como esta, ou o nome buscado
-    em search_path (o PATH do agente). Conferencia minima: existe e e executavel; devolve o caminho real.
-    Senao, INTERPRETER_NOT_FOUND."""
+    em search_path (o PATH do agente). Conferencia minima no caminho real: existe e e executavel; senao,
+    INTERPRETER_NOT_FOUND. Devolve o caminho sem resolver links: o Python de um virtualenv
+    (/opt/venv/bin/python3, link) acha o venv pelo caminho com que foi chamado."""
     validate_override(text)
     candidate = text if '/' in text else shutil.which(text, path=search_path or os.defpath)
     if not candidate:
@@ -196,7 +197,7 @@ def find_executable(text: str, search_path: Optional[str]) -> str:
     real = os_platform.final_path(candidate)
     if not os.path.isfile(real) or not os.access(real, os.X_OK):
         raise PathGuardError(Code.INTERPRETER_NOT_FOUND)
-    return real
+    return candidate if "/" in text else os.path.abspath(candidate)
 
 
 def read_shebang(script_real: str) -> Tuple[str, Optional[str]]:

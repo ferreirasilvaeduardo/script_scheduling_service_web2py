@@ -8,12 +8,12 @@ Geram e conferem as figuras dos documentos de homologação em `docs/homologatio
 
 | Arquivo | Uso |
 |---|---|
-| `tools/capture_evidence.js` | Executa os casos (CT-01 a CT-31, a preparação da massa e o encerramento; o CT-31 é o caminho relativo do CR-023) no navegador (Puppeteer), confere o resultado esperado de cada passo e grava as telas, `results.json`, `state.json` e o log em `evidence_<data>[_r<n>]/` (a rodada mais recente é a `evidence_20261025_r9/`) |
+| `tools/capture_evidence.js` | Executa os casos (CT-01 a CT-32, a preparação da massa e o encerramento; o CT-31 é o caminho relativo do CR-023 e o CT-32, o interpretador informado no disparo e os "definido no script" do CR-025) no navegador (Puppeteer), confere o resultado esperado de cada passo e grava as telas, `results.json`, `state.json` e o log em `evidence_<data>[_r<n>]/` (a rodada mais recente é a `evidence_20261026_r2/`) |
 | `tools/build_evidence_docx.py` | Gera o `.docx` de evidências a partir de `evidence_20261022/` (`python-docx`) |
 | `evidence_20261022/results.json`, `execucao.log` | Resultado de cada verificação e o log da execução que gerou o documento (versionados) |
 | `evidence_20261022/*.png`, `state.json` | Capturas e estado da rodada; não versionados, porque as capturas já estão dentro do `.docx` |
 
-Pré-requisitos: servidor web do DEV no ar (`bin/start_local.sh 18000`), agente do DEV no ar com `interpreters` configurado, o agente com `[agent] script_base_dir` = `dev/scripts` do repositório (CR-023: o seed e os diagnósticos são cadastrados com caminho relativo, como `utilitarios/zipar_arquivos.py` e `diagnostico/gerar_saida.sh`) e os arquivos de entrada em `input/<ambiente>/<script>/` (ver o documento, seção 2).
+Pré-requisitos: servidor web do DEV no ar (`bin/start_local.sh 18000`), agente do DEV no ar com `interpreters` configurado, o agente com `[agent] script_base_dir` = `dev/scripts` do repositório (CR-023: o seed e os diagnósticos são cadastrados com caminho relativo, como `utilitarios/zipar_arquivos.py` e `diagnostico/gerar_saida.sh`) e os arquivos de entrada em `input/<ambiente>/<script>/` (ver o documento, seção 2). Para o CT-32 (CR-025): `PYTHON=` em `[agent] interpreters`, os Pythons 3.6.0 e 3.13.2 do pyenv, o `python3.12` no `PATH` do agente e em `/usr/bin` (para o `#!/usr/bin/env python3`), e o virtualenv `~/.sss_homolog_venv` (`/usr/bin/python3 -m venv --without-pip ~/.sss_homolog_venv`).
 
 ```bash
 cd dev/homologation/tools

@@ -891,7 +891,9 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
 
   * valores sensíveis aparecem como `****`;
   * respostas vazias aparecem como "(sem resposta)";
-  * o comando lógico (argv, §6.4) continua no modal, abaixo da frase, com o título "Comando que será executado".
+  * o comando lógico (argv, §6.4) continua no modal, abaixo da frase, com o título "Comando que será executado";
+  * a linha "Interpretador:" mostra o digitado ou, em branco, o cadastrado (CR-025).
+* **Interpretador (opcional, CR-025):** campo de texto na etapa 3, em branco por padrão, com a ajuda citando o cadastrado. Em branco, roda como cadastrado; preenchido com o caminho completo ou só o nome, vale só para esta execução (regras e riscos no §8.5).
 * **"Usar as respostas da minha última execução":** o botão aparece na etapa 3 quando existe um ticket **do próprio usuário** para o mesmo script e o mesmo ambiente. Ele usa `list` com os filtros `requested_by`, `script_id` e `environment`, `size=1`, e depois `answers`, sem método novo no contrato.
   * Preenche só as respostas **não sensíveis**; os campos sensíveis ficam vazios, com a nota "Por segurança, digite de novo." no início do texto de ajuda.
   * Uma resposta que não vale mais no catálogo atual (opção removida, formato novo) fica vazia, com o aviso "esta resposta mudou desde a última vez".
@@ -911,7 +913,8 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
   * a prioridade é herdada do original, e `scheduled_at` é `SYSDATE`. Se a prioridade herdada não for mais permitida (prioridade 1 e o usuário deixou de ser admin), a reexecução direta é recusada e o formulário de disparo abre preenchido para ajuste;
   * valores sensíveis são reaproveitados do `ticket_answer` original, sem passar pela tela;
   * se a recompilação falhar (por exemplo, o catálogo mudou), o formulário de disparo abre preenchido com as respostas não sensíveis. Um campo sensível deixado em branco recebe o **padrão vigente** (§6.1), não o valor original;
-  * códigos de resposta que não existem mais no catálogo vigente são descartados.
+  * códigos de resposta que não existem mais no catálogo vigente são descartados;
+  * o interpretador digitado no disparo original, se houver, é repetido (CR-025).
 
 ### 5.6 Cancelamento distribuído
 
@@ -977,7 +980,7 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
 
    * Um ticket cancelado ainda na fila mostra a etapa "Rodando" como "não chegou a rodar" e a etapa final como "Cancelado".
    * A etapa atual de um ticket `RUNNING` mostra "há {tempo}".
-3. Depois disso vêm: resumo, comando executado (com o **arquivo do script** como foi cadastrado, marcado "relativo à pasta base do agente" quando for relativo, e o **caminho executado**, o real gravado pelo agente em `script_path`, CR-023; "Ainda não executado" antes do início), respostas, reexecuções e log. A situação aparece só no quadro do item 1 e no cabeçalho do log, que se atualiza sozinho; não há selo ao lado do número do ticket, linha "Situação" no resumo nem linha do tempo (CR-017b). Enquanto o ticket roda, o resumo mostra "Último sinal do servidor" (`heartbeat_at`). A linha "Detalhe técnico" do resumo traz o status, o `status_reason`, o `return_code` e a descrição técnica (`reason_description`). O bloco do snapshot mostra o **arquivo do script** (`path_file`, snapshot v5), com o caminho completo para todos (CR-005, D8). Logo depois do resumo vem o quadro **Registro** (§10, CR-006): quem criou o pedido e quando, e a última alteração, que normalmente é a última mudança de situação feita pelo agente.
+3. Depois disso vêm: resumo, comando executado (com o **arquivo do script** como foi cadastrado, marcado "relativo à pasta base do agente" quando for relativo, e o **caminho executado**, o real gravado pelo agente em `script_path`, CR-023; "Ainda não executado" antes do início), respostas, reexecuções e log. A situação aparece só no quadro do item 1 e no cabeçalho do log, que se atualiza sozinho; não há selo ao lado do número do ticket, linha "Situação" no resumo nem linha do tempo (CR-017b). Enquanto o ticket roda, o resumo mostra "Último sinal do servidor" (`heartbeat_at`). A linha "Detalhe técnico" do resumo traz o status, o `status_reason`, o `return_code` e a descrição técnica (`reason_description`). O bloco do snapshot mostra o **arquivo do script** (`path_file`), com o caminho completo para todos (CR-005, D8), e as linhas **Interpretador cadastrado**, **Interpretador informado** ("Como cadastrado" quando em branco) e **Interpretador usado** (`interpreter_path`, "Ainda não executado" antes do início) (CR-025). Logo depois do resumo vem o quadro **Registro** (§10, CR-006): quem criou o pedido e quando, e a última alteração, que normalmente é a última mudança de situação feita pelo agente.
 4. **Quadro Saída (CR-012):** depois do log, quando o ticket tem linha em `tbsss_ticket_output`, com a situação e o botão **Baixar** (§8.13).
 5. **Botões com o efeito escrito:** "Cancelar este pedido" (com a consequência no modal) e "Rodar de novo com as mesmas respostas" (reexecução, §5.5).
 6. A página continua se atualizando sozinha enquanto o ticket não termina, e a frase e a barra acompanham. Quando o polling do log (§8.10) recebe uma situação diferente da que a página mostrou ao abrir, o visualizador para, mostra "A situação mudou; atualizando a página…" e recarrega a página após 1,5 s. Num ticket que já estava encerrado ao abrir, o visualizador lê o log até o fim e mostra "Log completo." (CR-018b).
@@ -1156,13 +1159,13 @@ PYTHON3        -> [<exe PYTHON3>, "-I", <script_real>, ...args]
 PYTHON         -> [<exe PYTHON>, "-E", "-s", <script_real>, ...args]          (CR-025)
 BASH           -> [<exe BASH>, <script_real>, ...args]
 SH             -> [<exe SH>, <script_real>, ...args]
-PYTHON_SCRIPT  -> [<exe do #!>, "-E", "-s", [<arg do #!>], <script_real>, ...args]   (CR-025)
+PYTHON_SCRIPT  -> [<exe do #!>, [<arg do #!>], "-E", "-s", <script_real>, ...args]   (CR-025)
 SHELL_SCRIPT   -> [<exe do #!>, [<arg do #!>], <script_real>, ...args]               (CR-025)
-digitado       -> [<exe digitado>, ("-E", "-s" se o cadastro for Python), <script_real>, ...args]  (CR-025)
+digitado       -> [<exe digitado>, ("-E", "-s" se o cadastro for Python), <script_real>, ...args]  (CR-025; o arg do #! é ignorado)
 ```
 
 * `<exe X>` vem de `[agent] interpreters` do agente (§12.1).
-* **Interpretador informado no disparo (CR-025):** quando o operador digita um interpretador, ele vence o cadastro e o `#!`. Caminho absoluto é usado como está; só o nome (ex.: `python3.13`) é procurado no `PATH` do processo do agente. "Definido no script" (`PYTHON_SCRIPT`, `SHELL_SCRIPT`) usa o caminho do `#!` da primeira linha e, no máximo, um argumento depois dele. Regras e riscos no §8.5.
+* **Interpretador informado no disparo (CR-025):** quando o operador digita um interpretador, ele vence o cadastro e o `#!`. Caminho absoluto é executado como foi digitado, sem resolver links (o Python de um virtualenv, como `/opt/venv/bin/python3`, continua achando o venv); só o nome (ex.: `python3.13`) é procurado no `PATH` do processo do agente. "Definido no script" (`PYTHON_SCRIPT`, `SHELL_SCRIPT`) usa o caminho do `#!` da primeira linha, como está, e, no máximo, um argumento depois dele; no `PYTHON_SCRIPT`, o `-E -s` vai depois desse argumento, e por isso `#!/usr/bin/env python3` funciona (`env python3 -E -s script`). Com interpretador digitado, o argumento do `#!` é ignorado. Regras e riscos no §8.5.
 * **`-I` só no `PYTHON3` configurado:** os demais Python (o `PYTHON`, que pode ser o Python 2; o do `#!`; o digitado, de versão desconhecida) rodam com `-E -s`, que também isolam das variáveis `PYTHON*` e do site do usuário e existem no Python 2 e no 3.
 * `<script_real>` é o `realpath` de `path_file`: o caminho absoluto cadastrado (CR-005, D2) ou o relativo junto da `[agent] script_base_dir` do agente (CR-023), conferido pelo `path_guard` do agente (§8.5).
 * A UI mostra o `argv` **lógico**, por exemplo `PYTHON3 -I /opt/automacoes/scripts/carga.py --data 2026-10-13`, com o caminho cadastrado para todos (CR-005, D8). Com caminho relativo, aparece o relativo (`PYTHON3 -I faturamento/carga.py ...`); com interpretador digitado, aparece o digitado (`python3.13 -E -s ...`, CR-025); o caminho real executado fica em "Caminho executado", no detalhe do ticket (CR-023).
@@ -1174,7 +1177,7 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
 
 ```json
 {
-  "version": 5,
+  "version": 6,
   "script_id": 12,
   "script_name": "carga_faturas",
   "interpreter": "PYTHON3",
@@ -1183,10 +1186,12 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
   "args": ["--data", "2026-10-13"],
   "answers": {"data_ref": "2026-10-13"},
   "sensitive": [],
-  "compiled_at": "2026-10-13 10:47:00"
+  "compiled_at": "2026-10-13 10:47:00",
+  "interpreter_override": null
 }
 ```
 
+* **`interpreter_override` (versão 6, CR-025):** o interpretador digitado no disparo, ou `null` (roda como cadastrado). O agente aceita as versões 5 (sem a chave) e 6; um agente anterior ao CR-025 recusa a 6 com `UNSUPPORTED_VERSION`.
 * **Tipos em `answers`:** os valores são os resolvidos e normalizados (§6.2). Opcional sem valor fica `null`, `CHECKBOX` é booleano JSON (`true`/`false`) e os demais tipos são string. Os valores sensíveis ficam no snapshot (o banco é o único lugar onde ficam visíveis, §6.5 "Parâmetros sensíveis").
 * **`sensitive`:** lista os códigos de **todos** os parâmetros sensíveis vinculados, mesmo os que ficaram sem valor.
 * **Versão 2 (CR-001):** o snapshot não guarda mais caminho absoluto nem executável do nó que o compilou. O agente revalida `interpreter` contra a allowlist e o próprio mapeamento, resolve `path_file` pelo `path_guard` local e monta o `argv` (§6.4, §8.4).
@@ -1453,7 +1458,7 @@ UPDATE {owner}.tbsss_schedules
 * o avanço sem ticket;
 * a pausa (passo 7), inclusive a pausa por `INTERNAL_ERROR` numa transação separada.
 
-Todas recebem a conexão da transação do ciclo e nunca fazem `COMMIT` sozinhas; o `COMMIT` único é do passo 8. Para montar a decisão, o repositório também lê o login do responsável, o script com os vínculos de parâmetros (para o snapshot v5) e a situação do `last_ticket_id`. A violação de `ix_tbsss_tck_occur` no `INSERT` do ticket chega a quem chama como `DuplicateOccurrence` (passo 6). As operações do §8.8 e do §8.9 (`mark_node_offline`, `finalize_fenced`) ficam em `src/sss/persistence/oracle/scheduler_queue.py` (F8.4a).
+Todas recebem a conexão da transação do ciclo e nunca fazem `COMMIT` sozinhas; o `COMMIT` único é do passo 8. Para montar a decisão, o repositório também lê o login do responsável, o script com os vínculos de parâmetros (para o snapshot v6) e a situação do `last_ticket_id`. A violação de `ix_tbsss_tck_occur` no `INSERT` do ticket chega a quem chama como `DuplicateOccurrence` (passo 6). As operações do §8.8 e do §8.9 (`mark_node_offline`, `finalize_fenced`) ficam em `src/sss/persistence/oracle/scheduler_queue.py` (F8.4a).
 
 ### 7.6 Cadastro de regras na UI (decisões do F5.2)
 
@@ -1735,10 +1740,11 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
 5. **Instante de início:** renomear o log (passo 3), ler `os_platform.process_identity(pid)` (`starttime` no Linux; §8.0), gravar **`work_dir/ticket_<id>/.sss_proc`** (JSON com `ticket_id`, `pid`, `pgid`, `process_start` e `exec_user`; arquivo temporário + `rename`, `0600`) **antes** do banco (CR-007, R-01) e então:
    ```sql
    UPDATE {owner}.tbsss_tickets
-      SET process_id = :pid, process_start = :process_start, script_path = :script_path
+      SET process_id = :pid, process_start = :process_start, script_path = :script_path,
+          interpreter_path = :interpreter_path
     WHERE id = :ticket_id AND agent_id = :agent_id AND status = 'RUNNING'
    ```
-   `script_path` é o caminho real executado (CR-023, D6), mostrado no detalhe do ticket.
+   `script_path` é o caminho real executado (CR-023, D6) e `interpreter_path`, o interpretador executado (o configurado, o do `#!` ou o digitado, CR-025, D8); os dois aparecem no detalhe do ticket.
    Se `rowcount = 0`, a posse foi perdida (por exemplo, `NODE_OFFLINE` durante o spawn): encerramento do grupo pela máquina de estados do executor (`request_stop`/`advance_stop`, sem esperar) e ERROR `OWNERSHIP_LOST`. Se o `UPDATE` falhar por erro de banco, o ticket fica "PID pendente" no mapa local e o `UPDATE` é refeito a cada ciclo rápido até `rowcount` 1 ou 0 (CR-008, R-08); enquanto isso, o processo é acompanhado normalmente (heartbeat, cancelamento, timeout, fencing). O registro do PID é rotina técnica e não grava `updated_*` (§10, CR-006).
 
 ### 8.5 Validação de interpretador e caminho (`path_guard.py`, CR-005, CR-011)
@@ -1749,14 +1755,14 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
 
 **Interpretador informado no disparo e `#!` (CR-025)**
 
-* **No disparo**, todo script tem o campo opcional **Interpretador**, em branco por padrão (roda como cadastrado). O operador pode digitar o caminho absoluto (`/opt/py311/bin/python3`) ou só o nome (`python3.13`). No nó web só o formato é conferido: caminho absoluto sem caractere de controle, ou nome com letras, números, `.`, `_`, `+` e `-` (`INTERPRETER_INVALID`, mostrado no campo). A reexecução repete o valor; o agendamento roda como cadastrado.
-* **No agente**, a conferência é mínima e não restringe: o digitado, ou o caminho do `#!`, precisa existir e ser executável (`INTERPRETER_NOT_FOUND`). O nome sem `/` é procurado no `PATH` do processo do agente (o da unit do systemd ou do `bin/sss-scheduler.sh`). "Definido no script" sem `#!` com caminho absoluto na primeira linha: `NO_SHEBANG`. `#!/usr/bin/env python3` é aceito e roda o `env`, que procura o `python3` no `PATH` fixo do filho (§8.6).
-* **Registro:** o snapshot guarda o digitado (versão 6); o agente grava o executável usado em `tbsss_tickets.interpreter_path`; o detalhe do ticket mostra o cadastrado, o informado e o usado; a auditoria do disparo e da reexecução registra "interpretador informado: …".
+* **No disparo**, todo script tem o campo opcional **Interpretador**, em branco por padrão (roda como cadastrado). O operador pode digitar o caminho absoluto (`/opt/py311/bin/python3`) ou só o nome (`python3.13`). No nó web só o formato é conferido: caminho absoluto sem caractere de controle (até 500 caracteres; pode ter espaço), ou nome sem espaço com letras, números, `.`, `_`, `+` e `-` (até 100 caracteres) (`INTERPRETER_INVALID`, mostrado no campo). A reexecução repete o valor; o agendamento roda como cadastrado.
+* **No agente**, a conferência é mínima e não restringe: o digitado, ou o caminho do `#!`, precisa existir e ser executável (`INTERPRETER_NOT_FOUND`). A conferência é feita como o usuário do agente, não como o usuário de execução que roda o script fora do DEV. O nome sem `/` é procurado no `PATH` herdado pelo processo do agente: o da unit do systemd (o padrão do systemd, ou `Environment=PATH=...`) ou o do shell que rodou o `bin/sss-scheduler.sh`, que não o altera. O caminho é executado como foi digitado ou encontrado, sem resolver links (virtualenv funciona). "Definido no script" sem `#!` com caminho absoluto na primeira linha: `NO_SHEBANG`. `#!/usr/bin/env python3` é aceito: o argv fica `env python3 [-E -s] script`, e o `env` procura o `python3` no `PATH` fixo do filho (§8.6). Com interpretador digitado, o argumento do `#!` é ignorado.
+* **Registro:** o snapshot guarda o digitado (versão 6), e a auditoria do disparo e da reexecução registra "interpretador informado: …"; o agente grava o executável usado em `tbsss_tickets.interpreter_path`, junto com o PID (sem auditoria); o detalhe do ticket mostra o cadastrado, o informado e o usado.
 * **Riscos (aceitos pelo responsável pelo produto em 2026-10-26):**
   * **executável escolhido pelo operador:** quem pode disparar (`EXEC_SCRIPT`) escolhe qual programa roda o script, inclusive um que não seja interpretador; isso substitui a lista fixa de interpretadores do servidor naquela execução;
   * **versão errada:** o script pode rodar numa versão diferente daquela para a qual foi feito e falhar no meio, ou terminar com resultado errado;
   * **`#!` sob controle de quem edita o script:** nos "definido no script", trocar a primeira linha do arquivo troca o interpretador sem passar pelo cadastro;
-  * **mitigações que ficam:** o digitado e o usado gravados no ticket e na auditoria; a conferência mínima (existe e é executável); o Python isolado (`-I` ou `-E -s`); a execução com o usuário de execução do ambiente, nunca como root (§8.0); o perfil decide quem tem `EXEC_SCRIPT`.
+  * **mitigações que ficam:** o digitado gravado no snapshot e na auditoria do disparo, e o usado no ticket; a conferência mínima (existe e é executável); o Python isolado (`-I` ou `-E -s`); a execução com o usuário de execução do ambiente, nunca como root (§8.0); o perfil decide quem tem `EXEC_SCRIPT`.
 
 * O executável de cada interpretador vem de `[agent] interpreters`. Na inicialização, o agente confere, por `path_guard.validate_executable`: caminho absoluto e normalizado, existe, é arquivo executável e fica fora de `log_dir`, `work_dir` e `exec_work_dir`. Pode ser link simbólico (como `/usr/bin/python3`) e pode ficar nas pastas do sistema. Falha: `INTERPRETER_UNSAFE` (ou `NOT_FOUND`), CRITICAL.
 
@@ -1778,7 +1784,7 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
   * as pastas do caminho deixam o agente passar (`EACCES` é `NO_ACCESS`, diferente de `NOT_FOUND`);
   * é arquivo regular (`NOT_A_FILE`);
   * não é gravável por grupo nem por outros (`st_mode & 0o022 == 0`; senão `GROUP_OTHER_WRITABLE`). As pastas do caminho não são conferidas.
-* **Códigos de recusa:** `PATH_NOT_NORMALIZED`, `HAS_DOTS`, `INVALID_SEPARATOR`, `INVALID_CHARACTER`, `SYSTEM_DIR`, `SSS_DIR`, `APP_DIR`, `NO_BASE_DIR`, `NOT_FOUND`, `NO_ACCESS`, `NOT_A_FILE`, `GROUP_OTHER_WRITABLE`, `INTERPRETER_NOT_ALLOWED` e `INTERPRETER_UNSAFE`. `RELATIVE_PATH` só vem de agente anterior ao CR-023, que não aceita caminho relativo (DEPLOYMENT §18). A mensagem de erro nunca inclui o caminho.
+* **Códigos de recusa:** `PATH_NOT_NORMALIZED`, `HAS_DOTS`, `INVALID_SEPARATOR`, `INVALID_CHARACTER`, `SYSTEM_DIR`, `SSS_DIR`, `APP_DIR`, `NO_BASE_DIR`, `NOT_FOUND`, `NO_ACCESS`, `NOT_A_FILE`, `GROUP_OTHER_WRITABLE`, `INTERPRETER_NOT_ALLOWED`, `INTERPRETER_UNSAFE` e, no interpretador digitado ou do `#!` (CR-025), `INTERPRETER_INVALID`, `INTERPRETER_NOT_FOUND` e `NO_SHEBANG`. `RELATIVE_PATH` só vem de agente anterior ao CR-023, que não aceita caminho relativo (DEPLOYMENT §18). A mensagem de erro nunca inclui o caminho.
 * **Onde cada coisa é conferida (CR-011, S1):**
   * **no nó web** (cadastro, prévia e disparo): só o formato, o interpretador da allowlist e, no caminho absoluto, as pastas do sistema e a da aplicação (o relativo só tem o formato conferido, porque a pasta base é de cada agente). O web pode nem ter o arquivo, e não emite aviso de arquivo ausente;
   * **no agente**, a cada execução (§8.4, passo 1): tudo acima, inclusive o arquivo real. Falha: `PRECHECK_FAILED` com o código na linha `[SSS]` do log.
@@ -1806,7 +1812,7 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
 | `TMPDIR` | `tmp/` dentro dele |
 | `LANG`, `LC_ALL` | `child_locale` (padrão `C.UTF-8`) |
 | `TZ` | herdado do daemon (definido pelo launcher) |
-| `PYTHONDONTWRITEBYTECODE` | `1` (só tem efeito em BASH/SH que chamem `python` sem `-I`; o `PYTHON3` roda com `-I`, que ignora as variáveis `PYTHON*`, e o UTF-8 dele vem do `LC_ALL`; CR-007, R-17) |
+| `PYTHONDONTWRITEBYTECODE` | `1` (só tem efeito em BASH, SH e SHELL_SCRIPT que chamem `python` sem `-I` nem `-E`; o `PYTHON3` roda com `-I`, e os demais Python (`PYTHON`, `PYTHON_SCRIPT` e o digitado) com `-E`, que ignoram as variáveis `PYTHON*`; o UTF-8 deles vem do `LC_ALL`; CR-007, R-17; CR-025) |
 | `PYTHONIOENCODING` | `utf-8` (mesma observação) |
 | `SSS_TICKET_ID`, `SSS_PARENT_TICKET_ID` | id da execução e, na reexecução, o do ticket original (CR-010) |
 | `SSS_EXECUTION_TYPE` | `MANUAL` ou `AGENDADA` (ticket com `schedule_id`; CR-010) |
@@ -2560,7 +2566,7 @@ END;
   * `version VARCHAR2(20 CHAR)`
   * `environments VARCHAR2(1000 CHAR)` (CR-007; `environments` que não caiba é recusado na configuração)
   * `platform VARCHAR2(10 CHAR)`, com CK `ck_tbsss_agt_plat (platform IS NULL OR platform IN ('LINUX','UNIX'))`
-  * `interpreters VARCHAR2(100 CHAR)` (lista separada por vírgula dos interpretadores lógicos suportados)
+  * `interpreters VARCHAR2(100 CHAR)` (lista separada por vírgula dos interpretadores lógicos configurados no agente; os "definido no script" não aparecem, porque todo agente os atende, CR-025)
   * `script_base_dir VARCHAR2(500 CHAR)` (CR-023: `[agent] script_base_dir` publicado pelo agente no registro; nulo sem pasta base)
   * `status VARCHAR2(10 CHAR) DEFAULT 'ACTIVE' NOT NULL`
   * `started_at DATE`
@@ -3020,10 +3026,10 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
     | `OFFLINE` | além disso, sem heartbeat ou com status `STOPPED` | cinza, círculo cortado |
 
   * Cartões por agente com "há N s", lista expansível dos tickets `RUNNING` (com link para o detalhe), legenda dos estados e atualização automática a cada 15 s (fragmento `.load`, que preserva as listas abertas).
-  * Cada cartão mostra também a plataforma e os interpretadores do agente.
+  * Cada cartão mostra também a plataforma e os interpretadores configurados do agente (os "definido no script", que todo agente atende, não aparecem; CR-025).
   * Backend FAKE (DEV): o `agt-host01` renova o heartbeat a cada leitura. O `agt-host02` nasce com o heartbeat congelado 30 s antes da carga do seed, então envelhece com o relógio: começa `DELAYED`, passa a `AT_RISK` cerca de 1 min depois e a `OFFLINE` cerca de 2,5 min depois.
 * **Quadros de atenção na tela de agentes (CR-007, R-18):**
-  * **Fila sem atendente:** tickets `PENDING` vencidos cujo par (ambiente, interpretador) não é atendido por nenhum agente com saúde `OK` ou `DELAYED` (cruzando `tbsss_agents.environments` e `interpreters`). Mostra o ambiente, o interpretador, a quantidade e o mais antigo (o menor início da espera, `GREATEST(scheduled_at, created_at)`; CR-013). A consulta lê só `ix_tbsss_tck_queue` e agrupa por script antes do join com o catálogo. **Critério do claim (CR-008, R-15):** o interpretador é o do cadastro (`tbsss_scripts.interpreter`, por join), o mesmo que a seleção de candidatos usa (§8.2); `submitted_params` (CLOB) nunca é lido. A consulta usa as expressões de `ix_tbsss_tck_queue` (`PENDING` vencidos) e agrupa por `t.environment, s.interpreter`; o par é comparado em Python com os agentes saudáveis.
+  * **Fila sem atendente:** tickets `PENDING` vencidos cujo par (ambiente, interpretador) não é atendido por nenhum agente com saúde `OK` ou `DELAYED` (cruzando `tbsss_agents.environments` e `interpreters`; `PYTHON_SCRIPT` e `SHELL_SCRIPT` contam como atendidos por todo agente saudável do ambiente, CR-025). Mostra o ambiente, o interpretador, a quantidade e o mais antigo (o menor início da espera, `GREATEST(scheduled_at, created_at)`; CR-013). A consulta lê só `ix_tbsss_tck_queue` e agrupa por script antes do join com o catálogo. **Critério do claim (CR-008, R-15):** o interpretador é o do cadastro (`tbsss_scripts.interpreter`, por join), o mesmo que a seleção de candidatos usa (§8.2); `submitted_params` (CLOB) nunca é lido. A consulta usa as expressões de `ix_tbsss_tck_queue` (`PENDING` vencidos) e agrupa por `t.environment, s.interpreter`; o par é comparado em Python com os agentes saudáveis.
   * **Rodando sem PID:** tickets `RUNNING` com `process_id` nulo há mais de 2 minutos (o agente reservou e não iniciou). A consulta usa a expressão de `ix_tbsss_tck_run` e devolve só `id`, `script_id`, `environment`, `agent_id` e `started_at`, sem LOB (CR-008, R-15).
   * **Configuração divergente:** agentes ativos com `critical_config` diferente entre si ou dos valores do nó web (§8.12).
   * Os quadros só aparecem quando há algo a mostrar e ficam no topo da tela.
@@ -3060,6 +3066,7 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
 | Argumentos visíveis em `ps`/lista de processos | Proibição de parâmetro de senha; parâmetros sensíveis apenas mascarados na UI e nos logs |
 | Script que faça `setsid`/double-fork escapa do `killpg` | Homologação do script no catálogo; política de revisão de código; o processo fugido fica limitado ao usuário de execução do ambiente (D1), e os netos que ficam no grupo são encerrados sempre (§8.7, R-02) |
 | Conteúdo e versão do script sob controle do ambiente (CR-011): sem hash nem conferência de dono, um arquivo alterado no disco, ou um link simbólico trocado por quem grava na pasta dele, executa o novo conteúdo sem aviso | O arquivo real não pode ser gravável por grupo nem por outros, nem ficar nas pastas do sistema ou do SSS (§8.5); o script roda com o usuário de execução do ambiente (D1); a gestão de versões e de permissões dos scripts é do ambiente |
+| Interpretador escolhido no disparo e `#!` (CR-025, aceito em 2026-10-26): quem tem `EXEC_SCRIPT` escolhe o executável que roda o script, inclusive um que não seja interpretador; o script pode rodar numa versão errada; nos "definido no script", quem edita a primeira linha troca o interpretador sem passar pelo cadastro (§8.5) | O digitado no snapshot e na auditoria do disparo, o usado em `interpreter_path`; conferência mínima (existe e é executável); Python isolado (`-I` ou `-E -s`); execução com o usuário de execução do ambiente, nunca como root; o perfil decide quem tem `EXEC_SCRIPT` |
 | Granularidade fina "perfil × script × ambiente" | Não suportada; a intersecção `profile_env ∩ script_env` atende ao escopo atual |
 | Semântica de horário de verão | Horário de parede do servidor Oracle (§7.1), com o pré-requisito de banco sem horário de verão (D3). Se ele não for cumprido: com `SKIP`, a ocorrência que cai no avanço do relógio é perdida; o recuo atrasa a regra pelo tamanho do recuo; a detecção de nó offline é suspensa pela trava de salto de relógio (§8.8) |
 | Lacunas em sequences | Aceitas por design |
@@ -3138,7 +3145,7 @@ flowchart TD
     select["Agente seleciona candidato<br/>compatível com ambiente e interpretador"]
     claim["Claim transacional:<br/>lock, checagem de limite<br/>e transição condicional"]
     claimed{"Claim confirmado?"}
-    precheck["Validar snapshot, caminho,<br/>interpretador e hash"]
+    precheck["Validar snapshot, caminho,<br/>interpretador e arquivo"]
     valid{"Pré-validação aprovada?"}
     spawn["Iniciar pelo mecanismo POSIX<br/>helper fora de DEV"]
     spawned{"Spawn concluído?"}

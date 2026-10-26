@@ -272,14 +272,27 @@ class TestInterpreterCr025(unittest.TestCase):
                 self.assertEqual(ctx.exception.code, Code.INTERPRETER_INVALID)
 
     def test_busca_por_caminho_e_por_nome(self):
-        self.assertEqual(path_guard.find_executable(self.exe, None), os.path.realpath(self.exe))
-        self.assertEqual(path_guard.find_executable("python3.99", self.bin), os.path.realpath(self.exe))
+        self.assertEqual(path_guard.find_executable(self.exe, None), self.exe)
+        self.assertEqual(path_guard.find_executable("python3.99", self.bin), self.exe)
         for text, search in (("python3.99", "/nao/existe"), (self.not_exec, None), ("sem_x", self.bin),
                              (os.path.join(self.bin, "nada"), None)):
             with self.subTest(texto=text):
                 with self.assertRaises(PathGuardError) as ctx:
                     path_guard.find_executable(text, search)
                 self.assertEqual(ctx.exception.code, Code.INTERPRETER_NOT_FOUND)
+
+    def test_link_e_executado_sem_resolver(self):
+        # Python de virtualenv: o link acha o venv pelo caminho com que foi chamado (025d).
+        venv = os.path.join(self.root, "venv", "bin")
+        os.makedirs(venv)
+        link = os.path.join(venv, "python3")
+        os.symlink(self.exe, link)
+        self.assertEqual(path_guard.find_executable(link, None), link)
+        self.assertEqual(path_guard.find_executable("python3", venv), link)
+        os.symlink(self.not_exec, os.path.join(venv, "quebrado"))
+        with self.assertRaises(PathGuardError) as ctx:
+            path_guard.find_executable(os.path.join(venv, "quebrado"), None)
+        self.assertEqual(ctx.exception.code, Code.INTERPRETER_NOT_FOUND)
 
     def test_shebang(self):
         self.assertEqual(path_guard.read_shebang(self._script(b"#!/opt/py311/bin/python3")),

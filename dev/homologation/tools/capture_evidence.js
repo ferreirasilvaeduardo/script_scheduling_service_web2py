@@ -1896,6 +1896,8 @@ CTS['CT-32'] = async () => {
     begin('CT-32', 'CR-025: interpretador informado no disparo e "definido no script"');
     const PY36 = '/home/eduardof/.pyenv/versions/3.6.0/bin/python3.6';
     const PY313 = '/home/eduardof/.pyenv/versions/3.13.2/bin/python3.13';
+    // 025d: virtualenv sem pip criado fora do repositorio (/usr/bin/python3 -m venv --without-pip ~/.sss_homolog_venv)
+    const VENV = '/home/eduardof/.sss_homolog_venv';
     await login('admin');
     await go('/admin_scripts/form');
     const opcoes = await page.$$eval('#field-interpreter option', (os) => os.map((o) => o.value).filter((v) => v));
@@ -1925,10 +1927,16 @@ CTS['CT-32'] = async () => {
     const sem = await diagScript('diag_interp_sem_shebang', 'diagnostico/interp_sem_shebang.sh',
         'Diagnostico do CR-025: shell definido no script sem #!', 'SHELL_SCRIPT');
     const t5 = await runDirect(sem, 'GFPREPROD', {});
-    state.tickets.ct32 = [t1, t2, t3, t4, t5];
+    // (6) 025d: Python definido no script com #!/usr/bin/env python3 (o -E -s vai depois do python3)
+    const envpy = await diagScript('diag_interp_env', 'diagnostico/interp_env.py',
+        'Diagnostico do CR-025: Python definido no script com env', 'PYTHON_SCRIPT');
+    const t6 = await runDirect(envpy, 'GFPREPROD', {});
+    // (7) 025d: Python de virtualenv digitado (link): executado sem resolver o link, acha o venv
+    const t7 = await runDirect(info, 'GFPREPROD', {}, VENV + '/bin/python3');
+    state.tickets.ct32 = [t1, t2, t3, t4, t5, t6, t7];
     saveState();
     const fim = [];
-    for (const t of [t1, t2, t3, t4, t5]) {
+    for (const t of [t1, t2, t3, t4, t5, t6, t7]) {
         fim.push(await waitStatus(t, ['Deu certo', 'Deu erro', 'Não conseguiu', 'Arquivo não encontrado'], 120));
     }
     await sleep(3000);
@@ -1938,6 +1946,9 @@ CTS['CT-32'] = async () => {
         [t3, true, ['python3.12', '/usr/bin/python3.12'], ['Interpretador: /usr/bin/python3.12'], 'só o nome digitado (python3.12)'],
         [t4, false, ['python9.99', 'Ainda não executado'], ['INTERPRETER_NOT_FOUND'], 'nome que não existe no servidor'],
         [t5, false, ['Como cadastrado', 'Ainda não executado'], ['NO_SHEBANG'], 'definido no script sem #!'],
+        [t6, true, ['Como cadastrado', '/usr/bin/env'], ['Interpretador: /usr/bin/python3 '], 'definido no script com #!/usr/bin/env python3'],
+        [t7, true, [VENV + '/bin/python3', VENV + '/bin/python3'], ['Interpretador: ' + VENV + '/bin/python3', 'Prefixo: ' + VENV],
+            'Python de virtualenv digitado (link)'],
     ];
     for (let i = 0; i < casos.length; i++) {
         const [t, ok, detalhe, log, nome] = casos[i];
@@ -1947,7 +1958,7 @@ CTS['CT-32'] = async () => {
         await expectText(`Detalhe do ticket #${t}: interpretador informado e usado`, 'Interpretador informado',
             'Interpretador usado', ...detalhe);
         await expectText(`Log do ticket #${t}`, ...log);
-        if (i === 0 || i === 3) await snap(`Detalhe: ${nome}`, { full: true });
+        if (i === 0 || i === 3 || i >= 5) await snap(`Detalhe: ${nome}`, { full: true });
     }
     await go(`/tickets/new?script_id=${info}&environment=GFPREPROD`);
     await fill('#field-interpreter', 'py thon');
@@ -1958,7 +1969,7 @@ CTS['CT-32'] = async () => {
     const detalhes = await page.$$eval('.sss-audit-detail', (tds) => tds.map((td) => td.textContent).join(' | '));
     check('Auditoria do disparo com o interpretador informado (detalhe completo, em "ver mais")',
         detalhes.includes('interpretador informado: ' + PY313), detalhes.slice(0, 300));
-    for (const sid of [py36, info, sem]) check(`Script de diagnóstico ${sid} desativado ao final`, await deactivateScript(sid));
+    for (const sid of [py36, info, sem, envpy]) check(`Script de diagnóstico ${sid} desativado ao final`, await deactivateScript(sid));
     note('Risco aceito pelo responsável (README §8.5): quem dispara escolhe o executável. No DEV, o agente herda o PATH do terminal que o subiu; os casos usam caminhos do pyenv e o python3.12 do sistema, para não depender dos shims do pyenv.');
 };
 

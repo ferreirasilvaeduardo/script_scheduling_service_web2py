@@ -39,7 +39,8 @@ OPTIONS_MAX_LENGTH = 500
 OPTION_KEY_MAX_LENGTH = 100
 OPTION_LABEL_MAX_LENGTH = 100
 
-# Snapshot v5 (README §6.5, CR-005; chaves em ingles no CR-016c2, D20): path_file como foi cadastrado (absoluto ou,
+# Chaves obrigatorias das versoes 5 e 6 do snapshot (README §6.5, CR-005; chaves em ingles no CR-016c2, D20; a v6
+# acrescenta interpreter_override, CR-025): path_file como foi cadastrado (absoluto ou,
 # desde o CR-023, relativo a pasta base de cada agente); sem executavel do no que compilou.
 _SNAPSHOT_KEYS = ('version', 'script_id', 'script_name', 'interpreter', 'path_file', 'param_type',
                     'args', 'answers', 'sensitive', 'compiled_at')
@@ -48,7 +49,7 @@ _SNAPSHOT_KEYS = ('version', 'script_id', 'script_name', 'interpreter', 'path_fi
 # CR-025: campo do interpretador digitado no disparo e a mensagem do formato invalido.
 INTERPRETER_KEY = 'interpreter'
 INTERPRETER_MESSAGE = (u'Informe o caminho completo do interpretador (ex.: /opt/py311/bin/python3) ou só o '
-                       u'nome (ex.: python3.13), sem espaços.')
+                       u'nome sem espaços (ex.: python3.13).')
 
 
 class ParamError(Exception):
@@ -413,7 +414,7 @@ def build_agent_argv(interpreter, executable, script_real, args):
 
 
 def compile_snapshot(script, links, answers, now, interpreter_override=None):
-    """Compila o snapshot v5 (README §6.5) -> (json_str | None, resolvidos, erros por campo).
+    """Compila o snapshot v6 (README §6.5) -> (json_str | None, resolvidos, erros por campo).
 
     Guarda o interpretador logico, o path_file cadastrado e apenas os argumentos: o argv real e montado
     pelo agente com o proprio executavel. Erros sao acumulados.
@@ -500,14 +501,15 @@ def validate_snapshot(json_str, cfg):
 
 def _agent_argv(interpreter, executable, override, script_real, args, search_path):
     """argv do agente (CR-025): o digitado no disparo vence; sem ele, o #! nos "definido no script" e o
-    executavel configurado nos demais. Python que nao e o PYTHON3 configurado roda com -E -s."""
+    executavel configurado nos demais. Python que nao e o PYTHON3 configurado roda com -E -s, depois do
+    argumento do #! (#!/usr/bin/env python3 vira env python3 -E -s script; o env nao aceita -E)."""
     python_args = list(path_guard.PYTHON_PORTABLE_ARGS) if interpreter in path_guard.PYTHON_KINDS else []
     if override:
         return [path_guard.find_executable(override, search_path)] + python_args + [script_real] + list(args)
     if interpreter in path_guard.SCRIPT_DEFINED:
         path, extra = path_guard.read_shebang(script_real)
-        head = [path_guard.find_executable(path, search_path)] + python_args
-        return head + ([extra] if extra else []) + [script_real] + list(args)
+        head = [path_guard.find_executable(path, search_path)] + ([extra] if extra else [])
+        return head + python_args + [script_real] + list(args)
     return build_agent_argv(interpreter, executable, script_real, args)
 
 

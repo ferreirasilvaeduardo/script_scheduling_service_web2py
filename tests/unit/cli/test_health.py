@@ -290,7 +290,18 @@ class TestSqlRepoHealth(unittest.TestCase):
         lim = saude_cli.agents_service.Thresholds(10, 90, 180)
         agents = [_agent("a", 5, interpreters="SH"), _agent("b", 91, interpreters="BASH"),
                    _agent("c", 5, status="STOPPED", interpreters="PYTHON3")]
-        self.assertEqual(saude_sql.served_pairs(agents, NOW, lim), {("PRODUCAO", "SH")})
+        self.assertEqual(saude_sql.served_pairs(agents, NOW, lim),
+                         {("PRODUCAO", "SH"), ("PRODUCAO", "PYTHON_SCRIPT"), ("PRODUCAO", "SHELL_SCRIPT")})
+
+    def test_definido_no_script_atendido_por_todo_agente_saudavel(self):
+        # Os "definido no script" nao sao configurados: nao acusam fila sem atendente (025d).
+        lim = saude_cli.agents_service.Thresholds(10, 90, 180)
+        served = saude_sql.served_pairs([_agent("a", 5, interpreters="SH")], NOW, lim)
+        rows = [("PRODUCAO", "PYTHON_SCRIPT", 2, NOW), ("PRODUCAO", "SHELL_SCRIPT", 1, NOW),
+                ("PRODUCAO", "BASH", 1, NOW)]
+        self.assertEqual([g["interpreter"] for g in saude_sql.unattended_queue(rows, served)], ["BASH"])
+        self.assertEqual(saude_sql.unattended_queue(rows[:1], set()), [
+            {"environment": "PRODUCAO", "interpreter": "PYTHON_SCRIPT", "quantity": 2, "oldest": NOW}])
 
 
 if __name__ == "__main__":

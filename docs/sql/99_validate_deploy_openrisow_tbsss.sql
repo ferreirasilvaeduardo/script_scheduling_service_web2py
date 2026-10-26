@@ -241,7 +241,7 @@ PROMPT =========================================================================
 PROMPT 4. SCRIPTS CADASTRADOS
 PROMPT ==============================================================================
 COLUMN name FORMAT A25
-COLUMN interpreter FORMAT A8
+COLUMN interpreter FORMAT A13
 COLUMN param_type FORMAT A10
 COLUMN path_file FORMAT A70
 SELECT id, name, interpreter, param_type, max_parallel_env AS paral, timeout_s AS tmout,

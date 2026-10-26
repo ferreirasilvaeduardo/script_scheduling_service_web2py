@@ -1213,7 +1213,7 @@ COMMENT ON COLUMN openrisow.tbsss_scripts.description IS 'Detalhamento da finali
 COMMENT ON COLUMN openrisow.tbsss_scripts.script_group IS 'Coluna script_group da tabela tbsss_scripts';
 COMMENT ON COLUMN openrisow.tbsss_scripts.category IS 'Categoria de negocio ou agrupador funcional da rotina';
 COMMENT ON COLUMN openrisow.tbsss_scripts.stage IS 'Coluna stage da tabela tbsss_scripts';
-COMMENT ON COLUMN openrisow.tbsss_scripts.interpreter IS 'Interpretador utilizado para execucao (PYTHON3, BASH, SH)';
+COMMENT ON COLUMN openrisow.tbsss_scripts.interpreter IS 'Interpretador logico (PYTHON3, PYTHON, BASH, SH; PYTHON_SCRIPT e SHELL_SCRIPT usam o #! do script)';
 COMMENT ON COLUMN openrisow.tbsss_scripts.path_file IS 'Caminho normalizado do script: absoluto ou relativo a [agent] script_base_dir de cada agente';
 COMMENT ON COLUMN openrisow.tbsss_scripts.param_type IS 'Coluna param_type da tabela tbsss_scripts';
 COMMENT ON COLUMN openrisow.tbsss_scripts.max_parallel_env IS 'Coluna max_parallel_env da tabela tbsss_scripts';
@@ -1353,7 +1353,7 @@ COMMENT ON COLUMN openrisow.tbsss_agents.daemon_pid IS 'Identificador de process
 COMMENT ON COLUMN openrisow.tbsss_agents.version IS 'Versao do software do servico em execucao no agente';
 COMMENT ON COLUMN openrisow.tbsss_agents.environments IS 'Lista separada por virgulas dos ambientes atendidos por este no';
 COMMENT ON COLUMN openrisow.tbsss_agents.platform IS 'Sistema operacional da maquina servidora (POSIX)';
-COMMENT ON COLUMN openrisow.tbsss_agents.interpreters IS 'Interpretadores homologados disponiveis no servidor (PYTHON3, BASH, SH)';
+COMMENT ON COLUMN openrisow.tbsss_agents.interpreters IS 'Interpretadores configurados no agente (PYTHON3, PYTHON, BASH, SH); os definidos no script nao aparecem';
 COMMENT ON COLUMN openrisow.tbsss_agents.script_base_dir IS 'Pasta base dos scripts com caminho relativo ([agent] script_base_dir); vazio sem base';
 COMMENT ON COLUMN openrisow.tbsss_agents.status IS 'Estado de operacao do no (ACTIVE, STOPPED)';
 COMMENT ON COLUMN openrisow.tbsss_agents.started_at IS 'Data e hora de inicializacao do daemon';

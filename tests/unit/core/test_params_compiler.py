@@ -547,7 +547,7 @@ class TestSeedFake(unittest.TestCase):
                 self.assertEqual(errors, {})
                 self.assertEqual(set(json.loads(js).keys()), KEYS_6_5)
 
-    def test_snapshots_do_seed_sao_v5(self):
+    def test_snapshots_do_seed_sao_v6(self):
         tickets = self.repo_factory.get("tickets")
         for tid in (1, 11, 17, 37):
             snap = json.loads(tickets.get(tid)["submitted_params"])
@@ -592,7 +592,7 @@ class TestInterpreterOverrideCr025(unittest.TestCase):
 
     def test_digitado_vence_o_cadastro(self):
         scr = self._script("PYTHON3")
-        real = os.path.realpath(self.exe)
+        real = self.exe
         self.assertEqual(self._run(scr, "python3.99"), [real, "-E", "-s", scr["path_file"]])
         self.assertEqual(self._run(scr, self.exe), [real, "-E", "-s", scr["path_file"]])
         self.assertEqual(self._run(scr), [EXE_PY, "-I", scr["path_file"]])
@@ -608,14 +608,23 @@ class TestInterpreterOverrideCr025(unittest.TestCase):
 
     def test_definido_no_script(self):
         py = self._script("PYTHON_SCRIPT", ("#!%s" % self.exe).encode())
-        self.assertEqual(self._run(py), [os.path.realpath(self.exe), "-E", "-s", py["path_file"]])
+        self.assertEqual(self._run(py), [self.exe, "-E", "-s", py["path_file"]])
         sh = self._script("SHELL_SCRIPT", b"#!/bin/sh -e")
-        self.assertEqual(self._run(sh), [os.path.realpath("/bin/sh"), "-e", sh["path_file"]])
+        self.assertEqual(self._run(sh), ["/bin/sh", "-e", sh["path_file"]])
         self.assertEqual(self._reason(self._script("SHELL_SCRIPT", b"echo sem")), "PATH_GUARD_NO_SHEBANG")
         self.assertEqual(self._reason(self._script("SHELL_SCRIPT", b"#!/nao/existe/sh")),
                          "PATH_GUARD_INTERPRETER_NOT_FOUND")
         # O digitado vence tambem o #!
-        self.assertEqual(self._run(sh, "python3.99"), [os.path.realpath(self.exe), sh["path_file"]])
+        self.assertEqual(self._run(sh, "python3.99"), [self.exe, sh["path_file"]])
+
+    def test_python_definido_no_script_com_argumento_e_env(self):
+        # -E -s depois do argumento do #!: o env nao aceita -E (025d).
+        py = self._script("PYTHON_SCRIPT", ("#!%s -u" % self.exe).encode())
+        self.assertEqual(self._run(py), [self.exe, "-u", "-E", "-s", py["path_file"]])
+        env = self._script("PYTHON_SCRIPT", b"#!/usr/bin/env python3")
+        self.assertEqual(self._run(env), ["/usr/bin/env", "python3", "-E", "-s", env["path_file"]])
+        sh = self._script("SHELL_SCRIPT", b"#!/usr/bin/env sh")
+        self.assertEqual(self._run(sh), ["/usr/bin/env", "sh", sh["path_file"]])
 
     def test_python_configurado_e_v5_aceita(self):
         cfg = collections.namedtuple("CfgPy", ["interpreters"])({"PYTHON": "/usr/bin/python3"})

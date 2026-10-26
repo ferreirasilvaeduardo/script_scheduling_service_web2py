@@ -394,6 +394,17 @@ class TestAgentsDashboard(_Base):
         self.store.agents[2]["environments"] = "PRODUCAO"
         self.assertEqual(self.agents.unattended_queue(self.now, THRESHOLDS), [])
 
+    def test_fila_definido_no_script_atendida_por_agente_saudavel(self):
+        # Os "definido no script" nao sao configurados: todo agente saudavel do ambiente os atende (025d).
+        self._queue_diagnostics()
+        self.store.scripts[3]["interpreter"] = "SHELL_SCRIPT"
+        self.store.agents[1].update(environments="PRODUCAO", interpreters="PYTHON3")
+        self.store.agents[2].update(environments="HOMOLOGACAO", interpreters="BASH")
+        self.assertEqual(self.agents.unattended_queue(self.now, THRESHOLDS), [])
+        self.store.agents[1]["status"] = "STOPPED"
+        self.assertEqual([g["interpreter"] for g in self.agents.unattended_queue(self.now, THRESHOLDS)],
+                         ["SHELL_SCRIPT"])
+
     def test_fila_limiares_e_agente_parado(self):
         self._queue_diagnostics()
         self.store.agents[2]["status"] = "STOPPED"
