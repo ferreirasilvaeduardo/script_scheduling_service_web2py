@@ -215,6 +215,21 @@ class TestSSSLogging(unittest.TestCase):
         for level in levels:
             self.assertEqual(stat.S_IMODE(os.stat(level).st_mode), 0o750, level)
 
+    def test_cr026_aviso_do_config_vai_para_o_log_da_aplicacao(self):
+        """CR-026f: o aviso guardado pelo load() (ex.: linha [agent] interpreters) e gravado pelo configure()."""
+        from sss.config import sss_config
+        sss_config.pending_warnings()
+        sss_config._PENDING_WARNINGS.append("config.ini: chave [agent] interpreters ignorada: teste")
+        log_dir = os.path.join(self.tmp_dir, "logs")
+        logger = sss_logging.configure("sss_web", self._create_cfg(log_dir))
+        self.addCleanup(lambda: [h.close() for h in list(logger.handlers)])
+        logger.handlers[0].flush()
+        with open(logger.handlers[0].baseFilename, encoding="utf-8") as f:
+            text = f.read()
+        self.assertIn("WARNING", text)
+        self.assertIn("[action=INICIO] config.ini: chave [agent] interpreters ignorada: teste", text)
+        self.assertEqual(sss_config.pending_warnings(), [])
+
     def test_agent_id_aparece_nas_linhas(self):
         """Regressao do R4: o agent_id do config.ini entra em [agent=...] (README §13)."""
         log_dir = os.path.join(self.tmp_dir, "logs")

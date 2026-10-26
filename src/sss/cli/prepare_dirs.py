@@ -108,6 +108,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("Fora de DEV, rode como root: as pastas sao do usuario do servico e dos usuarios "
               "de execucao.", file=sys.stderr)
         return EXIT_NOT_ROOT
+    for message in sss_config.pending_warnings():
+        print(message, file=sys.stderr)
     folders = plan(cfg, args.service_user, as_root)
     missing = missing_users(folders)
     if missing:

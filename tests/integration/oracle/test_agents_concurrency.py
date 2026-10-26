@@ -139,8 +139,14 @@ class _TwoAgentsBase(unittest.TestCase):
                             "output_dir": dirs["output"], "input_dir": dirs["input"],
                             "log_dir_min_free_mb": "0"})
         for section, values in self.CONFIG_EXTRA.items():
+            if not cp.has_section(section):
+                cp.add_section(section)
             cp[section].update(values)
         cp["logging"]["log_dir"] = dirs["logs"]
+        # CR-026 (D9): sem secrets_file, o padrao e o secrets.cfg da pasta do config.ini (aqui, a temporaria).
+        if not cp.has_section("secrets"):
+            cp.add_section("secrets")
+        cp["secrets"]["secrets_file"] = os.path.join(APP, "instance", "secrets.cfg")
         path = os.path.join(base, "config.ini")
         with open(path, "w", encoding="utf-8") as f:
             cp.write(f)

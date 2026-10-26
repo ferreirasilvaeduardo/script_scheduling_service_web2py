@@ -10,7 +10,7 @@ parametro) e nao toca no sistema de arquivos. So monta caminhos e o dicionario d
 import logging
 import os
 
-from sss.core import masking
+from sss.core import masking, params_compiler
 from sss.config import sss_config
 
 _log = logging.getLogger("sss_scheduler")
@@ -147,7 +147,8 @@ def build(cfg, secrets, ticket, environment, script_real, work_dir_ticket, envir
             _set(env, "SSS_SCRIPT_LINK", typed)
     _set(env, "SSS_SCRIPT_ID", snap.get("script_id"))
     _set(env, "SSS_SCRIPT_NAME", snap.get("script_name"))
-    _set(env, "SSS_INTERPRETER", snap.get("interpreter"))
+    # CR-026f: o nome do cadastro, inclusive nos tickets v5/v6 ainda na fila (PYTHON3 -> python3).
+    _set(env, "SSS_INTERPRETER", params_compiler.interpreter_name(snap.get("interpreter")))
     if log_path:
         _set(env, "SSS_LOG_DIR", os.path.dirname(log_path))
         _set(env, "SSS_LOG_FILE", os.path.basename(log_path))

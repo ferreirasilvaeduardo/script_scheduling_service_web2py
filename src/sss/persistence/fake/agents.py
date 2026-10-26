@@ -55,7 +55,7 @@ class RepoAgentsFake(RepoAgents):
                     continue
                 # Inicio da espera (CR-013): o mesmo de ix_tbsss_tck_queue e do envelhecimento da fila.
                 start = max(t["scheduled_at"], t.get("created_at") or t["scheduled_at"])
-                # Mesmo criterio do claim: interpretador do cadastro, sem ler o snapshot (CR-008, R-15).
+                # Interpretador do cadastro so para agrupar a exibicao, sem ler o snapshot (CR-008, R-15; CR-026).
                 key = (t["environment"], interpreters.get(t["script_id"]))
                 if key[0] in served:
                     continue

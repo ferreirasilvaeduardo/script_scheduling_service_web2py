@@ -109,6 +109,14 @@ class TestEnvBuilder(unittest.TestCase):
             self.assertIn(reason, logs.output[0])
             self.assertNotIn("S3nh@Forte", logs.output[0], "WARN sem valores")
 
+    def test_cr026_sss_interpreter_traduz_a_chave_anterior(self):
+        # Ticket v5/v6 ainda na fila: PYTHON3 vira python3, como no cadastro (CR-026f).
+        for old, new in (("PYTHON3", "python3"), ("SHELL_SCRIPT", "sh"), ("bash", "bash")):
+            env = env_builder.build(_cfg(), _secrets({}), {"id": 1, "environment": "PRODUCAO"}, dict(AMB),
+                                    SCRIPT, WORK, dict(DAEMON), "LINUX",
+                                    snapshot={"script_id": 1, "script_name": "s", "interpreter": old})
+            self.assertEqual(env["SSS_INTERPRETER"], new, old)
+
     def test_cr010_execucao_agendada_completa(self):
         cred = EnvironmentSecret("fat_app", "S3nh@Forte")
         ticket = {"id": 41, "environment": "PRODUCAO", "parent_ticket_id": 7, "schedule_id": 3, "priority": 2,

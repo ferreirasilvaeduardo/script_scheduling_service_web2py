@@ -157,6 +157,9 @@ def main(argv=None, connect=None, output=None):
     args = _arguments(argv)
     try:
         cfg = sss_config.get_config(log_name="health", path=args.config)
+        # CR-026f: sem log da aplicacao aqui; o aviso do config.ini vai para o stderr (o stdout e do Nagios).
+        for message in sss_config.pending_warnings():
+            print(message, file=sys.stderr)
         secrets_value = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role="monitor")
     except sss_config.ConfigError as exc:
         return _unknown(output, "configuracao invalida: %s" % exc)

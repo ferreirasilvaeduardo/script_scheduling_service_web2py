@@ -76,7 +76,7 @@ class RepoAgentsOracle(BaseRepoOracle, RepoAgents):
                 cur.close()
 
     def list(self, conn=None):
-        """Agentes por codigo, id, com plataforma, interpretadores e config_criticos."""
+        """Agentes por codigo, id, com plataforma, pasta base e config_criticos."""
         return [self.tuple_to_dict(_COLS_AGT, r) for r in self._ler(self._sql["LIST"], conn=conn)]
 
     def tickets_running(self, code, conn=None):
@@ -85,7 +85,7 @@ class RepoAgentsOracle(BaseRepoOracle, RepoAgents):
         return [self.tuple_to_dict(_COLS_TCK, r) for r in rows]
 
     def unattended_queue(self, now, thresholds, conn=None):
-        """Grupos de PENDING vencidos sem agente OK/DELAYED para o par ambiente/interpretador."""
+        """Grupos de PENDING vencidos cujo ambiente nenhum agente OK/DELAYED atende (CR-026)."""
         served = saude_sql.served_pairs(self.list(conn=conn), now, thresholds)
         rows = self._ler(self._sql["QUEUE"], {"now": now}, {"now": db_conn.TIPO_DATE}, conn=conn)
         return saude_sql.unattended_queue(rows, served)

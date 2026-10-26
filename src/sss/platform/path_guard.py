@@ -59,8 +59,9 @@ class Code(object):
     NOT_A_FILE = 'NOT_A_FILE'
     GROUP_OTHER_WRITABLE = 'GROUP_OTHER_WRITABLE'
     INTERPRETER_NOT_ALLOWED = 'INTERPRETER_NOT_ALLOWED'
-    # CR-025/CR-026: nenhum interpretador (#!, digitado ou do cadastro) existe e e executavel; formato
-    # invalido do digitado; #! ausente ou invalido (so interno: a execucao segue para o digitado e o cadastro).
+    # CR-025/CR-026: o interpretador escolhido (o digitado, se informado, senao o do cadastro) nao existe ou
+    # nao e executavel; formato invalido do digitado; #! ausente ou invalido (so interno: a execucao segue
+    # para o digitado e o cadastro).
     INTERPRETER_NOT_FOUND = 'INTERPRETER_NOT_FOUND'
     INTERPRETER_INVALID = 'INTERPRETER_INVALID'
     NO_SHEBANG = 'NO_SHEBANG'

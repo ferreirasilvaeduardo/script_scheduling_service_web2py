@@ -444,6 +444,11 @@ def compile_snapshot(script, links, answers, now, interpreter_override=None):
     return json.dumps(obj, ensure_ascii=False, sort_keys=True), resolved, errors
 
 
+def interpreter_name(value):
+    """Nome do cadastro guardado no snapshot (CR-026); a chave anterior (v5, v6) vira o nome equivalente."""
+    return path_guard.registered_name(value) or value
+
+
 def validate_snapshot(json_str, cfg, notes=None):
     """Pre-valida o snapshot no claim (README §8.4 passo 1) e devolve (snap, argv, script_real);
     lanca SnapshotError. script_real (o path_file resolvido) alimenta o SSS_SCRIPT_DIR do env_builder.

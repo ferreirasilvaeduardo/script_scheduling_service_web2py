@@ -703,12 +703,15 @@ class TestConfigCR007(unittest.TestCase):
         self.assertEqual(self._load(agent={"queue_aging_min": "0"}).agent.queue_aging_min, 0)
 
     def test_cr026_interpreters_ignorado_com_aviso(self):
-        """CR-026 (D1): a linha antiga nao impede a subida; so avisa."""
+        """CR-026 (D1): a linha antiga nao impede a subida; o aviso espera o log da aplicacao (026f)."""
+        sss_config.pending_warnings()
         for key in ("interpreters", "interpretadores"):
             ini = self._copy_and_edit_ini(changes={"agent": {key: "PYTHON3=/usr/bin/python3,SH=/bin/sh"}})
-            with self.assertLogs("sss_config", "WARNING") as logs:
-                cfg = sss_config.load(ini)
-            self.assertIn("[agent] %s ignorada" % key, "\n".join(logs.output))
+            cfg = sss_config.load(ini)
+            warnings = sss_config.pending_warnings()
+            self.assertEqual(len(warnings), 1, warnings)
+            self.assertIn("[agent] %s ignorada" % key, warnings[0])
+            self.assertEqual(sss_config.pending_warnings(), [], "entregue uma vez so")
             self.assertFalse(hasattr(cfg.agent, "interpreters"))
 
     def test_cr026_readme_tabela_igual_ao_schema(self):

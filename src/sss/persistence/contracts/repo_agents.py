@@ -6,7 +6,7 @@ class RepoAgents(object):
     """Contrato abstrato para consulta de agentes e execucoes em andamento."""
 
     def list(self):
-        """Todos os agentes, por codigo e id, com plataforma, interpretadores e config_criticos."""
+        """Todos os agentes, por codigo e id, com plataforma, pasta base e config_criticos."""
         raise NotImplementedError
 
     def tickets_running(self, code):

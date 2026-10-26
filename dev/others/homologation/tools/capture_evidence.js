@@ -58,8 +58,11 @@ function readAgentConfig(file) {
 }
 const AGENT_CFG = readAgentConfig(path.join(APP, 'instance', 'config.ini'));
 const AGENT_ID = AGENT_CFG.agent_id;
-const INPUT = AGENT_CFG.input_dir || path.join(APP, 'input');
-const SCRIPT_WORK = AGENT_CFG.script_work_dir || path.join(APP, 'script_work');
+if (!AGENT_CFG.input_dir || !AGENT_CFG.script_work_dir) {
+    throw new Error('instance/config.ini sem [agent] input_dir ou script_work_dir: a homologacao precisa dos dois');
+}
+const INPUT = AGENT_CFG.input_dir;
+const SCRIPT_WORK = AGENT_CFG.script_work_dir;
 const STAMP = `HOMOLOG_${RUN_DATE}${ROUND ? 'R' + ROUND : ''}`;
 const ADMIN_STARTS_NEW = process.env.SSS_ADMIN_START === 'new';
 

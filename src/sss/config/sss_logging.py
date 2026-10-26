@@ -221,6 +221,10 @@ def configure(log_name, cfg):
                 handler.registrar_aviso("LOG", "fechamento do handler anterior falhou: %s" % exc)
 
     logger.addHandler(handler)
+    # CR-026f: avisos do config.ini guardados pelo load(), que roda antes deste configure().
+    from sss.config import sss_config  # pylint: disable=import-outside-toplevel
+    for message in sss_config.pending_warnings():
+        logger.warning(message, extra={"action": "INICIO"})
 
     return logger
 

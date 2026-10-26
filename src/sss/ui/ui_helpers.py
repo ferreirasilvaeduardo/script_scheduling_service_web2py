@@ -213,8 +213,8 @@ def stacked_bars(days, width=1000, height=240, left_margin=28, bottom_margin=22,
 
 # Mensagens-padrao em duas partes: o que aconteceu + o que fazer agora (README §2.4.2, texto exato).
 MESSAGES = {
-    "unattended_queue": (u"Há pedidos vencidos sem servidor disponível para o ambiente e o interpretador.",
-                           u"Confira os servidores e quais ambientes e interpretadores eles atendem."),
+    "unattended_queue": (u"Há pedidos vencidos sem servidor disponível para o ambiente.",
+                           u"Confira os servidores e quais ambientes eles atendem."),
     "running_without_pid": (u"Há pedidos reservados há mais de dois minutos sem processo registrado.",
                         u"Confira o servidor responsável e os logs antes de pedir outra execução."),
     "config_mismatch": (u"Há servidores ativos com configuração diferente da configuração deste nó web.",

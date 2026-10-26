@@ -232,7 +232,7 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
 * **Windows não é suportado** (CR-005, que revoga a parte Windows do CR-001): nem nó web nem agente.
 * Toda primitiva de sistema operacional fica em `src/sss/platform/os_platform/` (§8.0), só com a implementação POSIX. A camada continua para isolar essas primitivas e permitir os testes.
 * O banco e a UI não dependem do sabor de Unix do nó.
-* Um mesmo ambiente pode ter agentes com interpretadores diferentes: o claim respeita os interpretadores de cada agente (§8.2).
+* Qualquer agente do ambiente pega o ticket, seja qual for o interpretador (CR-026): o interpretador é conferido no servidor, na execução (§8.5). Os servidores de um ambiente precisam ter os interpretadores que os scripts usam.
 
 ### 2.7 SQL Oracle 11gR2 (CR-002)
 
@@ -846,7 +846,7 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
 1. Validar o CSRF e `rbac.can_execute(user, script_id, environment)`.
 2. Carregar o vínculo `tbsss_script_param` + `tbsss_parameters` (ativos) do script.
 3. Validar as respostas e compilar o snapshot (§6). Em caso de erro, retornar o erro por campo, sem gravar nada.
-4. Gravar o `scheduled_at` informado (opcional, padrão `SYSDATE`). O interpretador digitado (opcional, CR-025, §8.5) vai no snapshot e na auditoria.
+4. Gravar o `scheduled_at` informado (opcional, padrão `SYSDATE`). O interpretador digitado (opcional, CR-025, §8.5) vai no snapshot, em `tbsss_tickets.interpreter_path` (CR-026) e na auditoria.
    * Ele deve ser `>= SYSDATE` **exato**, sem tolerância de minuto: um horário no minuto corrente, mas anterior ao `SYSDATE`, é recusado.
    * O limite superior é `SYSDATE + 366` dias (CR-007, D2). Acima disso, o campo é recusado: "Escolha uma data até {data}."
    * O valor digitado no campo de data e hora do navegador é interpretado como horário de parede do servidor Oracle (§7.1). A tela informa isso ao lado do campo.
@@ -1167,9 +1167,9 @@ O catálogo guarda o **nome do interpretador** (`python`, `python3`, `sh` ou `ba
 * **1. `#!`:** se a primeira linha do script tem `#!` com caminho absoluto e esse executável existe no servidor, ele vence, com no máximo um argumento depois dele, como faz o Linux. `#!/usr/bin/env python3` funciona: o `-E -s` vai depois do argumento (`env python3 -E -s script`), porque o `env` não aceita `-E`. Se o executável do `#!` não existe, o `#!` é ignorado e o log do ticket ganha a linha `[SSS] #! ignorado: ...`.
 * **2. Digitado no disparo (CR-025):** caminho absoluto, executado como foi digitado, sem resolver links (o Python de um virtualenv, como `/opt/venv/bin/python3`, continua achando o venv), ou só o nome (ex.: `python3.13`), procurado no `PATH` do processo do agente. Com `#!` existente, o digitado é ignorado.
 * **3. Cadastro:** o nome, procurado no `PATH` do processo do agente.
-* Nenhum dos três existe no servidor: `PRECHECK_FAILED` com `INTERPRETER_NOT_FOUND`. Não há mais `[agent] interpreters` (CR-026).
+* `PRECHECK_FAILED` com `INTERPRETER_NOT_FOUND` quando o escolhido não existe: um interpretador **digitado** que não existe no servidor dá o erro na hora, **sem** voltar para o cadastro; sem digitado, o erro é o do nome do cadastro. Só o `#!` inexistente é pulado. Não há mais `[agent] interpreters` (CR-026).
 * **Python:** reconhecido pelo nome do executável (`python`, `python3`, `python3.13`...; no `#!` com `env`, pelo argumento). Só o `python3` do cadastro roda com `-I`; os demais (o `python`, que pode ser o Python 2; o do `#!`; o digitado, de versão desconhecida) rodam com `-E -s`, que também isolam das variáveis `PYTHON*` e do site do usuário e existem no Python 2 e no 3.
-* O executável usado vai para `tbsss_tickets.interpreter_used` e para a primeira linha do log do ticket (`[SSS] interpretador usado: ...`). Regras e riscos no §8.5.
+* O executável usado vai para `tbsss_tickets.interpreter_used` e para a linha `[SSS] interpretador usado: ...` do log do ticket (depois da linha `[SSS] #! ignorado`, se houver). Com `#!/usr/bin/env python3`, o registrado é `/usr/bin/env` (o argumento do `#!` está no comando). Regras e riscos no §8.5.
 * `<script_real>` é o `realpath` de `path_file`: o caminho absoluto cadastrado (CR-005, D2) ou o relativo junto da `[agent] script_base_dir` do agente (CR-023), conferido pelo `path_guard` do agente (§8.5).
 * A UI mostra o `argv` **lógico**, por exemplo `python3 -I /opt/automacoes/scripts/carga.py --data 2026-10-13`, com o caminho cadastrado para todos (CR-005, D8). Com caminho relativo, aparece o relativo (`python3 -I faturamento/carga.py ...`); com interpretador digitado, aparece o digitado (`python3.13 -E -s ...`, CR-025). O `#!` só o agente lê, no servidor: o comando mostrado antes da execução não o considera. O caminho real executado fica em "Caminho executado" e o interpretador em "Interpretador usado", no detalhe do ticket.
 * Fora de DEV, o `argv` é executado pelo helper com o usuário de execução do ambiente (§8.0, §8.4); o `argv` em si não muda.
@@ -1602,7 +1602,7 @@ O agente só tenta o claim se `execucoes_locais < max_parallel_jobs`, com `max_p
 
 Três leituras curtas, sem varrer a fila (CR-013), com o índice `ix_tbsss_tck_queue (status, environment, priority, GREATEST(scheduled_at, created_at), id, script_id)`:
 
-1. **Scripts do agente:** `SELECT id, max_parallel_env FROM {owner}.tbsss_scripts WHERE interpreter IN (:int0, :int1)`.
+1. **Scripts e teto:** `SELECT id, max_parallel_env FROM {owner}.tbsss_scripts` (CR-026: sem filtro de interpretador; todo agente atende qualquer um).
 2. **Em execução por par:** `SELECT script_id, environment, COUNT(*) FROM {owner}.tbsss_tickets WHERE status = 'RUNNING' AND environment IN (:amb0, :amb1) GROUP BY script_id, environment` (faixa curta de `ix_tbsss_tck_queue`, que tem `status` na frente). O agente separa, por ambiente, os scripts **elegíveis**: os do seu interpretador abaixo do teto.
 3. **Janela:** para cada ambiente e cada prioridade original (1 a 4), os `:batch_size` primeiros da fila pela ordem do índice, só dos scripts elegíveis; os blocos são juntados e ordenados pela ordem da fila:
 
@@ -1631,7 +1631,7 @@ SELECT id, script_id, environment FROM (
 * **Ordem:** pela prioridade efetiva (§5.3, `:env_min` = `queue_aging_min`, idade contada desde `GREATEST(scheduled_at, created_at)`, CR-008 R-20), depois esse mesmo início da espera e `id`. O `EXPLAIN` está em `docs/explain/SCHEDULER.md`.
 * **Ambientes ativos (CR-007, D2):** o agente relê `tbsss_environments` a cada ciclo do orquestrador e usa só os ambientes atendidos que estão ativos. Desativar um ambiente para os claims sem reiniciar os agentes; reativá-lo volta a atendê-lo.
 
-O filtro `interpreter IN (:int0..:intN)` da leitura 1 usa os interpretadores que **este** agente suporta (§12.1). Assim, cada agente só pega os scripts que consegue executar. Os placeholders são gerados pelo código, e os valores vão sempre como binds.
+Desde o CR-026 a leitura 1 não filtra o interpretador: o agente pega qualquer script dos ambientes que atende, e o interpretador é conferido na execução (§8.5); num servidor sem ele, o ticket termina em `PRECHECK_FAILED` (`INTERPRETER_NOT_FOUND`) em vez de esperar outro agente.
 
 Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olha o caminho, e um agente que não tenha o arquivo, não tenha a pasta base de um caminho relativo (`NO_BASE_DIR`) ou em que o arquivo não passe na §8.5 finaliza o ticket com `PRECHECK_FAILED`.
 
@@ -1760,7 +1760,7 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
 
 * **No cadastro**, só o nome: `python`, `python3`, `sh` ou `bash` (CK `ck_tbsss_scr_int`). Não há `[agent] interpreters`: o agente procura o nome no próprio `PATH` e pega tickets de qualquer interpretador (a fila escolhe só pelo ambiente).
 * **No disparo**, todo script tem o campo opcional **Interpretador**, em branco por padrão. O operador pode digitar o caminho absoluto (`/opt/py311/bin/python3`) ou só o nome (`python3.13`). No nó web só o formato é conferido: caminho absoluto sem caractere de controle (até 500 caracteres; pode ter espaço), ou nome sem espaço com letras, números, `.`, `_`, `+` e `-` (até 100 caracteres) (`INTERPRETER_INVALID`, mostrado no campo). O digitado vai para o snapshot, para `tbsss_tickets.interpreter_path` e para a auditoria do disparo. A reexecução repete o valor; o agendamento roda sem digitado.
-* **No agente, a ordem (CR-026, D5):** o `#!` da primeira linha do script, se o executável existir; senão o digitado; senão o nome do cadastro. Montagem do `argv` no §6.4. A conferência é mínima e não restringe: o escolhido precisa existir e ser executável; nenhum dos três: `PRECHECK_FAILED` com `INTERPRETER_NOT_FOUND`. `#!` que aponta para executável inexistente é ignorado, com a linha `[SSS] #! ignorado: ...` no log do ticket.
+* **No agente, a ordem (CR-026, D5):** o `#!` da primeira linha do script, se o executável existir; senão o digitado; senão o nome do cadastro. Montagem do `argv` no §6.4. A conferência é mínima e não restringe: o escolhido precisa existir e ser executável; senão, `PRECHECK_FAILED` com `INTERPRETER_NOT_FOUND`. Um digitado que não existe dá o erro na hora, sem voltar para o cadastro; só o `#!` inexistente é pulado. Não há conferência de pasta do SSS para o interpretador (risco abaixo). `#!` que aponta para executável inexistente é ignorado, com a linha `[SSS] #! ignorado: ...` no log do ticket.
   * A conferência é feita como o usuário do agente, não como o usuário de execução que roda o script fora do DEV.
   * O nome sem `/` é procurado no `PATH` herdado pelo processo do agente: o da unit do systemd (o padrão do systemd, ou `Environment=PATH=...`) ou o do shell que rodou o `bin/sss-scheduler.sh`, que não o altera. O `env` de um `#!/usr/bin/env python3` procura no `PATH` fixo do filho (§8.6).
   * O caminho é executado como foi escrito ou encontrado, sem resolver links (virtualenv funciona).
@@ -1769,6 +1769,7 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
   * **executável escolhido pelo operador:** quem pode disparar (`EXEC_SCRIPT`) escolhe qual programa roda o script, inclusive um que não seja interpretador (quando o script não tem `#!` válido);
   * **versão errada:** o script pode rodar numa versão diferente daquela para a qual foi feito e falhar no meio, ou terminar com resultado errado;
   * **`#!` sob controle de quem edita o script:** trocar a primeira linha do arquivo troca o interpretador sem passar pelo cadastro, e um `#!` válido vence o digitado (o operador não consegue trocá-lo no disparo);
+  * **interpretador numa pasta gravável pelo usuário de execução (CR-026f, aceito em 2026-10-26):** o agente não recusa um `#!` ou um digitado que aponte para `output_dir`, `input_dir`, `script_work_dir` ou outra pasta do SSS (antes do CR-026, o interpretador configurado era recusado ali, `INTERPRETER_UNSAFE`); um script poderia trocar esse executável para a execução seguinte;
   * **servidor sem o interpretador (CR-026):** o agente não filtra mais pelo interpretador; um ticket de `bash` num servidor sem `bash` termina em `PRECHECK_FAILED` em vez de esperar outro agente;
   * **mitigações que ficam:** o digitado gravado no snapshot, no ticket e na auditoria do disparo, e o usado no ticket e no log; a conferência mínima (existe e é executável); o Python isolado (`-I` ou `-E -s`); a execução com o usuário de execução do ambiente, nunca como root (§8.0); o perfil decide quem tem `EXEC_SCRIPT`.
 
@@ -2029,7 +2030,7 @@ Em seguida, o daemon faz o flush dos logs, grava `tbsss_agents.status = 'STOPPED
 
 O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualquer passo:
 
-* **Códigos de saída por passo (F8.3b):** 10 usuário (root), 11 configuração (inclusive codificação e `child_locale`), 12 segredos, 13 diretórios, interpretadores e execução fora de DEV, 14 instância já em execução, 15 banco (driver, conexão, versão do esquema), 16 registro do agente (`agent_id` duplicado ou `critical_config` divergente), 17 ambientes atendidos inexistentes, 18 startup check, 19 mais de uma thread antes do primeiro spawn. Em qualquer falha, a trava de instância e a conexão são liberadas antes da saída.
+* **Códigos de saída por passo (F8.3b):** 10 usuário (root), 11 configuração (inclusive codificação e `child_locale`), 12 segredos, 13 diretórios e execução fora de DEV, 14 instância já em execução, 15 banco (driver, conexão, versão do esquema), 16 registro do agente (`agent_id` duplicado ou `critical_config` divergente), 17 ambientes atendidos inexistentes, 18 startup check, 19 mais de uma thread antes do primeiro spawn. Em qualquer falha, a trava de instância e a conexão são liberadas antes da saída.
 
 1. **Usuário:** `os_platform.is_privileged_user()` precisa ser falso. É proibido rodar como root.
 2. **Configuração:** carregar e validar o `config.ini` (tipos, faixas, invariantes da §8.9 e `max_parallel_jobs <= max_parallel_hard_limit`), o `owner` e o `table_prefix` (regex do `AGENTS.md`), e `agent_id` contra `^[A-Za-z0-9._-]{1,30}$`, sem ser `init_db`, `seed` nem `purge` (reservados para os atores do sistema, §4.4). Inclui as invariantes I1 a I4 (§8.9) e, fora de DEV, `exec_users` cobrindo todos os ambientes atendidos (CR-007, D1).
@@ -2104,7 +2105,7 @@ Pasta permanente onde o script encontra os arquivos de que precisa (lotes, plani
 * **Dono:** fora de DEV, `input_dir/<ambiente>/` é criada na implantação pelo root, com dono o usuário de execução do ambiente e `0700` (`DEPLOYMENT.md`), e o agente confere na subida (§8.12, passo 4). Cada ambiente tem a sua pasta: o mesmo script em `PRODUCAO` e `HOMOLOGACAO` não vê os arquivos do outro.
 * **Permanente:** o SSS não limpa, não compacta, não purga e não lê nada nessa pasta. O conteúdo é responsabilidade do script e da operação (quem deposita os arquivos).
 * **Concorrência:** dois tickets do mesmo script no mesmo ambiente (com `max_parallel_env` maior que 1) usam a mesma pasta ao mesmo tempo. A coordenação (por exemplo, mover o arquivo para uma subpasta antes de processar) é do script.
-* **Scripts e interpretadores** não podem ficar dentro de `input_dir` (`SSS_DIR`, §8.5).
+* **Scripts** não podem ficar dentro de `input_dir` (`SSS_DIR`, §8.5). O **interpretador** não tem essa conferência (CR-026; risco aceito, §14).
 * Web e agentes podem estar em servidores diferentes: a pasta existe só no servidor de cada agente. Com mais de um agente atendendo o mesmo ambiente, cada um tem a sua `input_dir` (ou um compartilhamento de rede comum, montado pela infraestrutura).
 * **Envio pela tela (CR-020):** o arquivo chega pelo banco (§10, tabelas 19 a 21) e cada agente vivo do ambiente o grava na sua pasta (`src/sss/scheduler/input_phase.py`, máquina de estados do laço, sem espera, uma entrega por vez; persistência do agente por `src/sss/persistence/oracle/scheduler_input`, fora da camada web, com a conexão do daemon):
   1. **baixar:** no ciclo rápido, o agente pega a próxima entrega `PENDING` dele e, a cada volta do laço, lê até 4 partes de 1 MiB do banco para `work_dir/input/delivery_<id>.part` (do agente, `0600`). No fim, tamanho e SHA-256 são conferidos; divergência é `FAILED`/`HASH` sem chamar o helper;
@@ -2127,7 +2128,7 @@ Pasta de cada ticket onde o script grava o que precisa durante a execução e qu
 * **Dono:** fora de DEV, `script_work_dir/<ambiente>/` é criada na implantação pelo root, com dono o usuário de execução do ambiente e `0700` (`DEPLOYMENT.md`), e o agente confere na subida (§8.12, passo 4).
 * **Depois do ticket:** o SSS não lê, não compacta e não limpa a pasta no fim do ticket. O conteúdo não passa pelo mascarador e não vai para o banco nem para a tela.
 * **Retenção:** o `purge.py` (alvo `script_work`, §11.3) remove as pastas de minuto mais antigas que `[logging] script_work_retention_days`, com tudo o que estiver dentro, pelo helper `purge-output` (fora de DEV, com o usuário de execução do ambiente).
-* **Scripts e interpretadores** não podem ficar dentro de `script_work_dir` (`SSS_DIR`, §8.5).
+* **Scripts** não podem ficar dentro de `script_work_dir` (`SSS_DIR`, §8.5). O **interpretador** não tem essa conferência (CR-026; risco aceito, §14).
 * **Não é o `work_dir` do agente:** o `work_dir` guarda o estado local de cada ticket (§8.7) e nunca é entregue ao script; as duas pastas não podem ficar uma dentro da outra (§12.1).
 
 ---
@@ -2906,14 +2907,14 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[retention]` | `purge_batch_size` | não | `1000` | 1 a 100.000 |
 | `[retention]` | `input_retention_days` (CR-020e) | não | `30` | 1 a 3.650; envios da tela de Entrada apagados depois disso (§11.3) |
 
-**Pastas: o SSS não cria as pastas configuradas.** O agente confere na subida (§8.12, passo 4) e recusa subir (código 13) se faltar `log_dir`, `work_dir`, `exec_work_dir` (fora de DEV) ou, quando informadas, `output_dir`, `input_dir` e `script_work_dir`. Fora de DEV, também a subpasta de cada ambiente dessas três (`<pasta>/<ambiente>`, do usuário de execução, `0700`). A exceção é `script_base_dir`: inexistente, só gera aviso no log, e os scripts com caminho relativo terminam em `PRECHECK_FAILED` (`NOT_FOUND`). Quem cria as pastas é o root, na implantação, com o dono e as permissões certos: `scripts/prepare_dirs.py` (CR-026e) lê o `config.ini` e cria todas elas, inclusive `script_base_dir` e a pasta de cada ambiente, ou ajusta o dono e o modo das que já existem (DEPLOYMENT §8). Os níveis abaixo delas (ambiente, script, data, ticket) são criados pelo SSS a cada ticket.
+**Pastas: o SSS não cria as pastas configuradas, exceto o `log_dir`.** O `log_dir` é criado com `0750` pela configuração do log, na subida do web, do agente e do purge, quando a pasta de cima permite (sem permissão, a subida falha). As demais o agente confere na subida (§8.12, passo 4) e recusa subir (código 13) se faltar `work_dir`, `exec_work_dir` (fora de DEV) ou, quando informadas, `output_dir`, `input_dir` e `script_work_dir`. Fora de DEV, também a subpasta de cada ambiente dessas três (`<pasta>/<ambiente>`, do usuário de execução, `0700`). A exceção é `script_base_dir`: inexistente, só gera aviso no log, e os scripts com caminho relativo terminam em `PRECHECK_FAILED` (`NOT_FOUND`). Quem cria as pastas é o root, na implantação, com o dono e as permissões certos: `scripts/prepare_dirs.py` (CR-026e) lê o `config.ini` e cria todas elas, inclusive `script_base_dir` e a pasta de cada ambiente, ou ajusta o dono e o modo das que já existem (DEPLOYMENT §8). Os níveis abaixo delas (ambiente, script, data, ticket) são criados pelo SSS a cada ticket.
 
 **Falha de configuração (web e daemon):**
 * A subida é abortada com um registro **CRITICAL** contendo a seção, a chave e o motivo, sem nunca o valor de um segredo.
 * O CRITICAL vai para o log da aplicação do minuto atual (§13, `<log_name>` `sss_web` ou `sss_scheduler`) sempre que o `[logging] log_dir` do `config.ini`, lido mesmo que outras chaves estejam inválidas, existe e aceita escrita. Falhas repetidas no mesmo minuto e no mesmo processo vão para o mesmo arquivo (sem sufixo `_<n>`). Sem `log_dir` utilizável, vai para o stderr do processo, no mesmo formato do §13.
 * No nó web, a requisição recebe a página de erro genérica (500), sem o detalhe.
 
-Chaves que saíram ou mudaram de nome são recusadas na subida: uma chave removida (`[app] data_backend`, `[agent] script_owner_uids` e `[agent] ambientes_exigem_hash`) é recusada com a mensagem "apague a linha"; uma chave renomeada (§2.8, `sss_config.RENAMED_KEYS`), com o nome novo; e qualquer outra chave desconhecida, como chave desconhecida da seção. A exceção é `[agent] interpreters` (e o nome antigo `interpretadores`), removida no CR-026: é **ignorada** com um aviso no log, para que a atualização não derrube um agente com a linha antiga (`sss_config.IGNORED_KEYS`). O histórico das chaves por CR fica nos documentos de `docs/architecture/`.
+Chaves que saíram ou mudaram de nome são recusadas na subida: uma chave removida (`[app] data_backend`, `[agent] script_owner_uids` e `[agent] ambientes_exigem_hash`) é recusada com a mensagem "apague a linha"; uma chave renomeada (§2.8, `sss_config.RENAMED_KEYS`), com o nome novo; e qualquer outra chave desconhecida, como chave desconhecida da seção. A exceção é `[agent] interpreters` (e o nome antigo `interpretadores`), removida no CR-026: é **ignorada** com um aviso, para que a atualização não derrube um agente com a linha antiga (`sss_config.IGNORED_KEYS`). O aviso (`WARNING ... [action=INICIO] config.ini: chave [agent] interpreters ignorada ...`) vai para o log da aplicação do web, do agente e do purge (CR-026f: guardado pelo `load()` e gravado quando o log é configurado); no `health.py` e no `prepare_dirs.py`, para o stderr. O histórico das chaves por CR fica nos documentos de `docs/architecture/`.
 
 ### 12.2 Launchers
 
@@ -2976,7 +2977,7 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
 
 * Todo `except` registra o código de erro do banco (ORA- no Oracle) e o stack trace em ERROR antes de qualquer `ROLLBACK`. **Exceção (CR-007, R-32):** situações esperadas e tratadas (timeout de lock, deadlock, *call timeout*, perda de corrida com `rowcount = 0` e `SKIP LOCKED`) registram WARN com o código do erro e sem stack trace, para não poluir o log (AGENTS §4.10).
 * É proibido registrar senhas, `PADRAO_VALOR_RUN_CONEXAO_BD`, `SSS_ENVIRONMENT_CONNECTION`, `cookie_key`, o conteúdo de `secrets.cfg` e valores de parâmetros sensíveis.
-* **Visão operacional:** a tela de agentes (`audit/agents`, `VIEW_AUDIT`) lista `tbsss_agents` com o heartbeat e os tickets `RUNNING` de cada agente e a **pasta base dos scripts** de cada um (CR-023, D7; "Sem pasta base" quando o agente só aceita caminho completo). Os executáveis dos interpretadores continuam fora da tela (só os nomes lógicos). É **somente leitura**.
+* **Visão operacional:** a tela de agentes (`audit/agents`, `VIEW_AUDIT`) lista `tbsss_agents` com o heartbeat e os tickets `RUNNING` de cada agente e a **pasta base dos scripts** de cada um (CR-023, D7; "Sem pasta base" quando o agente só aceita caminho completo). Interpretadores não aparecem na tela (CR-026: o agente não tem lista própria). É **somente leitura**.
   * **Saúde derivada** da idade do heartbeat, medida pelo relógio do banco (`SYSDATE`), com os limiares do daemon:
 
     | Saúde | Condição | Exibição |
@@ -2990,7 +2991,7 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
   * Cada cartão mostra também a plataforma do agente. Desde o CR-026 não há lista de interpretadores por agente: todo agente atende qualquer interpretador.
   * Backend FAKE (DEV): o `agt-host01` renova o heartbeat a cada leitura. O `agt-host02` nasce com o heartbeat congelado 30 s antes da carga do seed, então envelhece com o relógio: começa `DELAYED`, passa a `AT_RISK` cerca de 1 min depois e a `OFFLINE` cerca de 2,5 min depois.
 * **Quadros de atenção na tela de agentes (CR-007, R-18):**
-  * **Fila sem atendente:** tickets `PENDING` vencidos cujo ambiente não é atendido por nenhum agente com saúde `OK` ou `DELAYED` (`tbsss_agents.environments`; CR-026: o interpretador não conta mais). Mostra o ambiente, o interpretador do cadastro, a quantidade e o mais antigo (o menor início da espera, `GREATEST(scheduled_at, created_at)`; CR-013). A consulta lê só `ix_tbsss_tck_queue` e agrupa por script antes do join com o catálogo. **Critério do claim (CR-008, R-15):** o interpretador é o do cadastro (`tbsss_scripts.interpreter`, por join), o mesmo que a seleção de candidatos usa (§8.2); `submitted_params` (CLOB) nunca é lido. A consulta usa as expressões de `ix_tbsss_tck_queue` (`PENDING` vencidos) e agrupa por `t.environment, s.interpreter`; o ambiente é comparado em Python com os agentes saudáveis.
+  * **Fila sem atendente:** tickets `PENDING` vencidos cujo ambiente não é atendido por nenhum agente com saúde `OK` ou `DELAYED` (`tbsss_agents.environments`; CR-026: o interpretador não conta mais). Mostra o ambiente, o interpretador do cadastro, a quantidade e o mais antigo (o menor início da espera, `GREATEST(scheduled_at, created_at)`; CR-013). A consulta lê só `ix_tbsss_tck_queue` e agrupa por script antes do join com o catálogo. O interpretador mostrado é o do cadastro (`tbsss_scripts.interpreter`, por join), só para agrupar a exibição (CR-026: a seleção de candidatos não o usa, §8.2); `submitted_params` (CLOB) nunca é lido. A consulta usa as expressões de `ix_tbsss_tck_queue` (`PENDING` vencidos) e agrupa por `t.environment, s.interpreter`; o ambiente é comparado em Python com os agentes saudáveis.
   * **Rodando sem PID:** tickets `RUNNING` com `process_id` nulo há mais de 2 minutos (o agente reservou e não iniciou). A consulta usa a expressão de `ix_tbsss_tck_run` e devolve só `id`, `script_id`, `environment`, `agent_id` e `started_at`, sem LOB (CR-008, R-15).
   * **Configuração divergente:** agentes ativos com `critical_config` diferente entre si ou dos valores do nó web (§8.12).
   * Os quadros só aparecem quando há algo a mostrar e ficam no topo da tela.
@@ -3028,6 +3029,7 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
 | Script que faça `setsid`/double-fork escapa do `killpg` | Homologação do script no catálogo; política de revisão de código; o processo fugido fica limitado ao usuário de execução do ambiente (D1), e os netos que ficam no grupo são encerrados sempre (§8.7, R-02) |
 | Conteúdo e versão do script sob controle do ambiente (CR-011): sem hash nem conferência de dono, um arquivo alterado no disco, ou um link simbólico trocado por quem grava na pasta dele, executa o novo conteúdo sem aviso | O arquivo real não pode ser gravável por grupo nem por outros, nem ficar nas pastas do sistema ou do SSS (§8.5); o script roda com o usuário de execução do ambiente (D1); a gestão de versões e de permissões dos scripts é do ambiente |
 | Interpretador escolhido no disparo e `#!` (CR-025 e CR-026, aceitos em 2026-10-26): quem tem `EXEC_SCRIPT` escolhe o executável que roda o script (sem `#!` válido), inclusive um que não seja interpretador; o script pode rodar numa versão errada; quem edita a primeira linha troca o interpretador sem passar pelo cadastro; um servidor sem o interpretador pega o ticket e falha (§8.5) | O digitado no snapshot, em `interpreter_path` e na auditoria do disparo, o usado em `interpreter_used` e no log; conferência mínima (existe e é executável); Python isolado (`-I` ou `-E -s`); execução com o usuário de execução do ambiente, nunca como root; o perfil decide quem tem `EXEC_SCRIPT` |
+| Interpretador numa pasta gravável pelo usuário de execução (CR-026f, aceito pelo responsável pelo produto em 2026-10-26): o agente não recusa um `#!` ou um interpretador digitado em `output_dir`, `input_dir`, `script_work_dir` ou outra pasta do SSS; um script poderia trocar esse executável para a execução seguinte (§8.5) | Os scripts continuam recusados nessas pastas (`SSS_DIR`); o interpretador usado fica em `interpreter_used` e no log do ticket; quem cadastra e quem dispara são perfis controlados; as pastas por ambiente são do usuário de execução daquele ambiente, `0700` |
 | Granularidade fina "perfil × script × ambiente" | Não suportada; a intersecção `profile_env ∩ script_env` atende ao escopo atual |
 | Semântica de horário de verão | Horário de parede do servidor Oracle (§7.1), com o pré-requisito de banco sem horário de verão (D3). Se ele não for cumprido: com `SKIP`, a ocorrência que cai no avanço do relógio é perdida; o recuo atrasa a regra pelo tamanho do recuo; a detecção de nó offline é suspensa pela trava de salto de relógio (§8.8) |
 | Lacunas em sequences | Aceitas por design |
@@ -3103,7 +3105,7 @@ flowchart TD
     manual_ticket["Criar ticket e snapshot<br/>imutável das respostas e do argv"]
     schedule["Agente desdobra ocorrência<br/>e cria ticket com snapshot"]
     pending["Ticket PENDING<br/>aguarda scheduled_at"]
-    select["Agente seleciona candidato<br/>compatível com ambiente e interpretador"]
+    select["Agente seleciona candidato<br/>do ambiente que atende"]
     claim["Claim transacional:<br/>lock, checagem de limite<br/>e transição condicional"]
     claimed{"Claim confirmado?"}
     precheck["Validar snapshot, caminho,<br/>interpretador e arquivo"]

@@ -96,7 +96,8 @@ class _Log(logging.LoggerAdapter):
 
 
 def _sss_dirs(cfg):
-    """Pastas do SSS onde nenhum script nem interpretador pode ficar (SSS_DIR, README §8.5). CR-014 e CR-019:
+    """Pastas do SSS onde nenhum script pode ficar (SSS_DIR, README §8.5; o interpretador nao e conferido
+    contra elas desde o CR-026, risco aceito, README §14). CR-014 e CR-019:
     inclui output_dir, input_dir e script_work_dir, que o usuario de execucao grava (um script ali poderia ser
     trocado por outro)."""
     agent = cfg.agent

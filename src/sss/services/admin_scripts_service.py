@@ -122,7 +122,7 @@ def msg_named_without_flag(codes):
 
 
 def normalize_filters(input_value):
-    """Filtros da lista: nome (trecho), grupo, categoria, interpretador (allowlist logica) e ativo."""
+    """Filtros da lista: nome (trecho), grupo, categoria, interpretador (os quatro nomes, CR-026) e ativo."""
     input_value = input_value or {}
     filters = {}
     for key in ("name", "script_group", "category"):

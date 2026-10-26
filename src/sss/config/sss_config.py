@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import sys
+from typing import List
 
 
 # Variaveis que nunca passam do daemon para o script (README §8.6, CR-007 R-32).
@@ -42,6 +43,17 @@ IGNORED_KEYS = {
     ("agent", "interpreters"): "o interpretador vem do script (#!), do disparo ou do cadastro (CR-026)",
     ("agent", "interpretadores"): "o interpretador vem do script (#!), do disparo ou do cadastro (CR-026)",
 }
+
+# Avisos do load() que esperam o log da aplicacao (CR-026f): o load() roda antes do sss_logging.configure().
+_PENDING_WARNINGS = []  # type: List[str]
+
+
+def pending_warnings() -> List[str]:
+    """Devolve e esvazia os avisos guardados pelo load() (o configure() do log os grava)."""
+    taken = list(_PENDING_WARNINGS)
+    del _PENDING_WARNINGS[:]
+    return taken
+
 
 # Chaves com nome novo (CR-015a): o config.ini antigo e recusado com o nome a usar, sem aceitar o antigo.
 RENAMED_KEYS = {
@@ -448,8 +460,8 @@ def load(ini_path: str) -> "Config":
         # Chaves desconhecidas na secao
         for k in cp_sec:
             if (sec_name, k) in IGNORED_KEYS:
-                _log.warning("config.ini: chave [%s] %s ignorada: %s; apague a linha", sec_name, k,
-                             IGNORED_KEYS[(sec_name, k)])
+                _PENDING_WARNINGS.append("config.ini: chave [%s] %s ignorada: %s; apague a linha"
+                                         % (sec_name, k, IGNORED_KEYS[(sec_name, k)]))
                 continue
             if (sec_name, k) in REMOVED_KEYS:
                 raise ConfigError(section=sec_name, key=k, reason="Chave removida: %s; apague a linha %s" % (

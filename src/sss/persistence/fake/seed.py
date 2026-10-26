@@ -27,8 +27,8 @@ _LINES_LOG_LARGE = 27000
 # comeca DELAYED, fica AT_RISK ~1 min depois e OFFLINE ~2,5 min depois (README §13).
 _HB_FROZEN_S = 30
 _TICKET_LOG_LARGE = 17
-# Quadros de atencao da tela de agentes (CR-007, R-18): o ticket 4 (SH em HOMOLOGACAO) ja venceu e
-# so o agt-host02 atende o par, entao aparece em "Fila sem atendente" quando ele sai de DELAYED;
+# Quadros de atencao da tela de agentes (CR-007, R-18): o ticket 4 (sh em HOMOLOGACAO) ja venceu e
+# so o agt-host02 atende HOMOLOGACAO, entao aparece em "Fila sem atendente" quando ele sai de DELAYED;
 # o RUNNING 16 foi reservado sem PID ("Rodando sem PID", sem log simulado).
 _TICKET_QUEUE_NO_SERVER = 4
 _TICKET_NO_PID = 16
