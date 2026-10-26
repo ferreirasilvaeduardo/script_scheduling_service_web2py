@@ -129,7 +129,7 @@ CREATE TABLE openrisow.tbsss_scripts (
     script_group VARCHAR2(30 CHAR),
     category VARCHAR2(30 CHAR),
     stage VARCHAR2(30 CHAR),
-    interpreter VARCHAR2(15 CHAR) NOT NULL,
+    interpreter VARCHAR2(100 CHAR) NOT NULL,
     path_file VARCHAR2(500 CHAR) NOT NULL,
     param_type VARCHAR2(15 CHAR) DEFAULT 'NAMED' NOT NULL,
     max_parallel_env NUMBER(3) DEFAULT 1 NOT NULL,
@@ -248,6 +248,7 @@ CREATE TABLE openrisow.tbsss_tickets (
     process_start NUMBER(20),
     script_path VARCHAR2(1000 CHAR),
     interpreter_path VARCHAR2(1000 CHAR),
+    interpreter_used VARCHAR2(1000 CHAR),
     status VARCHAR2(15 CHAR) DEFAULT 'PENDING' NOT NULL,
     priority NUMBER(1) DEFAULT 2 NOT NULL,
     cancel_requested CHAR(1) DEFAULT 'N' NOT NULL,
@@ -289,7 +290,6 @@ CREATE TABLE openrisow.tbsss_agents (
     version VARCHAR2(20 CHAR),
     environments VARCHAR2(1000 CHAR),
     platform VARCHAR2(10 CHAR),
-    interpreters VARCHAR2(100 CHAR),
     script_base_dir VARCHAR2(500 CHAR),
     status VARCHAR2(10 CHAR) DEFAULT 'ACTIVE' NOT NULL,
     started_at DATE,
@@ -445,7 +445,7 @@ ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_active CHECK (ac
 
 ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_paral CHECK (max_parallel_env BETWEEN 1 AND 999);
 
-ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_int CHECK (interpreter IN ('PYTHON3','PYTHON','BASH','SH','PYTHON_SCRIPT','SHELL_SCRIPT'));
+ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_int CHECK (interpreter IN ('python','python3','sh','bash'));
 
 ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_path CHECK (INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\') = 0);
 
@@ -1213,7 +1213,7 @@ COMMENT ON COLUMN openrisow.tbsss_scripts.description IS 'Detalhamento da finali
 COMMENT ON COLUMN openrisow.tbsss_scripts.script_group IS 'Coluna script_group da tabela tbsss_scripts';
 COMMENT ON COLUMN openrisow.tbsss_scripts.category IS 'Categoria de negocio ou agrupador funcional da rotina';
 COMMENT ON COLUMN openrisow.tbsss_scripts.stage IS 'Coluna stage da tabela tbsss_scripts';
-COMMENT ON COLUMN openrisow.tbsss_scripts.interpreter IS 'Interpretador logico (PYTHON3, PYTHON, BASH, SH; PYTHON_SCRIPT e SHELL_SCRIPT usam o #! do script)';
+COMMENT ON COLUMN openrisow.tbsss_scripts.interpreter IS 'Interpretador do cadastro (python, python3, sh, bash), usado sem #! valido nem digitado no disparo';
 COMMENT ON COLUMN openrisow.tbsss_scripts.path_file IS 'Caminho normalizado do script: absoluto ou relativo a [agent] script_base_dir de cada agente';
 COMMENT ON COLUMN openrisow.tbsss_scripts.param_type IS 'Coluna param_type da tabela tbsss_scripts';
 COMMENT ON COLUMN openrisow.tbsss_scripts.max_parallel_env IS 'Coluna max_parallel_env da tabela tbsss_scripts';
@@ -1316,7 +1316,8 @@ COMMENT ON COLUMN openrisow.tbsss_tickets.agent_id IS 'Identificador do daemon d
 COMMENT ON COLUMN openrisow.tbsss_tickets.process_id IS 'Identificador do processo (PID) no sistema operacional do servidor';
 COMMENT ON COLUMN openrisow.tbsss_tickets.process_start IS 'Coluna process_start da tabela tbsss_tickets';
 COMMENT ON COLUMN openrisow.tbsss_tickets.script_path IS 'Caminho real do script executado, resolvido pelo agente (CR-023); vazio antes do inicio';
-COMMENT ON COLUMN openrisow.tbsss_tickets.interpreter_path IS 'Interpretador executado (configurado, do #! ou digitado no disparo, CR-025); vazio antes do inicio';
+COMMENT ON COLUMN openrisow.tbsss_tickets.interpreter_path IS 'Interpretador digitado no disparo (caminho ou nome, CR-026); vazio quando nao informado';
+COMMENT ON COLUMN openrisow.tbsss_tickets.interpreter_used IS 'Interpretador executado (#!, digitado ou do cadastro, CR-026); vazio antes do inicio';
 COMMENT ON COLUMN openrisow.tbsss_tickets.status IS 'Situacao da execucao (PENDING, RUNNING, SUCCESS, FAILED, CANCELLED)';
 COMMENT ON COLUMN openrisow.tbsss_tickets.priority IS 'Prioridade de atendimento na fila (1=Critico, 2=Alta, 3=Normal, 4=Baixa)';
 COMMENT ON COLUMN openrisow.tbsss_tickets.cancel_requested IS 'Indicador se o cancelamento foi requisitado pelo operador (Y/N)';
@@ -1353,7 +1354,6 @@ COMMENT ON COLUMN openrisow.tbsss_agents.daemon_pid IS 'Identificador de process
 COMMENT ON COLUMN openrisow.tbsss_agents.version IS 'Versao do software do servico em execucao no agente';
 COMMENT ON COLUMN openrisow.tbsss_agents.environments IS 'Lista separada por virgulas dos ambientes atendidos por este no';
 COMMENT ON COLUMN openrisow.tbsss_agents.platform IS 'Sistema operacional da maquina servidora (POSIX)';
-COMMENT ON COLUMN openrisow.tbsss_agents.interpreters IS 'Interpretadores configurados no agente (PYTHON3, PYTHON, BASH, SH); os definidos no script nao aparecem';
 COMMENT ON COLUMN openrisow.tbsss_agents.script_base_dir IS 'Pasta base dos scripts com caminho relativo ([agent] script_base_dir); vazio sem base';
 COMMENT ON COLUMN openrisow.tbsss_agents.status IS 'Estado de operacao do no (ACTIVE, STOPPED)';
 COMMENT ON COLUMN openrisow.tbsss_agents.started_at IS 'Data e hora de inicializacao do daemon';
@@ -2732,7 +2732,7 @@ WHEN MATCHED THEN
              dst.script_group = 'UTILITARIOS',
              dst.category = 'ARQUIVOS',
              dst.stage = 'COMPACTACAO',
-             dst.interpreter = 'PYTHON3',
+             dst.interpreter = 'python3',
              dst.path_file = 'utilitarios/zipar_arquivos.py',
              dst.param_type = 'NAMED',
              dst.max_parallel_env = 2,
@@ -2745,14 +2745,14 @@ WHEN MATCHED THEN
      OR NVL(dst.script_group, '~') <> 'UTILITARIOS'
      OR NVL(dst.category, '~') <> 'ARQUIVOS'
      OR NVL(dst.stage, '~') <> 'COMPACTACAO'
-     OR dst.interpreter <> 'PYTHON3'
+     OR dst.interpreter <> 'python3'
      OR dst.path_file <> 'utilitarios/zipar_arquivos.py'
      OR dst.param_type <> 'NAMED'
      OR dst.max_parallel_env <> 2
      OR NVL(dst.timeout_s, 0) <> 1800
 WHEN NOT MATCHED THEN
   INSERT (id, name, description, script_group, category, stage, interpreter, path_file, param_type, max_parallel_env, timeout_s, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'zipar_arquivos', 'Compacta arquivo ou pasta em formato ZIP', 'UTILITARIOS', 'ARQUIVOS', 'COMPACTACAO', 'PYTHON3', 'utilitarios/zipar_arquivos.py', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'zipar_arquivos', 'Compacta arquivo ou pasta em formato ZIP', 'UTILITARIOS', 'ARQUIVOS', 'COMPACTACAO', 'python3', 'utilitarios/zipar_arquivos.py', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_script_env dst
 USING (
@@ -2921,7 +2921,7 @@ WHEN MATCHED THEN
              dst.script_group = 'UTILITARIOS',
              dst.category = 'ARQUIVOS',
              dst.stage = 'DESCOMPACTACAO',
-             dst.interpreter = 'PYTHON3',
+             dst.interpreter = 'python3',
              dst.path_file = 'utilitarios/descompactar_zip.py',
              dst.param_type = 'NAMED',
              dst.max_parallel_env = 2,
@@ -2934,14 +2934,14 @@ WHEN MATCHED THEN
      OR NVL(dst.script_group, '~') <> 'UTILITARIOS'
      OR NVL(dst.category, '~') <> 'ARQUIVOS'
      OR NVL(dst.stage, '~') <> 'DESCOMPACTACAO'
-     OR dst.interpreter <> 'PYTHON3'
+     OR dst.interpreter <> 'python3'
      OR dst.path_file <> 'utilitarios/descompactar_zip.py'
      OR dst.param_type <> 'NAMED'
      OR dst.max_parallel_env <> 2
      OR NVL(dst.timeout_s, 0) <> 1800
 WHEN NOT MATCHED THEN
   INSERT (id, name, description, script_group, category, stage, interpreter, path_file, param_type, max_parallel_env, timeout_s, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'descompactar_zip', 'Extrai arquivos de pacote ZIP para pasta destino com protecao segura', 'UTILITARIOS', 'ARQUIVOS', 'DESCOMPACTACAO', 'PYTHON3', 'utilitarios/descompactar_zip.py', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'descompactar_zip', 'Extrai arquivos de pacote ZIP para pasta destino com protecao segura', 'UTILITARIOS', 'ARQUIVOS', 'DESCOMPACTACAO', 'python3', 'utilitarios/descompactar_zip.py', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_script_env dst
 USING (
@@ -3090,7 +3090,7 @@ WHEN MATCHED THEN
              dst.script_group = 'UTILITARIOS',
              dst.category = 'ARQUIVOS',
              dst.stage = 'DIVISAO',
-             dst.interpreter = 'PYTHON3',
+             dst.interpreter = 'python3',
              dst.path_file = 'utilitarios/quebrar_arquivo.py',
              dst.param_type = 'NAMED',
              dst.max_parallel_env = 2,
@@ -3103,14 +3103,14 @@ WHEN MATCHED THEN
      OR NVL(dst.script_group, '~') <> 'UTILITARIOS'
      OR NVL(dst.category, '~') <> 'ARQUIVOS'
      OR NVL(dst.stage, '~') <> 'DIVISAO'
-     OR dst.interpreter <> 'PYTHON3'
+     OR dst.interpreter <> 'python3'
      OR dst.path_file <> 'utilitarios/quebrar_arquivo.py'
      OR dst.param_type <> 'NAMED'
      OR dst.max_parallel_env <> 2
      OR NVL(dst.timeout_s, 0) <> 1800
 WHEN NOT MATCHED THEN
   INSERT (id, name, description, script_group, category, stage, interpreter, path_file, param_type, max_parallel_env, timeout_s, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'quebrar_arquivo', 'Divide arquivo texto em partes menores por quantidade de linhas', 'UTILITARIOS', 'ARQUIVOS', 'DIVISAO', 'PYTHON3', 'utilitarios/quebrar_arquivo.py', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'quebrar_arquivo', 'Divide arquivo texto em partes menores por quantidade de linhas', 'UTILITARIOS', 'ARQUIVOS', 'DIVISAO', 'python3', 'utilitarios/quebrar_arquivo.py', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_script_env dst
 USING (
@@ -3279,7 +3279,7 @@ WHEN MATCHED THEN
              dst.script_group = 'UTILITARIOS',
              dst.category = 'ARQUIVOS',
              dst.stage = 'CONCATENACAO',
-             dst.interpreter = 'PYTHON3',
+             dst.interpreter = 'python3',
              dst.path_file = 'utilitarios/juntar_arquivos.py',
              dst.param_type = 'NAMED',
              dst.max_parallel_env = 2,
@@ -3292,14 +3292,14 @@ WHEN MATCHED THEN
      OR NVL(dst.script_group, '~') <> 'UTILITARIOS'
      OR NVL(dst.category, '~') <> 'ARQUIVOS'
      OR NVL(dst.stage, '~') <> 'CONCATENACAO'
-     OR dst.interpreter <> 'PYTHON3'
+     OR dst.interpreter <> 'python3'
      OR dst.path_file <> 'utilitarios/juntar_arquivos.py'
      OR dst.param_type <> 'NAMED'
      OR dst.max_parallel_env <> 2
      OR NVL(dst.timeout_s, 0) <> 1800
 WHEN NOT MATCHED THEN
   INSERT (id, name, description, script_group, category, stage, interpreter, path_file, param_type, max_parallel_env, timeout_s, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'juntar_arquivos', 'Concatena blocos de arquivos ordenados em arquivo consolidado final', 'UTILITARIOS', 'ARQUIVOS', 'CONCATENACAO', 'PYTHON3', 'utilitarios/juntar_arquivos.py', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'juntar_arquivos', 'Concatena blocos de arquivos ordenados em arquivo consolidado final', 'UTILITARIOS', 'ARQUIVOS', 'CONCATENACAO', 'python3', 'utilitarios/juntar_arquivos.py', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_script_env dst
 USING (
@@ -3448,7 +3448,7 @@ WHEN MATCHED THEN
              dst.script_group = 'UTILITARIOS',
              dst.category = 'ARQUIVOS',
              dst.stage = 'CONVERSAO',
-             dst.interpreter = 'PYTHON3',
+             dst.interpreter = 'python3',
              dst.path_file = 'utilitarios/converter_encoding.py',
              dst.param_type = 'NAMED',
              dst.max_parallel_env = 2,
@@ -3461,14 +3461,14 @@ WHEN MATCHED THEN
      OR NVL(dst.script_group, '~') <> 'UTILITARIOS'
      OR NVL(dst.category, '~') <> 'ARQUIVOS'
      OR NVL(dst.stage, '~') <> 'CONVERSAO'
-     OR dst.interpreter <> 'PYTHON3'
+     OR dst.interpreter <> 'python3'
      OR dst.path_file <> 'utilitarios/converter_encoding.py'
      OR dst.param_type <> 'NAMED'
      OR dst.max_parallel_env <> 2
      OR NVL(dst.timeout_s, 0) <> 1800
 WHEN NOT MATCHED THEN
   INSERT (id, name, description, script_group, category, stage, interpreter, path_file, param_type, max_parallel_env, timeout_s, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'converter_encoding', 'Converte codificacao de caracteres de arquivo texto (ex: ISO-8859-1 para UTF-8)', 'UTILITARIOS', 'ARQUIVOS', 'CONVERSAO', 'PYTHON3', 'utilitarios/converter_encoding.py', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'converter_encoding', 'Converte codificacao de caracteres de arquivo texto (ex: ISO-8859-1 para UTF-8)', 'UTILITARIOS', 'ARQUIVOS', 'CONVERSAO', 'python3', 'utilitarios/converter_encoding.py', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_script_env dst
 USING (
@@ -3657,7 +3657,7 @@ WHEN MATCHED THEN
              dst.script_group = 'UTILITARIOS',
              dst.category = 'ARQUIVOS',
              dst.stage = 'TRANSFORMACAO',
-             dst.interpreter = 'PYTHON3',
+             dst.interpreter = 'python3',
              dst.path_file = 'utilitarios/substituir_texto.py',
              dst.param_type = 'NAMED',
              dst.max_parallel_env = 2,
@@ -3670,14 +3670,14 @@ WHEN MATCHED THEN
      OR NVL(dst.script_group, '~') <> 'UTILITARIOS'
      OR NVL(dst.category, '~') <> 'ARQUIVOS'
      OR NVL(dst.stage, '~') <> 'TRANSFORMACAO'
-     OR dst.interpreter <> 'PYTHON3'
+     OR dst.interpreter <> 'python3'
      OR dst.path_file <> 'utilitarios/substituir_texto.py'
      OR dst.param_type <> 'NAMED'
      OR dst.max_parallel_env <> 2
      OR NVL(dst.timeout_s, 0) <> 1800
 WHEN NOT MATCHED THEN
   INSERT (id, name, description, script_group, category, stage, interpreter, path_file, param_type, max_parallel_env, timeout_s, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'substituir_texto', 'Localiza e substitui texto em arquivo gerando copia atualizada', 'UTILITARIOS', 'ARQUIVOS', 'TRANSFORMACAO', 'PYTHON3', 'utilitarios/substituir_texto.py', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'substituir_texto', 'Localiza e substitui texto em arquivo gerando copia atualizada', 'UTILITARIOS', 'ARQUIVOS', 'TRANSFORMACAO', 'python3', 'utilitarios/substituir_texto.py', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_script_env dst
 USING (
@@ -3866,7 +3866,7 @@ WHEN MATCHED THEN
              dst.script_group = 'UTILITARIOS',
              dst.category = 'ARQUIVOS',
              dst.stage = 'HIGIENIZACAO',
-             dst.interpreter = 'PYTHON3',
+             dst.interpreter = 'python3',
              dst.path_file = 'utilitarios/remover_duplicadas.py',
              dst.param_type = 'NAMED',
              dst.max_parallel_env = 2,
@@ -3879,14 +3879,14 @@ WHEN MATCHED THEN
      OR NVL(dst.script_group, '~') <> 'UTILITARIOS'
      OR NVL(dst.category, '~') <> 'ARQUIVOS'
      OR NVL(dst.stage, '~') <> 'HIGIENIZACAO'
-     OR dst.interpreter <> 'PYTHON3'
+     OR dst.interpreter <> 'python3'
      OR dst.path_file <> 'utilitarios/remover_duplicadas.py'
      OR dst.param_type <> 'NAMED'
      OR dst.max_parallel_env <> 2
      OR NVL(dst.timeout_s, 0) <> 1800
 WHEN NOT MATCHED THEN
   INSERT (id, name, description, script_group, category, stage, interpreter, path_file, param_type, max_parallel_env, timeout_s, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'remover_duplicadas', 'Remove linhas duplicadas de arquivo texto preservando ordem ou ordenando', 'UTILITARIOS', 'ARQUIVOS', 'HIGIENIZACAO', 'PYTHON3', 'utilitarios/remover_duplicadas.py', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'remover_duplicadas', 'Remove linhas duplicadas de arquivo texto preservando ordem ou ordenando', 'UTILITARIOS', 'ARQUIVOS', 'HIGIENIZACAO', 'python3', 'utilitarios/remover_duplicadas.py', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_script_env dst
 USING (
@@ -4055,7 +4055,7 @@ WHEN MATCHED THEN
              dst.script_group = 'UTILITARIOS',
              dst.category = 'ARQUIVOS',
              dst.stage = 'AUDITORIA',
-             dst.interpreter = 'PYTHON3',
+             dst.interpreter = 'python3',
              dst.path_file = 'utilitarios/gerar_hash_arquivo.py',
              dst.param_type = 'NAMED',
              dst.max_parallel_env = 2,
@@ -4068,14 +4068,14 @@ WHEN MATCHED THEN
      OR NVL(dst.script_group, '~') <> 'UTILITARIOS'
      OR NVL(dst.category, '~') <> 'ARQUIVOS'
      OR NVL(dst.stage, '~') <> 'AUDITORIA'
-     OR dst.interpreter <> 'PYTHON3'
+     OR dst.interpreter <> 'python3'
      OR dst.path_file <> 'utilitarios/gerar_hash_arquivo.py'
      OR dst.param_type <> 'NAMED'
      OR dst.max_parallel_env <> 2
      OR NVL(dst.timeout_s, 0) <> 1800
 WHEN NOT MATCHED THEN
   INSERT (id, name, description, script_group, category, stage, interpreter, path_file, param_type, max_parallel_env, timeout_s, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'gerar_hash_arquivo', 'Calcula hash criptografico (SHA256, MD5, SHA1) para conferencia de integridade', 'UTILITARIOS', 'ARQUIVOS', 'AUDITORIA', 'PYTHON3', 'utilitarios/gerar_hash_arquivo.py', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'gerar_hash_arquivo', 'Calcula hash criptografico (SHA256, MD5, SHA1) para conferencia de integridade', 'UTILITARIOS', 'ARQUIVOS', 'AUDITORIA', 'python3', 'utilitarios/gerar_hash_arquivo.py', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_script_env dst
 USING (
@@ -4224,7 +4224,7 @@ WHEN MATCHED THEN
              dst.script_group = 'UTILITARIOS',
              dst.category = 'ARQUIVOS',
              dst.stage = 'COMPACTACAO',
-             dst.interpreter = 'BASH',
+             dst.interpreter = 'bash',
              dst.path_file = 'utilitarios/compactar_targz.sh',
              dst.param_type = 'NAMED',
              dst.max_parallel_env = 2,
@@ -4237,14 +4237,14 @@ WHEN MATCHED THEN
      OR NVL(dst.script_group, '~') <> 'UTILITARIOS'
      OR NVL(dst.category, '~') <> 'ARQUIVOS'
      OR NVL(dst.stage, '~') <> 'COMPACTACAO'
-     OR dst.interpreter <> 'BASH'
+     OR dst.interpreter <> 'bash'
      OR dst.path_file <> 'utilitarios/compactar_targz.sh'
      OR dst.param_type <> 'NAMED'
      OR dst.max_parallel_env <> 2
      OR NVL(dst.timeout_s, 0) <> 1800
 WHEN NOT MATCHED THEN
   INSERT (id, name, description, script_group, category, stage, interpreter, path_file, param_type, max_parallel_env, timeout_s, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'compactar_targz', 'Cria pacote compactado .tar.gz a partir de arquivo ou pasta', 'UTILITARIOS', 'ARQUIVOS', 'COMPACTACAO', 'BASH', 'utilitarios/compactar_targz.sh', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'compactar_targz', 'Cria pacote compactado .tar.gz a partir de arquivo ou pasta', 'UTILITARIOS', 'ARQUIVOS', 'COMPACTACAO', 'bash', 'utilitarios/compactar_targz.sh', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_script_env dst
 USING (
@@ -4393,7 +4393,7 @@ WHEN MATCHED THEN
              dst.script_group = 'UTILITARIOS',
              dst.category = 'ARQUIVOS',
              dst.stage = 'DESCOMPACTACAO',
-             dst.interpreter = 'BASH',
+             dst.interpreter = 'bash',
              dst.path_file = 'utilitarios/descompactar_targz.sh',
              dst.param_type = 'NAMED',
              dst.max_parallel_env = 2,
@@ -4406,14 +4406,14 @@ WHEN MATCHED THEN
      OR NVL(dst.script_group, '~') <> 'UTILITARIOS'
      OR NVL(dst.category, '~') <> 'ARQUIVOS'
      OR NVL(dst.stage, '~') <> 'DESCOMPACTACAO'
-     OR dst.interpreter <> 'BASH'
+     OR dst.interpreter <> 'bash'
      OR dst.path_file <> 'utilitarios/descompactar_targz.sh'
      OR dst.param_type <> 'NAMED'
      OR dst.max_parallel_env <> 2
      OR NVL(dst.timeout_s, 0) <> 1800
 WHEN NOT MATCHED THEN
   INSERT (id, name, description, script_group, category, stage, interpreter, path_file, param_type, max_parallel_env, timeout_s, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'descompactar_targz', 'Extrai pacote compactado .tar.gz para pasta destino com verificacao', 'UTILITARIOS', 'ARQUIVOS', 'DESCOMPACTACAO', 'BASH', 'utilitarios/descompactar_targz.sh', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'descompactar_targz', 'Extrai pacote compactado .tar.gz para pasta destino com verificacao', 'UTILITARIOS', 'ARQUIVOS', 'DESCOMPACTACAO', 'bash', 'utilitarios/descompactar_targz.sh', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_script_env dst
 USING (
@@ -4562,7 +4562,7 @@ WHEN MATCHED THEN
              dst.script_group = 'UTILITARIOS',
              dst.category = 'ARQUIVOS',
              dst.stage = 'ANALISE',
-             dst.interpreter = 'SH',
+             dst.interpreter = 'sh',
              dst.path_file = 'utilitarios/contar_linhas_arquivo.sh',
              dst.param_type = 'POSITIONAL',
              dst.max_parallel_env = 2,
@@ -4575,14 +4575,14 @@ WHEN MATCHED THEN
      OR NVL(dst.script_group, '~') <> 'UTILITARIOS'
      OR NVL(dst.category, '~') <> 'ARQUIVOS'
      OR NVL(dst.stage, '~') <> 'ANALISE'
-     OR dst.interpreter <> 'SH'
+     OR dst.interpreter <> 'sh'
      OR dst.path_file <> 'utilitarios/contar_linhas_arquivo.sh'
      OR dst.param_type <> 'POSITIONAL'
      OR dst.max_parallel_env <> 2
      OR NVL(dst.timeout_s, 0) <> 600
 WHEN NOT MATCHED THEN
   INSERT (id, name, description, script_group, category, stage, interpreter, path_file, param_type, max_parallel_env, timeout_s, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'contar_linhas_arquivo', 'Conta linhas, palavras e bytes de arquivo texto (modo posicional/sequencial)', 'UTILITARIOS', 'ARQUIVOS', 'ANALISE', 'SH', 'utilitarios/contar_linhas_arquivo.sh', 'POSITIONAL', 2, 600, 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'contar_linhas_arquivo', 'Conta linhas, palavras e bytes de arquivo texto (modo posicional/sequencial)', 'UTILITARIOS', 'ARQUIVOS', 'ANALISE', 'sh', 'utilitarios/contar_linhas_arquivo.sh', 'POSITIONAL', 2, 600, 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_script_env dst
 USING (
@@ -4711,7 +4711,7 @@ WHEN MATCHED THEN
              dst.script_group = 'UTILITARIOS',
              dst.category = 'ARQUIVOS',
              dst.stage = 'FILTRAGEM',
-             dst.interpreter = 'BASH',
+             dst.interpreter = 'bash',
              dst.path_file = 'utilitarios/filtrar_linhas.sh',
              dst.param_type = 'NAMED',
              dst.max_parallel_env = 2,
@@ -4724,14 +4724,14 @@ WHEN MATCHED THEN
      OR NVL(dst.script_group, '~') <> 'UTILITARIOS'
      OR NVL(dst.category, '~') <> 'ARQUIVOS'
      OR NVL(dst.stage, '~') <> 'FILTRAGEM'
-     OR dst.interpreter <> 'BASH'
+     OR dst.interpreter <> 'bash'
      OR dst.path_file <> 'utilitarios/filtrar_linhas.sh'
      OR dst.param_type <> 'NAMED'
      OR dst.max_parallel_env <> 2
      OR NVL(dst.timeout_s, 0) <> 1800
 WHEN NOT MATCHED THEN
   INSERT (id, name, description, script_group, category, stage, interpreter, path_file, param_type, max_parallel_env, timeout_s, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'filtrar_linhas', 'Filtra linhas de arquivo baseado em padrao de texto com opcao de inverter', 'UTILITARIOS', 'ARQUIVOS', 'FILTRAGEM', 'BASH', 'utilitarios/filtrar_linhas.sh', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'filtrar_linhas', 'Filtra linhas de arquivo baseado em padrao de texto com opcao de inverter', 'UTILITARIOS', 'ARQUIVOS', 'FILTRAGEM', 'bash', 'utilitarios/filtrar_linhas.sh', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_script_env dst
 USING (
@@ -4920,7 +4920,7 @@ WHEN MATCHED THEN
              dst.script_group = 'UTILITARIOS',
              dst.category = 'ARQUIVOS',
              dst.stage = 'ORGANIZACAO',
-             dst.interpreter = 'SH',
+             dst.interpreter = 'sh',
              dst.path_file = 'utilitarios/ordenar_arquivo.sh',
              dst.param_type = 'NAMED',
              dst.max_parallel_env = 2,
@@ -4933,14 +4933,14 @@ WHEN MATCHED THEN
      OR NVL(dst.script_group, '~') <> 'UTILITARIOS'
      OR NVL(dst.category, '~') <> 'ARQUIVOS'
      OR NVL(dst.stage, '~') <> 'ORGANIZACAO'
-     OR dst.interpreter <> 'SH'
+     OR dst.interpreter <> 'sh'
      OR dst.path_file <> 'utilitarios/ordenar_arquivo.sh'
      OR dst.param_type <> 'NAMED'
      OR dst.max_parallel_env <> 2
      OR NVL(dst.timeout_s, 0) <> 1800
 WHEN NOT MATCHED THEN
   INSERT (id, name, description, script_group, category, stage, interpreter, path_file, param_type, max_parallel_env, timeout_s, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'ordenar_arquivo', 'Ordena linhas de arquivo texto com opcoes numerica e reversa', 'UTILITARIOS', 'ARQUIVOS', 'ORGANIZACAO', 'SH', 'utilitarios/ordenar_arquivo.sh', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'ordenar_arquivo', 'Ordena linhas de arquivo texto com opcoes numerica e reversa', 'UTILITARIOS', 'ARQUIVOS', 'ORGANIZACAO', 'sh', 'utilitarios/ordenar_arquivo.sh', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_script_env dst
 USING (
@@ -5129,7 +5129,7 @@ WHEN MATCHED THEN
              dst.script_group = 'UTILITARIOS',
              dst.category = 'ARQUIVOS',
              dst.stage = 'HIGIENIZACAO',
-             dst.interpreter = 'BASH',
+             dst.interpreter = 'bash',
              dst.path_file = 'utilitarios/limpar_linhas_vazias.sh',
              dst.param_type = 'NAMED',
              dst.max_parallel_env = 2,
@@ -5142,14 +5142,14 @@ WHEN MATCHED THEN
      OR NVL(dst.script_group, '~') <> 'UTILITARIOS'
      OR NVL(dst.category, '~') <> 'ARQUIVOS'
      OR NVL(dst.stage, '~') <> 'HIGIENIZACAO'
-     OR dst.interpreter <> 'BASH'
+     OR dst.interpreter <> 'bash'
      OR dst.path_file <> 'utilitarios/limpar_linhas_vazias.sh'
      OR dst.param_type <> 'NAMED'
      OR dst.max_parallel_env <> 2
      OR NVL(dst.timeout_s, 0) <> 1800
 WHEN NOT MATCHED THEN
   INSERT (id, name, description, script_group, category, stage, interpreter, path_file, param_type, max_parallel_env, timeout_s, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'limpar_linhas_vazias', 'Remove espacos em branco excedentes e linhas vazias de arquivo texto', 'UTILITARIOS', 'ARQUIVOS', 'HIGIENIZACAO', 'BASH', 'utilitarios/limpar_linhas_vazias.sh', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_scripts.NEXTVAL, 'limpar_linhas_vazias', 'Remove espacos em branco excedentes e linhas vazias de arquivo texto', 'UTILITARIOS', 'ARQUIVOS', 'HIGIENIZACAO', 'bash', 'utilitarios/limpar_linhas_vazias.sh', 'NAMED', 2, 1800, 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_script_env dst
 USING (

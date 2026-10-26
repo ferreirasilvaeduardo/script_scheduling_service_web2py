@@ -32,7 +32,6 @@ _agent_icons = URL('static', 'img/icons.svg')
         <dt>Status</dt><dd>{{=_agent['status']}}</dd>
         <dt>Versão</dt><dd>{{=_agent['version'] or '-'}}{{if _agent['platform']:}} · {{=_agent['platform']}}{{pass}}</dd>
         <dt>Ambientes</dt><dd>{{=', '.join(_agent['environments']) or '-'}}</dd>
-        <dt>Interpretadores</dt><dd>{{=', '.join(_agent['interpreters']) or '-'}}</dd>
         <dt>Pasta base dos scripts</dt><dd class="sss-mono">{{=_agent['script_base_dir'] or u'Sem pasta base (só caminho completo)'}}</dd>
         <dt>Iniciado em</dt><dd>{{=ui_helpers.format_date(_agent['started_at'])}}</dd>
       </dl>

@@ -149,19 +149,6 @@ class TestAccessAndExecutable(unittest.TestCase):
         finally:
             os.chmod(background, DIR_MODE)
 
-    def test_executavel_do_interpretador(self):
-        sh = os.path.realpath("/bin/sh")
-        self.assertEqual(path_guard.validate_executable("/bin/sh"), sh)
-        with self.assertRaises(PathGuardError) as ctx:
-            path_guard.validate_executable("/nao/existe/python3")
-        self.assertEqual(ctx.exception.code, Code.NOT_FOUND)
-        for path, kw in (("bin/sh", {}), ("/bin/sh", {"sss_dirs": (os.path.dirname(sh),)}),
-                            (self._p("sub/ok.py"), {}), (self._p("sub"), {})):
-            with self.subTest(caminho=path, kw=kw):
-                with self.assertRaises(PathGuardError) as ctx:
-                    path_guard.validate_executable(path, **kw)
-                self.assertEqual(ctx.exception.code, Code.INTERPRETER_UNSAFE)
-
 
 @unittest.skipIf(os.geteuid() == 0, "root sempre passa em os.access(W_OK)")
 class TestBaseDir(unittest.TestCase):
@@ -307,11 +294,19 @@ class TestInterpreterCr025(unittest.TestCase):
                 self.assertEqual(ctx.exception.code, Code.NO_SHEBANG)
 
     def test_opcoes_do_cadastro(self):
-        self.assertEqual(path_guard.ALLOWLIST,
-                         ("PYTHON3", "PYTHON", "BASH", "SH", "PYTHON_SCRIPT", "SHELL_SCRIPT"))
-        self.assertEqual(path_guard.FIXED_ARGS["PYTHON3"], ("-I",))
-        for key in ("PYTHON", "PYTHON_SCRIPT"):
-            self.assertEqual(path_guard.FIXED_ARGS[key], ("-E", "-s"))
+        # CR-026 (D3): so o nome; as chaves anteriores valem pelo nome equivalente (snapshots v5 e v6).
+        self.assertEqual(path_guard.ALLOWLIST, ("python", "python3", "sh", "bash"))
+        self.assertEqual([path_guard.registered_name(k) for k in
+                          ("PYTHON3", "PYTHON", "BASH", "SH", "PYTHON_SCRIPT", "SHELL_SCRIPT", "bash")],
+                         ["python3", "python", "bash", "sh", "python3", "sh", "bash"])
+        for bad in ("PERL", "/bin/sh", None, "", "python3.13"):
+            self.assertIsNone(path_guard.registered_name(bad), bad)
+
+    def test_reconhece_python_pelo_nome(self):
+        for ok in ("python", "python3", "python3.13", "/opt/py311/bin/python3", "python2.7"):
+            self.assertTrue(path_guard.is_python(ok), ok)
+        for no in ("sh", "/bin/bash", "pythonw", "ipython", "", None, "/usr/bin/env"):
+            self.assertFalse(path_guard.is_python(no), no)
 
 
 class TestTextValidations(unittest.TestCase):
@@ -361,19 +356,18 @@ class TestTextValidations(unittest.TestCase):
         self.assertEqual(ctx.exception.code, Code.SSS_DIR)
 
     def test_interpretador_na_allowlist(self):
-        for cmd in ("PYTHON3", "BASH", "SH"):
+        for cmd in ("python3", "python", "bash", "sh"):
             path_guard.validate_interpreter(cmd)
-        # CR-005: somente POSIX; POWERSHELL e cmd ficam fora da allowlist.
-        for cmd in ("POWERSHELL", "CMD", "python3"):
+        # CR-005: somente POSIX; POWERSHELL e cmd ficam fora. CR-026: as chaves anteriores tambem.
+        for cmd in ("POWERSHELL", "CMD", "PYTHON3", "SHELL_SCRIPT"):
             with self.assertRaises(PathGuardError) as ctx:
                 path_guard.validate_interpreter(cmd)
             self.assertEqual(ctx.exception.code, Code.INTERPRETER_NOT_ALLOWED)
-        self.assertNotIn("POWERSHELL", path_guard.FIXED_ARGS)
-        self.assertEqual(path_guard.FIXED_ARGS["PYTHON3"], ("-I",))
+        self.assertEqual(path_guard.PYTHON3_ARGS, ("-I",))
 
     def test_interpretador_fora_da_allowlist(self):
         # Caminhos absolutos (modelo anterior ao CR-001) e cmd/.bat (D2) tambem sao rejeitados.
-        for cmd in ("/usr/bin/python3", "/bin/bash", "/bin/zsh", "", None, "PYTHON3 ", "python3", "CMD", "cmd.exe",
+        for cmd in ("/usr/bin/python3", "/bin/bash", "/bin/zsh", "", None, "python3 ", "PYTHON3", "CMD", "cmd.exe",
                     "BAT", "SH -c"):
             with self.subTest(cmd=cmd):
                 with self.assertRaises(PathGuardError) as ctx:

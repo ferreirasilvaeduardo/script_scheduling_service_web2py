@@ -112,7 +112,7 @@ class _Base(unittest.TestCase):
                 if a["entity"] == "tbsss_scripts" and a["id"] > self.aud_base]
 
     def _insert(self, svc=None, **changes):
-        data = {"name": "Novo script", "interpreter": "PYTHON3", "path_file": self._p("novo.py"),
+        data = {"name": "Novo script", "interpreter": "python3", "path_file": self._p("novo.py"),
                  "param_type": "POSITIONAL", "max_parallel_env": "2", "timeout_s": ""}
         data.update(changes)
         return (svc or self.svc).save(self.ctx["admin"], IP, None, data)
@@ -139,20 +139,20 @@ class TestRegistration(_Base):
         self.assertEqual((errors, warning), ({}, None))
         s = self.catalog.scripts_get(sid)
         self.assertEqual((s["interpreter"], s["path_file"], s["max_parallel_env"], s["timeout_s"]),
-                         ("PYTHON3", self._p("novo.py"), 2, None))
+                         ("python3", self._p("novo.py"), 2, None))
         self.assertNotIn("pasta_base", s)
         self.assertIn("path_file: %s" % self._p("novo.py"), self._audits("CREATE")[0]["detail"])
 
     def test_interpretador_fora_da_allowlist(self):
-        for cmd in ("/bin/ls", "/usr/bin/python3", "PYTHON3 -c", "python3", "CMD", "POWERSHELL", "", None):
+        for cmd in ("/bin/ls", "/usr/bin/python3", "python3 -c", "PYTHON3", "SHELL_SCRIPT", "CMD", "POWERSHELL", "",
+                    None):
             _sid, errors, _ = self._insert(interpreter=cmd)
             self.assertEqual(errors.get("interpreter"), scr_mod.PATH_MESSAGES[Code.INTERPRETER_NOT_ALLOWED], cmd)
 
-    def test_cr025_seis_opcoes_de_interpretador(self):
-        """CR-025: o cadastro aceita PYTHON e os "definido no script"; o formulario lista as seis opcoes."""
-        self.assertEqual([k for k, _l in scr_mod.INTERPRETER_LABELS],
-                         ["PYTHON3", "PYTHON", "BASH", "SH", "PYTHON_SCRIPT", "SHELL_SCRIPT"])
-        for i, key in enumerate(("PYTHON", "PYTHON_SCRIPT", "SHELL_SCRIPT")):
+    def test_cr026_quatro_nomes_de_interpretador(self):
+        """CR-026 (D3): o cadastro aceita so python3, python, bash e sh; o formulario lista os quatro."""
+        self.assertEqual([k for k, _l in scr_mod.INTERPRETER_LABELS], ["python3", "python", "bash", "sh"])
+        for i, key in enumerate(("python", "bash", "sh")):
             _sid, errors, _ = self._insert(name="Int %s" % key, interpreter=key, path_file="relatorios/x%d.py" % i)
             self.assertEqual(errors, {}, key)
 
@@ -227,7 +227,7 @@ class TestRegistration(_Base):
     def test_edicao_e_reativacao_sem_conferir_o_arquivo(self):
         # CR-011 (S1): o estado do arquivo neste servidor nao impede editar, desativar nem reativar.
         svc = self._service("HML")
-        sid = self.catalog.scripts_insert({"name": "Gravavel", "interpreter": "PYTHON3",
+        sid = self.catalog.scripts_insert({"name": "Gravavel", "interpreter": "python3",
                                              "path_file": self._p("gravavel.py"), "param_type": "POSITIONAL"}, actor="teste")["id"]
         f = svc.form(self.ctx["admin"], str(sid))
         data = dict((c, "" if f[c] is None else str(f[c])) for c in scr_mod.EDITABLE_FIELDS)
@@ -235,7 +235,7 @@ class TestRegistration(_Base):
         self.assertEqual(errors, {})
         _sid, errors, _a = svc.save(self.ctx["admin"], IP, str(sid),
                                      dict(data, version=svc.form(self.ctx["admin"], str(sid))["version"],
-                                          interpreter="BASH"))
+                                          interpreter="bash"))
         self.assertEqual(errors, {})
         svc.toggle_active(self.ctx["admin"], IP, str(sid), svc.form(self.ctx["admin"], str(sid))["version"])
         self.assertEqual(self.catalog.scripts_get(sid)["active"], "N")
@@ -428,14 +428,14 @@ class TestPreview(_Base):
         r = self.svc.preview(self.ctx["admin"], str(S_CARGA))
         real = "carga_diaria.py"  # CR-023: relativo, como foi cadastrado
         self.assertEqual((r["errors"], r["warning"]), ({}, None))
-        self.assertEqual(r["argv"], ["PYTHON3", "-I", real, "--data-ref", "2026-10-14", "-n", "5000",
+        self.assertEqual(r["argv"], ["python3", "-I", real, "--data-ref", "2026-10-14", "-n", "5000",
                                      "--modo", "REAL", "--verbose", "--documento", "****"])
 
     def test_previa_no_cadastro_mostra_o_caminho_e_reflete_edicao(self):
         # CR-005 R-f: no cadastro (MANAGE_SCRIPTS) o caminho aparece inteiro, porque e o que o usuario cadastra.
         _screen, items = self._links_json(S_CARGA)
         r = self.svc.preview(self.ctx["gestor"], str(S_CARGA), json.dumps(items[:1]))
-        self.assertEqual(r["argv"], ["PYTHON3", "-I", "carga_diaria.py", "--data-ref", "2026-10-14"])
+        self.assertEqual(r["argv"], ["python3", "-I", "carga_diaria.py", "--data-ref", "2026-10-14"])
 
     def test_acesso_negado_e_nao_encontrado(self):
         for call in (lambda c: self.svc.list(c, {}, 1, 20), lambda c: self.svc.homologation(c, "1"),
@@ -446,11 +446,11 @@ class TestPreview(_Base):
             self.svc.form(self.ctx["admin"], "999")
 
     def test_lista_com_homologados_e_parametros(self):
-        page = self.svc.list(self.ctx["admin"], {"interpreter": "PYTHON3"}, 1, 20)
+        page = self.svc.list(self.ctx["admin"], {"interpreter": "python3"}, 1, 20)
         load = [s for s in page["items"] if s["name"] == "carga_diaria"][0]
         self.assertEqual(load["param_count"], 5)
         self.assertIn("PRODUCAO", load["homologated_environments"])
-        self.assertTrue(all(s["interpreter"] == "PYTHON3" for s in page["items"]))
+        self.assertTrue(all(s["interpreter"] == "python3" for s in page["items"]))
         self.assertEqual(scr_mod.normalize_filters({"interpreter": "/bin/ls", "active": "Y"}), {"active": "Y"})
         self.assertEqual(scr_mod.normalize_filters({"interpreter": "POWERSHELL"}), {})
 

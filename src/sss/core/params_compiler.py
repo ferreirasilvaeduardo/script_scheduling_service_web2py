@@ -7,14 +7,16 @@ sort por 'ordem'); nunca depende da ordem de dict comum (AGENTS §2.1).
 import collections
 import datetime
 import json
+import os
 import re
 
 from sss.platform import path_guard
 
-# CR-025: v6 acrescenta interpreter_override (o interpretador digitado no disparo, ou None); o agente
-# aceita v5 (sem a chave) e v6. Agente anterior recusa a v6 (UNSUPPORTED_VERSION) em vez de ignorar a escolha.
-SNAPSHOT_VERSION = 6
-ACCEPTED_VERSIONS = (5, 6)
+# CR-025: v6 acrescenta interpreter_override (o interpretador digitado no disparo, ou None). CR-026: v7 guarda
+# em interpreter o nome do cadastro (python, python3, sh, bash); v5 e v6, com a chave logica anterior, ainda
+# sao aceitas (path_guard.LEGACY). Agente anterior recusa a v7 (UNSUPPORTED_VERSION).
+SNAPSHOT_VERSION = 7
+ACCEPTED_VERSIONS = (5, 6, 7)
 MAX_LENGTH = 500
 MASK = '****'
 GENERAL_KEY = '_geral'
@@ -404,20 +406,11 @@ def build_args(param_type, links, resolved):
     return args
 
 
-def build_agent_argv(interpreter, executable, script_real, args):
-    """argv real montado no agente (README §6.4): executavel local + argumentos fixos + script + args.
-
-    Lanca PathGuardError se o interpretador logico estiver fora da allowlist.
-    """
-    path_guard.validate_interpreter(interpreter)
-    return [executable] + list(path_guard.FIXED_ARGS[interpreter]) + [script_real] + list(args)
-
-
 def compile_snapshot(script, links, answers, now, interpreter_override=None):
-    """Compila o snapshot v6 (README §6.5) -> (json_str | None, resolvidos, erros por campo).
+    """Compila o snapshot v7 (README §6.5) -> (json_str | None, resolvidos, erros por campo).
 
-    Guarda o interpretador logico, o path_file cadastrado e apenas os argumentos: o argv real e montado
-    pelo agente com o proprio executavel. Erros sao acumulados.
+    Guarda o interpretador do cadastro, o path_file cadastrado e apenas os argumentos: o argv real e montado
+    pelo agente (#!, digitado ou cadastro, CR-026). Erros sao acumulados.
     """
     resolved, errors = _resolve(links, answers)
     args = _build(script['param_type'], links, resolved, errors)
@@ -451,13 +444,14 @@ def compile_snapshot(script, links, answers, now, interpreter_override=None):
     return json.dumps(obj, ensure_ascii=False, sort_keys=True), resolved, errors
 
 
-def validate_snapshot(json_str, cfg):
+def validate_snapshot(json_str, cfg, notes=None):
     """Pre-valida o snapshot no claim (README §8.4 passo 1) e devolve (snap, argv, script_real);
     lanca SnapshotError. script_real (o path_file resolvido) alimenta o SSS_SCRIPT_DIR do env_builder.
 
-    cfg expoe interpretadores (dict logico -> executavel do agente) e, opcionais, sss_dirs (log_dir, work_dir e
-    exec_work_dir, onde nenhum script pode ficar), script_base_dir (base do caminho relativo, CR-023) e dev
-    (script em dev/ da aplicacao aceito, CR-023 D8).
+    cfg expoe, opcionais, sss_dirs (log_dir, work_dir e exec_work_dir, onde nenhum script pode ficar),
+    script_base_dir (base do caminho relativo, CR-023), dev (script em dev/ da aplicacao aceito, CR-023 D8)
+    e search_path (PATH do agente, onde os nomes sao procurados). notes, se dado, recebe as linhas para o log
+    do ticket (ex.: #! ignorado, CR-026).
     Status e homologacao do script ficam a cargo do chamador.
     """
     try:
@@ -468,15 +462,12 @@ def validate_snapshot(json_str, cfg):
         raise SnapshotError('INVALID_STRUCTURE')
     if snap['version'] not in ACCEPTED_VERSIONS:
         raise SnapshotError('UNSUPPORTED_VERSION')
-    interpreter = snap['interpreter']
-    if interpreter not in path_guard.ALLOWLIST:
+    registered = path_guard.registered_name(snap['interpreter'])
+    if registered is None:
         raise SnapshotError('INTERPRETER_NOT_ALLOWED')
     override = snap.get('interpreter_override')
     if override is not None and not isinstance(override, str):
         raise SnapshotError('INVALID_STRUCTURE')
-    executable = (cfg.interpreters or {}).get(interpreter)
-    if not executable and not override and interpreter not in path_guard.SCRIPT_DEFINED:
-        raise SnapshotError('INTERPRETER_UNAVAILABLE')
     args = snap['args']
     if not isinstance(args, list) or not all(isinstance(a, str) for a in args):
         raise SnapshotError('INVALID_ARGS')
@@ -492,25 +483,50 @@ def validate_snapshot(json_str, cfg):
     except path_guard.PathGuardError as e:
         raise SnapshotError('PATH_GUARD_' + e.code)
     try:
-        argv = _agent_argv(interpreter, executable, override, real, args,
-                           getattr(cfg, 'search_path', None))
+        argv, note = _agent_argv(registered, override, real, args, getattr(cfg, 'search_path', None))
     except path_guard.PathGuardError as e:
         raise SnapshotError('PATH_GUARD_' + e.code)
+    if note and notes is not None:
+        notes.append(note)
     return snap, argv, real
 
 
-def _agent_argv(interpreter, executable, override, script_real, args, search_path):
-    """argv do agente (CR-025): o digitado no disparo vence; sem ele, o #! nos "definido no script" e o
-    executavel configurado nos demais. Python que nao e o PYTHON3 configurado roda com -E -s, depois do
-    argumento do #! (#!/usr/bin/env python3 vira env python3 -E -s script; o env nao aceita -E)."""
-    python_args = list(path_guard.PYTHON_PORTABLE_ARGS) if interpreter in path_guard.PYTHON_KINDS else []
-    if override:
-        return [path_guard.find_executable(override, search_path)] + python_args + [script_real] + list(args)
-    if interpreter in path_guard.SCRIPT_DEFINED:
+def _shebang_argv(script_real, search_path):
+    """(cabeca do argv pelo #!, ou None, nota). #! ausente: None sem nota; #! cujo executavel nao existe
+    (ou invalido): None com a nota para o log do ticket (CR-026, D5)."""
+    try:
         path, extra = path_guard.read_shebang(script_real)
-        head = [path_guard.find_executable(path, search_path)] + ([extra] if extra else [])
-        return head + python_args + [script_real] + list(args)
-    return build_agent_argv(interpreter, executable, script_real, args)
+    except path_guard.PathGuardError:
+        return None, None
+    try:
+        executable = path_guard.find_executable(path, search_path)
+    except path_guard.PathGuardError:
+        return None, u'#! ignorado: %s nao encontrado ou nao executavel neste servidor' % path
+    # #!/usr/bin/env python3: o Python e o argumento do env; -E -s vem depois dele (o env nao aceita -E).
+    tokens = (extra or '').split()
+    python = path_guard.is_python(executable) or (os.path.basename(executable) == 'env'
+                                                  and any(path_guard.is_python(t) for t in tokens))
+    head = [executable] + ([extra] if extra else [])
+    return head + (list(path_guard.PYTHON_PORTABLE_ARGS) if python else []), None
+
+
+def _agent_argv(registered, override, script_real, args, search_path):
+    """(argv do agente, nota) na ordem do CR-026 (D5): o #! do script, se o executavel existir; senao o
+    digitado no disparo; senao o nome do cadastro, procurado no PATH do agente. O python3 do cadastro roda
+    com -I; os demais Python com -E -s (D7). Nenhum existe: INTERPRETER_NOT_FOUND."""
+    head, note = _shebang_argv(script_real, search_path)
+    if head is None:
+        if override:
+            executable = path_guard.find_executable(override, search_path)
+            fixed = path_guard.PYTHON_PORTABLE_ARGS if path_guard.is_python(override) else ()
+        else:
+            executable = path_guard.find_executable(registered, search_path)
+            if registered == 'python3':
+                fixed = path_guard.PYTHON3_ARGS
+            else:
+                fixed = path_guard.PYTHON_PORTABLE_ARGS if path_guard.is_python(registered) else ()
+        head = [executable] + list(fixed)
+    return head + [script_real] + list(args), note
 
 
 def _secrets(snapshot):
@@ -542,12 +558,12 @@ def display_argv(snapshot):
     O caminho do script vai completo para todos (README §6.4, CR-005 D8).
     Conservador: qualquer argumento igual a um valor sensivel e mascarado.
     """
-    interpreter = snapshot['interpreter']
+    registered = path_guard.registered_name(snapshot['interpreter']) or snapshot['interpreter']
     override = snapshot.get('interpreter_override')
-    if override:
-        # CR-025: o digitado no disparo aparece no lugar da chave do cadastro.
-        head = [override] + (list(path_guard.PYTHON_PORTABLE_ARGS)
-                             if interpreter in path_guard.PYTHON_KINDS else [])
+    # CR-026: o comando mostrado e o do disparo (digitado) ou do cadastro; o #! so o agente le, no servidor.
+    shown = override or registered
+    if not override and registered == 'python3':
+        head = [shown] + list(path_guard.PYTHON3_ARGS)
     else:
-        head = [interpreter] + list(path_guard.FIXED_ARGS.get(interpreter, ()))
+        head = [shown] + (list(path_guard.PYTHON_PORTABLE_ARGS) if path_guard.is_python(shown) else [])
     return head + [snapshot['path_file']] + _mask_args(list(snapshot['args']), _secrets(snapshot))

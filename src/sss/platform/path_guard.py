@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Validacao de interpretador logico e caminho de script (README §6.4, §8.5, AGENTS §3.2, CR-001, CR-005, CR-011).
+"""Validacao de interpretador e caminho de script (README §6.4, §8.5, AGENTS §3.2, CR-001, CR-005, CR-011).
 
 CR-005: somente POSIX e caminho absoluto livre. CR-011: o ambiente controla o conteudo e a
 versao dos scripts; o SSS confere so o essencial do arquivo real (pode haver link simbolico no caminho):
@@ -16,25 +16,17 @@ from typing import Iterable, Optional, Tuple
 
 from sss.platform import os_platform
 
-# Interpretadores logicos (CR-001, D1/D2; CR-005: somente POSIX; CR-025): o catalogo guarda a chave.
-# Os configurados sao mapeados por cada agente para o executavel local ([agent] interpreters); os
-# "definido no script" usam o caminho do #! da primeira linha do script.
-CONFIGURED = ('PYTHON3', 'PYTHON', 'BASH', 'SH')
-SCRIPT_DEFINED = ('PYTHON_SCRIPT', 'SHELL_SCRIPT')
-ALLOWLIST = CONFIGURED + SCRIPT_DEFINED
-PYTHON_KINDS = ('PYTHON3', 'PYTHON', 'PYTHON_SCRIPT')
-# Argumentos fixos entre o executavel e o script (README §6.4). PYTHON3 configurado: -I. Os demais Python
-# (PYTHON pode ser o Python 2, que nao tem -I; #! e interpretador digitado no disparo, de versao
-# desconhecida): -E -s, que isolam do ambiente e do site do usuario em qualquer versao (CR-025).
+# Interpretador do cadastro (CR-026, D3): so o nome, procurado no PATH do agente. A ordem na execucao e o
+# #! do script (se existir no servidor), o digitado no disparo e, por ultimo, o do cadastro (D5).
+ALLOWLIST = ('python', 'python3', 'sh', 'bash')
+# Chaves logicas anteriores ao CR-026 (snapshots v5 e v6 ainda na fila): o nome equivalente.
+LEGACY = {'PYTHON3': 'python3', 'PYTHON': 'python', 'BASH': 'bash', 'SH': 'sh',
+          'PYTHON_SCRIPT': 'python3', 'SHELL_SCRIPT': 'sh'}
+# Argumentos entre o executavel e o script (README §6.4, CR-026 D7): o python3 do cadastro roda com -I;
+# os demais Python (python, que pode ser o 2, o do #! e o digitado) com -E -s, que existem no 2 e no 3.
+PYTHON3_ARGS = ('-I',)
 PYTHON_PORTABLE_ARGS = ('-E', '-s')
-FIXED_ARGS = {
-    'PYTHON3': ('-I',),
-    'PYTHON': PYTHON_PORTABLE_ARGS,
-    'BASH': (),
-    'SH': (),
-    'PYTHON_SCRIPT': PYTHON_PORTABLE_ARGS,
-    'SHELL_SCRIPT': (),
-}
+_RE_PYTHON = re.compile(r"^python[0-9.]*$")
 # Interpretador digitado no disparo (CR-025): caminho absoluto ou so o nome, buscado no PATH do agente.
 OVERRIDE_MAX_LENGTH = 500
 _RE_INTERPRETER_NAME = re.compile(r"^[A-Za-z0-9._+-]{1,100}$")
@@ -67,9 +59,8 @@ class Code(object):
     NOT_A_FILE = 'NOT_A_FILE'
     GROUP_OTHER_WRITABLE = 'GROUP_OTHER_WRITABLE'
     INTERPRETER_NOT_ALLOWED = 'INTERPRETER_NOT_ALLOWED'
-    INTERPRETER_UNSAFE = 'INTERPRETER_UNSAFE'
-    # CR-025: interpretador digitado ou do #! que nao existe ou nao e executavel; formato invalido do
-    # digitado; script "definido no script" sem #! valido.
+    # CR-025/CR-026: nenhum interpretador (#!, digitado ou do cadastro) existe e e executavel; formato
+    # invalido do digitado; #! ausente ou invalido (so interno: a execucao segue para o digitado e o cadastro).
     INTERPRETER_NOT_FOUND = 'INTERPRETER_NOT_FOUND'
     INTERPRETER_INVALID = 'INTERPRETER_INVALID'
     NO_SHEBANG = 'NO_SHEBANG'
@@ -84,9 +75,21 @@ class PathGuardError(Exception):
 
 
 def validate_interpreter(interpreter):
-    """Exige que o interpretador logico seja exatamente um item da ALLOWLIST."""
+    """Exige que o interpretador do cadastro seja exatamente um item da ALLOWLIST (CR-026)."""
     if interpreter not in ALLOWLIST:
         raise PathGuardError(Code.INTERPRETER_NOT_ALLOWED)
+
+
+def registered_name(interpreter: object) -> Optional[str]:
+    """Nome do interpretador do cadastro guardado no snapshot (o atual ou a chave anterior ao CR-026)."""
+    if interpreter in ALLOWLIST:
+        return str(interpreter)
+    return LEGACY.get(interpreter) if isinstance(interpreter, str) else None
+
+
+def is_python(text: Optional[str]) -> bool:
+    """True se o executavel (caminho ou nome) e um Python: python, python3, python3.13... (CR-026, D7)."""
+    return bool(text) and bool(_RE_PYTHON.match(os.path.basename(str(text))))
 
 
 def is_relative(path_file: object) -> bool:
@@ -219,25 +222,3 @@ def read_shebang(script_real: str) -> Tuple[str, Optional[str]]:
     if not parts or parts[0][:1] != '/':
         raise PathGuardError(Code.NO_SHEBANG)
     return parts[0], (parts[1].strip() if len(parts) > 1 else None)
-
-
-def validate_executable(path, sss_dirs=()):
-    """Executavel de um interpretador de [agent] interpreters (README §8.5, CR-011): caminho absoluto e
-    normalizado, existe, e arquivo executavel e fica fora de log_dir/work_dir/exec_work_dir. Pode ser link
-    simbolico (ex.: /usr/bin/python3) e ficar nas pastas do sistema. Devolve o caminho real; falha:
-    NOT_FOUND ou INTERPRETER_UNSAFE."""
-    if not isinstance(path, str) or path[:1] != '/' or os.path.normpath(path) != path:
-        raise PathGuardError(Code.INTERPRETER_UNSAFE)
-    real = os_platform.final_path(path)
-    try:
-        _stat(real)
-    except PathGuardError as e:
-        if e.code == Code.NOT_FOUND:
-            raise
-        raise PathGuardError(Code.INTERPRETER_UNSAFE)
-    sss = [os_platform.final_path(d) for d in sss_dirs if d]
-    if any(_inside(target, d) for target in (path, real) for d in sss):
-        raise PathGuardError(Code.INTERPRETER_UNSAFE)
-    if not os.path.isfile(real) or not os.access(real, os.X_OK):
-        raise PathGuardError(Code.INTERPRETER_UNSAFE)
-    return real

@@ -29,7 +29,7 @@ from sss.persistence.oracle.scheduler_queue import DuplicateAgent
 from tests.support._output_memory import RepoOutputMemory
 
 _Agent = collections.namedtuple("_Agent", (
-    "agent_id", "environments", "work_dir", "interpreters", "exec_users",
+    "agent_id", "environments", "work_dir", "exec_users",
     "exec_work_dir", "heartbeat_interval_s", "fence_timeout_s", "node_offline_timeout_s", "kill_grace_s",
     "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "queue_aging_min", "child_locale",
     "output_dir", "input_dir", "script_work_dir"))
@@ -177,7 +177,7 @@ class _Base(unittest.TestCase):
 
     def cfg(self, **agent):
         base = dict(agent_id="srv-t", environments=("DEV",), work_dir=self.work,
-                    interpreters=(("SH", "/bin/sh"),), exec_users=(), exec_work_dir=None,
+                    exec_users=(), exec_work_dir=None,
                     heartbeat_interval_s=10, fence_timeout_s=40, node_offline_timeout_s=120, kill_grace_s=1,
                     misfire_policy="RUN_ONCE", misfire_tolerance_s=300, cron_horizon_days=366,
                     queue_aging_min=30, child_locale="C.UTF-8")
@@ -226,8 +226,9 @@ class TestSteps(_Base):
         self.assertIn("fence_timeout_s=40 node_offline_timeout_s=120", text)
         self.assertNotIn("SEM_EXIGENCIA_HASH", text, "CR-011: sem hash")
         r = self.repo.registro
-        self.assertEqual((r["code"], r["hostname"], r["version"], r["platform"], r["interpreters"]),
-                         ("srv-t", "host-t", sss_config.SSS_VERSION, os_platform.NAME, "SH"))
+        self.assertEqual((r["code"], r["hostname"], r["version"], r["platform"]),
+                         ("srv-t", "host-t", sss_config.SSS_VERSION, os_platform.NAME))
+        self.assertNotIn("interpreters", r, "CR-026: o agente nao publica lista de interpretadores")
         self.assertEqual(r["critical_config"], "hb=10;fence=40;offline=120;call=30;kill=1;misfire=RUN_ONCE;tol=300;"
                                                "horizonte=366;envelhecimento=30")
         self.assertTrue(os.path.exists(os.path.join(self.work, "sss-srv-t.lock")))
@@ -240,11 +241,10 @@ class TestSteps(_Base):
             self.failure(sl.EXIT_CONFIG)
         self.failure(sl.EXIT_CONFIG, self.agent(cfg=self.cfg(child_locale="xx_YY.UTF-8")))
 
-    def test_diretorios_e_interpretadores(self):
+    def test_diretorios(self):
+        # CR-026: sem [agent] interpreters, nao ha executavel a conferir na subida.
         self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(log_dir="/usr/local/sss-logs")))
         self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(work_dir=os.path.join(self.root, "nao"))))
-        self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(interpreters=(("SH", "bin/sh"),))))
-        self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(interpreters=())))
 
     def test_validar_execucao_fora_de_dev(self):
         cfg = self.cfg(sss_env="PROD", exec_work_dir=self.root)

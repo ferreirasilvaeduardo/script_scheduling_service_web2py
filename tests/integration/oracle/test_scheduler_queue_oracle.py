@@ -65,16 +65,16 @@ class TestSchedulerQueueOracle(unittest.TestCase):
     def _register(self, pid=None):
         return self.repo.register_agent(self.conn, {
             "code": self.agent, "hostname": "host-teste", "pid": pid or os.getpid(), "version": "teste",
-            "environments": self.amb, "platform": "LINUX", "interpreters": "SH", "critical_config": "hb=10",
+            "environments": self.amb, "platform": "LINUX", "critical_config": "hb=10",
             "script_base_dir": "/opt/tst/base", "node_offline_timeout_s": 120}, lambda p: False)
 
     def test_ordem_da_fila_igual_a_ordenacao_completa(self):
         """CR-013: a janela por prioridade devolve o lote exato da ordem (efetiva, inicio, id), sem os scripts
-        no teto nem os de outro interpretador; inicio = GREATEST(scheduled_at, created_at) (misfire)."""
+        no teto; inicio = GREATEST(scheduled_at, created_at) (misfire). CR-026: qualquer interpretador entra."""
         cat = self.catalog
         scr_sh = self.c["scr"]
         scr_cap = self._fixtures.script("teto", max_parallel_env=1)
-        scr_py = self._fixtures.script("py", interpreter="PYTHON3", path_file="/opt/tst/%s_py.py" % self._fixtures.suf)
+        scr_py = self._fixtures.script("py", interpreter="python3", path_file="/opt/tst/%s_py.py" % self._fixtures.suf)
         cur = self.conn.cursor()
         tck = cat.qualify_table("tickets")
         cases = []
@@ -101,15 +101,16 @@ class TestSchedulerQueueOracle(unittest.TestCase):
             tid, _sid, prio, sched, crt = case
             wait = min(sched, crt)  # minutos desde GREATEST(scheduled_at, created_at)
             return (max(1, prio - wait // env), -wait, tid)
-        expected = [c[0] for c in sorted((c for c in cases if c[1] == scr_sh["id"] and c[3] >= 0), key=chave)]
+        eligible = (scr_sh["id"], scr_py["id"])
+        expected = [c[0] for c in sorted((c for c in cases if c[1] in eligible and c[3] >= 0), key=chave)]
         for batch in (1, 3, 20):
-            got = [x["id"] for x in self.repo.candidates(self.conn, [self.amb], ["SH"], batch, env)]
+            got = [x["id"] for x in self.repo.candidates(self.conn, [self.amb], batch, env)]
             self.assertEqual(got, expected[:batch], "lote %d" % batch)
-        without_env = [x["id"] for x in self.repo.candidates(self.conn, [self.amb], ["SH"], 20, 0)]
-        self.assertEqual(without_env, [c[0] for c in sorted((c for c in cases if c[1] == scr_sh["id"] and c[3] >= 0),
+        without_env = [x["id"] for x in self.repo.candidates(self.conn, [self.amb], 20, 0)]
+        self.assertEqual(without_env, [c[0] for c in sorted((c for c in cases if c[1] in eligible and c[3] >= 0),
                                                         key=lambda c: (c[2], -min(c[3], c[4]), c[0]))])
-        with_py = [x["id"] for x in self.repo.candidates(self.conn, [self.amb], ["SH", "PYTHON3"], 20, env)]
-        self.assertIn(cases[10][0], with_py, "PYTHON3 entra com o interpretador")
+        with_py = [x["id"] for x in self.repo.candidates(self.conn, [self.amb], 20, env)]
+        self.assertIn(cases[10][0], with_py, "CR-026: o script python3 entra sem filtro de interpretador")
         self.assertNotIn(cases[9][0], with_py, "script no teto fica fora")
         self.assertNotIn(cases[11][0], with_py, "agendado no futuro fica fora")
 
@@ -117,7 +118,7 @@ class TestSchedulerQueueOracle(unittest.TestCase):
         aid = self._register()
         self.assertIsInstance(aid, int)
         tid = self._ticket()
-        candidates = self.repo.candidates(self.conn, [self.amb], ["SH"], 10, 30)
+        candidates = self.repo.candidates(self.conn, [self.amb], 10, 30)
         self.assertIn(tid, [c["id"] for c in candidates])
         ok, reason, start = self.repo.claim(self.conn, tid, self.c["scr"]["id"], self.amb, self.agent)
         self.assertEqual((ok, reason), (True, None))
@@ -131,11 +132,12 @@ class TestSchedulerQueueOracle(unittest.TestCase):
         # CR-023 (D6): caminho real executado gravado junto com o PID; acima de 1000 caracteres, o final.
         self.assertTrue(self.repo.register_pid(self.conn, tid, self.agent, 4321, 777,
                                                script_path="/opt/tst/" + "d/" * 600 + "fim.sh",
-                                               interpreter_path="/opt/py311/bin/python3"))
+                                               interpreter_used="/opt/py311/bin/python3"))
         stored = self.repo.get_ticket(self.conn, tid)
         self.assertEqual((len(stored["script_path"]), stored["script_path"][:3], stored["script_path"][-6:]),
                          (1000, "...", "fim.sh"))
-        self.assertEqual(stored["interpreter_path"], "/opt/py311/bin/python3", "CR-025: interpretador usado")
+        self.assertEqual((stored["interpreter_used"], stored["interpreter_path"]), ("/opt/py311/bin/python3", None),
+                         "CR-026: o usado (agente); o digitado so na criacao")
         lost, now = self.repo.heartbeat(self.conn, self.agent, "host-teste", os.getpid(), [tid])
         self.assertEqual(lost, [])
         self.assertIsInstance(now, datetime.datetime)
@@ -174,7 +176,7 @@ class TestSchedulerQueueOracle(unittest.TestCase):
         with self.assertRaises(DuplicateAgent):
             self.repo.register_agent(self.conn, {
                 "code": self.agent, "hostname": "outro-host", "pid": 1, "version": "t", "environments": self.amb,
-                "platform": "LINUX", "interpreters": "SH", "critical_config": "hb=10",
+                "platform": "LINUX", "critical_config": "hb=10",
                 "node_offline_timeout_s": 120}, lambda p: False)
         tid = self._ticket()
         lost, _now = self.repo.heartbeat(self.conn, self.agent, "host-teste", os.getpid(), [tid])

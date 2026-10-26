@@ -384,26 +384,16 @@ class TestAgentsDashboard(_Base):
                                       "submitted_params": json.dumps({"interpreter": "SH"}),
                                       "log_output": object()}
 
-    def test_fila_exige_um_agente_para_o_par_e_ignora_futuro(self):
+    def test_fila_exige_um_agente_no_ambiente_e_ignora_futuro(self):
+        # CR-026: o agente atende qualquer interpretador; so o ambiente conta (o quadro mostra o do cadastro).
         self._queue_diagnostics()
-        self.store.agents[1].update(environments="PRODUCAO", interpreters="PYTHON3")
-        self.store.agents[2].update(environments="HOMOLOGACAO", interpreters="BASH")
+        self.store.agents[1].update(environments="DESENV")
+        self.store.agents[2].update(environments="HOMOLOGACAO")
         result = self.agents.unattended_queue(self.now, THRESHOLDS)
-        self.assertEqual(result, [{"environment": "PRODUCAO", "interpreter": "BASH", "quantity": 2,
+        self.assertEqual(result, [{"environment": "PRODUCAO", "interpreter": "bash", "quantity": 2,
                                      "oldest": self.now - datetime.timedelta(seconds=300)}])
         self.store.agents[2]["environments"] = "PRODUCAO"
         self.assertEqual(self.agents.unattended_queue(self.now, THRESHOLDS), [])
-
-    def test_fila_definido_no_script_atendida_por_agente_saudavel(self):
-        # Os "definido no script" nao sao configurados: todo agente saudavel do ambiente os atende (025d).
-        self._queue_diagnostics()
-        self.store.scripts[3]["interpreter"] = "SHELL_SCRIPT"
-        self.store.agents[1].update(environments="PRODUCAO", interpreters="PYTHON3")
-        self.store.agents[2].update(environments="HOMOLOGACAO", interpreters="BASH")
-        self.assertEqual(self.agents.unattended_queue(self.now, THRESHOLDS), [])
-        self.store.agents[1]["status"] = "STOPPED"
-        self.assertEqual([g["interpreter"] for g in self.agents.unattended_queue(self.now, THRESHOLDS)],
-                         ["SHELL_SCRIPT"])
 
     def test_fila_limiares_e_agente_parado(self):
         self._queue_diagnostics()
@@ -440,9 +430,12 @@ class TestAgentsDashboard(_Base):
         self.assertEqual([t["id"] for t in dashboard["running_without_pid"]], [16])
         self.assertEqual(dashboard["unattended_queue"], [])  # agt-host02 ainda DELAYED
         self.now = self.base + datetime.timedelta(seconds=61)  # agt-host02 AT_RISK
+        # CR-026: HOMOLOGACAO continua atendida pelo agt-host01; sem ele, o ticket 4 fica sem atendente.
+        self.assertEqual(self.svc_agentes.dashboard(self.ctx["admin"])["unattended_queue"], [])
+        self.store.agents[1]["status"] = "STOPPED"
         queue_value = self.svc_agentes.dashboard(self.ctx["admin"])["unattended_queue"]
         self.assertEqual([(g["environment"], g["interpreter"], g["quantity"]) for g in queue_value],
-                         [("HOMOLOGACAO", "SH", 1)])
+                         [("HOMOLOGACAO", "sh", 1)])
         self.assertEqual(queue_value[0]["oldest"], self.store.tickets[4]["scheduled_at"])
 
     def test_diagnosticos_config_divergente_e_parado(self):

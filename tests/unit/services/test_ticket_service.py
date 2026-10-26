@@ -122,11 +122,11 @@ class TestTicketService(_BaseTicket):
         snap = json.loads(raw)
         self.assertEqual(raw, json.dumps(snap, ensure_ascii=False, sort_keys=True))
         self.assertEqual(sorted(snap), sorted(params_compiler._SNAPSHOT_KEYS + ("interpreter_override",)))
-        self.assertEqual((snap["version"], snap["interpreter_override"]), (6, None))
+        self.assertEqual((snap["version"], snap["interpreter_override"]), (7, None))
         self.assertEqual(snap["script_name"], "carga_diaria")
         path_expected = os.path.join(self.base, "carga_diaria.py")
         self.assertEqual((snap["interpreter"], snap["path_file"]),
-                         ("PYTHON3", path_expected))
+                         ("python3", path_expected))
         self.assertEqual(snap["param_type"], "NAMED")
         # Snapshot v5 (CR-005 D2; chaves em ingles no CR-016c2): path_file e absoluto; sem base_dir.
         self.assertNotIn("pasta_base", snap)
@@ -628,24 +628,28 @@ class TestTicketQuery(_BaseTicket):
         self.assertEqual([f["id"] for f in self.svc.detail(self.ctx["admin"], "17")["children"]], [25])
 
     def test_cr025_interpretador_digitado_no_disparo(self):
-        """CR-025: o digitado vai para o snapshot v6, a previa, a auditoria e o detalhe; em branco, como cadastrado."""
+        """CR-025/CR-026: o digitado vai para o snapshot v7, a previa, a auditoria, tbsss_tickets.interpreter_path
+        e o detalhe; em branco, como cadastrado. O usado (interpreter_used) so o agente grava."""
         answers = {"data_ref": "2026-10-20", "modo_exec": "SIMULACAO"}
         r = self.svc.trigger_summary(self.ctx["op.hml"], "1", "HOMOLOGACAO", answers, interpreter="python3.13")
         self.assertEqual((r["errors"], r["summary"]["interpreter"], r["argv"][0]), ({}, "python3.13", "python3.13"))
         self.assertIn("Interpretador informado: python3.13.", r["summary"]["phrase"])
         blank = self.svc.trigger_summary(self.ctx["op.hml"], "1", "HOMOLOGACAO", answers, interpreter="  ")
-        self.assertEqual(blank["summary"]["interpreter"], ticket_service.interpreter_label("PYTHON3"))
+        self.assertEqual(blank["summary"]["interpreter"], "python3")
         tid, errors = self._create(answers=answers, interpreter="/opt/py311/bin/python3")
         self.assertEqual(errors, {})
         snap = json.loads(self.tickets.get(tid)["submitted_params"])
-        self.assertEqual((snap["version"], snap["interpreter_override"]), (6, "/opt/py311/bin/python3"))
+        self.assertEqual((snap["version"], snap["interpreter_override"]), (7, "/opt/py311/bin/python3"))
+        self.assertEqual(self.tickets.get(tid)["interpreter_path"], "/opt/py311/bin/python3")
         det = self.svc.detail(self.ctx["op.hml"], str(tid))
-        self.assertEqual((det["snapshot"]["interpreter_override"], det["interpreter_path"]),
-                         ("/opt/py311/bin/python3", None))
+        self.assertEqual((det["snapshot"]["interpreter_override"], det["interpreter_path"], det["interpreter_used"],
+                          det["snapshot"]["interpreter"]), ("/opt/py311/bin/python3", "/opt/py311/bin/python3", None,
+                                                            "python3"))
         reg = self.audit.list(filters={"action": "TICKET_CREATE", "entity_id": tid})["items"][0]
         self.assertIn("interpretador informado: /opt/py311/bin/python3", reg["detail"])
         tid2, errors = self._create(answers=answers)
         self.assertEqual(json.loads(self.tickets.get(tid2)["submitted_params"])["interpreter_override"], None)
+        self.assertIsNone(self.tickets.get(tid2)["interpreter_path"])
         self.assertNotIn("interpretador", self.audit.list(filters={"action": "TICKET_CREATE",
                                                                     "entity_id": tid2})["items"][0]["detail"])
 

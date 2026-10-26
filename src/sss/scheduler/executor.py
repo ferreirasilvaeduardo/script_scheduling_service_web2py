@@ -89,6 +89,11 @@ def _sss_line(log_fd, text):
         _log.warning("falha ao gravar a linha [SSS] no log (%s)", e.__class__.__name__, extra={"action": "SPAWN"})
 
 
+def sss_line(log_fd, text):
+    """Linha [SSS] no log do ticket, antes de iniciar o script (ex.: o interpretador usado, CR-026)."""
+    _sss_line(log_fd, text)
+
+
 # -----------------------------------------------------------------------------
 # Preparo
 # -----------------------------------------------------------------------------

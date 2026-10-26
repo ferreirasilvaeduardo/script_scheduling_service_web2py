@@ -285,7 +285,7 @@ class TestOracleCatalog(unittest.TestCase):
         self.assertEqual(repo._seq["script_param"], "SSS_TEST_CAT.sq_abc_script_param")
         with mock.patch.object(repo, "_obter_conexao", side_effect=AssertionError("abriu conexao")):
             with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                repo.scripts_insert({"name": "s", "interpreter": "SH", "path_file": "x.sh"}, actor="t")
+                repo.scripts_insert({"name": "s", "interpreter": "sh", "path_file": "x.sh"}, actor="t")
         self.assertEqual(ctx.exception.constraint, "ck_abc_scr_path")
 
     def test_ator_obrigatorio_antes_de_qualquer_sql(self):
@@ -295,7 +295,7 @@ class TestOracleCatalog(unittest.TestCase):
                 for call in (
                     lambda a: self.cat.environments_insert({"name": "AMB_X"}, actor=a),
                     lambda a: self.cat.environments_update(1, {"description": "x"}, actor=a),
-                    lambda a: self.cat.scripts_insert({"name": "s", "interpreter": "SH",
+                    lambda a: self.cat.scripts_insert({"name": "s", "interpreter": "sh",
                                                         "path_file": "/opt/s.sh"}, actor=a),
                     lambda a: self.cat.scripts_update(1, {"description": "x"}, actor=a),
                     lambda a: self.cat.homologation_save(1, [1], actor=a),
@@ -312,15 +312,15 @@ class TestOracleCatalog(unittest.TestCase):
         with mock.patch.object(self.cat, "_obter_conexao", side_effect=AssertionError("abriu conexao")):
             cases = (
                 (lambda: self.cat.environments_insert({"name": "minusculo"}, actor="t"), n("ck", "environments", "name")),
-                (lambda: self.cat.scripts_insert({"name": "s", "interpreter": "SH",
+                (lambda: self.cat.scripts_insert({"name": "s", "interpreter": "sh",
                                                    "path_file": "rel//dupla.sh"}, actor="t"), n("ck", "scripts", "path")),
-                (lambda: self.cat.scripts_insert({"name": "s", "interpreter": "SH",
+                (lambda: self.cat.scripts_insert({"name": "s", "interpreter": "sh",
                                                    "path_file": "/opt/../x.sh"}, actor="t"), n("ck", "scripts", "path")),
-                (lambda: self.cat.scripts_insert({"name": "s", "interpreter": "SH",
+                (lambda: self.cat.scripts_insert({"name": "s", "interpreter": "sh",
                                                    "path_file": "/" + "a" * 500}, actor="t"), n("ck", "scripts", "path")),
                 (lambda: self.cat.scripts_insert({"name": "s", "interpreter": "PERL",
                                                    "path_file": "/opt/s.pl"}, actor="t"), n("ck", "scripts", "int")),
-                (lambda: self.cat.scripts_insert({"name": "s", "interpreter": "SH", "path_file": "/opt/s.sh",
+                (lambda: self.cat.scripts_insert({"name": "s", "interpreter": "sh", "path_file": "/opt/s.sh",
                                                    "max_parallel_env": 0}, actor="t"), n("ck", "scripts", "paral")),
                 (lambda: self.cat.parameters_insert({"code": "Maiusc", "component_type": "TEXT"},
                                                      actor="t"), n("ck", "parameters", "code")),
@@ -425,14 +425,14 @@ class TestOracleCatalog(unittest.TestCase):
 
             # 2. Scripts: UK sensivel a maiusculas, path_file absoluto e esperado nulo-seguro.
             name_scr = "Tst_Scr_" + suffix
-            scr = self.cat.scripts_insert({"name": name_scr, "interpreter": "SH", "param_type": "NAMED",
+            scr = self.cat.scripts_insert({"name": name_scr, "interpreter": "sh", "param_type": "NAMED",
                                             "path_file": "/opt/sss_teste/" + suffix + ".sh"}, actor=actor)
             ids["scripts"].append(scr["id"])
-            other = self.cat.scripts_insert({"name": name_scr.lower(), "interpreter": "SH",
+            other = self.cat.scripts_insert({"name": name_scr.lower(), "interpreter": "sh",
                                               "path_file": "/opt/sss_teste/b.sh"}, actor=actor)
             ids["scripts"].append(other["id"])
             with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                self.cat.scripts_insert({"name": name_scr, "interpreter": "SH",
+                self.cat.scripts_insert({"name": name_scr, "interpreter": "sh",
                                           "path_file": "/opt/sss_teste/c.sh"}, actor=actor)
             self.assertEqual(ctx.exception.constraint, n("uk", "scripts", "name"))
             alt = self.cat.scripts_update(scr["id"], {"script_group": "G1"}, expected={"script_group": None,
@@ -1313,13 +1313,12 @@ class TestOracleAuditAgents(unittest.TestCase):
             finally:
                 c.close()
             self._executar([(
-                "INSERT INTO " + tab_agt + " (id, code, hostname, status, environments, platform, interpreters, "
+                "INSERT INTO " + tab_agt + " (id, code, hostname, status, environments, platform, "
                 "heartbeat_at, critical_config, created_at, created_by) VALUES (:id, :code, 'host-tst', 'ACTIVE', "
-                ":env, 'LINUX', :interp, :hb, 'tst=1', SYSDATE, 'SYSTEM:teste')",
-                {"id": agt_id, "code": mark, "env": environment, "interp": script["interpreter"], "hb": now})])
+                ":env, 'LINUX', :hb, 'tst=1', SYSDATE, 'SYSTEM:teste')",
+                {"id": agt_id, "code": mark, "env": environment, "hb": now})])
             ag = [a for a in self.agt.list() if a["code"] == mark][0]
-            self.assertEqual((ag["platform"], ag["interpreters"], ag["critical_config"]),
-                             ("LINUX", script["interpreter"], "tst=1"))
+            self.assertEqual((ag["platform"], ag["critical_config"]), ("LINUX", "tst=1"))
 
             old = now - datetime.timedelta(minutes=30)
             base = {"script_id": script["id"], "environment": environment, "requested_by": login, "source_ip": mark}

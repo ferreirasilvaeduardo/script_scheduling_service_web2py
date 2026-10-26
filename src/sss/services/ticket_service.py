@@ -652,8 +652,9 @@ class TicketService(object):
             "submitted_params": snapshot,
             "scheduled_at": sched,
             "parent_ticket_id": parent_id,
-            # CR-025: vai para a auditoria do disparo (nao e coluna; o snapshot guarda o mesmo valor)
+            # CR-025: vai para a auditoria do disparo; CR-026 (D4): e para tbsss_tickets.interpreter_path
             "interpreter_override": json.loads(snapshot).get("interpreter_override"),
+            "interpreter_path": json.loads(snapshot).get("interpreter_override"),
         }
         rows = []
         for v in _sorted_items(links):
@@ -983,6 +984,8 @@ class TicketService(object):
             snapshot["path_relative"] = path_guard.is_relative(snap.get("path_file"))
             # CR-025: o digitado no disparo (ou None: como cadastrado)
             snapshot["interpreter_override"] = snap.get("interpreter_override")
+            # CR-026: nome do cadastro (a chave anterior de um snapshot v5/v6 vira o nome equivalente)
+            snapshot["interpreter"] = interpreter_label(snap.get("interpreter"))
         return {
             "id": ticket["id"],
             "script_id": ticket["script_id"],
@@ -1001,6 +1004,7 @@ class TicketService(object):
             "process_id": ticket.get("process_id"),
             "script_path": ticket.get("script_path"),
             "interpreter_path": ticket.get("interpreter_path"),
+            "interpreter_used": ticket.get("interpreter_used"),
             "created_at": ticket.get("created_at"),
             "scheduled_at": ticket.get("scheduled_at"),
             "started_at": ticket.get("started_at"),
@@ -1196,18 +1200,11 @@ class TicketService(object):
             "interpreter": (_snapshot(original) or {}).get("interpreter_override") or "",
         }
 
-# CR-025: rotulo de cada opcao do cadastro (cadastro, disparo e detalhe).
-INTERPRETER_LABELS = (("PYTHON3", u"Python 3"),
-                      ("PYTHON", u"Python"),
-                      ("BASH", u"Bash"),
-                      ("SH", u"Sh (Shell POSIX)"),
-                      ("PYTHON_SCRIPT", u"Python (definido no script)"),
-                      ("SHELL_SCRIPT", u"Shell (definido no script)"))
-
 
 def interpreter_label(key):
-    """Rotulo da opcao do cadastro; o "como cadastrado" do disparo e do detalhe (CR-025)."""
-    return dict(INTERPRETER_LABELS).get(key, key)
+    """Interpretador do cadastro como aparece no disparo e no detalhe (CR-026: o proprio nome, ex.: python3;
+    a chave anterior de um snapshot v5/v6 aparece pelo nome equivalente)."""
+    return path_guard.registered_name(key) or key
 
 
 _default = None

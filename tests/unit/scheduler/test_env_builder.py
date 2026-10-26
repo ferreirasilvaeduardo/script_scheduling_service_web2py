@@ -114,7 +114,7 @@ class TestEnvBuilder(unittest.TestCase):
         ticket = {"id": 41, "environment": "PRODUCAO", "parent_ticket_id": 7, "schedule_id": 3, "priority": 2,
                   "started_at": datetime.datetime(2026, 10, 20, 3, 0, 5),
                   "scheduled_at": datetime.datetime(2026, 10, 20, 3, 0)}
-        snap = {"script_id": 12, "script_name": "Carga Faturas", "interpreter": "PYTHON3"}
+        snap = {"script_id": 12, "script_name": "Carga Faturas", "interpreter": "python3"}
         env_name = dict(AMB, description="Produção faturamento")
         log = "/srv/sss/logs/producao/carga_faturas/2026/10/20/03/00/ticket_41.log.parcial"
         with mock.patch.object(masking, "MASKER", masking.Masker()):
@@ -131,7 +131,7 @@ class TestEnvBuilder(unittest.TestCase):
             "SSS_ENVIRONMENT": "PRODUCAO", "SSS_ENVIRONMENT_DESCRIPTION": "Produção faturamento",
             "SSS_ENVIRONMENT_DSN": "dbprod:1521/FAT", "SSS_ENVIRONMENT_USER": "fat_app",
             "SSS_ENVIRONMENT_CONNECTION": "fat_app/S3nh@Forte@dbprod:1521/FAT",
-            "SSS_SCRIPT_ID": "12", "SSS_SCRIPT_NAME": "Carga Faturas", "SSS_INTERPRETER": "PYTHON3",
+            "SSS_SCRIPT_ID": "12", "SSS_SCRIPT_NAME": "Carga Faturas", "SSS_INTERPRETER": "python3",
             "SSS_SCRIPT_FILE": SCRIPT, "SSS_SCRIPT_DIR": "/opt/automacoes/scripts/faturamento",
             "SSS_LOG_DIR": "/srv/sss/logs/producao/carga_faturas/2026/10/20/03/00",
             "SSS_LOG_FILE": "ticket_41.log.parcial",
@@ -223,7 +223,7 @@ class TestEnvBuilder(unittest.TestCase):
         with mock.patch.object(masking, "MASKER", masking.Masker()):
             env = env_builder.build(_cfg(), _secrets({"PRODUCAO": EnvironmentSecret("fat_app", "S3nh@Forte")}),
                                         ticket, dict(AMB, description="x"), SCRIPT, WORK, dict(DAEMON), "LINUX",
-                                        snapshot={"script_id": 12, "script_name": "C", "interpreter": "SH",
+                                        snapshot={"script_id": 12, "script_name": "C", "interpreter": "sh",
                                                   "path_file": "/opt/automacoes/atual/carga.sh"},
                                         schedule={"name": "N", "recurrence_type": "CRON"},
                                         log_path="/srv/sss/logs/x/ticket_41.log.parcial", timeout_sec=60,

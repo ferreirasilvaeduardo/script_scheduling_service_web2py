@@ -30,7 +30,7 @@ class TestRepoInputsOracle(_OracleContract, unittest.TestCase, BaseInputsContrac
         conn = catalog._obter_conexao()
         try:
             queue.register_agent(conn, {"code": code, "hostname": "tst-host", "pid": 1, "version": "t",
-                                        "environments": environments, "platform": "LINUX", "interpreters": "SH",
+                                        "environments": environments, "platform": "LINUX",
                                         "critical_config": None, "node_offline_timeout_s": 60},
                                  process_exists=lambda pid: False)
             if stale:

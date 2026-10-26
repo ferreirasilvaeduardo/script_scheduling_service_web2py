@@ -4,7 +4,6 @@ import copy
 import datetime
 
 from sss.persistence.contracts.repo_agents import RepoAgents
-from sss.platform import path_guard
 
 
 class RepoAgentsFake(RepoAgents):
@@ -37,7 +36,7 @@ class RepoAgentsFake(RepoAgents):
                          if k not in ("submitted_params", "log_output")) for t in running]
 
     def unattended_queue(self, now, thresholds):
-        """Agrupa a fila vencida sem agente saudavel para o ambiente e o interpretador."""
+        """Agrupa por ambiente e interpretador a fila vencida cujo ambiente nenhum agente saudavel atende."""
         served = set()
         for ag in self.list():
             hb = ag.get("heartbeat_at")
@@ -46,10 +45,8 @@ class RepoAgentsFake(RepoAgents):
             age = max(0, int((now - hb).total_seconds()))  # mesmo arredondamento de agents_service.saude
             if age >= 2 * thresholds.heartbeat_interval_s and age > thresholds.fence_timeout_s:
                 continue
-            # Os "definido no script" (CR-025) nao sao configurados: todo agente saudavel os atende.
-            interpreters = [i.strip() for i in (ag.get("interpreters") or "").split(",")] + list(path_guard.SCRIPT_DEFINED)
-            served.update((a.strip(), i) for a in (ag.get("environments") or "").split(",")
-                             for i in interpreters if a.strip() and i)
+            # CR-026: o agente atende qualquer interpretador; basta o ambiente.
+            served.update(a.strip() for a in (ag.get("environments") or "").split(",") if a.strip())
         groups = {}
         interpreters = dict((sid, s.get("interpreter")) for sid, s in self._store.scripts.items())
         with self._store.lock_tickets:
@@ -60,7 +57,7 @@ class RepoAgentsFake(RepoAgents):
                 start = max(t["scheduled_at"], t.get("created_at") or t["scheduled_at"])
                 # Mesmo criterio do claim: interpretador do cadastro, sem ler o snapshot (CR-008, R-15).
                 key = (t["environment"], interpreters.get(t["script_id"]))
-                if key in served:
+                if key[0] in served:
                     continue
                 group = groups.setdefault(key, {"environment": key[0], "interpreter": key[1],
                                                   "quantity": 0, "oldest": start})

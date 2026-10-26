@@ -33,7 +33,7 @@ SH = "/bin/sh"
 
 _AgentStub = collections.namedtuple("_Agente", "agent_id child_locale env_passthrough exec_users exec_work_dir")
 _Cfg = collections.namedtuple("_Cfg", "agent")
-_CfgSnap = collections.namedtuple("_CfgSnap", "interpreters")
+_CfgSnap = collections.namedtuple("_CfgSnap", "search_path")  # CR-026: nomes no PATH do agente
 
 
 def _wait(condition, deadline=10.0):
@@ -496,8 +496,10 @@ class TestSnapshotV4(_Base):
                               "path_file": self.script, "param_type": "NAMED", "args": ["--data", "2026-10-13"],
                               "answers": {}, "sensitive": [], "compiled_at": "2026-10-13 10:47:00"},
                              ensure_ascii=False, sort_keys=True)
-        snap, argv, script_real = pc.validate_snapshot(snap_js, _CfgSnap({"PYTHON3": sys.executable}))
-        self.assertEqual(argv, [sys.executable, "-I", script_real, "--data", "2026-10-13"])
+        # Snapshot v5 com a chave anterior ao CR-026: PYTHON3 vira o python3 do PATH do agente, com -I.
+        python3 = os.path.join(os.path.dirname(sys.executable), "python3")
+        snap, argv, script_real = pc.validate_snapshot(snap_js, _CfgSnap(os.path.dirname(sys.executable)))
+        self.assertEqual(argv, [python3, "-I", script_real, "--data", "2026-10-13"])
         wd = executor.prepare_directory(self.work, 21)
         cfg = _Cfg(_AgentStub("srv-01", "C.UTF-8", (), (), None))
         fd, partial = executor.open_log(self.logs, "DEV", snap["script_name"], STARTED_AT, 21, snap["script_id"])

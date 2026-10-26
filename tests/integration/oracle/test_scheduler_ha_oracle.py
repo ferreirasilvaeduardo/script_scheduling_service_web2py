@@ -84,7 +84,7 @@ class TestExpansionOracle(unittest.TestCase):
         self.assertEqual((t["schedule_id"], t["requested_by"], t["created_by"], t["scheduled_at"], t["status"]),
                          (ok["id"], self.c["login"], "SYSTEM:%s" % self.agent, ok["next_run_at"], "PENDING"))
         snap = json.loads(t["submitted_params"])
-        self.assertEqual((snap["version"], snap["path_file"]), (6, self.c["scr"]["path_file"]))
+        self.assertEqual((snap["version"], snap["path_file"]), (7, self.c["scr"]["path_file"]))
         self.assertEqual([x["answer_value"] for x in self.obter_repo("tickets").answers(t["id"])], ["valor-a"])
         self.assertEqual((r_bad["active"], r_bad["pause_reason"], r_bad["updated_by"]),
                          ("N", "INVALID_PARAM", "SYSTEM:%s" % self.agent))

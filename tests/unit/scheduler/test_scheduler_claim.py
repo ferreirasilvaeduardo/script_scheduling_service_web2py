@@ -37,7 +37,7 @@ AMB = "DEV"
 ENV_PASSWORD = "SenhaDoAmbiente#2026"
 
 _Agent = collections.namedtuple("_Agent", (
-    "agent_id", "environments", "work_dir", "interpreters", "exec_users",
+    "agent_id", "environments", "work_dir", "exec_users",
     "exec_work_dir", "heartbeat_interval_s", "fence_timeout_s", "node_offline_timeout_s", "kill_grace_s",
     "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "queue_aging_min", "child_locale",
     "cancel_poll_interval_s", "orchestrator_interval_s", "max_parallel_jobs",
@@ -99,7 +99,7 @@ class _Db(object):
 
     # -- massa
 
-    def script(self, body, timeout=None, active="Y", max_par=5, interpreter="SH", homologate=True):
+    def script(self, body, timeout=None, active="Y", max_par=5, interpreter="sh", homologate=True):
         self.seq += 1
         sid = self.seq
         path = os.path.join(self.base, "s%d.sh" % sid)
@@ -114,7 +114,7 @@ class _Db(object):
         self.ctx = dict(self.ctx, scripts=frozenset(set(self.ctx["scripts"]) | {sid}))
         return sid
 
-    def ticket(self, sid, version=5, args=(), path_file=None, interpreter=None, schedule_id=None,
+    def ticket(self, sid, version=7, args=(), path_file=None, interpreter=None, schedule_id=None,
                override=None):
         self.seq += 1
         s = self.scripts[sid]
@@ -142,13 +142,13 @@ class _Db(object):
         self._fail("check_config")
         return []
 
-    def candidates(self, conn, environments, interpreters, batch, env_min):
+    def candidates(self, conn, environments, batch, env_min):
+        # CR-026: qualquer interpretador; so o ambiente escolhe.
         self._fail("candidates")
         with self.lock:
             return [{"id": t["id"], "script_id": t["script_id"], "environment": t["environment"]}
                     for t in sorted(self.tickets.values(), key=lambda x: x["id"])
-                    if t["status"] == "PENDING" and t["cancel_requested"] == "N"
-                    and self.scripts[t["script_id"]]["interpreter"] in interpreters][:batch]
+                    if t["status"] == "PENDING" and t["cancel_requested"] == "N"][:batch]
 
     def claim(self, conn, tid, sid, environment, agent_id):
         self._fail("claim")
@@ -186,12 +186,12 @@ class _Db(object):
         self._fail("is_cancel_requested")
         return self.tickets[tid]["cancel_requested"] == "Y"
 
-    def register_pid(self, conn, tid, agent_id, pid, start, script_path=None, interpreter_path=None):
+    def register_pid(self, conn, tid, agent_id, pid, start, script_path=None, interpreter_used=None):
         self._fail("register_pid")
         t = self.tickets[tid]
         if t["status"] != "RUNNING" or t["agent_id"] != agent_id:
             return False
-        t.update(process_id=pid, process_start=start, script_path=script_path, interpreter_path=interpreter_path)
+        t.update(process_id=pid, process_start=start, script_path=script_path, interpreter_used=interpreter_used)
         return True
 
     def return_to_queue(self, conn, tid, agent_id):
@@ -359,7 +359,7 @@ class _Base(unittest.TestCase):
 
     def cfg(self, **changes):
         base = dict(agent_id="srv-t", environments=(AMB,), work_dir=self.work,
-                    interpreters=(("SH", "/bin/sh"),), exec_users=(), exec_work_dir=None,
+                    exec_users=(), exec_work_dir=None,
                     heartbeat_interval_s=0.2, fence_timeout_s=40, node_offline_timeout_s=120, kill_grace_s=1,
                     misfire_policy="RUN_ONCE", misfire_tolerance_s=300, cron_horizon_days=366,
                     queue_aging_min=30, child_locale="C.UTF-8",
@@ -442,29 +442,34 @@ class TestExecution(_Base):
         self.assertIn("%s|\n" % real, self.db.tickets[tid]["log"])
         self.assertEqual(self.db.tickets[tid]["script_path"], real)
 
-    def test_cr025_definido_no_script_e_digitado(self):
-        # CR-025: SHELL_SCRIPT roda pelo #!; o digitado no disparo (so o nome) vence; o usado (sem resolver links) vai com o PID.
-        sid = self.db.script("#!/bin/sh\necho \"rodou $0\"\n", interpreter="SHELL_SCRIPT")
-        by_shebang = self.db.ticket(sid, version=6)
-        typed = self.db.ticket(self.db.script("echo digitado\n"), version=6, override="sh")
+    def test_cr026_ordem_shebang_digitado_cadastro(self):
+        # CR-026 (D5): #! existente vence o digitado; sem #!, o digitado; sem os dois, o cadastro (qualquer
+        # interpretador: o agente nao filtra). O usado vai com o PID (interpreter_used) e abre o log.
+        sh = os.path.abspath(shutil.which("sh"))
+        bash = os.path.abspath(shutil.which("bash"))
+        by_shebang = self.db.ticket(self.db.script("#!/bin/sh\necho shebang\n", interpreter="bash"),
+                                    override="bash")
+        typed = self.db.ticket(self.db.script("echo digitado\n", interpreter="bash"), override="sh")
+        registered = self.db.ticket(self.db.script("echo cadastro\n", interpreter="bash"))
+        ignored = self.db.ticket(self.db.script("#!/nao/existe/sh\necho ignorado\n"))
+        legacy = self.db.ticket(self.db.script("echo legado\n"), version=5, interpreter="SH")
+        tids = (by_shebang, typed, registered, ignored, legacy)
         self.start_agent()
-        self.run_loop(lambda: self.finished(by_shebang)() and self.finished(typed)())
-        self.assertEqual(self.final(by_shebang), ("SUCCESS", "EXIT_OK", 0))
-        self.assertEqual(self.db.tickets[by_shebang]["interpreter_path"], "/bin/sh")
-        self.assertEqual(self.final(typed), ("SUCCESS", "EXIT_OK", 0))
-        self.assertEqual(self.db.tickets[typed]["interpreter_path"], os.path.abspath(shutil.which("sh")))
+        self.run_loop(lambda: all(self.finished(t)() for t in tids))
+        for tid in tids:
+            self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0), tid)
+        used = dict((tid, self.db.tickets[tid]["interpreter_used"]) for tid in tids)
+        self.assertEqual(used, {by_shebang: "/bin/sh", typed: sh, registered: bash, ignored: sh, legacy: sh})
+        self.assertIn("[SSS] interpretador usado: /bin/sh", self.db.tickets[by_shebang]["log"])
+        self.assertIn("[SSS] #! ignorado: /nao/existe/sh nao encontrado", self.db.tickets[ignored]["log"])
 
-    def test_cr025_shebang_invalido_e_nome_inexistente(self):
-        sem = self.db.ticket(self.db.script("echo sem shebang\n", interpreter="SHELL_SCRIPT"), version=6)
-        nome = self.db.ticket(self.db.script("echo x\n"), version=6, override="interpretador_que_nao_existe")
+    def test_cr026_nenhum_interpretador_existe(self):
+        nome = self.db.ticket(self.db.script("echo x\n"), override="interpretador_que_nao_existe")
         self.start_agent()
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            self.run_loop(lambda: self.finished(sem)() and self.finished(nome)())
-        self.assertEqual((self.final(sem)[:2], self.final(nome)[:2]),
-                         (("FAILED", "PRECHECK_FAILED"), ("FAILED", "PRECHECK_FAILED")))
-        text = "\n".join(logs.output)
-        self.assertIn("NO_SHEBANG", text)
-        self.assertIn("INTERPRETER_NOT_FOUND", text)
+            self.run_loop(self.finished(nome))
+        self.assertEqual(self.final(nome)[:2], ("FAILED", "PRECHECK_FAILED"))
+        self.assertIn("INTERPRETER_NOT_FOUND", "\n".join(logs.output))
 
     def test_cr023_relativo_sem_base_e_precheck(self):
         sid = self.db.script("echo nunca\n")
@@ -623,14 +628,6 @@ class TestPrevalidation(_Base):
         for tid in tids:
             self.assertEqual(self.final(tid), ("FAILED", "PRECHECK_FAILED", -4))
             self.assertIn("[SSS] pre-validacao recusada: UNSUPPORTED_VERSION", self.db.tickets[tid]["log"])
-
-    def test_interpretador_nao_mapeado(self):
-        # O script e BASH, mas este agente so mapeia SH; a fila de teste entrega o ticket mesmo assim.
-        tid = self.db.ticket(self.db.script("echo x\n", interpreter="BASH"))
-        self.db.candidates = lambda conn, a, i, batch, env: [
-            {"id": tid, "script_id": self.db.tickets[tid]["script_id"], "environment": AMB}
-        ] if self.db.tickets[tid]["status"] == "PENDING" else []
-        self._refusal(tid, "INTERPRETER_UNAVAILABLE")
 
     def test_caminho_inexistente(self):
         sid = self.db.script("echo x\n")

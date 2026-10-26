@@ -15,7 +15,6 @@ import time
 import unittest
 from unittest import mock
 
-from sss.platform import path_guard
 from sss.platform import os_platform
 from sss.platform.os_platform import posix
 
@@ -558,15 +557,6 @@ class TestPathValidations(unittest.TestCase):
     def test_inexistente_e_nao_arquivo(self):
         self.assertEqual(self.validate(os.path.join(self.base, "nao.py")), "NOT_FOUND")
         self.assertEqual(self.validate(os.path.join(self.base, "sub")), "NOT_A_FILE")
-
-    def test_interpretador_pelo_validar_executavel(self):
-        real = os_platform.validate_interpreter_executable("/bin/sh")
-        self.assertEqual(real, os.path.realpath("/bin/sh"))
-        with mock.patch.object(path_guard, "validate_executable", return_value="/x") as ve:
-            os_platform.validate_interpreter_executable("/usr/bin/python3", sss_dirs=("/srv",))
-        ve.assert_called_once_with("/usr/bin/python3", sss_dirs=("/srv",))
-        with self.assertRaises(path_guard.PathGuardError):
-            os_platform.validate_interpreter_executable("bin/sh")
 
 
 class TestRestrictedFile(unittest.TestCase):

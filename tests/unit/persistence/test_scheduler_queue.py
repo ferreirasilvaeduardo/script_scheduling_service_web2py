@@ -114,14 +114,15 @@ class TestWithoutDb(unittest.TestCase):
 
     def test_candidatos_sql_literal_e_binds_gerados(self):
         # CR-013: catalogo do agente, RUNNING por par e a janela por ambiente x prioridade em ix_tbsss_tck_queue.
-        conn = _Conn([("FROM OWN_X.pfx_scripts WHERE interpreter IN", (3, [(3, 2), (4, 1), (5, 1)])),
+        conn = _Conn([("SELECT id, max_parallel_env FROM OWN_X.pfx_scripts", (3, [(3, 2), (4, 1), (5, 1)])),
                       ("WHERE status = 'RUNNING' AND environment IN", (1, [(4, "PRD", 1)])),
                       ("UNION ALL", (2, [(7, 3, "PRD"), (8, 4, "HML")]))])
-        items = self.repo.candidates(conn, ["PRD", "HML"], ["PYTHON3", "SH"], 10, 30)
+        items = self.repo.candidates(conn, ["PRD", "HML"], 10, 30)
         self.assertEqual(items, [{"id": 7, "script_id": 3, "environment": "PRD"}, {"id": 8, "script_id": 4, "environment": "HML"}])
         (sql_scr, b_scr), (sql_run, b_run), (sql, binds) = conn.executed
-        self.assertIn("interpreter IN (:int0, :int1)", sql_scr)
-        self.assertEqual(b_scr, {"int0": "PYTHON3", "int1": "SH"})
+        # CR-026: o agente atende qualquer interpretador; o catalogo e lido inteiro (id e teto).
+        self.assertNotIn("interpreter", sql_scr)
+        self.assertFalse(b_scr)
         self.assertIn("environment IN (:env0, :env1) GROUP BY script_id, environment", sql_run)
         self.assertEqual(b_run, {"env0": "PRD", "env1": "HML"})
         start = sql_ident.FBI_TCK_QUEUE_START
@@ -139,22 +140,22 @@ class TestWithoutDb(unittest.TestCase):
         self.assertEqual((binds["s0_0"], binds["s0_1"]), (3, 5))
         self.assertIn("(script_id IN (:s1_0, :s1_1, :s1_2))", sql)
         self.assertEqual((binds["batch_size"], binds["env_min"], binds["env0"], binds["env1"]), (10, 30, "PRD", "HML"))
-        self.assertEqual(self.repo.candidates(conn, [], ["SH"], 10, 0), [])
-        self.assertEqual(self.repo.candidates(conn, ["PRD"], [], 10, 0), [])
+        self.assertEqual(self.repo.candidates(conn, [], 10, 0), [])
+        self.assertEqual(self.repo.candidates(conn, ["PRD"], 0, 0), [])
 
     def test_candidatos_sem_script_elegivel_nao_le_a_fila(self):
-        conn = _Conn([("FROM OWN_X.pfx_scripts WHERE interpreter IN", (1, [(4, 1)])),
+        conn = _Conn([("SELECT id, max_parallel_env FROM OWN_X.pfx_scripts", (1, [(4, 1)])),
                       ("WHERE status = 'RUNNING' AND environment IN", (1, [(4, "PRD", 1)]))])
-        self.assertEqual(self.repo.candidates(conn, ["PRD"], ["SH"], 10, 30), [])
+        self.assertEqual(self.repo.candidates(conn, ["PRD"], 10, 30), [])
         self.assertEqual(len(conn.executed), 2, "todos no teto: sem a janela")
         conn = _Conn([])
-        self.assertEqual(self.repo.candidates(conn, ["PRD"], ["PERL"], 10, 30), [])
-        self.assertEqual(len(conn.executed), 1, "nenhum script do interpreter: so o catalogo")
+        self.assertEqual(self.repo.candidates(conn, ["PRD"], 10, 30), [])
+        self.assertEqual(len(conn.executed), 1, "catalogo vazio: so o catalogo")
 
     def test_candidatos_lista_longa_vira_or_de_listas(self):
-        conn = _Conn([("FROM OWN_X.pfx_scripts WHERE interpreter IN", (1, [(i, 1) for i in range(1, 1902)])),
+        conn = _Conn([("SELECT id, max_parallel_env FROM OWN_X.pfx_scripts", (1, [(i, 1) for i in range(1, 1902)])),
                       ("UNION ALL", (0, []))])
-        self.repo.candidates(conn, ["PRD"], ["SH"], 10, 30)
+        self.repo.candidates(conn, ["PRD"], 10, 30)
         sql = conn.executed[-1][0]
         chunk = sql[sql.index("AND (script_id IN"):sql.index(") ORDER BY")]
         self.assertEqual(chunk.count("script_id IN ("), 3, "1.901 scripts: listas de ate 900 (ORA-01795)")
@@ -252,7 +253,7 @@ class TestWithoutDb(unittest.TestCase):
 
     def _agent_data(self, **changes):
         d = {"code": AGENT, "hostname": "host-a", "pid": 100, "version": "1.0", "environments": "PRD",
-             "platform": "LINUX", "interpreters": "PYTHON3,SH", "critical_config": "hb=10",
+             "platform": "LINUX", "critical_config": "hb=10",
              "node_offline_timeout_s": 120}
         d.update(changes)
         return d

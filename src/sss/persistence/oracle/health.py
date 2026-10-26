@@ -9,12 +9,11 @@ import datetime
 
 from sss.persistence import db_conn
 from sss.core import sql_ident
-from sss.platform import path_guard
 
 _RUN = "(" + sql_ident.FBI_TCK_RUN_AGENT_CASE + ")"
 _START = sql_ident.FBI_TCK_QUEUE_START
 
-COLS_AGENT = ("code", "status", "heartbeat_at", "environments", "interpreters", "critical_config")
+COLS_AGENT = ("code", "status", "heartbeat_at", "environments", "critical_config")
 COLS_NO_PID = ("id", "script_id", "environment", "agent_id", "started_at")
 
 # {agt}, {tck}, {scr}, {amb}, {aud} e {ctl} recebem apenas nomes qualificados por sql_ident (validados).
@@ -46,9 +45,8 @@ _SQL_VERSION = "SELECT schema_version FROM {ctl} WHERE id = 1"
 
 
 def served_pairs(agents, now, thresholds):
-    """(ambiente, interpretador) servidos por agente ATIVO com saude OK ou DELAYED (README §13), com o mesmo
-    arredondamento de agents_service.health. Os "definido no script" (CR-025) nao sao configurados: todo agente
-    saudavel do ambiente os atende."""
+    """Ambientes servidos por agente ATIVO com saude OK ou DELAYED (README §13), com o mesmo arredondamento de
+    agents_service.health. CR-026: o agente atende qualquer interpretador; o par virou so o ambiente."""
     served = set()
     for ag in agents:
         hb = ag.get("heartbeat_at")
@@ -57,17 +55,15 @@ def served_pairs(agents, now, thresholds):
         age = max(0, int((now - hb).total_seconds()))
         if age >= 2 * thresholds.heartbeat_interval_s and age > thresholds.fence_timeout_s:
             continue
-        interpreters = [i.strip() for i in (ag.get("interpreters") or "").split(",")] + list(path_guard.SCRIPT_DEFINED)
-        served.update((a.strip(), i) for a in (ag.get("environments") or "").split(",")
-                         for i in interpreters if a.strip() and i)
+        served.update(a.strip() for a in (ag.get("environments") or "").split(",") if a.strip())
     return served
 
 
 def unattended_queue(queue_rows, served):
-    """Grupos (ambiente, interpretador) do SQL_QUEUE que nenhum par atendido cobre, por ambiente e interpretador."""
+    """Grupos (ambiente, interpretador) do SQL_QUEUE cujo ambiente nenhum agente saudavel atende."""
     groups = [{"environment": env, "interpreter": interp, "quantity": int(count),
                "oldest": old.replace(microsecond=0)}
-              for env, interp, count, old in queue_rows if (env, interp) not in served]
+              for env, interp, count, old in queue_rows if env not in served]
     groups.sort(key=lambda g: (g["environment"], g["interpreter"]))
     return groups
 

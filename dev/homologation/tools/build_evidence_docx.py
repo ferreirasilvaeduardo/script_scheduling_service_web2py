@@ -593,10 +593,11 @@ RODADAS["20261026_r2"] = dict(RODADAS["20261026"], **{
     "adaptacao": dict(RODADAS["20261026"]["adaptacao"], **{
         "CT-01": ADAPTACAO["CT-01"] + u" O banco não foi recriado desde a rodada de 26/10: o admin já estava com a "
                                       u"senha escolhida (SSS_ADMIN_START=new).",
-        "CT-32": RODADAS["20261026"]["adaptacao"]["CT-32"] + u" No CR-025d entraram mais dois casos: Python definido "
-                 u"no script com #!/usr/bin/env python3 (o -E -s passou para depois do python3, porque o env não "
-                 u"aceita -E) e o Python de um virtualenv digitado no disparo (~/.sss_homolog_venv/bin/python3, um "
-                 u"link), executado sem resolver o link: o log mostra o prefixo do venv.",
+        "CT-32": RODADAS["20261026"]["adaptacao"]["CT-32"] + (
+            u" No CR-025d entraram mais dois casos: Python definido no script com #!/usr/bin/env python3 (o -E -s "
+            u"passou para depois do python3, porque o env não aceita -E) e o Python de um virtualenv digitado no "
+            u"disparo (~/.sss_homolog_venv/bin/python3, um link), executado sem resolver o link: o log mostra o "
+            u"prefixo do venv."),
     }),
     "observacoes": [
         u"Rodada do CR-025d. A revisão independente da documentação contra o código achou três defeitos de código, "

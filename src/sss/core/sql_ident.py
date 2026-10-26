@@ -298,7 +298,7 @@ def _build_table_registry():
             ('script_group', {'name': 'script_group', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
             ('category', {'name': 'category', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
             ('stage', {'name': 'stage', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
-            ('interpreter', {'name': 'interpreter', 'tipo': 'VARCHAR2(15 CHAR)', 'not_null': True, 'default': None}),
+            ('interpreter', {'name': 'interpreter', 'tipo': 'VARCHAR2(100 CHAR)', 'not_null': True, 'default': None}),
             ('path_file', {'name': 'path_file', 'tipo': 'VARCHAR2(500 CHAR)', 'not_null': True, 'default': None}),
             ('param_type', {'name': 'param_type', 'tipo': 'VARCHAR2(15 CHAR)', 'not_null': True, 'default': "'NAMED'"}),
             ('max_parallel_env', {'name': 'max_parallel_env', 'tipo': 'NUMBER(3)', 'not_null': True, 'default': '1'}),
@@ -315,7 +315,7 @@ def _build_table_registry():
             ('active', {'sufixo': 'active', 'expr': "active IN ('Y', 'N')"}),
             ('paral', {'sufixo': 'paral', 'expr': "max_parallel_env BETWEEN 1 AND 999"}),
             # CR-025: PYTHON (2o Python do servidor) e os "definido no script" (#!)
-            ('int', {'sufixo': 'int', 'expr': "interpreter IN ('PYTHON3','PYTHON','BASH','SH','PYTHON_SCRIPT','SHELL_SCRIPT')"}),
+            ('int', {'sufixo': 'int', 'expr': "interpreter IN ('python','python3','sh','bash')"}),
             # CR-023: absoluto ou relativo a [agent] script_base_dir (sem exigir a '/' inicial)
             ('path', {'sufixo': 'path', 'expr': "INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\\') = 0"}),
             ('tmout', {'sufixo': 'tmout', 'expr': "timeout_s IS NULL OR timeout_s > 0"}),
@@ -564,6 +564,7 @@ def _build_table_registry():
             ('script_path', {'name': 'script_path', 'tipo': 'VARCHAR2(1000 CHAR)', 'not_null': False, 'default': None}),
             # CR-025: interpretador executado (configurado, do #! ou digitado no disparo), gravado com o PID
             ('interpreter_path', {'name': 'interpreter_path', 'tipo': 'VARCHAR2(1000 CHAR)', 'not_null': False, 'default': None}),
+            ('interpreter_used', {'name': 'interpreter_used', 'tipo': 'VARCHAR2(1000 CHAR)', 'not_null': False, 'default': None}),
             ('status', {'name': 'status', 'tipo': 'VARCHAR2(15 CHAR)', 'not_null': True, 'default': "'PENDING'"}),
             ('priority', {'name': 'priority', 'tipo': 'NUMBER(1)', 'not_null': True, 'default': '2'}),
             ('cancel_requested', {'name': 'cancel_requested', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'N'"}),
@@ -659,7 +660,6 @@ def _build_table_registry():
             ('version', {'name': 'version', 'tipo': 'VARCHAR2(20 CHAR)', 'not_null': False, 'default': None}),
             ('environments', {'name': 'environments', 'tipo': 'VARCHAR2(1000 CHAR)', 'not_null': False, 'default': None}),
             ('platform', {'name': 'platform', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': False, 'default': None}),
-            ('interpreters', {'name': 'interpreters', 'tipo': 'VARCHAR2(100 CHAR)', 'not_null': False, 'default': None}),
             # CR-023 (D7): pasta base do caminho relativo, publicada pelo agente no registro
             ('script_base_dir', {'name': 'script_base_dir', 'tipo': 'VARCHAR2(500 CHAR)', 'not_null': False, 'default': None}),
             ('status', {'name': 'status', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': True, 'default': "'ACTIVE'"}),

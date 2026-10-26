@@ -2329,7 +2329,7 @@ END;
   * `ck_tbsss_scr_ptype (param_type IN ('NAMED','POSITIONAL','NONE'))`
   * `ck_tbsss_scr_active`
   * `ck_tbsss_scr_paral (max_parallel_env BETWEEN 1 AND 999)`
-  * `ck_tbsss_scr_int (interpreter IN ('PYTHON3','PYTHON','BASH','SH','PYTHON_SCRIPT','SHELL_SCRIPT'))` (CR-025: `PYTHON`, segundo Python do servidor, e os "definido no script", que usam o `#!`)
+  * `ck_tbsss_scr_int (interpreter IN ('python','python3','sh','bash'))` (CR-026: só o nome, procurado no `PATH` do agente quando o script não tem `#!` válido nem interpretador informado no disparo)
   * `ck_tbsss_scr_path (INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\') = 0)` (formato do §8.5, CR-005; desde o CR-023 sem exigir a `/` inicial, porque o caminho pode ser relativo a `[agent] script_base_dir`)
   * `ck_tbsss_scr_tmout (timeout_s IS NULL OR timeout_s > 0)`
   * `ck_tbsss_scr_upd` (colunas de registro, CR-006)
@@ -2340,7 +2340,7 @@ END;
   * `script_group VARCHAR2(30 CHAR)`
   * `category VARCHAR2(30 CHAR)`
   * `stage VARCHAR2(30 CHAR)`
-  * `interpreter VARCHAR2(15 CHAR) NOT NULL` (lógico; o executável é mapeado por agente, §8.5; `PYTHON_SCRIPT` e `SHELL_SCRIPT` usam o `#!` do script, CR-025)
+  * `interpreter VARCHAR2(100 CHAR) NOT NULL` (CR-026: `python`, `python3`, `sh` ou `bash`; a ordem na execução é o `#!`, o informado no disparo e este, §8.5)
   * `path_file VARCHAR2(500 CHAR) NOT NULL` (caminho do script, absoluto ou relativo a `[agent] script_base_dir` de cada agente, §8.5, CR-005, CR-023)
   * `param_type VARCHAR2(15 CHAR) DEFAULT 'NAMED' NOT NULL`
   * `max_parallel_env NUMBER(3) DEFAULT 1 NOT NULL`
@@ -2518,7 +2518,8 @@ END;
   * `process_id NUMBER(10)` (CR-007: comporta PIDs de até 10 dígitos, como no HP-UX)
   * `process_start NUMBER(20)`
   * `script_path VARCHAR2(1000 CHAR)` (CR-023: caminho real executado, gravado pelo agente junto com o PID; acima de 1000 caracteres, só o final, com `...` na frente)
-  * `interpreter_path VARCHAR2(1000 CHAR)` (CR-025: interpretador executado, o configurado, o do `#!` ou o digitado no disparo, gravado junto com o PID, com a mesma regra de tamanho)
+  * `interpreter_path VARCHAR2(1000 CHAR)` (CR-026: o interpretador digitado no disparo, caminho ou nome, gravado pelo nó web na criação; vazio quando não informado)
+  * `interpreter_used VARCHAR2(1000 CHAR)` (CR-026: o interpretador executado, o do `#!`, o digitado ou o do cadastro, gravado pelo agente junto com o PID, com a mesma regra de tamanho do `script_path`)
   * `status VARCHAR2(15 CHAR) DEFAULT 'PENDING' NOT NULL`
   * `priority NUMBER(1) DEFAULT 2 NOT NULL`
   * `cancel_requested CHAR(1) DEFAULT 'N' NOT NULL`
@@ -2566,7 +2567,6 @@ END;
   * `version VARCHAR2(20 CHAR)`
   * `environments VARCHAR2(1000 CHAR)` (CR-007; `environments` que não caiba é recusado na configuração)
   * `platform VARCHAR2(10 CHAR)`, com CK `ck_tbsss_agt_plat (platform IS NULL OR platform IN ('LINUX','UNIX'))`
-  * `interpreters VARCHAR2(100 CHAR)` (lista separada por vírgula dos interpretadores lógicos configurados no agente; os "definido no script" não aparecem, porque todo agente os atende, CR-025)
   * `script_base_dir VARCHAR2(500 CHAR)` (CR-023: `[agent] script_base_dir` publicado pelo agente no registro; nulo sem pasta base)
   * `status VARCHAR2(10 CHAR) DEFAULT 'ACTIVE' NOT NULL`
   * `started_at DATE`

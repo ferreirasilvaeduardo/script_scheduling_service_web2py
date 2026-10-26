@@ -197,18 +197,18 @@ class TestConfig(unittest.TestCase):
 
     def test_chave_ausente(self):
         """Verifica rejeicao fail-fast quando chave obrigatoria esta ausente."""
-        ini = self._copy_and_edit_ini(keys_to_remove=[("oracle", "call_timeout_ms")])
+        ini = self._copy_and_edit_ini(keys_to_remove=[("oracle", "dsn")])
         with self.assertRaises(sss_config.ConfigError) as ctx:
             sss_config.load(ini)
         self.assertEqual(ctx.exception.section, "oracle")
-        self.assertEqual(ctx.exception.key, "call_timeout_ms")
+        self.assertEqual(ctx.exception.key, "dsn")
 
     def test_secao_ausente(self):
         """Verifica rejeicao fail-fast quando secao inteira esta ausente."""
-        ini = self._copy_and_edit_ini(sections_to_remove=["retention"])
+        ini = self._copy_and_edit_ini(sections_to_remove=["logging"])
         with self.assertRaises(sss_config.ConfigError) as ctx:
             sss_config.load(ini)
-        self.assertEqual(ctx.exception.section, "retention")
+        self.assertEqual(ctx.exception.section, "logging")
 
     def test_chave_desconhecida(self):
         """Verifica rejeicao de chave desconhecida no config.ini."""
@@ -702,12 +702,51 @@ class TestConfigCR007(unittest.TestCase):
         self._refusal("queue_aging_min", agent={"queue_aging_min": "1441"})
         self.assertEqual(self._load(agent={"queue_aging_min": "0"}).agent.queue_aging_min, 0)
 
-    def test_cr025_chaves_de_interpreters(self):
-        """CR-025: PYTHON (2o Python do servidor) e configuravel; os "definido no script" nao."""
-        ok = self._load(agent={"interpreters": "PYTHON3=/usr/bin/python3,PYTHON=/usr/bin/python2,SH=/bin/sh"})
-        self.assertEqual(dict(ok.agent.interpreters)["PYTHON"], "/usr/bin/python2")
-        for bad in ("PYTHON_SCRIPT=/usr/bin/python3", "SHELL_SCRIPT=/bin/sh", "PERL=/usr/bin/perl"):
-            self._refusal("interpreters", agent={"interpreters": bad})
+    def test_cr026_interpreters_ignorado_com_aviso(self):
+        """CR-026 (D1): a linha antiga nao impede a subida; so avisa."""
+        for key in ("interpreters", "interpretadores"):
+            ini = self._copy_and_edit_ini(changes={"agent": {key: "PYTHON3=/usr/bin/python3,SH=/bin/sh"}})
+            with self.assertLogs("sss_config", "WARNING") as logs:
+                cfg = sss_config.load(ini)
+            self.assertIn("[agent] %s ignorada" % key, "\n".join(logs.output))
+            self.assertFalse(hasattr(cfg.agent, "interpreters"))
+
+    def test_cr026_config_minimo_com_padroes(self):
+        """CR-026 (D8, D9): sem os ajustes finos nem [secrets], valem os padroes do config.ini.example."""
+        optional = [(sec, k) for sec, fields in sss_config.SCHEMA.items() for k, cdef in fields.items()
+                    if not cdef.required]
+        ini = self._copy_and_edit_ini(keys_to_remove=optional, sections_to_remove=["secrets"])
+        with open(ini, "r", encoding="utf-8") as f:
+            text = f.read()
+        self.assertNotIn("call_timeout_ms", text)
+        cfg = sss_config.load(ini)
+        self.assertEqual(cfg.secrets.secrets_file, os.path.join(self.tmp_dir, "secrets.cfg"))
+        expected = {("oracle", "call_timeout_ms"): 30000, ("oracle", "pool_min"): 1, ("oracle", "pool_max"): 4,
+                    ("agent", "max_parallel_hard_limit"): 32, ("agent", "claim_batch_size"): 20,
+                    ("agent", "schedule_batch_size"): 50, ("agent", "orchestrator_interval_s"): 10,
+                    ("agent", "cancel_poll_interval_s"): 2, ("agent", "heartbeat_interval_s"): 10,
+                    ("agent", "fence_timeout_s"): 90, ("agent", "node_offline_timeout_s"): 180,
+                    ("agent", "kill_grace_s"): 5, ("agent", "script_timeout_s"): 21600,
+                    ("agent", "shutdown_mode"): "TERMINATE", ("agent", "shutdown_grace_s"): 30,
+                    ("agent", "misfire_policy"): "RUN_ONCE", ("agent", "misfire_tolerance_s"): 300,
+                    ("agent", "cron_horizon_days"): 1461, ("agent", "child_locale"): "C.UTF-8",
+                    ("logging", "level"): "INFO", ("logging", "app_log_max_bytes"): 10485760,
+                    ("logging", "app_log_retention_days"): 30, ("logging", "max_log_size_bytes"): 5242880,
+                    ("logging", "max_local_log_size_bytes"): 52428800, ("logging", "local_log_retention_days"): 30,
+                    ("web", "session_idle_timeout_s"): 1800, ("web", "login_max_attempts"): 5,
+                    ("web", "login_lockout_s"): 900, ("web", "log_poll_interval_s"): 3,
+                    ("retention", "ticket_retention_days"): 180, ("retention", "audit_retention_days"): 730,
+                    ("retention", "purge_batch_size"): 1000}
+        for (sec, key), value in expected.items():
+            self.assertEqual(getattr(getattr(cfg, sec), key), value, key)
+        # Os obrigatorios continuam: sss_env, oracle (user, dsn, owner, table_prefix), agent_id, environments,
+        # work_dir, max_parallel_jobs, log_dir e allowed_origins.
+        required = sorted((sec, k) for sec, fields in sss_config.SCHEMA.items() for k, cdef in fields.items()
+                          if cdef.required)
+        self.assertEqual(required, sorted([
+            ("app", "sss_env"), ("oracle", "user"), ("oracle", "dsn"), ("oracle", "owner"),
+            ("oracle", "table_prefix"), ("agent", "agent_id"), ("agent", "environments"), ("agent", "work_dir"),
+            ("agent", "max_parallel_jobs"), ("logging", "log_dir"), ("web", "allowed_origins")]))
 
     def test_pasta_de_saida(self):
         # CR-012 (README §8.13): opcional, com limites e sem sobrepor as pastas do SSS.

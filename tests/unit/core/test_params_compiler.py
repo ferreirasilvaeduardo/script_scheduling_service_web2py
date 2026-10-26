@@ -20,10 +20,22 @@ from sss.core.params_compiler import ParamError, SnapshotError
 FAKE_AGENT = 2 ** 31 - 3
 
 NOW = datetime.datetime(2026, 10, 13, 10, 47, 0, 123456)
-AgentCfg = collections.namedtuple("CfgAgente", ["interpreters"])
+# CR-026: o agente procura os nomes no proprio PATH (search_path); sem [agent] interpreters.
+AgentCfg = collections.namedtuple("CfgAgente", ["search_path"])
 KEYS_6_5 = {"version", "script_id", "script_name", "interpreter", "path_file", "param_type", "args",
-              "answers", "sensitive", "compiled_at", "interpreter_override"}  # CR-025: snapshot v6
-EXE_PY = "/usr/bin/python3"
+              "answers", "sensitive", "compiled_at", "interpreter_override"}  # CR-025: v6; CR-026: v7, mesmas chaves
+
+
+def fake_bin(root, *names):
+    """Pasta com executaveis falsos (o agente so confere que existem e sao executaveis)."""
+    folder = os.path.join(root, "bin")
+    os.makedirs(folder, exist_ok=True)
+    for name in names:
+        path = os.path.join(folder, name)
+        with open(path, "w") as f:
+            f.write("#!/bin/sh\n")
+        os.chmod(path, 0o755)
+    return folder
 
 
 def prm(code, kind="TEXT", order=1, required_flag="N", flag=None, options=None, default_value=None,
@@ -34,7 +46,7 @@ def prm(code, kind="TEXT", order=1, required_flag="N", flag=None, options=None, 
             "sensitive": sensitive_flag}
 
 
-def script(param_type="NAMED", interpreter="PYTHON3"):
+def script(param_type="NAMED", interpreter="python3"):
     return {"id": 12, "name": "carga_faturas", "interpreter": interpreter,
             "path_file": REAL, "param_type": param_type}
 
@@ -318,20 +330,6 @@ class TestBuildArgs(unittest.TestCase):
         self.assertIsNone(e.param_code)
 
 
-class TestBuildAgentArgv(unittest.TestCase):
-
-    def test_interpretadores(self):
-        self.assertEqual(pc.build_agent_argv("PYTHON3", EXE_PY, "/b/s.py", ["a"]), [EXE_PY, "-I", "/b/s.py", "a"])
-        self.assertEqual(pc.build_agent_argv("BASH", "/bin/bash", "/b/s.sh", ["a"]), ["/bin/bash", "/b/s.sh", "a"])
-        self.assertEqual(pc.build_agent_argv("SH", "/bin/sh", "/b/s.sh", []), ["/bin/sh", "/b/s.sh"])
-
-    def test_fora_da_allowlist(self):
-        from sss.platform import path_guard
-        for interp in ("/usr/bin/python3", "PERL", "CMD", "cmd.exe", ""):
-            with self.assertRaises(path_guard.PathGuardError, msg=interp):
-                pc.build_agent_argv(interp, "/x", "/b/s", [])
-
-
 class TestCompileSnapshot(unittest.TestCase):
 
     def _links(self):
@@ -343,7 +341,7 @@ class TestCompileSnapshot(unittest.TestCase):
         js, resolved, errors = pc.compile_snapshot(script(), self._links()[:1], {"data_ref": "2026-10-13"}, NOW)
         self.assertEqual(errors, {})
         expected = {
-            "version": 6, "script_id": 12, "script_name": "carga_faturas", "interpreter": "PYTHON3",
+            "version": 7, "script_id": 12, "script_name": "carga_faturas", "interpreter": "python3",
             "path_file": REAL, "param_type": "NAMED",
             "args": ["--data", "2026-10-13"],
             "answers": {"data_ref": "2026-10-13"}, "sensitive": [], "compiled_at": "2026-10-13 10:47:00",
@@ -386,15 +384,15 @@ class TestCompileSnapshot(unittest.TestCase):
         js, _, errors = pc.compile_snapshot(script("NONE"), [prm("a", order=1)], {"a": "x"}, NOW)
         self.assertIsNone(js)
         self.assertIn(pc.GENERAL_KEY, errors)
-        for interp in ("/usr/bin/python3", "PERL", "CMD"):
+        for interp in ("/usr/bin/python3", "PERL", "CMD", "PYTHON3", "python3.13"):
             js, _, errors = pc.compile_snapshot(script(interpreter=interp), [], {}, NOW)
             self.assertIsNone(js, interp)
             self.assertIn(pc.GENERAL_KEY, errors)
 
     def test_nenhum_sem_vinculos(self):
-        js = pc.compile_snapshot(script("NONE", "BASH"), [], {}, NOW)[0]
+        js = pc.compile_snapshot(script("NONE", "bash"), [], {}, NOW)[0]
         snap = json.loads(js)
-        self.assertEqual((snap["interpreter"], snap["args"]), ("BASH", []))
+        self.assertEqual((snap["interpreter"], snap["args"]), ("bash", []))
 
     def test_argv_para_exibicao(self):
         v = self._links() + [prm("seq", order=4, flag="-s", sensitive_flag="Y")]
@@ -402,14 +400,17 @@ class TestCompileSnapshot(unittest.TestCase):
             script(), v, {"data_ref": "2026-10-13", "token": "-segredo", "seq": "outro_segredo"}, NOW)[0])
         disp = pc.display_argv(snap)
         # CR-005 D8: caminho completo para todos.
-        self.assertEqual(disp, ["PYTHON3", "-I", REAL, "--data", "2026-10-13",
+        self.assertEqual(disp, ["python3", "-I", REAL, "--data", "2026-10-13",
                                 "--token=****", "--modo", "A", "-s", "****"])
         self.assertNotIn("segredo", " ".join(disp))
         self.assertIn("-segredo", snap["args"][2])
 
     def test_argv_para_exibicao_sem_sensiveis(self):
-        snap = json.loads(pc.compile_snapshot(script("POSITIONAL", "SH"), [prm("a", order=1)], {"a": "x"}, NOW)[0])
-        self.assertEqual(pc.display_argv(snap), ["SH", REAL, "x"])
+        snap = json.loads(pc.compile_snapshot(script("POSITIONAL", "sh"), [prm("a", order=1)], {"a": "x"}, NOW)[0])
+        self.assertEqual(pc.display_argv(snap), ["sh", REAL, "x"])
+        # CR-026: o digitado aparece no lugar do cadastro; Python digitado com -E -s.
+        snap["interpreter_override"] = "python3.13"
+        self.assertEqual(pc.display_argv(snap)[:3], ["python3.13", "-E", "-s"])
 
 
 @unittest.skipIf(os.geteuid() == 0, "root sempre passa em os.access(W_OK)")
@@ -425,7 +426,9 @@ class TestValidateSnapshot(unittest.TestCase):
         os.chmod(self.arq, 0o444)
         os.chmod(os.path.join(self.base, "faturamento"), 0o555)
         os.chmod(self.base, 0o555)
-        self.cfg = AgentCfg({"PYTHON3": EXE_PY, "SH": "/bin/sh"})
+        self.bin = fake_bin(self.root, "python3", "sh")
+        self.exe_py = os.path.join(self.bin, "python3")
+        self.cfg = AgentCfg(self.bin)
         self.real = os.path.realpath(self.arq)
         v = [prm("data_ref", "DATE", order=1, required_flag="Y", flag="--data")]
         scr = dict(script(), path_file=self.arq)
@@ -453,8 +456,7 @@ class TestValidateSnapshot(unittest.TestCase):
         return ctx.exception.reason
 
     def test_cr023_relativo_junto_da_base_do_agente(self):
-        cfg = collections.namedtuple("CfgBase", ["interpreters", "script_base_dir"])(
-            self.cfg.interpreters, self.base)
+        cfg = collections.namedtuple("CfgBase", ["search_path", "script_base_dir"])(self.bin, self.base)
         _snap, argv, script_real = pc.validate_snapshot(
             self._changed(path_file="faturamento/carga_faturas.py"), cfg)
         self.assertEqual(script_real, os.path.realpath(self.arq))
@@ -463,15 +465,15 @@ class TestValidateSnapshot(unittest.TestCase):
                          "PATH_GUARD_NOT_FOUND")
 
     def test_cr023_pasta_da_aplicacao(self):
-        cfg = collections.namedtuple("CfgDev", ["interpreters", "dev"])(self.cfg.interpreters, True)
+        cfg = collections.namedtuple("CfgDev", ["search_path", "dev"])(self.bin, True)
         inside = os.path.join(path_guard.APP_DIR, "README.md")
         self.assertEqual(self._reason(self._changed(path_file=inside), cfg), "PATH_GUARD_APP_DIR")
 
     def test_ok_monta_argv_com_executavel_e_base_do_agente(self):
         snap, argv, script_real = pc.validate_snapshot(self.js, self.cfg)
-        self.assertEqual(argv, [EXE_PY, "-I", self.real, "--data", "2026-10-13"])
+        self.assertEqual(argv, [self.exe_py, "-I", self.real, "--data", "2026-10-13"])
         self.assertEqual(script_real, self.real)
-        self.assertEqual(snap["interpreter"], "PYTHON3")
+        self.assertEqual(snap["interpreter"], "python3")
 
     def test_json_e_estrutura(self):
         self.assertEqual(self._reason("{x"), "INVALID_JSON")
@@ -484,9 +486,10 @@ class TestValidateSnapshot(unittest.TestCase):
         for version in (1, 2, 3, 4):
             self.assertEqual(self._reason(self._changed(version=version)), "UNSUPPORTED_VERSION")
 
-    def test_interpretador_fora_da_allowlist_ou_indisponivel_no_agente(self):
+    def test_interpretador_fora_da_allowlist_ou_ausente_no_agente(self):
         self.assertEqual(self._reason(self._changed(interpreter="/usr/bin/perl")), "INTERPRETER_NOT_ALLOWED")
-        self.assertEqual(self._reason(self._changed(interpreter="BASH")), "INTERPRETER_UNAVAILABLE")
+        # CR-026: bash nao existe no PATH deste agente (so python3 e sh).
+        self.assertEqual(self._reason(self._changed(interpreter="bash")), "PATH_GUARD_INTERPRETER_NOT_FOUND")
         # CR-005: POWERSHELL saiu da allowlist (somente POSIX).
         self.assertEqual(self._reason(self._changed(interpreter="POWERSHELL")), "INTERPRETER_NOT_ALLOWED")
 
@@ -505,8 +508,8 @@ class TestValidateSnapshot(unittest.TestCase):
                          "PATH_GUARD_NOT_A_FILE")
 
     def test_log_dir_e_work_dir_do_agente(self):
-        cfg = collections.namedtuple("CfgDirs", ["interpreters", "sss_dirs"])(
-            self.cfg.interpreters, (os.path.join(self.base, "faturamento"),))
+        cfg = collections.namedtuple("CfgDirs", ["search_path", "sss_dirs"])(
+            self.bin, (os.path.join(self.base, "faturamento"),))
         self.assertEqual(self._reason(self.js, cfg), "PATH_GUARD_SSS_DIR")
 
 
@@ -547,42 +550,41 @@ class TestSeedFake(unittest.TestCase):
                 self.assertEqual(errors, {})
                 self.assertEqual(set(json.loads(js).keys()), KEYS_6_5)
 
-    def test_snapshots_do_seed_sao_v6(self):
+    def test_snapshots_do_seed_sao_v7(self):
         tickets = self.repo_factory.get("tickets")
         for tid in (1, 11, 17, 37):
             snap = json.loads(tickets.get(tid)["submitted_params"])
-            self.assertEqual((snap["version"], set(snap.keys())), (6, KEYS_6_5), tid)
+            self.assertEqual((snap["version"], set(snap.keys())), (7, KEYS_6_5), tid)
+            self.assertIn(snap["interpreter"], path_guard.ALLOWLIST, tid)
             # CR-023: o seed do FAKE cadastra os scripts com caminho relativo a pasta base do agente.
             self.assertFalse(snap["path_file"].startswith("/"), tid)
             path_guard.validate_registration(snap["path_file"])
 
 
-class TestInterpreterOverrideCr025(unittest.TestCase):
-    """CR-025: snapshot v6 com o interpretador digitado; argv do agente com o digitado, o #! ou o configurado."""
+class TestInterpreterOrderCr026(unittest.TestCase):
+    """CR-026 (D5, D7): #! existente, depois o digitado no disparo, depois o cadastro (no PATH do agente)."""
 
     def setUp(self):
         self.root = tempfile.mkdtemp(prefix="sss_pc_int_")
         self.addCleanup(shutil.rmtree, self.root)
-        self.bin = os.path.join(self.root, "bin")
-        os.mkdir(self.bin)
+        self.bin = fake_bin(self.root, "python3.99", "python3", "python", "sh", "bash")
         self.exe = os.path.join(self.bin, "python3.99")
-        with open(self.exe, "w") as f:
-            f.write("#!/bin/sh\n")
-        os.chmod(self.exe, 0o755)
-        self.cfg = collections.namedtuple("CfgInt", ["interpreters", "search_path"])(
-            {"PYTHON3": EXE_PY, "SH": "/bin/sh"}, self.bin)
+        self.cfg = AgentCfg(self.bin)
 
-    def _script(self, interpreter, first_line=b"print(1)"):
-        path = os.path.join(self.root, "%s.txt" % interpreter)
+    def _p(self, name):
+        return os.path.join(self.bin, name)
+
+    def _script(self, interpreter, first_line=b"print(1)", name="s"):
+        path = os.path.join(self.root, "%s_%s.txt" % (name, interpreter))
         with open(path, "wb") as f:
             f.write(first_line + b"\n")
         os.chmod(path, 0o644)
         return dict(script(), interpreter=interpreter, path_file=path, param_type="POSITIONAL")
 
-    def _run(self, scr, override=None):
+    def _run(self, scr, override=None, notes=None):
         js, _r, errors = pc.compile_snapshot(scr, [], {}, NOW, interpreter_override=override)
         self.assertEqual(errors, {})
-        return pc.validate_snapshot(js, self.cfg)[1]
+        return pc.validate_snapshot(js, self.cfg, notes=notes)[1]
 
     def _reason(self, scr, override=None):
         js, _r, _e = pc.compile_snapshot(scr, [], {}, NOW, interpreter_override=override)
@@ -590,60 +592,65 @@ class TestInterpreterOverrideCr025(unittest.TestCase):
             pc.validate_snapshot(js, self.cfg)
         return ctx.exception.reason
 
-    def test_digitado_vence_o_cadastro(self):
-        scr = self._script("PYTHON3")
-        real = self.exe
-        self.assertEqual(self._run(scr, "python3.99"), [real, "-E", "-s", scr["path_file"]])
-        self.assertEqual(self._run(scr, self.exe), [real, "-E", "-s", scr["path_file"]])
-        self.assertEqual(self._run(scr), [EXE_PY, "-I", scr["path_file"]])
+    def test_cadastro_quando_nao_ha_shebang_nem_digitado(self):
+        for name, fixed in (("python3", ["-I"]), ("python", ["-E", "-s"]), ("sh", []), ("bash", [])):
+            scr = self._script(name)
+            self.assertEqual(self._run(scr), [self._p(name)] + fixed + [scr["path_file"]], name)
+
+    def test_digitado_vence_o_cadastro_sem_shebang(self):
+        scr = self._script("sh")
+        self.assertEqual(self._run(scr, "python3.99"), [self.exe, "-E", "-s", scr["path_file"]])
+        self.assertEqual(self._run(scr, self.exe), [self.exe, "-E", "-s", scr["path_file"]])
+        self.assertEqual(self._run(scr, "bash"), [self._p("bash"), scr["path_file"]])
         self.assertEqual(self._reason(scr, "python9.99"), "PATH_GUARD_INTERPRETER_NOT_FOUND")
-        sh = self._script("SH")
-        self.assertEqual(self._run(sh, "python3.99"), [real, sh["path_file"]])
+
+    def test_shebang_existente_vence_o_digitado(self):
+        sh = self._script("bash", b"#!/bin/sh -e")
+        self.assertEqual(self._run(sh, "python3.99"), ["/bin/sh", "-e", sh["path_file"]])
+        py = self._script("sh", ("#!%s -u" % self.exe).encode())
+        # Python do #!: -E -s depois do argumento do #!
+        self.assertEqual(self._run(py), [self.exe, "-u", "-E", "-s", py["path_file"]])
+        env = self._script("sh", b"#!/usr/bin/env python3")
+        self.assertEqual(self._run(env), ["/usr/bin/env", "python3", "-E", "-s", env["path_file"]])
+        envsh = self._script("python3", b"#!/usr/bin/env sh")
+        self.assertEqual(self._run(envsh), ["/usr/bin/env", "sh", envsh["path_file"]])
+
+    def test_shebang_inexistente_e_ignorado_com_nota(self):
+        scr = self._script("sh", b"#!/nao/existe/python3")
+        notes = []
+        self.assertEqual(self._run(scr, "bash", notes=notes), [self._p("bash"), scr["path_file"]])
+        self.assertEqual(notes, ["#! ignorado: /nao/existe/python3 nao encontrado ou nao executavel neste servidor"])
+        notes = []
+        self.assertEqual(self._run(scr, notes=notes), [self._p("sh"), scr["path_file"]])
+        self.assertEqual(len(notes), 1)
+        # #! relativo ou ausente: nao e #! valido; sem nota
+        for first in (b"#!python3", b"echo sem"):
+            notes = []
+            self.assertEqual(self._run(self._script("sh", first), notes=notes)[0], self._p("sh"))
+            self.assertEqual(notes, [])
 
     def test_digitado_com_formato_invalido_e_erro_do_campo(self):
-        _js, _r, errors = pc.compile_snapshot(self._script("PYTHON3"), [], {}, NOW, interpreter_override="py thon")
+        _js, _r, errors = pc.compile_snapshot(self._script("python3"), [], {}, NOW, interpreter_override="py thon")
         self.assertEqual(errors, {pc.INTERPRETER_KEY: pc.INTERPRETER_MESSAGE})
-        js, _r, errors = pc.compile_snapshot(self._script("PYTHON3"), [], {}, NOW, interpreter_override="  ")
-        self.assertEqual((errors, json.loads(js)["interpreter_override"], json.loads(js)["version"]), ({}, None, 6))
+        js, _r, errors = pc.compile_snapshot(self._script("python3"), [], {}, NOW, interpreter_override="  ")
+        self.assertEqual((errors, json.loads(js)["interpreter_override"], json.loads(js)["version"]), ({}, None, 7))
 
-    def test_definido_no_script(self):
-        py = self._script("PYTHON_SCRIPT", ("#!%s" % self.exe).encode())
-        self.assertEqual(self._run(py), [self.exe, "-E", "-s", py["path_file"]])
-        sh = self._script("SHELL_SCRIPT", b"#!/bin/sh -e")
-        self.assertEqual(self._run(sh), ["/bin/sh", "-e", sh["path_file"]])
-        self.assertEqual(self._reason(self._script("SHELL_SCRIPT", b"echo sem")), "PATH_GUARD_NO_SHEBANG")
-        self.assertEqual(self._reason(self._script("SHELL_SCRIPT", b"#!/nao/existe/sh")),
-                         "PATH_GUARD_INTERPRETER_NOT_FOUND")
-        # O digitado vence tambem o #!
-        self.assertEqual(self._run(sh, "python3.99"), [self.exe, sh["path_file"]])
-
-    def test_python_definido_no_script_com_argumento_e_env(self):
-        # -E -s depois do argumento do #!: o env nao aceita -E (025d).
-        py = self._script("PYTHON_SCRIPT", ("#!%s -u" % self.exe).encode())
-        self.assertEqual(self._run(py), [self.exe, "-u", "-E", "-s", py["path_file"]])
-        env = self._script("PYTHON_SCRIPT", b"#!/usr/bin/env python3")
-        self.assertEqual(self._run(env), ["/usr/bin/env", "python3", "-E", "-s", env["path_file"]])
-        sh = self._script("SHELL_SCRIPT", b"#!/usr/bin/env sh")
-        self.assertEqual(self._run(sh), ["/usr/bin/env", "sh", sh["path_file"]])
-
-    def test_python_configurado_e_v5_aceita(self):
-        cfg = collections.namedtuple("CfgPy", ["interpreters"])({"PYTHON": "/usr/bin/python3"})
-        scr = self._script("PYTHON")
-        js, _r, _e = pc.compile_snapshot(scr, [], {}, NOW)
-        self.assertEqual(pc.validate_snapshot(js, cfg)[1], ["/usr/bin/python3", "-E", "-s", scr["path_file"]])
-        snap = json.loads(js)
-        snap["version"] = 5
-        del snap["interpreter_override"]
-        self.assertEqual(pc.validate_snapshot(json.dumps(snap), cfg)[1][:3], ["/usr/bin/python3", "-E", "-s"])
-        snap["version"] = 7
+    def test_snapshots_v5_e_v6_com_a_chave_anterior(self):
+        for key, name, fixed in (("PYTHON3", "python3", ["-I"]), ("PYTHON", "python", ["-E", "-s"]),
+                                 ("BASH", "bash", []), ("SH", "sh", []), ("SHELL_SCRIPT", "sh", []),
+                                 ("PYTHON_SCRIPT", "python3", ["-I"])):
+            scr = self._script("sh")
+            snap = json.loads(pc.compile_snapshot(scr, [], {}, NOW)[0])
+            snap.update(version=5, interpreter=key)
+            del snap["interpreter_override"]
+            self.assertEqual(pc.validate_snapshot(json.dumps(snap), self.cfg)[1],
+                             [self._p(name)] + fixed + [scr["path_file"]], key)
+            snap.update(version=6, interpreter_override="bash")
+            self.assertEqual(pc.validate_snapshot(json.dumps(snap), self.cfg)[1][0], self._p("bash"), key)
+        snap["version"] = 8
         with self.assertRaises(SnapshotError) as ctx:
-            pc.validate_snapshot(json.dumps(snap), cfg)
+            pc.validate_snapshot(json.dumps(snap), self.cfg)
         self.assertEqual(ctx.exception.reason, "UNSUPPORTED_VERSION")
-
-    def test_argv_logico_mostra_o_digitado(self):
-        scr = self._script("PYTHON3")
-        js, _r, _e = pc.compile_snapshot(scr, [], {}, NOW, interpreter_override="python3.13")
-        self.assertEqual(pc.display_argv(json.loads(js)), ["python3.13", "-E", "-s", scr["path_file"]])
 
 
 if __name__ == "__main__":

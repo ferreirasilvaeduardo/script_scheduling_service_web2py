@@ -38,10 +38,10 @@ def _cfg():
 CRITICAL = sss_config.critical_config(_cfg())
 
 
-def _agent(code, age_s=5, status="ACTIVE", environments="PRODUCAO", interpreters="SH,PYTHON3", cfg=CRITICAL):
+def _agent(code, age_s=5, status="ACTIVE", environments="PRODUCAO", cfg=CRITICAL):
     hb = None if age_s is None else NOW - datetime.timedelta(seconds=age_s)
     return {"code": code, "status": status, "heartbeat_at": hb, "environments": environments,
-            "interpreters": interpreters, "critical_config": cfg}
+            "critical_config": cfg}
 
 
 class _Repo(object):
@@ -144,14 +144,15 @@ class TestChecks(unittest.TestCase):
         self.assertEqual(code, saude_cli.CRITICAL)
         self.assertIn("CRITICAL: ambiente HOMOLOGACAO ativo sem nenhum agente saudavel", text)
 
-    def test_fila_sem_atendente_pelo_interpretador_do_cadastro(self):
+    def test_fila_sem_atendente_pelo_ambiente(self):
+        # CR-026: o agente atende qualquer interpretador; a linha mostra o do cadastro.
         old = datetime.datetime(2026, 10, 21, 9, 50, 0, 7)
-        queue_value = [("PRODUCAO", "SH", 3, old), ("PRODUCAO", "BASH", 2, old)]
+        queue_value = [("PRODUCAO", "sh", 3, old), ("DESENV", "bash", 2, old)]
         code, text, _r = self._run_loop(fila=queue_value)
         self.assertEqual(code, saude_cli.CRITICAL)
-        self.assertIn("CRITICAL: fila sem atendente: 2 tickets de PRODUCAO/BASH, o mais antigo desde 2026-10-21 09:50:00",
+        self.assertIn("CRITICAL: fila sem atendente: 2 tickets de DESENV/bash, o mais antigo desde 2026-10-21 09:50:00",
                       text)
-        self.assertNotIn("PRODUCAO/SH", text, "SH e atendido pelo srv-a")
+        self.assertNotIn("PRODUCAO/sh", text, "PRODUCAO e atendido pelo srv-a")
 
     def test_fila_vencida_por_quantidade_e_espera(self):
         one_min = NOW - datetime.timedelta(minutes=1)
@@ -286,22 +287,13 @@ class TestSqlRepoHealth(unittest.TestCase):
         self.assertIs(agentes_oracle._SQL_QUEUE, saude_sql.SQL_QUEUE)
         self.assertIs(agentes_oracle._SQL_RUNNING_NO_PID, saude_sql.SQL_RUNNING_NO_PID)
 
-    def test_pares_atendidos_ignoram_em_risco_e_parados(self):
+    def test_ambientes_atendidos_ignoram_em_risco_e_parados(self):
         lim = saude_cli.agents_service.Thresholds(10, 90, 180)
-        agents = [_agent("a", 5, interpreters="SH"), _agent("b", 91, interpreters="BASH"),
-                   _agent("c", 5, status="STOPPED", interpreters="PYTHON3")]
-        self.assertEqual(saude_sql.served_pairs(agents, NOW, lim),
-                         {("PRODUCAO", "SH"), ("PRODUCAO", "PYTHON_SCRIPT"), ("PRODUCAO", "SHELL_SCRIPT")})
-
-    def test_definido_no_script_atendido_por_todo_agente_saudavel(self):
-        # Os "definido no script" nao sao configurados: nao acusam fila sem atendente (025d).
-        lim = saude_cli.agents_service.Thresholds(10, 90, 180)
-        served = saude_sql.served_pairs([_agent("a", 5, interpreters="SH")], NOW, lim)
-        rows = [("PRODUCAO", "PYTHON_SCRIPT", 2, NOW), ("PRODUCAO", "SHELL_SCRIPT", 1, NOW),
-                ("PRODUCAO", "BASH", 1, NOW)]
-        self.assertEqual([g["interpreter"] for g in saude_sql.unattended_queue(rows, served)], ["BASH"])
-        self.assertEqual(saude_sql.unattended_queue(rows[:1], set()), [
-            {"environment": "PRODUCAO", "interpreter": "PYTHON_SCRIPT", "quantity": 2, "oldest": NOW}])
+        agents = [_agent("a", 5), _agent("b", 91, environments="DESENV"),
+                   _agent("c", 5, status="STOPPED", environments="HOMOLOGACAO")]
+        self.assertEqual(saude_sql.served_pairs(agents, NOW, lim), {"PRODUCAO"})
+        rows = [("PRODUCAO", "python3", 2, NOW), ("DESENV", "bash", 1, NOW)]
+        self.assertEqual([g["environment"] for g in saude_sql.unattended_queue(rows, {"PRODUCAO"})], ["DESENV"])
 
 
 if __name__ == "__main__":

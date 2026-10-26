@@ -23,7 +23,8 @@ _TERMINAL = ("SUCCESS", "FAILED", "CANCELLED")
 
 # Colunas sem CLOB (listagens); obter acrescenta submitted_params.
 _COLS_TCK = ("id", "script_id", "environment", "requested_by", "source_ip", "agent_id", "process_id",
-             "process_start", "script_path", "interpreter_path", "status", "priority", "cancel_requested",
+             "process_start", "script_path", "interpreter_path", "interpreter_used", "status", "priority",
+             "cancel_requested",
              "status_reason",
              "parent_ticket_id", "schedule_id", "log_offset_chars", "log_truncated", "return_code",
              "scheduled_at", "started_at", "heartbeat_at", "finished_at",

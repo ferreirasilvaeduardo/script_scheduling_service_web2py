@@ -423,12 +423,6 @@ def validate_script_path(path):
     return None
 
 
-def validate_interpreter_executable(path, sss_dirs=()):
-    """Executavel do interpretador: envolve path_guard.validate_executable (README §8.5, CR-011)."""
-    from sss.platform import path_guard
-    return path_guard.validate_executable(path, sss_dirs=sss_dirs)
-
-
 # -----------------------------------------------------------------------------
 # Subida do agente fora de DEV (CR-007, D1)
 # -----------------------------------------------------------------------------

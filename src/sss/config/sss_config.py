@@ -37,6 +37,12 @@ REMOVED_KEYS = {
     ("agent", "ambientes_exigem_hash"): "o SSS nao confere mais o hash dos scripts (CR-011)",
 }
 
+# Chaves que deixaram de existir e sao so ignoradas, com aviso (a subida segue).
+IGNORED_KEYS = {
+    ("agent", "interpreters"): "o interpretador vem do script (#!), do disparo ou do cadastro (CR-026)",
+    ("agent", "interpretadores"): "o interpretador vem do script (#!), do disparo ou do cadastro (CR-026)",
+}
+
 # Chaves com nome novo (CR-015a): o config.ini antigo e recusado com o nome a usar, sem aceitar o antigo.
 RENAMED_KEYS = {
     ("agent", "saida_dir"): "output_dir",
@@ -48,7 +54,6 @@ RENAMED_KEYS = {
     ("oracle", "modo_driver"): "driver_mode",
     ("agent", "ambientes_atendidos"): "environments",
     ("agent", "usuarios_execucao"): "exec_users",
-    ("agent", "interpretadores"): "interpreters",
     ("agent", "fila_envelhecimento_min"): "queue_aging_min",
     ("agent", "log_dir_min_livre_mb"): "log_dir_min_free_mb",
     ("web", "sessao_max_horas"): "session_max_hours",
@@ -134,12 +139,13 @@ SCHEMA = collections.OrderedDict([
         ("table_prefix", FieldDef("str", required=True, regex=r"^[a-z][a-z0-9_]{0,7}$")),
         ("driver_mode", FieldDef("enum", required=False, allowed_values=("auto", "thin", "thick", "cx_oracle"), default="auto")),
         ("oracle_client_lib_dir", FieldDef("path", required=False, default=None)),
-        ("call_timeout_ms", FieldDef("int", required=True, min_val=1, max_val=3600000)),
-        ("pool_min", FieldDef("int", required=True, min_val=1, max_val=1000)),
-        ("pool_max", FieldDef("int", required=True, min_val=1, max_val=1000)),
+        ("call_timeout_ms", FieldDef("int", required=False, min_val=1, max_val=3600000, default=30000)),
+        ("pool_min", FieldDef("int", required=False, min_val=1, max_val=1000, default=1)),
+        ("pool_max", FieldDef("int", required=False, min_val=1, max_val=1000, default=4)),
     ])),
     ("secrets", collections.OrderedDict([
-        ("secrets_file", FieldDef("path", required=True)),
+        # CR-026 (D9): sem a linha, o secrets.cfg da pasta do config.ini.
+        ("secrets_file", FieldDef("path", required=False, default=None)),
     ])),
     ("agent", collections.OrderedDict([
         # init_db, seed e purge sao atores reservados do sistema (README §4.4 e §8.12).
@@ -149,25 +155,24 @@ SCHEMA = collections.OrderedDict([
         # Usuario do SO por ambiente e pasta base dos diretorios de trabalho dos scripts (CR-007, D1):
         # obrigatorios fora de DEV (validacao cruzada em carregar()).
         ("exec_users", FieldDef("map_csv", required=False, default=())),
-        ("interpreters", FieldDef("map_csv", required=False, default=())),
         ("exec_work_dir", FieldDef("path", required=False, default=None)),
         ("max_parallel_jobs", FieldDef("int", required=True, min_val=1, max_val=999)),
-        ("max_parallel_hard_limit", FieldDef("int", required=True, min_val=1, max_val=999)),
-        ("claim_batch_size", FieldDef("int", required=True, min_val=1, max_val=1000)),
-        ("schedule_batch_size", FieldDef("int", required=True, min_val=1, max_val=1000)),
-        ("orchestrator_interval_s", FieldDef("int", required=True, min_val=1, max_val=3600)),
-        ("cancel_poll_interval_s", FieldDef("int", required=True, min_val=1, max_val=3600)),
-        ("heartbeat_interval_s", FieldDef("int", required=True, min_val=1, max_val=3600)),
-        ("fence_timeout_s", FieldDef("int", required=True, min_val=1, max_val=86400)),
-        ("node_offline_timeout_s", FieldDef("int", required=True, min_val=1, max_val=86400)),
-        ("kill_grace_s", FieldDef("int", required=True, min_val=1, max_val=300)),
-        ("script_timeout_s", FieldDef("int", required=True, min_val=1, max_val=86400)),
-        ("shutdown_mode", FieldDef("enum", required=True, allowed_values=("TERMINATE", "DRAIN"))),
-        ("shutdown_grace_s", FieldDef("int", required=True, min_val=1, max_val=3600)),
-        ("misfire_policy", FieldDef("enum", required=True, allowed_values=("RUN_ONCE", "SKIP"))),
-        ("misfire_tolerance_s", FieldDef("int", required=True, min_val=1, max_val=86400)),
+        ("max_parallel_hard_limit", FieldDef("int", required=False, min_val=1, max_val=999, default=32)),
+        ("claim_batch_size", FieldDef("int", required=False, min_val=1, max_val=1000, default=20)),
+        ("schedule_batch_size", FieldDef("int", required=False, min_val=1, max_val=1000, default=50)),
+        ("orchestrator_interval_s", FieldDef("int", required=False, min_val=1, max_val=3600, default=10)),
+        ("cancel_poll_interval_s", FieldDef("int", required=False, min_val=1, max_val=3600, default=2)),
+        ("heartbeat_interval_s", FieldDef("int", required=False, min_val=1, max_val=3600, default=10)),
+        ("fence_timeout_s", FieldDef("int", required=False, min_val=1, max_val=86400, default=90)),
+        ("node_offline_timeout_s", FieldDef("int", required=False, min_val=1, max_val=86400, default=180)),
+        ("kill_grace_s", FieldDef("int", required=False, min_val=1, max_val=300, default=5)),
+        ("script_timeout_s", FieldDef("int", required=False, min_val=1, max_val=86400, default=21600)),
+        ("shutdown_mode", FieldDef("enum", required=False, allowed_values=("TERMINATE", "DRAIN"), default="TERMINATE")),
+        ("shutdown_grace_s", FieldDef("int", required=False, min_val=1, max_val=3600, default=30)),
+        ("misfire_policy", FieldDef("enum", required=False, allowed_values=("RUN_ONCE", "SKIP"), default="RUN_ONCE")),
+        ("misfire_tolerance_s", FieldDef("int", required=False, min_val=1, max_val=86400, default=300)),
         # Minimo 1461 (4 anos): cobre o 29/02 de regras CRON anuais (CR-008, R-32).
-        ("cron_horizon_days", FieldDef("int", required=True, min_val=1461, max_val=36500)),
+        ("cron_horizon_days", FieldDef("int", required=False, min_val=1461, max_val=36500, default=1461)),
         ("queue_aging_min", FieldDef("int", required=False, min_val=0, max_val=1440, default=60)),
         # CR-008, R-25: espaco minimo do log_dir.
         ("log_dir_min_free_mb", FieldDef("int", required=False, min_val=0, max_val=1048576, default=1024)),
@@ -181,28 +186,28 @@ SCHEMA = collections.OrderedDict([
         ("script_work_dir", FieldDef("path", required=False, default=None)),
         # CR-023: pasta base dos scripts cadastrados com caminho relativo (vazio desliga; README §8.5).
         ("script_base_dir", FieldDef("path", required=False, default=None)),
-        ("child_locale", FieldDef("str", required=True)),
+        ("child_locale", FieldDef("str", required=False, default="C.UTF-8")),
         ("env_passthrough", FieldDef("list_csv", required=False, default=())),
     ])),
     ("logging", collections.OrderedDict([
         ("log_dir", FieldDef("path", required=True)),
-        ("level", FieldDef("enum", required=True, allowed_values=("DEBUG", "INFO", "WARN", "ERROR"))),
-        ("app_log_max_bytes", FieldDef("int", required=True, min_val=1024, max_val=1073741824)),
-        ("app_log_retention_days", FieldDef("int", required=True, min_val=1, max_val=3650)),
-        ("max_log_size_bytes", FieldDef("int", required=True, min_val=1024, max_val=67108864)),
-        ("max_local_log_size_bytes", FieldDef("int", required=True, min_val=1024, max_val=10737418240)),
-        ("local_log_retention_days", FieldDef("int", required=True, min_val=1, max_val=3650)),
+        ("level", FieldDef("enum", required=False, allowed_values=("DEBUG", "INFO", "WARN", "ERROR"), default="INFO")),
+        ("app_log_max_bytes", FieldDef("int", required=False, min_val=1024, max_val=1073741824, default=10485760)),
+        ("app_log_retention_days", FieldDef("int", required=False, min_val=1, max_val=3650, default=30)),
+        ("max_log_size_bytes", FieldDef("int", required=False, min_val=1024, max_val=67108864, default=5242880)),
+        ("max_local_log_size_bytes", FieldDef("int", required=False, min_val=1024, max_val=10737418240, default=52428800)),
+        ("local_log_retention_days", FieldDef("int", required=False, min_val=1, max_val=3650, default=30)),
         # CR-012: pastas de saida que ficaram no disco (excesso ou falha).
         ("output_retention_days", FieldDef("int", required=False, min_val=1, max_val=365, default=7)),
         # CR-019: pastas de trabalho dos scripts, que ficam no disco depois do ticket.
         ("script_work_retention_days", FieldDef("int", required=False, min_val=1, max_val=365, default=7)),
     ])),
     ("web", collections.OrderedDict([
-        ("session_idle_timeout_s", FieldDef("int", required=True, min_val=1, max_val=86400)),
+        ("session_idle_timeout_s", FieldDef("int", required=False, min_val=1, max_val=86400, default=1800)),
         ("session_max_hours", FieldDef("int", required=False, min_val=1, max_val=168, default=12)),
-        ("login_max_attempts", FieldDef("int", required=True, min_val=1, max_val=99)),
-        ("login_lockout_s", FieldDef("int", required=True, min_val=1, max_val=86400)),
-        ("log_poll_interval_s", FieldDef("int", required=True, min_val=1, max_val=3600)),
+        ("login_max_attempts", FieldDef("int", required=False, min_val=1, max_val=99, default=5)),
+        ("login_lockout_s", FieldDef("int", required=False, min_val=1, max_val=86400, default=900)),
+        ("log_poll_interval_s", FieldDef("int", required=False, min_val=1, max_val=3600, default=3)),
         ("trusted_proxies", FieldDef("list_csv", required=False, default=())),
         ("allowed_origins", FieldDef("list_csv", required=True)),
         # CR-020d: tamanho maximo do arquivo enviado pela tela de Entrada (o POST maior e recusado antes de ser lido).
@@ -214,9 +219,9 @@ SCHEMA = collections.OrderedDict([
         ("socket_timeout_s", FieldDef("int", required=False, min_val=5, max_val=300, default=30)),
     ])),
     ("retention", collections.OrderedDict([
-        ("ticket_retention_days", FieldDef("int", required=True, min_val=1, max_val=3650)),
-        ("audit_retention_days", FieldDef("int", required=True, min_val=365, max_val=3650)),
-        ("purge_batch_size", FieldDef("int", required=True, min_val=1, max_val=100000)),
+        ("ticket_retention_days", FieldDef("int", required=False, min_val=1, max_val=3650, default=180)),
+        ("audit_retention_days", FieldDef("int", required=False, min_val=365, max_val=3650, default=730)),
+        ("purge_batch_size", FieldDef("int", required=False, min_val=1, max_val=100000, default=1000)),
         # CR-020e: envios da tela de Entrada apagados depois de N dias (o conteudo sai antes, apos as entregas).
         ("input_retention_days", FieldDef("int", required=False, min_val=1, max_val=3650, default=30)),
         ("purge_user", FieldDef("str", required=False, default=None, regex=r"^[A-Za-z][A-Za-z0-9_$#]{0,29}$")),
@@ -260,7 +265,7 @@ class AgentConfig(_ItemAccessMixin, collections.namedtuple("AgentConfig", [
     "node_offline_timeout_s", "kill_grace_s", "script_timeout_s",
     "shutdown_mode", "shutdown_grace_s", "misfire_policy",
     "misfire_tolerance_s", "cron_horizon_days", "child_locale",
-    "env_passthrough", "exec_users", "interpreters", "exec_work_dir", "queue_aging_min",
+    "env_passthrough", "exec_users", "exec_work_dir", "queue_aging_min",
     "log_dir_min_free_mb", "output_dir", "output_max_bytes", "output_max_files", "input_dir",
     "script_work_dir", "script_base_dir"
 ])):
@@ -433,12 +438,19 @@ def load(ini_path):
     data_sections = {}
     for sec_name, sec_fields in SCHEMA.items():
         if sec_name not in cp.sections():
-            raise ConfigError(section=sec_name, key=None, reason="Secao obrigatoria ausente: [%s]" % sec_name)
-
-        cp_sec = cp[sec_name]
+            # CR-026: secao sem chave obrigatoria (ex.: [secrets]) pode faltar; vale o padrao de cada chave.
+            if any(cdef.required for cdef in sec_fields.values()):
+                raise ConfigError(section=sec_name, key=None, reason="Secao obrigatoria ausente: [%s]" % sec_name)
+            cp_sec = {}
+        else:
+            cp_sec = cp[sec_name]
 
         # Chaves desconhecidas na secao
         for k in cp_sec:
+            if (sec_name, k) in IGNORED_KEYS:
+                _log.warning("config.ini: chave [%s] %s ignorada: %s; apague a linha", sec_name, k,
+                             IGNORED_KEYS[(sec_name, k)])
+                continue
             if (sec_name, k) in REMOVED_KEYS:
                 raise ConfigError(section=sec_name, key=k, reason="Chave removida: %s; apague a linha %s" % (
                     REMOVED_KEYS[(sec_name, k)], k))
@@ -463,6 +475,9 @@ def load(ini_path):
                 data_sec[k] = _convert_value(sec_name, k, cdef, raw)
 
         data_sections[sec_name] = data_sec
+
+    if data_sections["secrets"]["secrets_file"] is None:
+        data_sections["secrets"]["secrets_file"] = os.path.join(os.path.dirname(os.path.abspath(ini_path)), "secrets.cfg")
 
     # 3. Validacao de env_passthrough contra a lista de bloqueio e as chaves fixas (README §8.6)
     agent_dict = data_sections["agent"]
@@ -579,16 +594,6 @@ def _validate_cr007(app, oracle, agent, logging_dict, retention):
     if len(",".join(agent["environments"])) > _ENVIRONMENTS_MAX:
         raise ConfigError(section="agent", key="environments",
                          reason="Lista com mais de %d caracteres (coluna tbsss_agentes.ambientes)" % _ENVIRONMENTS_MAX)
-
-    for logical, executable in agent["interpreters"]:
-        # Allowlist do path_guard (README §6.4); o executavel e conferido pelo agente na subida (§8.5).
-        # CR-025: PYTHON (ex.: o Python 2 do servidor) tambem e configuravel; os "definido no script" nao.
-        if logical not in ("PYTHON3", "PYTHON", "BASH", "SH"):
-            raise ConfigError(section="agent", key="interpreters",
-                             reason="Interpretador fora da allowlist (PYTHON3, PYTHON, BASH, SH): '%s'" % logical)
-        if not executable.startswith("/") or os.path.normpath(executable) != executable:
-            raise ConfigError(section="agent", key="interpreters",
-                             reason="Executavel de %s deve ser caminho absoluto e normalizado" % logical)
 
     dev = app["sss_env"] == "DEV"
     users = dict(agent["exec_users"])

@@ -89,7 +89,7 @@ class _Fixtures(object):
         return prm
 
     def script(self, label="s", **extra):
-        data = dict({"name": "tst_scr_%s_%s" % (self.suf, label), "interpreter": "SH", "param_type": "NAMED",
+        data = dict({"name": "tst_scr_%s_%s" % (self.suf, label), "interpreter": "sh", "param_type": "NAMED",
                       "path_file": "/opt/tst/%s_%s.sh" % (self.suf, label)}, **extra)
         scr = self._r("catalog").scripts_insert(data, actor=self.actor)
         self.note("scripts", scr["id"])
@@ -195,12 +195,12 @@ class BaseRepoContractTest(object):
             rbac.profiles_insert({"name": c["profile"]["name"], "is_admin": "N"}, actor="teste")
         self.assertEqual(ctx.exception.constraint, self.cn("uk", "profiles", "name"))
         with self.assertRaises(RepoViolation) as ctx:
-            cat.scripts_insert({"name": c["scr"]["name"], "interpreter": "PYTHON3",
+            cat.scripts_insert({"name": c["scr"]["name"], "interpreter": "python3",
                                  "path_file": "/opt/tst/dup.py"}, actor="teste")
         self.assertEqual(ctx.exception.constraint, self.cn("uk", "scripts", "name"))
         # CK de path_file (CR-005 R-g; CR-023: o relativo e aceito): sem '..', '//' nem '\'.
         with self.assertRaises(RepoViolation) as ctx:
-            cat.scripts_insert({"name": "tst_%s_path" % self.m.suf, "interpreter": "PYTHON3",
+            cat.scripts_insert({"name": "tst_%s_path" % self.m.suf, "interpreter": "python3",
                                  "path_file": "a//x.py"}, actor="teste")
         self.assertEqual(ctx.exception.constraint, self.cn("ck", "scripts", "path"))
         with self.assertRaises(RepoViolation) as ctx:
@@ -642,7 +642,7 @@ class BaseRepoContractTest(object):
         self._check_update(env, cat.environments_update(env["id"], {"description": "f"}, audit=aud), "carla")
         self.assertEqual(cat.environments_get(env["id"])["updated_by"], "carla")
 
-        scr = cat.scripts_insert({"name": "tst_%s_reg" % suf, "interpreter": "SH",
+        scr = cat.scripts_insert({"name": "tst_%s_reg" % suf, "interpreter": "sh",
                                    "path_file": "/opt/tst/%s_reg.sh" % suf, "param_type": "NONE"}, actor="ana")
         self.m.note("scripts", scr["id"])
         self._check_insert(scr, "ana")

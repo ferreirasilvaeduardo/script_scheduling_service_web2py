@@ -53,8 +53,7 @@ class TestStartupOracle(_Base):
         finally:
             conn.close()
         self.assertTrue(active, "o seed precisa de um ambiente ativo")
-        agent = cfg.agent._replace(agent_id=self.code, environments=tuple(active[:1]), work_dir=self.work,
-                                    interpreters=(("SH", "/bin/sh"),))
+        agent = cfg.agent._replace(agent_id=self.code, environments=tuple(active[:1]), work_dir=self.work)
         cfg = cfg._replace(agent=agent, logging=cfg.logging._replace(log_dir=self.logs))
         ag = sl.Agent(cfg=cfg, secrets=seg, hostname="host-tst", pid=os.getpid())
         self.agents.append(ag)

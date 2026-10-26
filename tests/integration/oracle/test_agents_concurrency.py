@@ -134,7 +134,7 @@ class _TwoAgentsBase(unittest.TestCase):
         cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
         cp.read(os.path.join(APP, "instance", "config.ini"), encoding="utf-8")
         cp["agent"].update({"agent_id": agent, "environments": self.amb["name"], "work_dir": dirs["work"],
-                            "exec_users": "", "exec_work_dir": "", "interpreters": "SH=/bin/sh",
+                            "exec_users": "", "exec_work_dir": "",
                             "max_parallel_jobs": "4", "orchestrator_interval_s": "1", "cancel_poll_interval_s": "1",
                             "output_dir": dirs["output"], "input_dir": dirs["input"],
                             "log_dir_min_free_mb": "0"})

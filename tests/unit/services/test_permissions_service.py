@@ -82,7 +82,7 @@ class TestPermissions(unittest.TestCase):
         # Script do perfil desativado e script do perfil sem homologacao nos ambientes dele.
         sid_inactive = sorted(ctx["scripts"])[0]
         self.catalog.scripts_update(sid_inactive, {"active": "N"}, actor="teste")
-        new = self.catalog.scripts_insert({"name": "So em PRODUCAO", "interpreter": "PYTHON3",
+        new = self.catalog.scripts_insert({"name": "So em PRODUCAO", "interpreter": "python3",
                                               "path_file": "/opt/scripts/x.py",
                                               "param_type": "NONE"}, actor="teste")["id"]
         prod = [a for a in self.catalog.environments_list(page=1, size=50)["items"] if a["name"] == "PRODUCAO"][0]

@@ -189,7 +189,7 @@ class _Queue(object):
         self.usuario = {"user_id": 7, "login": LOGIN, "profile_id": 2, "active_user": "Y", "active_profile": "Y",
                         "is_admin": "N", "perm_version": 1, "features": ["EXEC_SCRIPT"], "environments": ["PRD"],
                         "scripts": [3]}
-        self.script = {"id": 3, "name": "carga", "interpreter": "SH", "path_file": "/opt/x/carga.sh", "active": "Y",
+        self.script = {"id": 3, "name": "carga", "interpreter": "sh", "path_file": "/opt/x/carga.sh", "active": "Y",
                        "timeout_s": 600}
         self.environment = {"id": 1, "name": "PRD", "description": "Producao", "connection": None, "active": "Y"}
         self.homologations = frozenset([1])
@@ -211,7 +211,7 @@ class _Base(unittest.TestCase):
     def setUp(self):
         self.agenda = _Agenda()
         self.queue = _Queue()
-        self.agenda.scripts[3] = {"id": 3, "name": "carga", "interpreter": "SH", "path_file": "/opt/x/carga.sh",
+        self.agenda.scripts[3] = {"id": 3, "name": "carga", "interpreter": "sh", "path_file": "/opt/x/carga.sh",
                                   "param_type": "NAMED", "max_parallel_env": 2, "timeout_s": 600, "active": "Y"}
         self.agenda.links[3] = [_link()]
         self.conn = _Conn(self.agenda)
@@ -244,7 +244,7 @@ class _Base(unittest.TestCase):
 
 class TestExpansion(_Base):
 
-    def test_ticket_com_ocorrencia_snapshot_v6_e_um_commit(self):
+    def test_ticket_com_ocorrencia_snapshot_v7_e_um_commit(self):
         self.rule()
         with self.assertLogs("sss_scheduler", "INFO") as logs:
             self.assertEqual(self.process(), "TICKET")
@@ -256,7 +256,7 @@ class TestExpansion(_Base):
                          (datetime.datetime(2026, 10, 20, 9, 55), LOGIN, 2, "SYSTEM:" + AGENT),
                          "scheduled_at = ocorrencia coberta (R-27, R-03)")
         snap = json.loads(t["submitted_params"])
-        self.assertEqual((snap["version"], snap["path_file"], snap["args"]), (6, "/opt/x/carga.sh", ["--data", "2026-10-20"]))
+        self.assertEqual((snap["version"], snap["path_file"], snap["args"]), (7, "/opt/x/carga.sh", ["--data", "2026-10-20"]))
         self.assertNotIn("pasta_base", snap)
         self.assertEqual(t["answers"], [{"parameter_id": 11, "answer_value": "2026-10-20"}])
         self.assertTrue(any("agendamento 1: ticket %d gerado" % t["id"] in l for l in logs.output))

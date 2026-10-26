@@ -235,15 +235,7 @@ class Agent(object):
             code = self.plat.validate_restricted_dir(path)
             if code:
                 self._fail(EXIT_DIRECTORIES, "%s %s recusado: %s", name, path, code)
-        sss_dirs = _sss_dirs(self.cfg)
-        if not agent.interpreters:
-            self._fail(EXIT_DIRECTORIES, "[agent] interpreters vazio: o agente nao executaria nada")
-        for logical, path in agent.interpreters:
-            try:
-                self.plat.validate_interpreter_executable(path, sss_dirs=sss_dirs)
-            except Exception as exc:  # noqa: BLE001 - PathGuardError e afins: CRITICAL com o codigo
-                self._fail(EXIT_DIRECTORIES, "interpretador %s (%s) recusado: %s", logical, path,
-                             getattr(exc, "code", exc.__class__.__name__))
+        # CR-026: sem [agent] interpreters; o interpretador e conferido a cada ticket (#!, digitado, cadastro).
         if self.cfg.app.sss_env != "DEV":
             failures = self.plat.validate_execution(agent.exec_users, agent.exec_work_dir)
             for failure in failures:
@@ -338,7 +330,7 @@ class Agent(object):
             self.agent_db_id = self.repo.register_agent(self._conn(), {
                 "code": agent.agent_id, "hostname": self.hostname, "pid": self.pid,
                 "version": sss_config.SSS_VERSION, "environments": ",".join(agent.environments),
-                "platform": self.plat.NAME, "interpreters": ",".join(k for k, _v in agent.interpreters),
+                "platform": self.plat.NAME,
                 "script_base_dir": getattr(agent, "script_base_dir", None),
                 "critical_config": critical, "node_offline_timeout_s": agent.node_offline_timeout_s,
             }, self.plat.process_exists)
@@ -1164,10 +1156,8 @@ class Agent(object):
         start = self.clock()
         budget = agent.heartbeat_interval_s / 2.0
         conn = self._conn()
-        # CR-025: os "definido no script" nao dependem de configuracao: todo agente os atende.
-        interpreters = [k for k, _v in agent.interpreters] + list(path_guard.SCRIPT_DEFINED)
-        for cand in self.repo.candidates(conn, self.active_environments, interpreters, slots,
-                                         agent.queue_aging_min):
+        # CR-026: o agente atende qualquer interpretador; a escolha e so pelo ambiente.
+        for cand in self.repo.candidates(conn, self.active_environments, slots, agent.queue_aging_min):
             if len(self.executions) >= agent.max_parallel_jobs or self.clock() - start > budget \
                     or not self._can_continue():
                 break
@@ -1212,13 +1202,17 @@ class Agent(object):
         item.ticket = ticket
         context = self.repo.execution_context(conn, ticket)
         script, environment = context["script"], context["environment"]
+        notes = []
         try:
             snap, argv, script_real = params_compiler.validate_snapshot(ticket["submitted_params"],
-                                                                       self._cfg_snapshot())
+                                                                       self._cfg_snapshot(), notes=notes)
         except params_compiler.SnapshotError as exc:
             code = exc.reason[len("PATH_GUARD_"):] if exc.reason.startswith("PATH_GUARD_") else exc.reason
             return self._refuse(item, code)
-        if script is None or snap["path_file"] != script["path_file"] or snap["interpreter"] != script["interpreter"]:
+        item.notes = notes
+        # Snapshot v5/v6 guarda a chave logica anterior ao CR-026: compara pelo nome equivalente.
+        if script is None or snap["path_file"] != script["path_file"] \
+                or path_guard.registered_name(snap["interpreter"]) != script["interpreter"]:
             return self._refuse(item, "REGISTRATION_CHANGED")
         if script.get("active") != "Y":
             return self._refuse(item, "SCRIPT_INACTIVE")
@@ -1235,11 +1229,10 @@ class Agent(object):
         agent = self.cfg.agent
 
         class _Cfg(object):
-            interpreters = dict(agent.interpreters)
             sss_dirs = _sss_dirs(self.cfg)
             script_base_dir = getattr(agent, "script_base_dir", None)
             dev = self.cfg.app.sss_env == "DEV"
-            # CR-025: o nome digitado no disparo e buscado no PATH do proprio agente (o do servidor).
+            # CR-025/CR-026: os nomes (digitado e cadastro) sao buscados no PATH do proprio agente.
             search_path = os.environ.get("PATH", os.defpath)
         return _Cfg()
 
@@ -1299,7 +1292,7 @@ class Agent(object):
         agent = self.cfg.agent
         ticket = item.ticket
         item.script_path = script_real
-        item.interpreter_path = argv[0] if argv else None
+        item.interpreter_used = argv[0] if argv else None
         user = env_builder.exec_user(self.cfg, ticket["environment"])
         label = "SSS-%s-%s" % (self.agent_id, item.tid)
         try:
@@ -1310,6 +1303,10 @@ class Agent(object):
             item.log.error("falha antes do spawn: %s", exc, extra={"action": "SPAWN"})
             return self._finalize_without_spawn(item, _FINAL["SPAWN_ERROR"], "falha ao iniciar: %s (agente %s)" % (
                 exc.__class__.__name__, self.agent_id))
+        # CR-026: o #! ignorado (se houver) e o interpretador usado abrem o log do ticket.
+        for note in getattr(item, "notes", None) or []:
+            executor.sss_line(fd, note)
+        executor.sss_line(fd, "interpretador usado: %s" % item.interpreter_used)
         timeout = context["script"].get("timeout_s") or agent.script_timeout_s
         connection = None
         output = None
@@ -1377,7 +1374,7 @@ class Agent(object):
         try:
             ok = self.repo.register_pid(self._conn(), item.tid, self.agent_id, ex.pid, ex.identity,
                                         script_path=item.script_path,
-                                        interpreter_path=item.interpreter_path)
+                                        interpreter_used=item.interpreter_used)
         except Exception as exc:  # noqa: BLE001 - PID pendente (CR-008, R-08)
             if not item.pid_warned:
                 item.pid_warned = True
@@ -1457,4 +1454,5 @@ class _Item(object):
         self.finalize_pending = False
         self.output = None  # CR-012: output_phase.Saida quando o agente tem output_dir
         self.script_path = None  # CR-023 (D6): caminho real executado, gravado junto com o PID
-        self.interpreter_path = None  # CR-025: interpretador executado (argv[0]), gravado junto com o PID
+        self.interpreter_used = None  # CR-026: interpretador executado (argv[0]), gravado junto com o PID
+        self.notes = []  # CR-026: linhas [SSS] da pre-validacao (ex.: #! ignorado)
