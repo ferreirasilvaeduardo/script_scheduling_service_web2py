@@ -12,7 +12,7 @@ REQUIRED_PACKAGES := isort autopep8 flake8 pylint mypy
 EXCLUDES := .pytest_cache .mypy_cache .bkp .sql __pycache__ sss_dev_script_examples sss_packages
 PY_FILES := $(shell find . -name "*.py" $(foreach d,$(EXCLUDES),! -path "./$(d)/*"))
 
-.PHONY: check-sqlplus check-runtime check-dev-deps check-deps freeze-req zip-deploy zip-deploy-zip list-deploy format lint lint-pylint type-check check-all test-unit test-integration test-functional test-architecture test-all
+.PHONY: check-sqlplus check-runtime check-dev-deps check-deps freeze-req zip-deploy zip-deploy-zip list-deploy clean-cache package format lint lint-pylint type-check check-all test-unit test-integration test-functional test-architecture test-all
 
 # Valida o sqlplus, ORACLE_HOME e bibliotecas partilhadas do Instant Client
 check-sqlplus:
@@ -163,6 +163,30 @@ zip-deploy-zip: freeze-req ## Gera arquivo .zip nativo após gerar o snapshot de
 		-x "./databases/*.db" \
 		-x "./databases/storage.sqlite"
 	@echo "\n[+] Arquivo .zip gerado: $(ZIP_FILE)"
+
+# Apaga as pastas de cache do Python e do mypy em toda a árvore (o .git fica de fora)
+clean-cache: ## Apaga todas as pastas __pycache__ e .mypy_cache
+	@find . -path ./.git -prune -o -type d \( -name __pycache__ -o -name .mypy_cache \) -prune -print -exec rm -rf {} +
+	@echo "\n[+] Pastas __pycache__ e .mypy_cache apagadas."
+
+# Pacote de implantação seguro (DEPLOYMENT §3): cópia limpa do commit atual (git archive HEAD), sem as evidências
+# da homologação (docs/homologation, ~225 MB), conferida pelo tools/package.py, que recusa senha, secrets.cfg
+# real, código de DEV, o FAKE, testes e __pycache__. Mudança não commitada NÃO entra: faça o commit antes.
+PKG_DIR = ./.bkp/pacote_$(shell date +%Y%m%d_%H%M%S)
+package: ## Gera sss-<versao>.tar.gz e SHA256SUMS em ./.bkp/pacote_<data> para levar ao servidor
+	@if [ -n "$$(git status --porcelain --untracked-files=no -- . ':!LEIA-ME.TXT')" ]; then \
+		echo "[!] Aviso: há mudanças não commitadas; o pacote usa só o commit $$(git rev-parse --short HEAD)."; \
+	fi
+	@set -e; \
+	DEST=$(PKG_DIR); TMP=$$(mktemp -d); \
+	trap 'rm -rf "$$TMP"' EXIT; \
+	git archive HEAD | tar -x -C "$$TMP"; \
+	rm -rf "$$TMP/docs/homologation"; \
+	mkdir -p "$$DEST"; \
+	$(PYTHON) "$$TMP/tools/package.py" --source "$$TMP" --out-dir "$$DEST"; \
+	git rev-parse HEAD > "$$DEST/COMMIT"; \
+	echo "\n[+] Leve ao servidor os dois arquivos de $$DEST: sss-*.tar.gz e SHA256SUMS"; \
+	echo "    No servidor: sha256sum -c SHA256SUMS (DEPLOYMENT §3). COMMIT guarda o commit empacotado."
 
 # Inspeciona o pacote gerado mais recente em ./.bkp
 list-deploy: ## Lista os arquivos contidos no pacote mais recente gerado
