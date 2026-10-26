@@ -14,6 +14,7 @@ Ordem de locks: tbsss_scripts -> tbsss_parameters (nunca o inverso).
 import datetime
 import re
 
+from sss.platform import path_guard
 from sss.persistence import db_conn
 from sss.persistence import repo_errors
 from sss.persistence.contracts.repo_catalog import RepoCatalog
@@ -497,7 +498,7 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             raise repo_errors.RepoViolation("Tipo de parametro invalido", constraint=self._ck("scripts", "ptype"))
         if base.get("active", "Y") not in ("Y", "N"):
             raise repo_errors.RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint=self._ck("scripts", "active"))
-        if base.get("interpreter") not in ("PYTHON3", "BASH", "SH"):
+        if base.get("interpreter") not in path_guard.ALLOWLIST:
             raise repo_errors.RepoViolation("Interpretador fora da allowlist", constraint=self._ck("scripts", "int"))
         pfile = base.get("path_file") or ""
         # ck_tbsss_scr_path (README §10, CR-005, CR-023): absoluto ou relativo, sem '..', '//' nem '\';

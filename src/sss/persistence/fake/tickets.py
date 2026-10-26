@@ -111,6 +111,7 @@ class RepoTicketsFake(RepoTickets):
                 "process_id": ticket.get("process_id"),
                 "process_start": ticket.get("process_start"),
                 "script_path": ticket.get("script_path"),
+                "interpreter_path": ticket.get("interpreter_path"),
                 "status": status,
                 "priority": prio,
                 "cancel_requested": ticket.get("cancel_requested", "N"),

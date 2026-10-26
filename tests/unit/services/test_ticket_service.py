@@ -121,8 +121,8 @@ class TestTicketService(_BaseTicket):
         raw = ticket["submitted_params"]
         snap = json.loads(raw)
         self.assertEqual(raw, json.dumps(snap, ensure_ascii=False, sort_keys=True))
-        self.assertEqual(sorted(snap), sorted(params_compiler._SNAPSHOT_KEYS))
-        self.assertEqual(snap["version"], 5)
+        self.assertEqual(sorted(snap), sorted(params_compiler._SNAPSHOT_KEYS + ("interpreter_override",)))
+        self.assertEqual((snap["version"], snap["interpreter_override"]), (6, None))
         self.assertEqual(snap["script_name"], "carga_diaria")
         path_expected = os.path.join(self.base, "carga_diaria.py")
         self.assertEqual((snap["interpreter"], snap["path_file"]),

@@ -314,7 +314,8 @@ def _build_table_registry():
             ('ptype', {'sufixo': 'ptype', 'expr': "param_type IN ('NAMED','POSITIONAL','NONE')"}),
             ('active', {'sufixo': 'active', 'expr': "active IN ('Y', 'N')"}),
             ('paral', {'sufixo': 'paral', 'expr': "max_parallel_env BETWEEN 1 AND 999"}),
-            ('int', {'sufixo': 'int', 'expr': "interpreter IN ('PYTHON3','BASH','SH')"}),
+            # CR-025: PYTHON (2o Python do servidor) e os "definido no script" (#!)
+            ('int', {'sufixo': 'int', 'expr': "interpreter IN ('PYTHON3','PYTHON','BASH','SH','PYTHON_SCRIPT','SHELL_SCRIPT')"}),
             # CR-023: absoluto ou relativo a [agent] script_base_dir (sem exigir a '/' inicial)
             ('path', {'sufixo': 'path', 'expr': "INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\\') = 0"}),
             ('tmout', {'sufixo': 'tmout', 'expr': "timeout_s IS NULL OR timeout_s > 0"}),
@@ -561,6 +562,8 @@ def _build_table_registry():
             ('process_start', {'name': 'process_start', 'tipo': 'NUMBER(20)', 'not_null': False, 'default': None}),
             # CR-023 (D6): caminho real executado, gravado pelo agente junto com o PID
             ('script_path', {'name': 'script_path', 'tipo': 'VARCHAR2(1000 CHAR)', 'not_null': False, 'default': None}),
+            # CR-025: interpretador executado (configurado, do #! ou digitado no disparo), gravado com o PID
+            ('interpreter_path', {'name': 'interpreter_path', 'tipo': 'VARCHAR2(1000 CHAR)', 'not_null': False, 'default': None}),
             ('status', {'name': 'status', 'tipo': 'VARCHAR2(15 CHAR)', 'not_null': True, 'default': "'PENDING'"}),
             ('priority', {'name': 'priority', 'tipo': 'NUMBER(1)', 'not_null': True, 'default': '2'}),
             ('cancel_requested', {'name': 'cancel_requested', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'N'"}),

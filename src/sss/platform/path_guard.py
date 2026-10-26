@@ -10,19 +10,36 @@ Modulo puro: nao importa gluon (AGENTS §7.1).
 """
 import errno
 import os
-from typing import Iterable, Optional
+import re
+import shutil
+from typing import Iterable, Optional, Tuple
 
 from sss.platform import os_platform
 
-# Interpretadores logicos (CR-001, D1/D2; CR-005: somente POSIX): o catalogo guarda a chave; cada agente
-# a mapeia para o executavel local ([agent] interpreters).
-ALLOWLIST = ('PYTHON3', 'BASH', 'SH')
-# Argumentos fixos entre o executavel e o script (README §6.4); Python sempre com -I.
+# Interpretadores logicos (CR-001, D1/D2; CR-005: somente POSIX; CR-025): o catalogo guarda a chave.
+# Os configurados sao mapeados por cada agente para o executavel local ([agent] interpreters); os
+# "definido no script" usam o caminho do #! da primeira linha do script.
+CONFIGURED = ('PYTHON3', 'PYTHON', 'BASH', 'SH')
+SCRIPT_DEFINED = ('PYTHON_SCRIPT', 'SHELL_SCRIPT')
+ALLOWLIST = CONFIGURED + SCRIPT_DEFINED
+PYTHON_KINDS = ('PYTHON3', 'PYTHON', 'PYTHON_SCRIPT')
+# Argumentos fixos entre o executavel e o script (README §6.4). PYTHON3 configurado: -I. Os demais Python
+# (PYTHON pode ser o Python 2, que nao tem -I; #! e interpretador digitado no disparo, de versao
+# desconhecida): -E -s, que isolam do ambiente e do site do usuario em qualquer versao (CR-025).
+PYTHON_PORTABLE_ARGS = ('-E', '-s')
 FIXED_ARGS = {
     'PYTHON3': ('-I',),
+    'PYTHON': PYTHON_PORTABLE_ARGS,
     'BASH': (),
     'SH': (),
+    'PYTHON_SCRIPT': PYTHON_PORTABLE_ARGS,
+    'SHELL_SCRIPT': (),
 }
+# Interpretador digitado no disparo (CR-025): caminho absoluto ou so o nome, buscado no PATH do agente.
+OVERRIDE_MAX_LENGTH = 500
+_RE_INTERPRETER_NAME = re.compile(r"^[A-Za-z0-9._+-]{1,100}$")
+# Bytes lidos do inicio do script para o #! (o Linux le ate 256).
+SHEBANG_MAX_BYTES = 256
 # Pastas do sistema onde nenhum script pode ficar (README §8.5, CR-005 D3).
 SYSTEM_DIRS = os_platform.SYSTEM_DIRS
 # Tamanho maximo de path_file (coluna VARCHAR2(500 CHAR)).
@@ -51,6 +68,11 @@ class Code(object):
     GROUP_OTHER_WRITABLE = 'GROUP_OTHER_WRITABLE'
     INTERPRETER_NOT_ALLOWED = 'INTERPRETER_NOT_ALLOWED'
     INTERPRETER_UNSAFE = 'INTERPRETER_UNSAFE'
+    # CR-025: interpretador digitado ou do #! que nao existe ou nao e executavel; formato invalido do
+    # digitado; script "definido no script" sem #! valido.
+    INTERPRETER_NOT_FOUND = 'INTERPRETER_NOT_FOUND'
+    INTERPRETER_INVALID = 'INTERPRETER_INVALID'
+    NO_SHEBANG = 'NO_SHEBANG'
 
 
 class PathGuardError(Exception):
@@ -147,6 +169,55 @@ def resolve(path_file: str, sss_dirs: Iterable[Optional[str]] = (), base_dir: Op
     if code:
         raise PathGuardError(code)
     return os_platform.final_path(target)
+
+
+def validate_override(text: object) -> None:
+    """Formato do interpretador digitado no disparo (CR-025): caminho absoluto sem controle, ou so o nome
+    (letras, numeros, '.', '_', '+', '-'). Nao confere se existe: isso e no agente. Formato: INTERPRETER_INVALID."""
+    if not isinstance(text, str) or text == '' or len(text) > OVERRIDE_MAX_LENGTH:
+        raise PathGuardError(Code.INTERPRETER_INVALID)
+    if any(ord(c) < 32 or ord(c) == 127 for c in text):
+        raise PathGuardError(Code.INTERPRETER_INVALID)
+    if '/' in text:
+        if text[:1] != '/':
+            raise PathGuardError(Code.INTERPRETER_INVALID)
+    elif not _RE_INTERPRETER_NAME.match(text):
+        raise PathGuardError(Code.INTERPRETER_INVALID)
+
+
+def find_executable(text: str, search_path: Optional[str]) -> str:
+    """Executavel do interpretador digitado ou do #! (CR-025): caminho absoluto como esta, ou o nome buscado
+    em search_path (o PATH do agente). Conferencia minima: existe e e executavel; devolve o caminho real.
+    Senao, INTERPRETER_NOT_FOUND."""
+    validate_override(text)
+    candidate = text if '/' in text else shutil.which(text, path=search_path or os.defpath)
+    if not candidate:
+        raise PathGuardError(Code.INTERPRETER_NOT_FOUND)
+    real = os_platform.final_path(candidate)
+    if not os.path.isfile(real) or not os.access(real, os.X_OK):
+        raise PathGuardError(Code.INTERPRETER_NOT_FOUND)
+    return real
+
+
+def read_shebang(script_real: str) -> Tuple[str, Optional[str]]:
+    """(caminho, argumento opcional) do #! da primeira linha do script (CR-025), como o Linux interpreta:
+    um caminho absoluto e, no maximo, um argumento. Sem #! valido: NO_SHEBANG."""
+    try:
+        with open(script_real, 'rb') as handle:
+            head = handle.read(SHEBANG_MAX_BYTES)
+    except OSError:
+        raise PathGuardError(Code.NOT_FOUND)
+    first = head.split(b'\n', 1)[0].rstrip(b'\r')
+    if first[:2] != b'#!':
+        raise PathGuardError(Code.NO_SHEBANG)
+    try:
+        rest = first[2:].decode('utf-8').strip()
+    except UnicodeDecodeError:
+        raise PathGuardError(Code.NO_SHEBANG)
+    parts = rest.split(None, 1)
+    if not parts or parts[0][:1] != '/':
+        raise PathGuardError(Code.NO_SHEBANG)
+    return parts[0], (parts[1].strip() if len(parts) > 1 else None)
 
 
 def validate_executable(path, sss_dirs=()):

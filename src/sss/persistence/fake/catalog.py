@@ -3,6 +3,7 @@
 import copy
 import re
 
+from sss.platform import path_guard
 from sss.persistence.contracts.repo_catalog import RepoCatalog
 from sss.persistence.repo_errors import RepoConflict, RepoNotFound, RepoViolation
 from sss.persistence.fake.store import paginate
@@ -209,7 +210,7 @@ class RepoCatalogFake(RepoCatalog):
             raise RepoViolation("Tipo de parametro invalido", constraint="ck_tbsss_scr_ptype")
         if base.get("active", "Y") not in ("Y", "N"):
             raise RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint="ck_tbsss_scr_active")
-        if base.get("interpreter") not in ("PYTHON3", "BASH", "SH"):
+        if base.get("interpreter") not in path_guard.ALLOWLIST:
             raise RepoViolation("Interpretador fora da allowlist", constraint="ck_tbsss_scr_int")
         pfile = base.get("path_file") or ""
         # ck_tbsss_scr_path (README §10, CR-005, CR-023): absoluto ou relativo, sem '..', '//' nem '\\';

@@ -22,7 +22,7 @@ FAKE_AGENT = 2 ** 31 - 3
 NOW = datetime.datetime(2026, 10, 13, 10, 47, 0, 123456)
 AgentCfg = collections.namedtuple("CfgAgente", ["interpreters"])
 KEYS_6_5 = {"version", "script_id", "script_name", "interpreter", "path_file", "param_type", "args",
-              "answers", "sensitive", "compiled_at"}
+              "answers", "sensitive", "compiled_at", "interpreter_override"}  # CR-025: snapshot v6
 EXE_PY = "/usr/bin/python3"
 
 
@@ -343,10 +343,11 @@ class TestCompileSnapshot(unittest.TestCase):
         js, resolved, errors = pc.compile_snapshot(script(), self._links()[:1], {"data_ref": "2026-10-13"}, NOW)
         self.assertEqual(errors, {})
         expected = {
-            "version": 5, "script_id": 12, "script_name": "carga_faturas", "interpreter": "PYTHON3",
+            "version": 6, "script_id": 12, "script_name": "carga_faturas", "interpreter": "PYTHON3",
             "path_file": REAL, "param_type": "NAMED",
             "args": ["--data", "2026-10-13"],
             "answers": {"data_ref": "2026-10-13"}, "sensitive": [], "compiled_at": "2026-10-13 10:47:00",
+            "interpreter_override": None,
         }
         self.assertEqual(json.loads(js), expected)
         self.assertEqual(js, json.dumps(expected, ensure_ascii=False, sort_keys=True))
@@ -550,10 +551,90 @@ class TestSeedFake(unittest.TestCase):
         tickets = self.repo_factory.get("tickets")
         for tid in (1, 11, 17, 37):
             snap = json.loads(tickets.get(tid)["submitted_params"])
-            self.assertEqual((snap["version"], set(snap.keys())), (5, KEYS_6_5), tid)
+            self.assertEqual((snap["version"], set(snap.keys())), (6, KEYS_6_5), tid)
             # CR-023: o seed do FAKE cadastra os scripts com caminho relativo a pasta base do agente.
             self.assertFalse(snap["path_file"].startswith("/"), tid)
             path_guard.validate_registration(snap["path_file"])
+
+
+class TestInterpreterOverrideCr025(unittest.TestCase):
+    """CR-025: snapshot v6 com o interpretador digitado; argv do agente com o digitado, o #! ou o configurado."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix="sss_pc_int_")
+        self.addCleanup(shutil.rmtree, self.root)
+        self.bin = os.path.join(self.root, "bin")
+        os.mkdir(self.bin)
+        self.exe = os.path.join(self.bin, "python3.99")
+        with open(self.exe, "w") as f:
+            f.write("#!/bin/sh\n")
+        os.chmod(self.exe, 0o755)
+        self.cfg = collections.namedtuple("CfgInt", ["interpreters", "search_path"])(
+            {"PYTHON3": EXE_PY, "SH": "/bin/sh"}, self.bin)
+
+    def _script(self, interpreter, first_line=b"print(1)"):
+        path = os.path.join(self.root, "%s.txt" % interpreter)
+        with open(path, "wb") as f:
+            f.write(first_line + b"\n")
+        os.chmod(path, 0o644)
+        return dict(script(), interpreter=interpreter, path_file=path, param_type="POSITIONAL")
+
+    def _run(self, scr, override=None):
+        js, _r, errors = pc.compile_snapshot(scr, [], {}, NOW, interpreter_override=override)
+        self.assertEqual(errors, {})
+        return pc.validate_snapshot(js, self.cfg)[1]
+
+    def _reason(self, scr, override=None):
+        js, _r, _e = pc.compile_snapshot(scr, [], {}, NOW, interpreter_override=override)
+        with self.assertRaises(SnapshotError) as ctx:
+            pc.validate_snapshot(js, self.cfg)
+        return ctx.exception.reason
+
+    def test_digitado_vence_o_cadastro(self):
+        scr = self._script("PYTHON3")
+        real = os.path.realpath(self.exe)
+        self.assertEqual(self._run(scr, "python3.99"), [real, "-E", "-s", scr["path_file"]])
+        self.assertEqual(self._run(scr, self.exe), [real, "-E", "-s", scr["path_file"]])
+        self.assertEqual(self._run(scr), [EXE_PY, "-I", scr["path_file"]])
+        self.assertEqual(self._reason(scr, "python9.99"), "PATH_GUARD_INTERPRETER_NOT_FOUND")
+        sh = self._script("SH")
+        self.assertEqual(self._run(sh, "python3.99"), [real, sh["path_file"]])
+
+    def test_digitado_com_formato_invalido_e_erro_do_campo(self):
+        _js, _r, errors = pc.compile_snapshot(self._script("PYTHON3"), [], {}, NOW, interpreter_override="py thon")
+        self.assertEqual(errors, {pc.INTERPRETER_KEY: pc.INTERPRETER_MESSAGE})
+        js, _r, errors = pc.compile_snapshot(self._script("PYTHON3"), [], {}, NOW, interpreter_override="  ")
+        self.assertEqual((errors, json.loads(js)["interpreter_override"], json.loads(js)["version"]), ({}, None, 6))
+
+    def test_definido_no_script(self):
+        py = self._script("PYTHON_SCRIPT", ("#!%s" % self.exe).encode())
+        self.assertEqual(self._run(py), [os.path.realpath(self.exe), "-E", "-s", py["path_file"]])
+        sh = self._script("SHELL_SCRIPT", b"#!/bin/sh -e")
+        self.assertEqual(self._run(sh), [os.path.realpath("/bin/sh"), "-e", sh["path_file"]])
+        self.assertEqual(self._reason(self._script("SHELL_SCRIPT", b"echo sem")), "PATH_GUARD_NO_SHEBANG")
+        self.assertEqual(self._reason(self._script("SHELL_SCRIPT", b"#!/nao/existe/sh")),
+                         "PATH_GUARD_INTERPRETER_NOT_FOUND")
+        # O digitado vence tambem o #!
+        self.assertEqual(self._run(sh, "python3.99"), [os.path.realpath(self.exe), sh["path_file"]])
+
+    def test_python_configurado_e_v5_aceita(self):
+        cfg = collections.namedtuple("CfgPy", ["interpreters"])({"PYTHON": "/usr/bin/python3"})
+        scr = self._script("PYTHON")
+        js, _r, _e = pc.compile_snapshot(scr, [], {}, NOW)
+        self.assertEqual(pc.validate_snapshot(js, cfg)[1], ["/usr/bin/python3", "-E", "-s", scr["path_file"]])
+        snap = json.loads(js)
+        snap["version"] = 5
+        del snap["interpreter_override"]
+        self.assertEqual(pc.validate_snapshot(json.dumps(snap), cfg)[1][:3], ["/usr/bin/python3", "-E", "-s"])
+        snap["version"] = 7
+        with self.assertRaises(SnapshotError) as ctx:
+            pc.validate_snapshot(json.dumps(snap), cfg)
+        self.assertEqual(ctx.exception.reason, "UNSUPPORTED_VERSION")
+
+    def test_argv_logico_mostra_o_digitado(self):
+        scr = self._script("PYTHON3")
+        js, _r, _e = pc.compile_snapshot(scr, [], {}, NOW, interpreter_override="python3.13")
+        self.assertEqual(pc.display_argv(json.loads(js)), ["python3.13", "-E", "-s", scr["path_file"]])
 
 
 if __name__ == "__main__":

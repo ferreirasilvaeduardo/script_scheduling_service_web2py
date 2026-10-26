@@ -30,6 +30,7 @@ from sss.scheduler import log_pump
 from sss.core import params_compiler
 from sss.config import log_paths
 from sss.platform import os_platform
+from sss.platform import path_guard
 from sss.core import rbac
 from sss.persistence.contracts import repo_inputs
 from sss.config import sss_config
@@ -1163,7 +1164,8 @@ class Agent(object):
         start = self.clock()
         budget = agent.heartbeat_interval_s / 2.0
         conn = self._conn()
-        interpreters = [k for k, _v in agent.interpreters]
+        # CR-025: os "definido no script" nao dependem de configuracao: todo agente os atende.
+        interpreters = [k for k, _v in agent.interpreters] + list(path_guard.SCRIPT_DEFINED)
         for cand in self.repo.candidates(conn, self.active_environments, interpreters, slots,
                                          agent.queue_aging_min):
             if len(self.executions) >= agent.max_parallel_jobs or self.clock() - start > budget \
@@ -1237,6 +1239,8 @@ class Agent(object):
             sss_dirs = _sss_dirs(self.cfg)
             script_base_dir = getattr(agent, "script_base_dir", None)
             dev = self.cfg.app.sss_env == "DEV"
+            # CR-025: o nome digitado no disparo e buscado no PATH do proprio agente (o do servidor).
+            search_path = os.environ.get("PATH", os.defpath)
         return _Cfg()
 
     def _refuse(self, item, code):
@@ -1295,6 +1299,7 @@ class Agent(object):
         agent = self.cfg.agent
         ticket = item.ticket
         item.script_path = script_real
+        item.interpreter_path = argv[0] if argv else None
         user = env_builder.exec_user(self.cfg, ticket["environment"])
         label = "SSS-%s-%s" % (self.agent_id, item.tid)
         try:
@@ -1371,7 +1376,8 @@ class Agent(object):
         ex = item.execution
         try:
             ok = self.repo.register_pid(self._conn(), item.tid, self.agent_id, ex.pid, ex.identity,
-                                        script_path=item.script_path)
+                                        script_path=item.script_path,
+                                        interpreter_path=item.interpreter_path)
         except Exception as exc:  # noqa: BLE001 - PID pendente (CR-008, R-08)
             if not item.pid_warned:
                 item.pid_warned = True
@@ -1451,3 +1457,4 @@ class _Item(object):
         self.finalize_pending = False
         self.output = None  # CR-012: output_phase.Saida quando o agente tem output_dir
         self.script_path = None  # CR-023 (D6): caminho real executado, gravado junto com o PID
+        self.interpreter_path = None  # CR-025: interpretador executado (argv[0]), gravado junto com o PID

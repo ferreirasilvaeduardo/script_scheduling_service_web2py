@@ -2305,7 +2305,7 @@ END;
   * `ck_tbsss_scr_ptype (param_type IN ('NAMED','POSITIONAL','NONE'))`
   * `ck_tbsss_scr_active`
   * `ck_tbsss_scr_paral (max_parallel_env BETWEEN 1 AND 999)`
-  * `ck_tbsss_scr_int (interpreter IN ('PYTHON3','BASH','SH'))`
+  * `ck_tbsss_scr_int (interpreter IN ('PYTHON3','PYTHON','BASH','SH','PYTHON_SCRIPT','SHELL_SCRIPT'))` (CR-025: `PYTHON`, segundo Python do servidor, e os "definido no script", que usam o `#!`)
   * `ck_tbsss_scr_path (INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\') = 0)` (formato do §8.5, CR-005; desde o CR-023 sem exigir a `/` inicial, porque o caminho pode ser relativo a `[agent] script_base_dir`)
   * `ck_tbsss_scr_tmout (timeout_s IS NULL OR timeout_s > 0)`
   * `ck_tbsss_scr_upd` (colunas de registro, CR-006)
@@ -2316,7 +2316,7 @@ END;
   * `script_group VARCHAR2(30 CHAR)`
   * `category VARCHAR2(30 CHAR)`
   * `stage VARCHAR2(30 CHAR)`
-  * `interpreter VARCHAR2(15 CHAR) NOT NULL` (lógico; o executável é mapeado por agente, §8.5)
+  * `interpreter VARCHAR2(15 CHAR) NOT NULL` (lógico; o executável é mapeado por agente, §8.5; `PYTHON_SCRIPT` e `SHELL_SCRIPT` usam o `#!` do script, CR-025)
   * `path_file VARCHAR2(500 CHAR) NOT NULL` (caminho do script, absoluto ou relativo a `[agent] script_base_dir` de cada agente, §8.5, CR-005, CR-023)
   * `param_type VARCHAR2(15 CHAR) DEFAULT 'NAMED' NOT NULL`
   * `max_parallel_env NUMBER(3) DEFAULT 1 NOT NULL`
@@ -2494,6 +2494,7 @@ END;
   * `process_id NUMBER(10)` (CR-007: comporta PIDs de até 10 dígitos, como no HP-UX)
   * `process_start NUMBER(20)`
   * `script_path VARCHAR2(1000 CHAR)` (CR-023: caminho real executado, gravado pelo agente junto com o PID; acima de 1000 caracteres, só o final, com `...` na frente)
+  * `interpreter_path VARCHAR2(1000 CHAR)` (CR-025: interpretador executado, o configurado, o do `#!` ou o digitado no disparo, gravado junto com o PID, com a mesma regra de tamanho)
   * `status VARCHAR2(15 CHAR) DEFAULT 'PENDING' NOT NULL`
   * `priority NUMBER(1) DEFAULT 2 NOT NULL`
   * `cancel_requested CHAR(1) DEFAULT 'N' NOT NULL`

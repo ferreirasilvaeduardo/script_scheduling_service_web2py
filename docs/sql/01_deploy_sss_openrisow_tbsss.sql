@@ -247,6 +247,7 @@ CREATE TABLE openrisow.tbsss_tickets (
     process_id NUMBER(10),
     process_start NUMBER(20),
     script_path VARCHAR2(1000 CHAR),
+    interpreter_path VARCHAR2(1000 CHAR),
     status VARCHAR2(15 CHAR) DEFAULT 'PENDING' NOT NULL,
     priority NUMBER(1) DEFAULT 2 NOT NULL,
     cancel_requested CHAR(1) DEFAULT 'N' NOT NULL,
@@ -444,7 +445,7 @@ ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_active CHECK (ac
 
 ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_paral CHECK (max_parallel_env BETWEEN 1 AND 999);
 
-ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_int CHECK (interpreter IN ('PYTHON3','BASH','SH'));
+ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_int CHECK (interpreter IN ('PYTHON3','PYTHON','BASH','SH','PYTHON_SCRIPT','SHELL_SCRIPT'));
 
 ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_path CHECK (INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\') = 0);
 
@@ -1315,6 +1316,7 @@ COMMENT ON COLUMN openrisow.tbsss_tickets.agent_id IS 'Identificador do daemon d
 COMMENT ON COLUMN openrisow.tbsss_tickets.process_id IS 'Identificador do processo (PID) no sistema operacional do servidor';
 COMMENT ON COLUMN openrisow.tbsss_tickets.process_start IS 'Coluna process_start da tabela tbsss_tickets';
 COMMENT ON COLUMN openrisow.tbsss_tickets.script_path IS 'Caminho real do script executado, resolvido pelo agente (CR-023); vazio antes do inicio';
+COMMENT ON COLUMN openrisow.tbsss_tickets.interpreter_path IS 'Interpretador executado (configurado, do #! ou digitado no disparo, CR-025); vazio antes do inicio';
 COMMENT ON COLUMN openrisow.tbsss_tickets.status IS 'Situacao da execucao (PENDING, RUNNING, SUCCESS, FAILED, CANCELLED)';
 COMMENT ON COLUMN openrisow.tbsss_tickets.priority IS 'Prioridade de atendimento na fila (1=Critico, 2=Alta, 3=Normal, 4=Baixa)';
 COMMENT ON COLUMN openrisow.tbsss_tickets.cancel_requested IS 'Indicador se o cancelamento foi requisitado pelo operador (Y/N)';

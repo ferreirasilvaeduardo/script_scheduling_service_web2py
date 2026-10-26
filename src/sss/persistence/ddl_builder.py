@@ -319,6 +319,7 @@ COLUMN_COMMENTS = {
         "cancel_requested": "Indicador se o cancelamento foi requisitado pelo operador (Y/N)",
         "process_id": "Identificador do processo (PID) no sistema operacional do servidor",
         "script_path": "Caminho real do script executado, resolvido pelo agente (CR-023); vazio antes do inicio",
+        "interpreter_path": "Interpretador executado (configurado, do #! ou digitado no disparo, CR-025); vazio antes do inicio",
         "exit_code": "Codigo numerico de retorno do processo (0=Sucesso, >0=Erro)",
         "scheduled_at": "Data e hora agendadas para o processamento",
         "started_at": "Data e hora efetivas do inicio da execucao pelo agente",

@@ -702,6 +702,13 @@ class TestConfigCR007(unittest.TestCase):
         self._refusal("queue_aging_min", agent={"queue_aging_min": "1441"})
         self.assertEqual(self._load(agent={"queue_aging_min": "0"}).agent.queue_aging_min, 0)
 
+    def test_cr025_chaves_de_interpreters(self):
+        """CR-025: PYTHON (2o Python do servidor) e configuravel; os "definido no script" nao."""
+        ok = self._load(agent={"interpreters": "PYTHON3=/usr/bin/python3,PYTHON=/usr/bin/python2,SH=/bin/sh"})
+        self.assertEqual(dict(ok.agent.interpreters)["PYTHON"], "/usr/bin/python2")
+        for bad in ("PYTHON_SCRIPT=/usr/bin/python3", "SHELL_SCRIPT=/bin/sh", "PERL=/usr/bin/perl"):
+            self._refusal("interpreters", agent={"interpreters": bad})
+
     def test_pasta_de_saida(self):
         # CR-012 (README §8.13): opcional, com limites e sem sobrepor as pastas do SSS.
         cfg = self._load()

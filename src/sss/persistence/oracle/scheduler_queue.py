@@ -240,7 +240,8 @@ class RepoSchedulerQueue(object):
         cur = conn.cursor()
         try:
             cur.execute("SELECT id, script_id, environment, requested_by, status, priority, cancel_requested, "
-                        "agent_id, process_id, process_start, script_path, parent_ticket_id, schedule_id, "
+                        "agent_id, process_id, process_start, script_path, interpreter_path, parent_ticket_id, "
+                        "schedule_id, "
                         "scheduled_at, started_at, created_at, log_offset_chars, submitted_params FROM " + self._tck +
                         " WHERE id = :id",
                         id=int(ticket_id))
@@ -248,7 +249,8 @@ class RepoSchedulerQueue(object):
             if r is None:
                 return None
             names = ("id", "script_id", "environment", "requested_by", "status", "priority", "cancel_requested",
-                     "agent_id", "process_id", "process_start", "script_path", "parent_ticket_id", "schedule_id",
+                     "agent_id", "process_id", "process_start", "script_path", "interpreter_path",
+                     "parent_ticket_id", "schedule_id",
                      "scheduled_at", "started_at", "created_at", "log_offset_chars", "submitted_params")
             data = dict(zip(names, r))
             data["submitted_params"] = _read_lob(data["submitted_params"])
@@ -341,16 +343,19 @@ class RepoSchedulerQueue(object):
     # Transicoes do ticket (§5.1, §8.4 passo 5, §8.7)
     # -------------------------------------------------------------------------
 
-    def register_pid(self, conn, ticket_id, agent_id, pid, process_start, script_path=None):
-        """PID e identidade do processo (README §8.4 passo 5) e o caminho real executado (CR-023, D6).
+    def register_pid(self, conn, ticket_id, agent_id, pid, process_start, script_path=None,
+                     interpreter_path=None):
+        """PID e identidade do processo (README §8.4 passo 5), o caminho real executado (CR-023, D6) e o
+        interpretador executado (CR-025).
         Rotina tecnica, sem updated_*. False = posse perdida (OWNERSHIP_LOST)."""
         with db_conn.transaction(conn):
             cur = conn.cursor()
             try:
                 cur.execute("UPDATE " + self._tck + " SET process_id = :pid, process_start = :process_start, "
-                            "script_path = :script_path "
+                            "script_path = :script_path, interpreter_path = :interpreter_path "
                             "WHERE id = :ticket_id AND agent_id = :agent_id AND status = 'RUNNING'",
                             pid=int(pid), process_start=process_start, script_path=_fit_path(script_path),
+                            interpreter_path=_fit_path(interpreter_path),
                             ticket_id=int(ticket_id), agent_id=agent_id)
                 return cur.rowcount == 1
             finally:

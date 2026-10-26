@@ -239,6 +239,68 @@ class TestAppDir(unittest.TestCase):
         path_guard.check_forbidden_dirs("relatorios/x.py")
 
 
+class TestInterpreterCr025(unittest.TestCase):
+    """CR-025: interpretador digitado no disparo (caminho ou nome no PATH do agente) e o #! do script."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix="sss_pg_int_")
+        self.addCleanup(shutil.rmtree, self.root)
+        self.bin = os.path.join(self.root, "bin")
+        os.mkdir(self.bin)
+        self.exe = os.path.join(self.bin, "python3.99")
+        with open(self.exe, "w") as f:
+            f.write("#!/bin/sh\n")
+        os.chmod(self.exe, 0o755)
+        self.not_exec = os.path.join(self.bin, "sem_x")
+        with open(self.not_exec, "w") as f:
+            f.write("x\n")
+        os.chmod(self.not_exec, 0o644)
+
+    def _script(self, first_line):
+        path = os.path.join(self.root, "s.py")
+        with open(path, "wb") as f:
+            f.write(first_line + b"\nprint(1)\n")
+        return path
+
+    def test_formato_do_digitado(self):
+        for ok in ("/opt/py311/bin/python3", "python3.13", "bash", "python3+x", "/opt/a b/python"):
+            path_guard.validate_override(ok)
+        for bad in ("", None, "py thon", "bin/python3", "python3;id", "a\x00", "x" * 501, "python3 -c"):
+            with self.subTest(valor=bad):
+                with self.assertRaises(PathGuardError) as ctx:
+                    path_guard.validate_override(bad)
+                self.assertEqual(ctx.exception.code, Code.INTERPRETER_INVALID)
+
+    def test_busca_por_caminho_e_por_nome(self):
+        self.assertEqual(path_guard.find_executable(self.exe, None), os.path.realpath(self.exe))
+        self.assertEqual(path_guard.find_executable("python3.99", self.bin), os.path.realpath(self.exe))
+        for text, search in (("python3.99", "/nao/existe"), (self.not_exec, None), ("sem_x", self.bin),
+                             (os.path.join(self.bin, "nada"), None)):
+            with self.subTest(texto=text):
+                with self.assertRaises(PathGuardError) as ctx:
+                    path_guard.find_executable(text, search)
+                self.assertEqual(ctx.exception.code, Code.INTERPRETER_NOT_FOUND)
+
+    def test_shebang(self):
+        self.assertEqual(path_guard.read_shebang(self._script(b"#!/opt/py311/bin/python3")),
+                         ("/opt/py311/bin/python3", None))
+        self.assertEqual(path_guard.read_shebang(self._script(b"#! /bin/bash -e")), ("/bin/bash", "-e"))
+        self.assertEqual(path_guard.read_shebang(self._script(b"#!/usr/bin/env python3")),
+                         ("/usr/bin/env", "python3"))
+        for first in (b"print(1)", b"#!", b"#!python3", b"# !/bin/sh", b"#!\xff\xfe"):
+            with self.subTest(linha=first):
+                with self.assertRaises(PathGuardError) as ctx:
+                    path_guard.read_shebang(self._script(first))
+                self.assertEqual(ctx.exception.code, Code.NO_SHEBANG)
+
+    def test_opcoes_do_cadastro(self):
+        self.assertEqual(path_guard.ALLOWLIST,
+                         ("PYTHON3", "PYTHON", "BASH", "SH", "PYTHON_SCRIPT", "SHELL_SCRIPT"))
+        self.assertEqual(path_guard.FIXED_ARGS["PYTHON3"], ("-I",))
+        for key in ("PYTHON", "PYTHON_SCRIPT"):
+            self.assertEqual(path_guard.FIXED_ARGS[key], ("-E", "-s"))
+
+
 class TestTextValidations(unittest.TestCase):
 
     def test_validar_cadastro(self):

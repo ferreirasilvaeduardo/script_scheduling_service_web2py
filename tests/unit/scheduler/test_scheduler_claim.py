@@ -114,13 +114,16 @@ class _Db(object):
         self.ctx = dict(self.ctx, scripts=frozenset(set(self.ctx["scripts"]) | {sid}))
         return sid
 
-    def ticket(self, sid, version=5, args=(), path_file=None, interpreter=None, schedule_id=None):
+    def ticket(self, sid, version=5, args=(), path_file=None, interpreter=None, schedule_id=None,
+               override=None):
         self.seq += 1
         s = self.scripts[sid]
         snap = {"version": version, "script_id": sid, "script_name": s["name"],
                 "interpreter": interpreter or s["interpreter"], "path_file": path_file or s["path_file"],
                 "param_type": "NAMED", "args": list(args), "answers": {}, "sensitive": [],
                 "compiled_at": "2026-10-20 10:00:00"}
+        if version >= 6:
+            snap["interpreter_override"] = override
         self.tickets[self.seq] = {
             "id": self.seq, "script_id": sid, "environment": AMB, "requested_by": "ana", "status": "PENDING",
             "priority": 2, "cancel_requested": "N", "agent_id": None, "process_id": None, "process_start": None,
@@ -183,12 +186,12 @@ class _Db(object):
         self._fail("is_cancel_requested")
         return self.tickets[tid]["cancel_requested"] == "Y"
 
-    def register_pid(self, conn, tid, agent_id, pid, start, script_path=None):
+    def register_pid(self, conn, tid, agent_id, pid, start, script_path=None, interpreter_path=None):
         self._fail("register_pid")
         t = self.tickets[tid]
         if t["status"] != "RUNNING" or t["agent_id"] != agent_id:
             return False
-        t.update(process_id=pid, process_start=start, script_path=script_path)
+        t.update(process_id=pid, process_start=start, script_path=script_path, interpreter_path=interpreter_path)
         return True
 
     def return_to_queue(self, conn, tid, agent_id):
@@ -438,6 +441,30 @@ class TestExecution(_Base):
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
         self.assertIn("%s|\n" % real, self.db.tickets[tid]["log"])
         self.assertEqual(self.db.tickets[tid]["script_path"], real)
+
+    def test_cr025_definido_no_script_e_digitado(self):
+        # CR-025: SHELL_SCRIPT roda pelo #!; o digitado no disparo (so o nome) vence; o usado vai com o PID.
+        sid = self.db.script("#!/bin/sh\necho \"rodou $0\"\n", interpreter="SHELL_SCRIPT")
+        by_shebang = self.db.ticket(sid, version=6)
+        typed = self.db.ticket(self.db.script("echo digitado\n"), version=6, override="sh")
+        self.start_agent()
+        self.run_loop(lambda: self.finished(by_shebang)() and self.finished(typed)())
+        self.assertEqual(self.final(by_shebang), ("SUCCESS", "EXIT_OK", 0))
+        self.assertEqual(self.db.tickets[by_shebang]["interpreter_path"], os.path.realpath("/bin/sh"))
+        self.assertEqual(self.final(typed), ("SUCCESS", "EXIT_OK", 0))
+        self.assertEqual(self.db.tickets[typed]["interpreter_path"], os.path.realpath(shutil.which("sh")))
+
+    def test_cr025_shebang_invalido_e_nome_inexistente(self):
+        sem = self.db.ticket(self.db.script("echo sem shebang\n", interpreter="SHELL_SCRIPT"), version=6)
+        nome = self.db.ticket(self.db.script("echo x\n"), version=6, override="interpretador_que_nao_existe")
+        self.start_agent()
+        with self.assertLogs("sss_scheduler", "WARNING") as logs:
+            self.run_loop(lambda: self.finished(sem)() and self.finished(nome)())
+        self.assertEqual((self.final(sem)[:2], self.final(nome)[:2]),
+                         (("FAILED", "PRECHECK_FAILED"), ("FAILED", "PRECHECK_FAILED")))
+        text = "\n".join(logs.output)
+        self.assertIn("NO_SHEBANG", text)
+        self.assertIn("INTERPRETER_NOT_FOUND", text)
 
     def test_cr023_relativo_sem_base_e_precheck(self):
         sid = self.db.script("echo nunca\n")

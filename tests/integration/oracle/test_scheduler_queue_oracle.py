@@ -130,9 +130,12 @@ class TestSchedulerQueueOracle(unittest.TestCase):
         self.assertTrue(self.repo.active_homologated_script(self.conn, self.c["scr"]["id"], self.amb))
         # CR-023 (D6): caminho real executado gravado junto com o PID; acima de 1000 caracteres, o final.
         self.assertTrue(self.repo.register_pid(self.conn, tid, self.agent, 4321, 777,
-                                               script_path="/opt/tst/" + "d/" * 600 + "fim.sh"))
-        stored = self.repo.get_ticket(self.conn, tid)["script_path"]
-        self.assertEqual((len(stored), stored[:3], stored[-6:]), (1000, "...", "fim.sh"))
+                                               script_path="/opt/tst/" + "d/" * 600 + "fim.sh",
+                                               interpreter_path="/opt/py311/bin/python3"))
+        stored = self.repo.get_ticket(self.conn, tid)
+        self.assertEqual((len(stored["script_path"]), stored["script_path"][:3], stored["script_path"][-6:]),
+                         (1000, "...", "fim.sh"))
+        self.assertEqual(stored["interpreter_path"], "/opt/py311/bin/python3", "CR-025: interpretador usado")
         lost, now = self.repo.heartbeat(self.conn, self.agent, "host-teste", os.getpid(), [tid])
         self.assertEqual(lost, [])
         self.assertIsInstance(now, datetime.datetime)

@@ -256,7 +256,7 @@ class TestExpansion(_Base):
                          (datetime.datetime(2026, 10, 20, 9, 55), LOGIN, 2, "SYSTEM:" + AGENT),
                          "scheduled_at = ocorrencia coberta (R-27, R-03)")
         snap = json.loads(t["submitted_params"])
-        self.assertEqual((snap["version"], snap["path_file"], snap["args"]), (5, "/opt/x/carga.sh", ["--data", "2026-10-20"]))
+        self.assertEqual((snap["version"], snap["path_file"], snap["args"]), (6, "/opt/x/carga.sh", ["--data", "2026-10-20"]))
         self.assertNotIn("pasta_base", snap)
         self.assertEqual(t["answers"], [{"parameter_id": 11, "answer_value": "2026-10-20"}])
         self.assertTrue(any("agendamento 1: ticket %d gerado" % t["id"] in l for l in logs.output))

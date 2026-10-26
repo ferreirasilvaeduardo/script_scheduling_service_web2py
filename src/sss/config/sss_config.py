@@ -582,9 +582,10 @@ def _validate_cr007(app, oracle, agent, logging_dict, retention):
 
     for logical, executable in agent["interpreters"]:
         # Allowlist do path_guard (README §6.4); o executavel e conferido pelo agente na subida (§8.5).
-        if logical not in ("PYTHON3", "BASH", "SH"):
+        # CR-025: PYTHON (ex.: o Python 2 do servidor) tambem e configuravel; os "definido no script" nao.
+        if logical not in ("PYTHON3", "PYTHON", "BASH", "SH"):
             raise ConfigError(section="agent", key="interpreters",
-                             reason="Interpretador fora da allowlist (PYTHON3, BASH, SH): '%s'" % logical)
+                             reason="Interpretador fora da allowlist (PYTHON3, PYTHON, BASH, SH): '%s'" % logical)
         if not executable.startswith("/") or os.path.normpath(executable) != executable:
             raise ConfigError(section="agent", key="interpreters",
                              reason="Executavel de %s deve ser caminho absoluto e normalizado" % logical)
