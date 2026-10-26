@@ -12,7 +12,7 @@ REQUIRED_PACKAGES := isort autopep8 flake8 pylint mypy
 EXCLUDES := .pytest_cache .mypy_cache .bkp .sql __pycache__ sss_dev_script_examples sss_packages
 PY_FILES := $(shell find . -name "*.py" $(foreach d,$(EXCLUDES),! -path "./$(d)/*"))
 
-.PHONY: check-sqlplus check-runtime check-dev-deps check-deps freeze-req zip-deploy zip-deploy-zip list-deploy clean-cache package format lint lint-pylint type-check check-all test-unit test-integration test-functional test-architecture test-all
+.PHONY: check-sqlplus check-runtime check-dev-deps check-deps freeze-req zip-deploy zip-deploy-zip list-deploy clean-cache package package-local format lint lint-pylint type-check check-all test-unit test-integration test-functional test-architecture test-all
 
 # Valida o sqlplus, ORACLE_HOME e bibliotecas partilhadas do Instant Client
 check-sqlplus:
@@ -187,6 +187,29 @@ package: ## Gera sss-<versao>.tar.gz e SHA256SUMS em ./.bkp/pacote_<data> para l
 	git rev-parse HEAD > "$$DEST/COMMIT"; \
 	echo "\n[+] Leve ao servidor os dois arquivos de $$DEST: sss-*.tar.gz e SHA256SUMS"; \
 	echo "    No servidor: sha256sum -c SHA256SUMS (DEPLOYMENT §3). COMMIT guarda o commit empacotado."
+
+# Mesmo pacote, mas a partir dos arquivos desta pasta como estão (sem git; inclui o que não foi commitado).
+# Copia só o que o tools/package.py empacota (bin, docs, instance, scripts, src, AGENTS.md, README.md) e o próprio
+# tools/, sem caches, sem docs/homologation e sem o instance/secrets.cfg local (senhas reais). A conferência do
+# package.py é a mesma: senha fora do placeholder, código de DEV, o FAKE, testes ou link simbólico recusam o pacote.
+PKG_LOCAL_DIR = ./.bkp/pacote_local_$(shell date +%Y%m%d_%H%M%S)
+package-local: ## Gera o pacote a partir dos arquivos locais (sem git) em ./.bkp/pacote_local_<data>
+	@set -e; \
+	DEST=$(PKG_LOCAL_DIR); TMP=$$(mktemp -d); \
+	trap 'rm -rf "$$TMP"' EXIT; \
+	rsync -a \
+		--exclude='__pycache__/' --exclude='*.pyc' --exclude='*.pyo' --exclude='.mypy_cache/' \
+		--exclude='/docs/homologation/' --exclude='/instance/secrets.cfg' \
+		bin docs instance scripts src tools AGENTS.md README.md "$$TMP/"; \
+	mkdir -p "$$DEST"; \
+	$(PYTHON) -B "$$TMP/tools/package.py" --source "$$TMP" --out-dir "$$DEST"; \
+	{ echo "Origem: arquivos locais de $$(pwd) em $$(date '+%Y-%m-%d %H:%M:%S')"; \
+	  if git rev-parse --short HEAD >/dev/null 2>&1; then \
+		echo "Commit de base: $$(git rev-parse --short HEAD) (mais as mudanças locais abaixo)"; \
+		git status --short -- bin docs instance scripts src AGENTS.md README.md; \
+	  fi; } > "$$DEST/ORIGEM"; \
+	echo "\n[+] Leve ao servidor os dois arquivos de $$DEST: sss-*.tar.gz e SHA256SUMS"; \
+	echo "    No servidor: sha256sum -c SHA256SUMS (DEPLOYMENT §3). ORIGEM diz de onde veio o pacote."
 
 # Inspeciona o pacote gerado mais recente em ./.bkp
 list-deploy: ## Lista os arquivos contidos no pacote mais recente gerado
