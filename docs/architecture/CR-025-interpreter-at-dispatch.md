@@ -28,7 +28,7 @@
 | Passo | Conteúdo | Situação |
 |---|---|---|
 | 025a | Agente e banco: opções novas (CK), snapshot v6, leitura do `#!`, busca do nome no `PATH`, conferência mínima, `interpreter_path` com o PID, `docs/sql` regenerados, tabelas do DEV recriadas (esquema 100% compatível). Testes novos: formato do digitado, busca por caminho e por nome, `#!` (com argumento, sem `#!`, relativo, `env`), argv em cada caso, v5 ainda aceita, `PYTHON` configurável e `PYTHON_SCRIPT` não, agente de ponta a ponta (`#!` e nome digitado, `NO_SHEBANG`, `INTERPRETER_NOT_FOUND`), Oracle (`interpreter_path`) | Concluído |
-| 025b | Telas: seis opções no cadastro; campo no disparo e na reexecução; detalhe do ticket com o digitado e o usado | Pendente |
+| 025b | Telas: seis opções no cadastro; campo no disparo e na reexecução; detalhe do ticket com o digitado e o usado. Campo "Interpretador (opcional)" no disparo, com a ajuda citando o cadastrado; modal com "Interpretador:" e o comando; detalhe com "Interpretador cadastrado", "informado" e "usado"; reexecução repete o digitado; auditoria do disparo com "interpretador informado"; conferido no navegador sobre o FAKE (sem erro de console nem de CSP) | Concluído |
 | 025c | Documentação com os riscos (README, AGENTS, DEPLOYMENT) e homologação real (`#!`, caminho digitado, nome digitado, `#!` inválido, nome inexistente) | Pendente |
 | 025d | Validação da documentação contra o código (revisão independente) e encerramento | Pendente |
 

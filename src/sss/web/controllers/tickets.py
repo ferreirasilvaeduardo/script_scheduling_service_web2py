@@ -47,13 +47,14 @@ def _post_answers():
 
 
 def _new_page(ctx, script_id, environment, values=None, errors=None, priority=None, scheduled_at=None,
-                 rerun_of=None, warnings=None):
+                 rerun_of=None, warnings=None, interpreter=None):
     response.title = u"Disparar script — SSS"
     response.sss_scripts = [_JS_TRIGGER]
     errors = errors or {}
     data = dict(step=1, script=None, environments=[], form=None, errors=errors,
                  general_error=errors.get(ticket_service.GENERAL_FIELD), priority=priority,
                  scheduled_at=scheduled_at or "", focus_field=None, rerun_of=rerun_of,
+                 interpreter=interpreter or "",
                  has_last=False, used_last=warnings is not None, single_environment=False,
                  aging_min=app_context.require_config().agent.queue_aging_min)
     if not script_id:
@@ -71,6 +72,7 @@ def _new_page(ctx, script_id, environment, values=None, errors=None, priority=No
     fields = [{"name": c["name"], "error": c["error"]} for c in form["fields"]]
     fields.append({"name": "priority", "error": errors.get(ticket_service.PRIORITY_FIELD)})
     fields.append({"name": "scheduled_at", "error": errors.get(ticket_service.SCHEDULED_AT_FIELD)})
+    fields.append({"name": "interpreter", "error": errors.get(ticket_service.INTERPRETER_FIELD)})
     data.update(step=3, form=form, focus_field=ui_helpers.first_invalid_field(fields))
     return data
 
@@ -86,7 +88,7 @@ def new():
         if rerun:
             data = ticket_service.prepare_rerun(ctx, rerun)
             return _new_page(ctx, data["script_id"], data["environment"], data["values"], data["errors"],
-                                data["priority"], rerun_of=data["ticket_id"])
+                                data["priority"], rerun_of=data["ticket_id"], interpreter=data["interpreter"])
         script_id = _text(request.get_vars.get("script_id"), 10)
         environment = _text(request.get_vars.get("environment"), 30)
         if script_id and environment and request.get_vars.get("last") == "1":
@@ -133,10 +135,11 @@ def create():
     priority = _text(request.post_vars.get("priority"), 10)
     scheduled_at = _text(request.post_vars.get("scheduled_at"), 40)
     rerun_of = _text(request.post_vars.get("rerun_of"), 10)
+    interpreter = _text(request.post_vars.get("interpreter"), 600)
     answers = _post_answers()
     try:
         ticket_id, errors = ticket_service.create_ticket(ctx, _client_ip(), script_id, environment, answers,
-                                                       priority, scheduled_at, rerun_of)
+                                                       priority, scheduled_at, rerun_of, interpreter=interpreter)
         if ticket_id is not None:
             session.flash = {"kind": "success", "message": u"Ticket #%s criado com sucesso." % ticket_id}
             redirect(URL(c="tickets", f="detail", args=[ticket_id]))
@@ -144,7 +147,7 @@ def create():
         response.flash = {"kind": "error", "message": ui_helpers.message("form_errors")}
         response.view = "tickets/new.html"
         return _new_page(ctx, script_id, environment, answers, errors, priority, scheduled_at,
-                            rerun_of or None)
+                            rerun_of or None, interpreter=interpreter)
     except RepoNotFound:
         _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
@@ -162,7 +165,8 @@ def preview():
                                               _text(request.post_vars.get("environment"), 30),
                                               answers if isinstance(answers, dict) else {},
                                               _text(request.post_vars.get("priority"), 10),
-                                              _text(request.post_vars.get("scheduled_at"), 40))
+                                              _text(request.post_vars.get("scheduled_at"), 40),
+                                              _text(request.post_vars.get("interpreter"), 600))
     except AccessDenied:
         response.status = 403
         return response.json({"error": ui_helpers.message("no_permission")})

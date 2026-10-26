@@ -31,9 +31,13 @@ INSERT_FIELDS = ("name", "description", "script_group", "category", "stage", "in
 
 
 
+# CR-025: PYTHON (2o Python do servidor) e os "definido no script" (#! da primeira linha do script).
 INTERPRETER_LABELS = (("PYTHON3", u"PYTHON3 — Python 3"),
+                         ("PYTHON", u"PYTHON — Python (2º Python do servidor)"),
                          ("BASH", u"BASH — Bash"),
-                         ("SH", u"SH — Shell POSIX"))
+                         ("SH", u"SH — Shell POSIX"),
+                         ("PYTHON_SCRIPT", u"PYTHON_SCRIPT — Python (definido no script, #!)"),
+                         ("SHELL_SCRIPT", u"SHELL_SCRIPT — Shell (definido no script, #!)"))
 PARAM_TYPE_LABELS = (("NAMED", u"Por flag (NOMEADO)"), ("POSITIONAL", u"Posicional (SEQUENCIAL)"),
                       ("NONE", u"Sem argumentos (NENHUM)"))
 MAX_LENGTHS = {"name": 60, "description": 200, "script_group": 30, "category": 30, "stage": 30,

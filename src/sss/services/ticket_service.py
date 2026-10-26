@@ -21,6 +21,8 @@ from sss.persistence.repo_errors import RepoError, RepoNotFound
 GENERAL_FIELD = params_compiler.GENERAL_KEY
 PRIORITY_FIELD = "priority"
 SCHEDULED_AT_FIELD = "scheduled_at"
+# CR-025: interpretador digitado no disparo (opcional; em branco roda como cadastrado).
+INTERPRETER_FIELD = params_compiler.INTERPRETER_KEY
 DEFAULT_PRIORITY = 2
 
 MSG_SCRIPT_UNAVAILABLE = (u"O script não está disponível para execução neste servidor. "
@@ -453,7 +455,8 @@ class TicketService(object):
         priorities = [(p, PRIORITY_LABELS[p]) for p in rbac.PRIORITIES if rbac.allowed_priority(ctx, p)]
         return {
             "script": {"id": script["id"], "name": script["name"], "description": script.get("description") or "",
-                       "param_type": script["param_type"]},
+                       "param_type": script["param_type"],
+                       "interpreter_label": interpreter_label(script["interpreter"])},
             "environment": {"id": env["id"], "name": env["name"], "description": env.get("description") or "",
                          "production": env.get("is_production") == "Y"},
             "fields": fields,
@@ -502,8 +505,9 @@ class TicketService(object):
             return None
         return date.replace(microsecond=0)
 
-    def _compile(self, ctx, script, env, answers, now, errors):
-        """Confere o formato do caminho e compila o snapshot v5, acumulando erros por campo."""
+    def _compile(self, ctx, script, env, answers, now, errors, interpreter=None):
+        """Confere o formato do caminho e compila o snapshot v6, acumulando erros por campo.
+        interpreter: o digitado no disparo (CR-025), ou None."""
         links = self._links(script["id"])
         codes = set(v["code"] for v in links)
         if not isinstance(answers, dict):
@@ -521,7 +525,7 @@ class TicketService(object):
             errors[GENERAL_FIELD] = MSG_SCRIPT_UNAVAILABLE
 
         snapshot, resolved, errors_param = params_compiler.compile_snapshot(
-            script, links, answers, now)
+            script, links, answers, now, interpreter_override=interpreter)
         for code, message in errors_param.items():
             errors.setdefault(code, message)
         if errors:
@@ -533,7 +537,8 @@ class TicketService(object):
 
     # --------------------------------------------------------------- acoes
 
-    def trigger_summary(self, ctx, script_id, environment, answers, priority=None, scheduled_at=None):
+    def trigger_summary(self, ctx, script_id, environment, answers, priority=None, scheduled_at=None,
+                        interpreter=None):
         """Resumo em frase do modal de confirmacao (README §5.4), montado pelo servidor; nao grava nada.
 
         Retorna {argv, errors, summary} com summary = {script, environment, when, priority, answers:
@@ -544,7 +549,7 @@ class TicketService(object):
         errors = collections.OrderedDict()
         prio = self._priority(ctx, priority, errors)
         sched = self._scheduled_at(scheduled_at, now, errors)
-        snapshot, resolved, links = self._compile(ctx, script, env, answers, now, errors)
+        snapshot, resolved, links = self._compile(ctx, script, env, answers, now, errors, interpreter)
         if snapshot is None or errors:
             return {"argv": None, "errors": dict(errors), "summary": None}
         rows = []
@@ -563,10 +568,14 @@ class TicketService(object):
         phrase = u"Vamos rodar %s no ambiente %s %s, com prioridade %d." % (script["name"], env["name"], when, prio)
         if rows:
             phrase += u" Respostas: " + u"; ".join(u"%s = %s" % (l["label"], l["value"]) for l in rows) + u"."
+        override = json.loads(snapshot).get("interpreter_override")
+        interpreter_text = override or interpreter_label(script["interpreter"])
+        if override:
+            phrase += u" Interpretador informado: %s." % override
         return {"argv": params_compiler.display_argv(json.loads(snapshot)),
                 "errors": {},
                 "summary": {"script": script["name"], "environment": env["name"], "when": when, "priority": prio,
-                           "answers": rows, "phrase": phrase}}
+                           "answers": rows, "phrase": phrase, "interpreter": interpreter_text}}
 
     def _last_ticket(self, ctx, script_id, environment):
         sid = _id(script_id)
@@ -608,7 +617,7 @@ class TicketService(object):
         return values, warnings_value
 
     def create_ticket(self, ctx, ip, script_id, environment, answers, priority, scheduled_at,
-                     rerun_of=None):
+                     rerun_of=None, interpreter=None):
         """Cria o ticket (README §5.4). Retorna (ticket_id | None, erros por campo).
 
         rerun_of (opcional) vincula o novo ticket ao original (README §5.5), exigindo
@@ -626,7 +635,7 @@ class TicketService(object):
         errors = collections.OrderedDict()
         prio = self._priority(ctx, priority, errors)
         sched = self._scheduled_at(scheduled_at, now, errors)
-        snapshot, resolved, links = self._compile(ctx, script, env, answers, now, errors)
+        snapshot, resolved, links = self._compile(ctx, script, env, answers, now, errors, interpreter)
         if errors:
             return None, dict(errors)
         return self._save(ctx, ip, script, env, prio, sched, snapshot, resolved, links, parent_id)
@@ -643,6 +652,8 @@ class TicketService(object):
             "submitted_params": snapshot,
             "scheduled_at": sched,
             "parent_ticket_id": parent_id,
+            # CR-025: vai para a auditoria do disparo (nao e coluna; o snapshot guarda o mesmo valor)
+            "interpreter_override": json.loads(snapshot).get("interpreter_override"),
         }
         rows = []
         for v in _sorted_items(links):
@@ -970,6 +981,8 @@ class TicketService(object):
             snapshot["compiled_at"] = snap.get("compiled_at")  # chave de tela (CR-016d)
             # CR-023: relativo a pasta base de cada agente; o real executado vem em script_path.
             snapshot["path_relative"] = path_guard.is_relative(snap.get("path_file"))
+            # CR-025: o digitado no disparo (ou None: como cadastrado)
+            snapshot["interpreter_override"] = snap.get("interpreter_override")
         return {
             "id": ticket["id"],
             "script_id": ticket["script_id"],
@@ -987,6 +1000,7 @@ class TicketService(object):
             "agent_id": ticket.get("agent_id"),
             "process_id": ticket.get("process_id"),
             "script_path": ticket.get("script_path"),
+            "interpreter_path": ticket.get("interpreter_path"),
             "created_at": ticket.get("created_at"),
             "scheduled_at": ticket.get("scheduled_at"),
             "started_at": ticket.get("started_at"),
@@ -1142,7 +1156,9 @@ class TicketService(object):
         now = self._tickets.now()
         errors = collections.OrderedDict()
         prio = self._priority(ctx, str(ticket["priority"]), errors)
-        snapshot, resolved, links = self._compile(ctx, script, env, answers, now, errors)
+        # CR-025: a reexecucao repete o interpretador digitado no original.
+        interpreter = (_snapshot(ticket) or {}).get("interpreter_override")
+        snapshot, resolved, links = self._compile(ctx, script, env, answers, now, errors, interpreter)
         return script, env, prio, answers, snapshot, resolved, links, errors
 
     def rerun(self, ctx, ip, ticket_id):
@@ -1177,7 +1193,22 @@ class TicketService(object):
             "priority": str(prio if prio is not None else DEFAULT_PRIORITY),
             "values": dict((k, v) for k, v in answers.items() if k not in sensitive),
             "errors": dict(errors),
+            "interpreter": (_snapshot(original) or {}).get("interpreter_override") or "",
         }
+
+# CR-025: rotulo de cada opcao do cadastro (cadastro, disparo e detalhe).
+INTERPRETER_LABELS = (("PYTHON3", u"Python 3"),
+                      ("PYTHON", u"Python"),
+                      ("BASH", u"Bash"),
+                      ("SH", u"Sh (Shell POSIX)"),
+                      ("PYTHON_SCRIPT", u"Python (definido no script)"),
+                      ("SHELL_SCRIPT", u"Shell (definido no script)"))
+
+
+def interpreter_label(key):
+    """Rotulo da opcao do cadastro; o "como cadastrado" do disparo e do detalhe (CR-025)."""
+    return dict(INTERPRETER_LABELS).get(key, key)
+
 
 _default = None
 _default_lock = threading.Lock()
@@ -1217,9 +1248,9 @@ def prepare_form(ctx, script_id, environment, values=None, errors=None, warnings
     return _service().prepare_form(ctx, script_id, environment, values, errors, warnings)
 
 
-def trigger_summary(ctx, script_id, environment, answers, priority=None, scheduled_at=None):
+def trigger_summary(ctx, script_id, environment, answers, priority=None, scheduled_at=None, interpreter=None):
     """Resumo em frase do disparo (servico padrao)."""
-    return _service().trigger_summary(ctx, script_id, environment, answers, priority, scheduled_at)
+    return _service().trigger_summary(ctx, script_id, environment, answers, priority, scheduled_at, interpreter)
 
 
 def script_history(ctx, script_id):
@@ -1247,10 +1278,11 @@ def last_answers(ctx, script_id, environment):
     return _service().last_answers(ctx, script_id, environment)
 
 
-def create_ticket(ctx, ip, script_id, environment, answers, priority, scheduled_at, rerun_of=None):
+def create_ticket(ctx, ip, script_id, environment, answers, priority, scheduled_at, rerun_of=None,
+                  interpreter=None):
     """Criacao do ticket (servico padrao)."""
     return _service().create_ticket(ctx, ip, script_id, environment, answers, priority, scheduled_at,
-                                   rerun_of)
+                                   rerun_of, interpreter=interpreter)
 
 
 def allowed_filters(ctx, filters):

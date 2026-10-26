@@ -571,6 +571,9 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
             else:
                 action = "TICKET_RERUN"
                 detail = "Reexecucao do ticket %s para script %s em %s" % (parent_id, script_id, environment)
+            if ticket.get("interpreter_override"):
+                # CR-025: o interpretador digitado no disparo fica na trilha.
+                detail += "; interpretador informado: %s" % ticket["interpreter_override"]
             write_audit(c, self._tbl_aud, self._seq_aud,
                              {"actor": requester, "ip": ticket.get("source_ip"), "action": action, "detail": detail},
                              "tbsss_tickets", tid)

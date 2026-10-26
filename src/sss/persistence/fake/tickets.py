@@ -151,6 +151,9 @@ class RepoTicketsFake(RepoTickets):
             else:
                 action = "TICKET_RERUN"
                 detail = "Reexecucao do ticket %s para script %s em %s" % (parent_id, script_id, environment)
+            if ticket.get("interpreter_override"):
+                # CR-025: o interpretador digitado no disparo fica na trilha.
+                detail += "; interpretador informado: %s" % ticket["interpreter_override"]
             self._store.register_internal_audit(
                 actor=requester,
                 ip=ticket.get("source_ip"),

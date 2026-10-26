@@ -90,8 +90,12 @@ _info = ui_helpers.status_info(_t['status'])
     </div>
     {{if _t['snapshot']:}}
     <dl class="sss-summary mt-3">
-      <dt>Interpretador</dt>
+      <dt>Interpretador cadastrado</dt>
       <dd class="sss-mono">{{=_t['snapshot']['interpreter'] or '-'}}</dd>
+      <dt>Interpretador informado</dt>
+      <dd class="sss-mono">{{=_t['snapshot']['interpreter_override'] or u'Como cadastrado'}}</dd>
+      <dt>Interpretador usado</dt>
+      <dd class="sss-mono">{{=_t['interpreter_path'] or u'Ainda não executado'}}</dd>
       <dt>Arquivo do script</dt>
       <dd class="sss-mono">{{=_t['snapshot']['path_file'] or '-'}}{{if _t['snapshot']['path_relative']:}} <span class="sss-text-muted">(relativo à pasta base do agente)</span>{{pass}}</dd>
       <dt>Caminho executado</dt>

@@ -148,6 +148,14 @@ class TestRegistration(_Base):
             _sid, errors, _ = self._insert(interpreter=cmd)
             self.assertEqual(errors.get("interpreter"), scr_mod.PATH_MESSAGES[Code.INTERPRETER_NOT_ALLOWED], cmd)
 
+    def test_cr025_seis_opcoes_de_interpretador(self):
+        """CR-025: o cadastro aceita PYTHON e os "definido no script"; o formulario lista as seis opcoes."""
+        self.assertEqual([k for k, _l in scr_mod.INTERPRETER_LABELS],
+                         ["PYTHON3", "PYTHON", "BASH", "SH", "PYTHON_SCRIPT", "SHELL_SCRIPT"])
+        for i, key in enumerate(("PYTHON", "PYTHON_SCRIPT", "SHELL_SCRIPT")):
+            _sid, errors, _ = self._insert(name="Int %s" % key, interpreter=key, path_file="relatorios/x%d.py" % i)
+            self.assertEqual(errors, {}, key)
+
     def test_cr023_relativo_e_pasta_da_aplicacao(self):
         """CR-023: o relativo so tem o formato conferido no cadastro; a pasta da aplicacao e recusada,
         salvo dev/ no DEV."""

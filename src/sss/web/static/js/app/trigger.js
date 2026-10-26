@@ -64,6 +64,7 @@
       environment: dom.ref(form, 'environment'),
       when: dom.ref(form, 'when'),
       priority: dom.ref(form, 'priority'),
+      interpreter: dom.ref(form, 'interpreter'),
       answers: dom.ref(form, 'answers'),
       answerTemplate: dom.ref(form, 'answerTemplate'),
       command: dom.ref(form, 'command'),
@@ -99,6 +100,7 @@
         environment: form.elements.environment.value,
         priority: form.elements.priority ? form.elements.priority.value : '',
         scheduled_at: form.elements.scheduled_at ? form.elements.scheduled_at.value : '',
+        interpreter: form.elements.interpreter ? form.elements.interpreter.value : '',
         answers: collectAnswers(form)
       };
       dom.show(el.loading, true);
@@ -120,6 +122,7 @@
         dom.setText(el.environment, summary.environment);
         dom.setText(el.when, summary.when);
         dom.setText(el.priority, summary.priority);
+        dom.setText(el.interpreter, summary.interpreter);
         renderAnswers(summary.answers.map(function (r) { return { label: r.label, value: String(r.value) }; }));
         dom.setText(el.command, (data.argv || []).map(displayToken).join(' '));
         dom.show(el.summary, true);

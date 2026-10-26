@@ -94,9 +94,9 @@ class _BaseTicket(unittest.TestCase):
         return self.tickets.list(page=1, size=100)["total"]
 
     def _create(self, login="op.hml", script_id="1", environment="HOMOLOGACAO", answers=None,
-               priority="2", scheduled_at=""):
+               priority="2", scheduled_at="", interpreter=None):
         return self.svc.create_ticket(self.ctx[login], IP, script_id, environment, answers or {},
-                                     priority, scheduled_at)
+                                     priority, scheduled_at, interpreter=interpreter)
 
 
 @_SKIP_ROOT
@@ -626,6 +626,44 @@ class TestTicketQuery(_BaseTicket):
         self.assertNotEqual(det["duration"], "-")
         self.assertEqual(self.svc.detail(self.ctx["admin"], "25")["parent"]["id"], 17)
         self.assertEqual([f["id"] for f in self.svc.detail(self.ctx["admin"], "17")["children"]], [25])
+
+    def test_cr025_interpretador_digitado_no_disparo(self):
+        """CR-025: o digitado vai para o snapshot v6, a previa, a auditoria e o detalhe; em branco, como cadastrado."""
+        answers = {"data_ref": "2026-10-20", "modo_exec": "SIMULACAO"}
+        r = self.svc.trigger_summary(self.ctx["op.hml"], "1", "HOMOLOGACAO", answers, interpreter="python3.13")
+        self.assertEqual((r["errors"], r["summary"]["interpreter"], r["argv"][0]), ({}, "python3.13", "python3.13"))
+        self.assertIn("Interpretador informado: python3.13.", r["summary"]["phrase"])
+        blank = self.svc.trigger_summary(self.ctx["op.hml"], "1", "HOMOLOGACAO", answers, interpreter="  ")
+        self.assertEqual(blank["summary"]["interpreter"], ticket_service.interpreter_label("PYTHON3"))
+        tid, errors = self._create(answers=answers, interpreter="/opt/py311/bin/python3")
+        self.assertEqual(errors, {})
+        snap = json.loads(self.tickets.get(tid)["submitted_params"])
+        self.assertEqual((snap["version"], snap["interpreter_override"]), (6, "/opt/py311/bin/python3"))
+        det = self.svc.detail(self.ctx["op.hml"], str(tid))
+        self.assertEqual((det["snapshot"]["interpreter_override"], det["interpreter_path"]),
+                         ("/opt/py311/bin/python3", None))
+        reg = self.audit.list(filters={"action": "TICKET_CREATE", "entity_id": tid})["items"][0]
+        self.assertIn("interpretador informado: /opt/py311/bin/python3", reg["detail"])
+        tid2, errors = self._create(answers=answers)
+        self.assertEqual(json.loads(self.tickets.get(tid2)["submitted_params"])["interpreter_override"], None)
+        self.assertNotIn("interpretador", self.audit.list(filters={"action": "TICKET_CREATE",
+                                                                    "entity_id": tid2})["items"][0]["detail"])
+
+    def test_cr025_formato_invalido_e_erro_do_campo(self):
+        for bad in ("py thon", "bin/python3", "python3;id"):
+            tid, errors = self._create(answers={"data_ref": "2026-10-20"}, interpreter=bad)
+            self.assertIsNone(tid, bad)
+            self.assertEqual(errors.get(ticket_service.INTERPRETER_FIELD), params_compiler.INTERPRETER_MESSAGE, bad)
+
+    def test_cr025_reexecucao_repete_o_interpretador(self):
+        ctx = self.ctx["op.hml"]
+        original, _ = self._create(answers={"data_ref": "2026-10-20"}, interpreter="python3.13")
+        self.svc.cancel(ctx, IP, str(original))
+        self.assertEqual(self.svc.prepare_rerun(ctx, str(original))["interpreter"], "python3.13")
+        new = self.svc.rerun(ctx, IP, str(original))
+        self.assertEqual(json.loads(self.tickets.get(new)["submitted_params"])["interpreter_override"], "python3.13")
+        reg = self.audit.list(filters={"action": "TICKET_RERUN", "entity_id": new})["items"][0]
+        self.assertIn("interpretador informado: python3.13", reg["detail"])
 
     def test_cr023_relativo_e_caminho_executado_no_detalhe(self):
         """CR-023: o disparo aceita o caminho relativo; o detalhe marca o relativo e mostra o real gravado."""

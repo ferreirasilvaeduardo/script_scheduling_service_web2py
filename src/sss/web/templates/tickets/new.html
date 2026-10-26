@@ -89,6 +89,7 @@ _steps = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
         {{for _c in form['fields']:}}{{if _c['error']:}}<li>{{=_c['error']}}</li>{{pass}}{{pass}}
         {{if errors.get('priority'):}}<li>{{=errors['priority']}}</li>{{pass}}
         {{if errors.get('scheduled_at'):}}<li>{{=errors['scheduled_at']}}</li>{{pass}}
+        {{if errors.get('interpreter'):}}<li>{{=errors['interpreter']}}</li>{{pass}}
       </ul>
     </div>
     {{pass}}
@@ -111,6 +112,12 @@ _steps = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
         <input class="form-control{{=' is-invalid' if errors.get('scheduled_at') else ''}}" type="datetime-local" id="field-scheduled_at" name="scheduled_at" value="{{=scheduled_at}}" aria-describedby="field-scheduled_at-help{{=' field-scheduled_at-error' if errors.get('scheduled_at') else ''}}"{{if errors.get('scheduled_at'):}} aria-invalid="true"{{pass}}{{if focus_field == 'scheduled_at':}} autofocus{{pass}}>
         <div class="form-text" id="field-scheduled_at-help">Horário do servidor do banco de dados. Deixe em branco para rodar assim que houver um servidor livre.</div>
         {{if errors.get('scheduled_at'):}}<div class="invalid-feedback" id="field-scheduled_at-error">{{=errors['scheduled_at']}}</div>{{pass}}
+      </div>
+      <div class="sss-form-field mb-3">
+        <label class="form-label" for="field-interpreter">Interpretador (opcional)</label>
+        <input class="form-control sss-mono{{=' is-invalid' if errors.get('interpreter') else ''}}" type="text" id="field-interpreter" name="interpreter" maxlength="500" value="{{=interpreter}}" autocomplete="off" spellcheck="false" aria-describedby="field-interpreter-help{{=' field-interpreter-error' if errors.get('interpreter') else ''}}"{{if errors.get('interpreter'):}} aria-invalid="true"{{pass}}{{if focus_field == 'interpreter':}} autofocus{{pass}}>
+        <div class="form-text" id="field-interpreter-help">Em branco, roda como cadastrado ({{=form['script']['interpreter_label']}}). Para usar outro só nesta execução, digite o caminho completo (ex.: /opt/py311/bin/python3) ou só o nome (ex.: python3.13), procurado no servidor do ambiente.</div>
+        {{if errors.get('interpreter'):}}<div class="invalid-feedback" id="field-interpreter-error">{{=errors['interpreter']}}</div>{{pass}}
       </div>
     </div>
 
@@ -137,6 +144,7 @@ _steps = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
                 <p class="mb-2" data-ref="loading" hidden>Montando o resumo…</p>
                 <div data-ref="summary" hidden>
                   <p class="mb-2">Vamos rodar <strong class="sss-mono" data-ref="script"></strong> no ambiente <strong data-ref="environment"></strong> <span data-ref="when"></span>, com prioridade <span data-ref="priority"></span>.</p>
+                  <p class="mb-2">Interpretador: <strong class="sss-mono" data-ref="interpreter"></strong></p>
                   <template data-ref="answerTemplate">
                     <li><span data-part="label"></span> = <span class="sss-mono" data-part="value"></span></li>
                   </template>
