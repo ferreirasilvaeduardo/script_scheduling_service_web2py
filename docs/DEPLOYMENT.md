@@ -334,7 +334,7 @@ O papel vem do próprio arquivo (CR-028, D4): o do web tem `[web]` e não tem `[
 
 As pastas (`log_dir`, `work_dir`, `exec_work_dir`, `output_dir`, `input_dir`, `script_work_dir` e `script_base_dir`) saem do nome e não precisam ser escritas. A tabela completa, com o padrão e a faixa de cada chave, está no README §12.1. **O SSS não cria as pastas configuradas** (exceto o `log_dir`, criado na subida): crie-as com `scripts/prepare_dirs.py <nome>` (§8); sem elas, o agente recusa subir (código 13, §15). `[agent] interpreters` não existe mais (CR-026): uma linha antiga só gera aviso. O web usa sete valores de `[agent]` que precisam ser iguais aos dos agentes (`heartbeat_interval_s`, `fence_timeout_s`, `node_offline_timeout_s`, `misfire_policy`, `misfire_tolerance_s`, `cron_horizon_days` e `queue_aging_min`). Sem `[agent]` no config do web, valem os padrões. Se mudar algum nos agentes, escreva o mesmo valor num `[agent]` do config do web, que só aceita essas sete chaves e continua com o papel web (README §12.1). Em `instance/<nome>/`, o `[app] name` precisa ser o nome da pasta: ao copiar a pasta de um agente para criar outro, troque o `name`.
 
-**Tempos que precisam ser idênticos em todos os agentes (README §8.9, D7):** copie `fence_timeout_s` e `node_offline_timeout_s` do arquivo de referência **sem alterar**, assim como os outros valores do `critical_config` (`heartbeat_interval_s`, `call_timeout_ms`, `kill_grace_s`, `misfire_policy`, `misfire_tolerance_s`, `cron_horizon_days`, `queue_aging_min`). Cada agente registra na subida:
+**Tempos que precisam ser idênticos em todos os agentes (README §8.9, D7):** desde o CR-032, os tempos de saúde e os ajustes do desdobro são fixos no código (`heartbeat_interval_s` 10, `fence_timeout_s` 90, `node_offline_timeout_s` 180, `kill_grace_s` 5, `misfire_tolerance_s` 300, `cron_horizon_days` 1461, `queue_aging_min` 60). Dos valores do `critical_config`, só `call_timeout_ms` e `misfire_policy` vêm do config: escreva-os iguais em todos os agentes (ou deixe o padrão). Cada agente registra na subida:
 
 `INFO ... [action=INICIO] tempos do fencing: fence_timeout_s=90 node_offline_timeout_s=180`
 
@@ -427,11 +427,11 @@ bin/sss-web.sh "$PYTHON" web0001 --check                      # CONFIG_OK sss_en
 bin/sss-web.sh "$PYTHON" web0001 --host 127.0.0.1 --port 8000  # instance/web0001/config.ini (CR-028)
 ```
 
-* O servidor é o próprio do SSS (`scripts/run_web.py`, CR-021e), sem web2py: até `[web] max_threads` requisições ao mesmo tempo (padrão 16) e `[web] socket_timeout_s` por conexão (padrão 30 s). O `sss-web.sh` só inicia o `run_web.py`; `web2py.py` e `anyserver.py` são recusados (código 2).
+* O servidor é o próprio do SSS (`scripts/run_web.py`, CR-021e), sem web2py: até 16 requisições ao mesmo tempo e 30 s de espera por conexão (fixos no código desde o CR-032). O `sss-web.sh` só inicia o `run_web.py`; `web2py.py` e `anyserver.py` são recusados (código 2).
 * `--host 127.0.0.1`: só local, atrás do proxy reverso ou do túnel (§10.4). **Nunca** use `0.0.0.0`.
 * Não cria arquivos na raiz (`httpserver.log`, `httpserver.pid`, `parameters_<porta>.py`, `cron.master` e afins eram do web2py). Requisições, erros e a subida vão para o log da aplicação (`sss_web_<PID>.log`, §14.1); a saída padrão só recebe o que acontecer antes de o log abrir.
 * Saída: 2 com configuração ou segredos inválidos (o motivo vai para o log), 3 com a porta em uso ou sem permissão.
-* Para parar: `SIGTERM` ou `SIGINT` (Ctrl+C) ao processo Python. O servidor para de aceitar conexões, espera as requisições em andamento até `socket_timeout_s` e sai com código 0.
+* Para parar: `SIGTERM` ou `SIGINT` (Ctrl+C) ao processo Python. O servidor para de aceitar conexões, espera as requisições em andamento por até 30 s e sai com código 0.
 
 ### 10.2 Agente [ensaiado em DEV]
 
@@ -454,9 +454,7 @@ bin/sss-scheduler.sh agente0001            # instance/agente0001/config.ini (CR-
 
 ### 10.3 Parada controlada [ensaiado]
 
-* **Por sinal:** `SIGTERM` para o agente. O modo segue `[agent] shutdown_mode`:
-  * `TERMINATE`: encerra os scripts em andamento e finaliza os tickets;
-  * `DRAIN`: para de pegar tickets e aguarda os que estão rodando por até `shutdown_grace_s`.
+* **Por sinal:** `SIGTERM` para o agente. Desde o CR-032 a parada é sempre `TERMINATE`, com 30 s de espera: o agente encerra os scripts em andamento e finaliza os tickets (`SHUTDOWN`). Antes de parar para uma atualização, confira na tela se não há script longo rodando.
 * **Sem sinal:** `bin/sss-stop.sh <nome>` (ou `--config <config.ini>`) cria `work_dir/sss-<agent_id>.stop`:
   ```text
   parada solicitada: <RAIZ>/var/agente0001/work/sss-agente0001.stop
@@ -697,7 +695,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | 10 | `o agente nao pode rodar como root (README §8.12 passo 1)` | Idem, sem o launcher | Idem |
 | 11 | `configuracao invalida: Arquivo de configuracao nao encontrado: <caminho>` | `config.ini` ausente ou `--config` errado | §7.1 |
 | 11 | `configuracao invalida: [secao] chave: <motivo>` | Chave ausente, desconhecida ou fora da faixa | Compare com o modelo de `instance/exemplos/`; uma chave removida pede "apague a linha" |
-| 11 | `child_locale <x> nao consta em locale -a (CR-007, R-17)` | Locale do filho não instalado | Instale o locale ou ajuste `[agent] child_locale` |
+| 11 | `child_locale <x> nao consta em locale -a (CR-007, R-17)` | Locale do filho não instalado | Instale o locale `C.UTF-8` (fixo desde o CR-032) |
 | 12 | `secrets.cfg invalido: <reason>` (ex.: `Arquivo de segredos possui permissoes inseguras (mode 644, ...)`, `... deve pertencer ao usuario corrente`, `Secao [web] nao pertence ao papel 'agente'`) | Modo, dono ou seções do `secrets.cfg` | `chmod 0600`, `chown sss`, e só as seções do papel (§7.2) |
 | 13 | `work_dir <pasta> recusado: NOT_FOUND` (ou `output_dir`, `input_dir`, `script_work_dir`) | A pasta configurada não existe: o SSS não cria as pastas, exceto o `log_dir` (README §12.1) | `scripts/prepare_dirs.py` como root (§8) e suba de novo |
 | 13 | Linhas `execucao fora de DEV: <falha>` e depois `N falha(s) na conferencia do helper e do sudoers` | Helper ou `sudoers` incompletos: `helper ... nao pertence ao root`, `... deve ter modo 0755`, `sudo -n -l sem a regra do helper para <usuário>`, `<pasta> deve pertencer a <usuário> com modo 0700`, `usuario de execucao <x> nao existe` | §8 e §4.2 |
@@ -939,7 +937,7 @@ Os passos abaixo valem para a instalação no formato anterior, com a aplicaçã
 - [ ] Limpeza manual combinada: quem roda o SQL do banco e o `find` dos arquivos, e com que frequência (§12, README §11.3)
 - [ ] `[web] allowed_origins` com a URL pública e `trusted_proxies` com o proxy
 - [ ] `[logging] level = INFO`
-- [ ] `fence_timeout_s` e `node_offline_timeout_s` iguais em todos os agentes, conferidos pela linha `tempos do fencing` de cada um
+- [ ] `call_timeout_ms` e `misfire_policy` iguais em todos os agentes (os demais tempos são fixos, CR-032), conferidos pela linha `tempos do fencing` de cada um
 - [ ] Combinação de driver registrada (linha `driver=... modo=... servidor=... cliente=...` de cada servidor)
 - [ ] `ls <RAIZ>` sem `applications/`, `gluon/` nem `web2py.py`; `curl .../admin/...` dá 404; `src/sss/web/controllers/dev.py` ausente
 - [ ] `secrets.cfg` com `0600` e dono `sss`, só com as seções do papel

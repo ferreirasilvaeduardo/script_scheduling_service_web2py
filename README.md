@@ -61,7 +61,7 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
   * A combinação escolhida é registrada em INFO, exibida pelo `check_env.py` e mantida pelo processo; reconexões a reutilizam e só um reinício refaz a sondagem.
 * `thin`, `thick` ou `cx_oracle`: força um único candidato, sem sondagem; falha é fatal.
 * **Carregamento do Instant Client no Linux/Unix** (Thick e cx_Oracle): o IC deve estar no caminho de bibliotecas **antes** de o processo Python iniciar, via `ldconfig` (preferencial) ou `LD_LIBRARY_PATH` exportado pelos launchers `bin/sss-web.sh` e `bin/sss-scheduler.sh`. Nessas plataformas, `init_oracle_client(lib_dir=...)` não tem efeito e deve ser chamado sem `lib_dir`.
-* **Desenvolvimento em macOS:** `oracle_client_lib_dir` só é usado em macOS. O IC 19 para macOS existe apenas para Intel (x86_64). Em Apple Silicon, use Python x86_64 sob Rosetta ou um container/VM Linux x86_64 (o modo Thin exigiria a `cryptography`, que o projeto não usa).
+* **Desenvolvimento em macOS:** não suportado (o `oracle_client_lib_dir` saiu no CR-032). Use um container ou uma VM Linux x86_64.
 * `src/sss/persistence/db_conn.py` é a **única** porta de acesso ao banco. Ele contém a seleção do driver, o adaptador das diferenças de API entre `oracledb` (Thin/Thick) e `cx_Oracle` (exceções mapeadas por driver e modo para os erros do contrato, tipos de bind, conversão do estilo `:name` para o `paramstyle` do driver, pool e `init_oracle_client`).
 * **Toda conexão deve:**
   * usar `autocommit = False`;
@@ -1605,7 +1605,7 @@ inicialização (§8.12) -> loop (uma coisa por vez, sem espera dentro das opera
 
 ### 8.2 Seleção de candidatos
 
-O agente só tenta o claim se `execucoes_locais < max_parallel_jobs`, com `max_parallel_jobs <= max_parallel_hard_limit`, **e** se o espaço livre no sistema de arquivos de `log_dir` for de pelo menos `[agent] log_dir_min_free_mb` (CR-008, R-25; medido por `os.statvfs` a cada ciclo de claim). Abaixo disso, não faz claim e registra WARN `DISCO_LOG` uma vez por minuto; os tickets em execução continuam. Com `output_dir` (CR-012), a mesma conferência vale para o sistema de arquivos dele (WARN `DISCO_SAIDA`). Os placeholders `:amb0..:ambN` são **gerados pelo código** a partir dos ambientes atendidos **ativos agora**; os valores sempre são binds.
+O agente só tenta o claim se `execucoes_locais < max_parallel_jobs`, **e** se o espaço livre no sistema de arquivos de `log_dir` for de pelo menos `[agent] log_dir_min_free_mb` (CR-008, R-25; medido por `os.statvfs` a cada ciclo de claim). Abaixo disso, não faz claim e registra WARN `DISCO_LOG` uma vez por minuto; os tickets em execução continuam. Com `output_dir` (CR-012), a mesma conferência vale para o sistema de arquivos dele (WARN `DISCO_SAIDA`). Os placeholders `:amb0..:ambN` são **gerados pelo código** a partir dos ambientes atendidos **ativos agora**; os valores sempre são binds.
 
 Três leituras curtas, sem varrer a fila (CR-013), com o índice `ix_tbsss_tck_queue (status, environment, priority, GREATEST(scheduled_at, created_at), id, script_id)`:
 
@@ -1941,7 +1941,7 @@ O relógio de referência é sempre o `SYSDATE` do banco, nunca o relógio do n�
   * sem `.sss_result`, tenta `UPDATE ... SET status = 'FAILED', status_reason = 'FENCED', return_code = -2, ..., updated_at = SYSDATE, updated_by = :actor WHERE id = :id AND agent_id = :agent_id AND status = 'RUNNING'`, com `:actor = 'SYSTEM:<agent_id>'`.
 
   Nos dois casos, se o ticket já estiver `NODE_OFFLINE`, o `rowcount = 0` é esperado.
-* **Invariantes validadas na inicialização** (`sss_config`), com `call_timeout_s = ceil(call_timeout_ms / 1000)`:
+* **Invariantes** (`sss_config`), com `call_timeout_s = ceil(call_timeout_ms / 1000)`. **Desde o CR-032 (D3), `heartbeat_interval_s` (10), `fence_timeout_s` (90), `node_offline_timeout_s` (180) e `kill_grace_s` (5) são fixos no código:** I1 e I2 valem sempre, e I3 e I4 só limitam o `call_timeout_ms`, que a subida recusa acima de 40.000:
   * **I1:** `heartbeat_interval_s * 3 <= fence_timeout_s`;
   * **I2:** `fence_timeout_s * 2 <= node_offline_timeout_s`;
   * **I3 (CR-007):** `heartbeat_interval_s + 2 * call_timeout_s <= fence_timeout_s`, para que um heartbeat atrasado por uma chamada travada não provoque fencing falso;
@@ -2025,6 +2025,8 @@ END;
 * SIGTERM/SIGINT e o arquivo `work_dir/sss-<agent_id>.stop` apenas acionam uma flag; o laço trata o restante.
 * O daemon para de fazer desdobro e claim. O pedido de parada é conferido no **início de cada volta, antes de qualquer ciclo** (com a parada já pedida, o orquestrador daquela volta não faz claim nem desdobro), e de novo depois dos ciclos, para um sinal que chegou durante eles.
 
+**Desde o CR-032 (D9), o modo é sempre `TERMINATE`, com `shutdown_grace_s` de 30 s, fixos no código** (`sss_config.FIXED`). O `DRAIN` continua implementado no laço, mas nenhum config o liga.
+
 | `shutdown_mode` | Comportamento |
 |---|---|
 | `DRAIN` | Aguarda os filhos por até `shutdown_grace_s`, mantendo heartbeat, varredura, log pump e fence (CR-007, R-04), e então aplica `TERMINATE` aos restantes |
@@ -2041,7 +2043,7 @@ O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualqu
 * **Códigos de saída por passo (F8.3b):** 10 usuário (root), 11 configuração (inclusive codificação e `child_locale`), 12 segredos, 13 diretórios e execução fora de DEV, 14 instância já em execução, 15 banco (driver, conexão, versão do esquema), 16 registro do agente (`agent_id` duplicado ou `critical_config` divergente), 17 ambientes atendidos inexistentes, 18 startup check, 19 mais de uma thread antes do primeiro spawn. Em qualquer falha, a trava de instância e a conexão são liberadas antes da saída.
 
 1. **Usuário:** `os_platform.is_privileged_user()` precisa ser falso. É proibido rodar como root.
-2. **Configuração:** carregar e validar o `config.ini` (tipos, faixas, invariantes da §8.9 e `max_parallel_jobs <= max_parallel_hard_limit`), o `owner` e o `table_prefix` (regex do `AGENTS.md`), e `agent_id` contra `^[A-Za-z0-9._-]{1,30}$`, sem ser `init_db`, `seed` nem `purge` (reservados para os atores do sistema, §4.4). Inclui as invariantes I1 a I4 (§8.9) e, fora de DEV, `exec_users` cobrindo todos os ambientes atendidos (CR-007, D1).
+2. **Configuração:** carregar e validar o `config.ini` (tipos, faixas, invariantes da §8.9, que desde o CR-032 só limitam o `call_timeout_ms`), o `owner` e o `table_prefix` (regex do `AGENTS.md`), e `agent_id` contra `^[A-Za-z0-9._-]{1,30}$`, sem ser `init_db`, `seed` nem `purge` (reservados para os atores do sistema, §4.4). Inclui as invariantes I1 a I4 (§8.9) e, fora de DEV, `exec_users` cobrindo todos os ambientes atendidos (CR-007, D1).
    **Aviso de configuração (CR-008):** um DSN descritor que passe da fórmula do §2.3 gera WARN `CONEXAO_ACIMA_DO_PRAZO` (R-17).
    **Codificação (CR-007, R-17):** `sys.getfilesystemencoding()` precisa ser UTF-8 (o launcher exporta `LANG`/`LC_ALL`, §12.2); `child_locale` precisa constar em `locale -a`. Falha: CRITICAL.
 3. **Segredos:** validar o `secrets.cfg` (§4.1).
@@ -2857,7 +2859,7 @@ find var/*/logs var/*/output var/*/script_work -mindepth 3 -type d -empty -delet
 
 **Config por processo (CR-028) e mínimo (CR-026):** um `config.ini` por processo, em `instance/<nome>/`, só com as chaves obrigatórias e as que dependem do servidor. As demais têm padrão (tabela abaixo) e só entram no arquivo quando o valor for outro. O papel vem do próprio arquivo (D4): com `[web]` e sem `[agent]`, é o web; com `[agent]` e sem `[web]`, o agente (que também roda o purge); com as duas, o formato único anterior, validado inteiro. Com `[app] name`, as pastas saem do nome (D5): `log_dir` = `var/<nome>/logs`; no agente, `work_dir` = `var/<nome>/work`, `output_dir`, `input_dir` e `script_work_dir` em `var/<nome>/`, `exec_work_dir` = `var/exec`, `script_base_dir` = `scripts_ambiente` e `agent_id` = o nome. Em `instance/<pasta>/config.ini`, o `name` precisa ser o nome da pasta: um `instance/agente0002/` copiado sem trocar o `name` é recusado na subida e pelo `sss-stop.sh`. Modelos em `instance/exemplos/`.
 
-**`[agent]` parcial no web (revisão do CR-028, A1):** o web usa sete valores de `[agent]` que precisam ser iguais aos dos agentes: `heartbeat_interval_s`, `fence_timeout_s` e `node_offline_timeout_s` (saúde no painel), `misfire_policy` e `misfire_tolerance_s` (aviso de ocorrência perdida), `cron_horizon_days` e `queue_aging_min`. Sem `[agent]`, valem os padrões. Quem muda algum deles nos agentes escreve o mesmo valor num `[agent]` do config do web, que só aceita essas chaves e continua com o papel web (uma seção com `environments` ou `max_parallel_jobs` é a do formato único).
+**`[agent]` parcial no web (revisão do CR-028, A1; CR-032):** dos valores de `[agent]` que o web usa, só `misfire_policy` (aviso de ocorrência perdida na tela de agendamentos) continua configurável; os tempos de saúde e os ajustes do desdobro ficaram fixos no código (CR-032). Quem muda o `misfire_policy` nos agentes (por exemplo, `SKIP` na restauração do banco, DEPLOYMENT §17) escreve o mesmo valor num `[agent]` do config do web, que só aceita essa chave (as fixas geram aviso) e continua com o papel web.
 
 `instance/web0001/config.ini`:
 
@@ -2909,34 +2911,23 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[oracle]` | `owner` | sim | — | `^[A-Za-z][A-Za-z0-9_]{0,29}$` |
 | `[oracle]` | `table_prefix` | sim | — | `^[a-z][a-z0-9_]{0,7}$`: começa com letra minúscula, até 8 caracteres (CR-007, R-31) |
 | `[oracle]` | `driver_mode` (F7.0) | não | `auto` | `auto` (Thin → Thick → cx_Oracle), `thin`, `thick`, `cx_oracle` (§2.3) |
-| `[oracle]` | `oracle_client_lib_dir` | não | vazio | caminho; só macOS (DEV). No Linux/Unix, `ldconfig`/`LD_LIBRARY_PATH` |
-| `[oracle]` | `call_timeout_ms` | não | `30000` | 1 a 3.600.000 |
-| `[oracle]` | `pool_min`, `pool_max` | não | `1`, `4` | 1 a 1.000, com `pool_min <= pool_max` |
+| `[oracle]` | `call_timeout_ms` | não | `30000` | 1 a 40.000 (CR-032: com os tempos de saúde fixos, as invariantes I3 e I4 do §8.9 limitam a 40 s) |
 | `[secrets]` | `secrets_file` | não | `secrets.cfg` da pasta do `config.ini` (CR-026, D9) | caminho |
 | `[agent]` | `agent_id` | sim | — | `^[A-Za-z0-9._-]{1,30}$`, diferente de `init_db`, `seed` e `purge` |
 | `[agent]` | `environments` | sim | — | lista CSV; o texto inteiro com até 1.000 caracteres (coluna `tbsss_agents.environments`) |
 | `[agent]` | `work_dir` | sim | — | caminho |
-| `[agent]` | `max_parallel_jobs` | sim | — | 1 a 999, e `<= max_parallel_hard_limit` |
+| `[agent]` | `max_parallel_jobs` | sim | — | 1 a 999 |
 | `[agent]` | `exec_users` (CR-007) | fora de DEV | vazio | `AMBIENTE=usuario` cobrindo todos os `environments`; usuário `^[a-z_][a-z0-9_-]{0,31}$`, diferente de `root`. Vazio em DEV = execução com o próprio usuário, com WARN |
 | `[agent]` | `exec_work_dir` (CR-007) | fora de DEV | vazio | caminho fora das pastas do sistema; nem dentro nem contendo `work_dir` e `log_dir` |
 | `[agent]` | `helper_path` (CR-028) | não | `<RAIZ>/../sss-root/bin/sss-helper` | caminho absoluto do helper de execução, fora da pasta da aplicação, de `work_dir`, `log_dir` e `exec_work_dir`; usado só fora de DEV. A pasta dele e todas as acima são do root (conferido na subida, §8.0). Instalação anterior ao CR-028: escreva `/opt/sss/bin/sss-helper` |
-| `[agent]` | `max_parallel_hard_limit` | não | `32` | 1 a 999 |
-| `[agent]` | `claim_batch_size`, `schedule_batch_size` | não | `20`, `50` | 1 a 1.000 |
-| `[agent]` | `orchestrator_interval_s`, `cancel_poll_interval_s`, `heartbeat_interval_s` | não | `10`, `2`, `10` | 1 a 3.600 |
-| `[agent]` | `fence_timeout_s`, `node_offline_timeout_s` | não | `90`, `180` | 1 a 86.400, com as invariantes I1 a I4 do §8.9 (I3 e I4 envolvem `call_timeout_ms` e `kill_grace_s`); os padrões as atendem |
-| `[agent]` | `kill_grace_s` | não | `5` | 1 a 300 |
 | `[agent]` | `script_timeout_s` | não | `604800` | 1 a 9.999.999 (padrão global de 168 h, pedido de 2026-10-27; o `timeout_s` de cada script vence e vai até o mesmo limite, o da coluna) |
-| `[agent]` | `shutdown_mode`, `shutdown_grace_s` | não | `TERMINATE`, `30` | `TERMINATE` ou `DRAIN`; 1 a 3.600 |
-| `[agent]` | `misfire_policy`, `misfire_tolerance_s` | não | `RUN_ONCE`, `300` | `RUN_ONCE` ou `SKIP`; 1 a 86.400 |
-| `[agent]` | `cron_horizon_days` | não | `1461` | 1.461 a 36.500 (CR-008, R-32: quatro anos, para cobrir 29/02) |
-| `[agent]` | `queue_aging_min` (CR-007) | não | `60` | 0 a 1.440 (0 desliga o envelhecimento da prioridade, §5.3) |
+| `[agent]` | `misfire_policy` | não | `RUN_ONCE` | `RUN_ONCE` ou `SKIP` (no config do web, num `[agent]` parcial, §12.1) |
 | `[agent]` | `log_dir_min_free_mb` (CR-008) | não | `1024` | 0 a 1.048.576; 0 desliga a checagem (só em DEV) |
 | `[agent]` | `output_dir` (CR-012) | não | vazio (desligado) | caminho absoluto e normalizado, fora das pastas do sistema, sem sobreposição com `log_dir`, `work_dir` e `exec_work_dir` |
 | `[agent]` | `output_max_bytes`, `output_max_files` (CR-012) | não | `20971520`, `1000` | 1.048.576 a 209.715.200; 1 a 10.000 |
 | `[agent]` | `input_dir` (CR-014) | não | vazio (desligado) | como `output_dir`, e também sem sobreposição com ele |
 | `[agent]` | `script_work_dir` (CR-019) | não | vazio (desligado) | como `input_dir`, e também sem sobreposição com ele |
 | `[agent]` | `script_base_dir` (CR-023) | não | vazio (só caminho absoluto) | caminho absoluto e normalizado, fora das pastas do sistema, das pastas do SSS e da pasta da aplicação (no DEV, só em `dev/`) |
-| `[agent]` | `child_locale` | não | `C.UTF-8` | locale existente no servidor |
 | `[agent]` | `env_passthrough` | não | vazio | lista CSV, sem as variáveis bloqueadas nem as chaves fixas do §8.6 |
 | `[logging]` | `log_dir` | sim | — | caminho |
 | `[logging]` | `level` | não | `INFO` | `DEBUG`, `INFO`, `WARN`, `ERROR` |
@@ -2947,10 +2938,10 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[web]` | `session_idle_timeout_s`, `login_lockout_s` | não | `1800`, `900` | 1 a 86.400 |
 | `[web]` | `session_max_hours` (CR-008) | não | `12` | 1 a 168 |
 | `[web]` | `login_max_attempts` | não | `5` | **1 a 99** (a coluna `failed_attempts` é `NUMBER(2)`) |
-| `[web]` | `log_poll_interval_s` | não | `3` | 1 a 3.600 |
 | `[web]` | `trusted_proxies` | não | vazio | lista CSV |
 | `[web]` | `input_upload_max_bytes` (CR-020d) | não | `52428800` | 1.048.576 a 209.715.200; o POST acima disso é recusado com 413 antes de ser lido (§5.10) |
-| `[web]` | `max_threads`, `socket_timeout_s` (CR-021e) | não | `16`, `30` | 1 a 256; 5 a 300 |
+
+**Fixas no código desde o CR-032 (uma linha antiga só gera aviso):** `[oracle] pool_min = 1` e `pool_max = 4`; `[agent] schedule_batch_size = 50`, `orchestrator_interval_s = 10`, `cancel_poll_interval_s = 2`, `heartbeat_interval_s = 10`, `fence_timeout_s = 90`, `node_offline_timeout_s = 180`, `kill_grace_s = 5`, `shutdown_mode = TERMINATE`, `shutdown_grace_s = 30`, `misfire_tolerance_s = 300`, `cron_horizon_days = 1461`, `queue_aging_min = 60`, `child_locale = C.UTF-8`; `[web] log_poll_interval_s = 3`, `max_threads = 16` e `socket_timeout_s = 30`. **Retiradas no CR-032, sem efeito:** `[agent] claim_batch_size` e `max_parallel_hard_limit`, e `[oracle] oracle_client_lib_dir` (o Instant Client vem do `ldconfig`/`LD_LIBRARY_PATH`).
 
 **Retiradas no CR-030 (ignoradas com aviso):** a seção `[retention]` inteira (`purge_user`, `ticket_retention_days`, `audit_retention_days`, `purge_batch_size`, `input_retention_days`) e, em `[logging]`, `app_log_retention_days`, `local_log_retention_days`, `output_retention_days` e `script_work_retention_days`. A limpeza é manual (§11.3).
 

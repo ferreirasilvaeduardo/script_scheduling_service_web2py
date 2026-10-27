@@ -17,6 +17,8 @@ from sss.config import sss_logging
 class TestSSSLogging(unittest.TestCase):
 
     def setUp(self):
+        # Avisos pendentes de outro teste (CR-026f/CR-032) iriam para o log deste.
+        sss_config.pending_warnings()
         self.tmp_dir = tempfile.mkdtemp(prefix="sss_test_logging_")
         self.addCleanup(shutil.rmtree, self.tmp_dir, True)
 

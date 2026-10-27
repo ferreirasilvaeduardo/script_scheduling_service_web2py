@@ -258,7 +258,7 @@ Os arquivos precisam de modo `0644` ou `0755` (`chmod -R go-w dev/scripts`). Uma
 * **Config enxuto (CR-026, CR-028):** o `instance/agente0001/config.ini` do DEV só tem as chaves obrigatórias e as que fogem do padrão (`sss_env = DEV`, `name = agente0001`, `[oracle]`, `environments`, `max_parallel_jobs`, `script_base_dir = <RAIZ>/dev/scripts`, `env_passthrough` e `level = DEBUG`); o do `web0001`, `name`, `[oracle]`, `level` e `allowed_origins`. As pastas saem do nome. Não há `[agent] interpreters`: o agente procura `python3`, `bash`... no `PATH` do terminal que o subiu. O agente sobe pelo nome: `PYTHON=~/.pyenv/versions/3.6.15/bin/python3 bin/sss-scheduler.sh agente0001`. Para parar, `bin/sss-stop.sh agente0001` ou `SIGTERM` no PID do agente: ele encerra pela máquina de estados (README §8.11).
 * **Pasta de trabalho dos scripts (CR-019, CR-028):** no DEV é `var/agente0001/script_work` (padrão do nome; fora do git; criada pelo `prepare_dirs.py`, que no DEV a deixa com `0755`, como as outras pastas do usuário atual). Cada ticket recebe `SSS_WORK_DIR` em `script_work/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, que fica depois do ticket até a limpeza manual (README §11.3, CR-030).
 * Em DEV, `[agent] exec_users` pode ficar vazio: o agente executa os scripts com o próprio usuário e registra WARN `SEM_USUARIO_EXECUCAO`. Para testar o helper e o `sudo` como nos servidores, siga o `DEPLOYMENT.md` §8 numa VM.
-* `cron_horizon_days` vai de 1.461 a 36.500 (CR-008, R-32), `max_log_size_bytes` até 64 MiB; o `table_prefix` só aceita minúsculas. Um `config.ini` antigo fora dessas faixas aborta a subida com a chave no log.
+* `cron_horizon_days` é fixo em 1.461 desde o CR-032, `max_log_size_bytes` vai até 64 MiB; o `table_prefix` só aceita minúsculas. Um `config.ini` antigo fora dessas faixas aborta a subida com a chave no log.
 * **CR-008:** `[web] session_max_hours` (padrão 12) e `[agent] log_dir_min_free_mb` (padrão 1.024; 0 desliga, só em DEV) são opcionais. Em DEV, `[oracle] user` pode ser igual ao `owner`; fora de DEV, é recusado. O `scripts/health.py` lê só a seção `[monitor]` do `secrets.cfg`.
 
 ---
@@ -270,7 +270,7 @@ O backend FAKE não precisa de banco. Para o backend ORACLE (README §2.3, CR-00
 * **Driver:** `python-oracledb` (`< 2.0` na 3.6; `2.x` na 3.7+) e `cx_Oracle 8.3` como contingência, com o Oracle Instant Client 19.x. São pré-instalados pela infraestrutura; não use `pip install` no projeto. O projeto não usa a biblioteca `cryptography`: o DEV vem com `driver_mode = thick`, e o modo Thin (que dependeria dela) fica fora de uso.
 * **Modo:** `[oracle] driver_mode = auto` tenta Thin → Thick → cx_Oracle por sondagem. Contra banco **11g**, só Thick e cx_Oracle conectam, então o **Instant Client 19** precisa estar instalado:
   * Linux/Unix: no `ldconfig` (preferencial) ou em `LD_LIBRARY_PATH` exportado **antes** de iniciar o Python;
-  * macOS (só desenvolvimento): `oracle_client_lib_dir` no `config.ini`. Windows não é suportado (CR-005).
+  * macOS e Windows não são suportados (CR-005; o `oracle_client_lib_dir` saiu no CR-032).
 * **Credencial:** só no `secrets.cfg` (`0600`, dono = usuário do processo), nunca no `config.ini`.
 * **Inicialização e DDL/DML:**
   * Via Python: `python3 scripts/init_db.py --name agente0001`

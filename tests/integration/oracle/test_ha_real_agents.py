@@ -42,11 +42,11 @@ def _long_pids():
 class TestHaTwoAgents(_TwoAgentsBase):
 
     AGENT_PREFIX = "tst-f84e"
-    CONFIG_EXTRA = {
-        "oracle": {"call_timeout_ms": "5000"},
-        "agent": {"heartbeat_interval_s": "2", "fence_timeout_s": "12", "kill_grace_s": "2",
-                  "node_offline_timeout_s": str(NODE_OFFLINE_S)},
-    }
+    CONFIG_EXTRA = {"oracle": {"call_timeout_ms": "5000"}}
+    # CR-032: tempos fixos no codigo, reduzidos so nos agentes deste teste pelo lancador do F8.3d.
+    FIXED_OVERRIDE = {"agent.orchestrator_interval_s": 1, "agent.cancel_poll_interval_s": 1,
+                      "agent.heartbeat_interval_s": 2, "agent.fence_timeout_s": 12, "agent.kill_grace_s": 2,
+                      "agent.node_offline_timeout_s": NODE_OFFLINE_S}
 
     def test_cron_por_minuto_gera_um_ticket_por_minuto(self):
         now = self._query("SELECT SYSDATE FROM DUAL")[0][0]

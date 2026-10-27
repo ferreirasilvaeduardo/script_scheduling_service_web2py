@@ -255,12 +255,9 @@ def initialize(selection, cfg=None):
 
             driver = oracledb
             if candidate == "thick":
-                lib_dir = os_platform.get_oracle_lib_dir(cfg)
+                # O Instant Client vem do ldconfig/LD_LIBRARY_PATH (CR-032: sem oracle_client_lib_dir).
                 try:
-                    if lib_dir:
-                        oracledb.init_oracle_client(lib_dir=lib_dir)
-                    else:
-                        oracledb.init_oracle_client()
+                    oracledb.init_oracle_client()
                 except Exception as exc:
                     if "already been initialized" not in str(exc):
                         raise
@@ -277,12 +274,8 @@ def initialize(selection, cfg=None):
         elif candidate == "cx_oracle":
             import cx_Oracle
             driver = cx_Oracle
-            lib_dir = os_platform.get_oracle_lib_dir(cfg)
             try:
-                if lib_dir:
-                    cx_Oracle.init_oracle_client(lib_dir=lib_dir)
-                else:
-                    cx_Oracle.init_oracle_client()
+                cx_Oracle.init_oracle_client()
             except Exception as exc:
                 if "already been initialized" not in str(exc):
                     pass

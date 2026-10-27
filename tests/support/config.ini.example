@@ -11,10 +11,7 @@ dsn = localhost:2424/servico_homolog
 owner = openrisow
 table_prefix = tbsss_
 driver_mode = thick               ; thick (recomendado) | cx_oracle | auto (padrao: Thin -> Thick -> cx_Oracle) | thin; o Thin exige a biblioteca cryptography, que o projeto nao usa (README §2.3)
-; oracle_client_lib_dir =         ; somente macOS (dev); no Linux/Unix usar ldconfig/LD_LIBRARY_PATH
 ; call_timeout_ms = 30000
-; pool_min = 1
-; pool_max = 4
 
 ; [secrets]
 ; secrets_file = /etc/sss/secrets.cfg   ; padrao: o secrets.cfg da mesma pasta deste config.ini
@@ -32,26 +29,11 @@ output_dir =                      ; CR-012: pasta de saida dos scripts (README �
 input_dir =                       ; CR-014: pasta de entrada dos scripts (README §8.14); vazio desliga
 script_work_dir =                 ; CR-019: pasta de trabalho dos scripts, por ticket (README §8.15); vazio desliga
 env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
-; max_parallel_hard_limit = 32
-; claim_batch_size = 20
-; schedule_batch_size = 50
-; orchestrator_interval_s = 10
-; cancel_poll_interval_s = 2
-; heartbeat_interval_s = 10         ; os tempos do critical_config precisam ser iguais em todos os agentes (README §8.12)
-; fence_timeout_s = 90
-; node_offline_timeout_s = 180
-; kill_grace_s = 5
 ; script_timeout_s = 604800
-; shutdown_mode = TERMINATE         ; TERMINATE | DRAIN
-; shutdown_grace_s = 30
 ; misfire_policy = RUN_ONCE         ; RUN_ONCE | SKIP
-; misfire_tolerance_s = 300
-; cron_horizon_days = 1461
-; queue_aging_min = 60              ; a cada N minutos na fila a prioridade sobe 1 nivel (README §5.3); 0 desliga
 ; log_dir_min_free_mb = 1024        ; abaixo disso em log_dir o agente nao reserva tickets (CR-008, R-25)
 ; output_max_bytes = 20971520       ; limite do zip da saida (1 MiB a 200 MiB)
 ; output_max_files = 1000           ; limite de arquivos da saida (1 a 10.000)
-; child_locale = C.UTF-8
 
 [logging]
 log_dir = /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/logs
@@ -67,7 +49,4 @@ allowed_origins = http://127.0.0.1:18000   ; ex.: https://sss.empresa.local; lis
 ; session_max_hours = 12            ; vida maxima da sessao desde o login (CR-008, E2)
 ; login_max_attempts = 5
 ; login_lockout_s = 900
-; log_poll_interval_s = 3
 ; input_upload_max_bytes = 52428800 ; CR-020d: maior arquivo enviado pela tela de Entrada (1 MiB a 200 MiB)
-; max_threads = 16                  ; CR-021e: conexoes atendidas ao mesmo tempo (1 a 256)
-; socket_timeout_s = 30             ; CR-021e: segundos que uma conexao espera o cliente (5 a 300)

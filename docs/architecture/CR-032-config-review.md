@@ -81,3 +81,30 @@ Feito no código (`sss_config.SCHEMA` e quem lê cada chave). Propostas: **M** m
 ### 3.3 Efeito se tudo for aprovado
 
 O `config.ini` do agente ficaria com `sss_env`, `name`, `[oracle]` (`dsn`, `owner`, `table_prefix`, e `user` só se diferente do owner), `environments`, `max_parallel_jobs` e, quando preciso, `env_passthrough`, `script_timeout_s`, `level` e caminhos próprios. O do web, com `sss_env`, `name`, `[oracle]` e `allowed_origins`. Sairiam 3 chaves mortas (§3.1), cerca de 14 ficariam fixas no código e 5 dependem das decisões D.
+
+## 4. Decisões (2026-10-27, uma por vez)
+
+| # | Decisão |
+|---|---|
+| D1 | A: retirar `claim_batch_size`, `max_parallel_hard_limit` e `oracle_client_lib_dir` (linha antiga ignorada com aviso) |
+| D2 | A: fixar no código `orchestrator_interval_s` (10), `cancel_poll_interval_s` (2), `kill_grace_s` (5), `schedule_batch_size` (50), `misfire_tolerance_s` (300), `cron_horizon_days` (1461), `queue_aging_min` (60), `child_locale` (C.UTF-8), `pool_min`/`pool_max` (1/4), `max_threads` (16), `socket_timeout_s` (30) e `log_poll_interval_s` (3) |
+| D3 | A: fixar `heartbeat_interval_s` (10), `fence_timeout_s` (90) e `node_offline_timeout_s` (180); I3/I4 viram limite do `call_timeout_ms` (até 40 s); o `[agent]` parcial do web (CR-028, D13) fica só com `misfire_policy` |
+| D4 | A: `[app] name` obrigatório; `agent_id`, `work_dir`, `log_dir` e `secrets_file` sempre derivados do nome; fim do formato único (`[web]` e `[agent]` no mesmo arquivo); testes passam a usar configs por processo |
+| D5 | B: `[oracle] user` continua obrigatório |
+| D6 | B: `driver_mode` continua com padrão `auto` |
+| D7 | B: retirar o modo `sudo`/helper inteiro (`exec_users`, `exec_work_dir`, `helper_path`, `sudoers`, conferências, DEPLOYMENT §4.1/§4.2/§8); empacotar a saída, gravar e listar a entrada e limpar pastas continuam no agente, com a própria conta |
+| D8 | A: retirar o papel monitor (`[monitor]`, GRANTs, papel no `db_conn`); o `health.py` usa a conta do próprio processo |
+| D9 | B: parada fixa em `TERMINATE` com 30 s (`shutdown_mode` e `shutdown_grace_s` saem) |
+| D10 | A: o PROD continua com `sss_env = DEV` (D12 do CR-028): os usuários acessam por HTTP, sem proxy HTTPS (senha e cookie de sessão abertos na rede interna: risco aceito, DEPLOYMENT §4.0) |
+| D11 | A: retirar o `[app] sss_env` (passo 032c); DEV e PROD idênticos por construção. Comportamento único: cookie `Secure` só quando a requisição chega por HTTPS; origem das `allowed_origins` e do próprio `Host`; conta Oracle igual ao owner aceita; seção de outro papel nos segredos só gera aviso; ambiente atendido sem credencial no `secrets.cfg` do agente recusa a subida; `init_db` mantém a trava de esquema descartável (`--real-schema`); tela `/dev`, FAKE e scripts em `dev/` só onde existem (o repositório; o pacote não os leva); a faixa de ambiente vem da pasta `<TIPO>` |
+
+### 4.1 Decisões pendentes (apresentar uma por vez depois do 032a)
+
+| # | Tema | Proposta |
+|---|---|---|
+| D12 | Criação das pastas (S1) | O processo cria as pastas que faltam na subida, com a própria conta; o `prepare_dirs.py` deixa de ser passo obrigatório |
+| D13 | Helper como programa separado (S2) | Saída e entrada por chamadas diretas no agente; sai o `bin/sss-helper` (encaixa no 032c com a D7) |
+| D14 | Senha repetida (S3) | Um `instance/secrets.cfg` compartilhado pelos processos do servidor |
+| D15 | DEPLOYMENT enxuto (S4) | Só o caminho real (§4.0 como roteiro único); sem `systemd`, apêndices B e migração do formato antigo (032d) |
+| D16 | Conferência entre agentes (S5) | `critical_config` só com o que ainda é configurável (`call_timeout_ms`, `misfire_policy`) |
+| D17 | `check_env.py` (S6) | Juntar no `--check` do `run_web` e numa opção do `run_scheduler` |

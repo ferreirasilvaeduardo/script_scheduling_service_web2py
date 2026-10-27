@@ -10,7 +10,6 @@ import re
 import sys
 
 from sss.config import sss_config
-from sss.platform import os_platform
 
 
 _RE_ERROR_CODE = re.compile(r"\b([A-Z]{3,4}-\d{4,5})\b")
@@ -78,12 +77,8 @@ def probe(candidate, cfg, password_value, user=None):
         elif candidate == "thick":
             import oracledb
             driver = oracledb
-            lib_dir = os_platform.get_oracle_lib_dir(cfg)
             try:
-                if lib_dir:
-                    oracledb.init_oracle_client(lib_dir=lib_dir)
-                else:
-                    oracledb.init_oracle_client()
+                oracledb.init_oracle_client()
             except Exception as and_init:
                 if "already been initialized" not in str(and_init):
                     raise
@@ -95,13 +90,6 @@ def probe(candidate, cfg, password_value, user=None):
         elif candidate == "cx_oracle":
             import cx_Oracle
             driver = cx_Oracle
-            lib_dir = os_platform.get_oracle_lib_dir(cfg)
-            try:
-                if lib_dir:
-                    cx_Oracle.init_oracle_client(lib_dir=lib_dir)
-            except Exception as and_init:
-                if "already been initialized" not in str(and_init):
-                    pass
             conn = cx_Oracle.connect(
                 user=user,
                 password=password_value,

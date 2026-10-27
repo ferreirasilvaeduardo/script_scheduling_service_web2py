@@ -49,6 +49,26 @@ IGNORED_KEYS = {
     ("logging", "script_work_retention_days"): _NO_PURGE,
     ("logging", "saida_retention_days"): _NO_PURGE,
 }
+# CR-032 (D2, D3, D9): ajustes finos com valor fixo no codigo. Continuam atributos do Config (quem le nao
+# muda); a linha no config.ini so gera aviso. D1: chaves sem efeito, retiradas.
+FIXED = {
+    ("oracle", "pool_min"): 1, ("oracle", "pool_max"): 4,
+    ("agent", "schedule_batch_size"): 50, ("agent", "orchestrator_interval_s"): 10,
+    ("agent", "cancel_poll_interval_s"): 2, ("agent", "heartbeat_interval_s"): 10,
+    ("agent", "fence_timeout_s"): 90, ("agent", "node_offline_timeout_s"): 180,
+    ("agent", "kill_grace_s"): 5, ("agent", "shutdown_mode"): "TERMINATE",
+    ("agent", "shutdown_grace_s"): 30, ("agent", "misfire_tolerance_s"): 300,
+    ("agent", "cron_horizon_days"): 1461, ("agent", "queue_aging_min"): 60,
+    ("agent", "child_locale"): "C.UTF-8",
+    ("web", "log_poll_interval_s"): 3, ("web", "max_threads"): 16, ("web", "socket_timeout_s"): 30,
+}
+_FIXED_REASON = "valor fixo no codigo desde o CR-032"
+_REMOVED_REASON = "sem efeito, retirada no CR-032"
+IGNORED_KEYS.update(dict((key, "%s (%s)" % (_FIXED_REASON, value)) for key, value in FIXED.items()))
+IGNORED_KEYS.update({("agent", "claim_batch_size"): _REMOVED_REASON,
+                     ("agent", "max_parallel_hard_limit"): _REMOVED_REASON,
+                     ("oracle", "oracle_client_lib_dir"): _REMOVED_REASON})
+
 # Secoes inteiras ignoradas com aviso (CR-030): o load() registra uma linha por chave.
 IGNORED_SECTIONS = {"retention": _NO_PURGE, "retencao": _NO_PURGE}
 
@@ -160,10 +180,7 @@ SCHEMA = collections.OrderedDict([
         # So minusculas: o registro de identificadores so aceita nomes em minusculas (CR-007, R-31).
         ("table_prefix", FieldDef("str", required=True, regex=r"^[a-z][a-z0-9_]{0,7}$")),
         ("driver_mode", FieldDef("enum", required=False, allowed_values=("auto", "thin", "thick", "cx_oracle"), default="auto")),
-        ("oracle_client_lib_dir", FieldDef("path", required=False, default=None)),
         ("call_timeout_ms", FieldDef("int", required=False, min_val=1, max_val=3600000, default=30000)),
-        ("pool_min", FieldDef("int", required=False, min_val=1, max_val=1000, default=1)),
-        ("pool_max", FieldDef("int", required=False, min_val=1, max_val=1000, default=4)),
     ])),
     ("secrets", collections.OrderedDict([
         # CR-026 (D9): sem a linha, o secrets.cfg da pasta do config.ini.
@@ -181,25 +198,10 @@ SCHEMA = collections.OrderedDict([
         # CR-028: helper de execucao, numa pasta so do root ao lado da raiz (padrao HELPER_DEFAULT).
         ("helper_path", FieldDef("path", required=False, default=None)),
         ("max_parallel_jobs", FieldDef("int", required=True, min_val=1, max_val=999)),
-        ("max_parallel_hard_limit", FieldDef("int", required=False, min_val=1, max_val=999, default=32)),
-        ("claim_batch_size", FieldDef("int", required=False, min_val=1, max_val=1000, default=20)),
-        ("schedule_batch_size", FieldDef("int", required=False, min_val=1, max_val=1000, default=50)),
-        ("orchestrator_interval_s", FieldDef("int", required=False, min_val=1, max_val=3600, default=10)),
-        ("cancel_poll_interval_s", FieldDef("int", required=False, min_val=1, max_val=3600, default=2)),
-        ("heartbeat_interval_s", FieldDef("int", required=False, min_val=1, max_val=3600, default=10)),
-        ("fence_timeout_s", FieldDef("int", required=False, min_val=1, max_val=86400, default=90)),
-        ("node_offline_timeout_s", FieldDef("int", required=False, min_val=1, max_val=86400, default=180)),
-        ("kill_grace_s", FieldDef("int", required=False, min_val=1, max_val=300, default=5)),
         # Pedido do responsavel pelo produto (2026-10-27): padrao de 168 h; maximo igual ao do cadastro do
         # script (tbsss_scripts.timeout_s, NUMBER(7)).
         ("script_timeout_s", FieldDef("int", required=False, min_val=1, max_val=9999999, default=604800)),
-        ("shutdown_mode", FieldDef("enum", required=False, allowed_values=("TERMINATE", "DRAIN"), default="TERMINATE")),
-        ("shutdown_grace_s", FieldDef("int", required=False, min_val=1, max_val=3600, default=30)),
         ("misfire_policy", FieldDef("enum", required=False, allowed_values=("RUN_ONCE", "SKIP"), default="RUN_ONCE")),
-        ("misfire_tolerance_s", FieldDef("int", required=False, min_val=1, max_val=86400, default=300)),
-        # Minimo 1461 (4 anos): cobre o 29/02 de regras CRON anuais (CR-008, R-32).
-        ("cron_horizon_days", FieldDef("int", required=False, min_val=1461, max_val=36500, default=1461)),
-        ("queue_aging_min", FieldDef("int", required=False, min_val=0, max_val=1440, default=60)),
         # CR-008, R-25: espaco minimo do log_dir.
         ("log_dir_min_free_mb", FieldDef("int", required=False, min_val=0, max_val=1048576, default=1024)),
         # CR-012: pasta de saida dos scripts (vazio desliga) e limites do zip (README §8.13).
@@ -212,7 +214,6 @@ SCHEMA = collections.OrderedDict([
         ("script_work_dir", FieldDef("path", required=False, default=None)),
         # CR-023: pasta base dos scripts cadastrados com caminho relativo (vazio desliga; README §8.5).
         ("script_base_dir", FieldDef("path", required=False, default=None)),
-        ("child_locale", FieldDef("str", required=False, default="C.UTF-8")),
         ("env_passthrough", FieldDef("list_csv", required=False, default=())),
     ])),
     ("logging", collections.OrderedDict([
@@ -227,16 +228,11 @@ SCHEMA = collections.OrderedDict([
         ("session_max_hours", FieldDef("int", required=False, min_val=1, max_val=168, default=12)),
         ("login_max_attempts", FieldDef("int", required=False, min_val=1, max_val=99, default=5)),
         ("login_lockout_s", FieldDef("int", required=False, min_val=1, max_val=86400, default=900)),
-        ("log_poll_interval_s", FieldDef("int", required=False, min_val=1, max_val=3600, default=3)),
         ("trusted_proxies", FieldDef("list_csv", required=False, default=())),
         ("allowed_origins", FieldDef("list_csv", required=True)),
         # CR-020d: tamanho maximo do arquivo enviado pela tela de Entrada (o POST maior e recusado antes de ser lido).
         ("input_upload_max_bytes", FieldDef("int", required=False, min_val=1048576, max_val=209715200,
                                             default=52428800)),
-        # CR-021e (D5): servidor web proprio, uma thread por conexao ate max_threads, e o tempo maximo
-        # que uma conexao espera o cliente (o cliente lento e derrubado).
-        ("max_threads", FieldDef("int", required=False, min_val=1, max_val=256, default=16)),
-        ("socket_timeout_s", FieldDef("int", required=False, min_val=5, max_val=300, default=30)),
     ])),
 ])
 
@@ -265,7 +261,7 @@ AppConfig.__new__.__defaults__ = (None, "all", None)
 
 class OracleConfig(_ItemAccessMixin, collections.namedtuple("OracleConfig", [
     "user", "dsn", "owner", "table_prefix", "driver_mode",
-    "oracle_client_lib_dir", "call_timeout_ms",
+    "call_timeout_ms",
     "pool_min", "pool_max"
 ])):
     __slots__ = ()
@@ -277,8 +273,7 @@ class SecretsConfig(_ItemAccessMixin, collections.namedtuple("SecretsConfig", ["
 
 class AgentConfig(_ItemAccessMixin, collections.namedtuple("AgentConfig", [
     "agent_id", "environments", "work_dir",
-    "max_parallel_jobs", "max_parallel_hard_limit",
-    "claim_batch_size", "schedule_batch_size", "orchestrator_interval_s",
+    "max_parallel_jobs", "schedule_batch_size", "orchestrator_interval_s",
     "cancel_poll_interval_s", "heartbeat_interval_s", "fence_timeout_s",
     "node_offline_timeout_s", "kill_grace_s", "script_timeout_s",
     "shutdown_mode", "shutdown_grace_s", "misfire_policy",
@@ -435,8 +430,8 @@ HELPER_DEFAULT = os.path.join(os.path.dirname(APP_DIR), "sss-root", "bin", "sss-
 _ROLE_SKIPPED = {"web": ("agent",), "agent": ("web",), "all": ()}
 # Chaves de [agent] que o web tambem usa (painel de saude, agendamentos, fila) e que precisam ser iguais as dos
 # agentes (revisao do CR-028, A1): o config do web aceita um [agent] parcial so com elas, sem mudar o papel.
-WEB_AGENT_KEYS = ("heartbeat_interval_s", "fence_timeout_s", "node_offline_timeout_s", "misfire_policy",
-                  "misfire_tolerance_s", "cron_horizon_days", "queue_aging_min")
+# CR-032 (D2, D3): os tempos de saude e os ajustes do desdobro ficaram fixos; sobra so a politica de misfire.
+WEB_AGENT_KEYS = ("misfire_policy",)
 # Chaves que so o agente tem: um [agent] com qualquer delas e o do formato unico, e nao o parcial do web.
 _AGENT_ONLY_REQUIRED = ("environments", "max_parallel_jobs")
 
@@ -511,7 +506,7 @@ def load(ini_path: str) -> "Config":
         # CR-028 (A1): [web] com um [agent] parcial e o web; o [agent] so leva as chaves de WEB_AGENT_KEYS.
         role = "web"
         for k in cp["agent"]:
-            if k not in WEB_AGENT_KEYS:
+            if k not in WEB_AGENT_KEYS and ("agent", k) not in IGNORED_KEYS:
                 raise ConfigError(section="agent", key=k,
                                   reason="No config do web, [agent] so aceita: %s" % ", ".join(WEB_AGENT_KEYS))
     raw_name = cp["app"].get("name", "").strip() if cp.has_section("app") else ""
@@ -524,6 +519,10 @@ def load(ini_path: str) -> "Config":
             data_sections[sec_name] = dict((k, cdef.default) for k, cdef in sec_fields.items())
             if sec_name in cp:
                 for k in cp[sec_name]:
+                    if (sec_name, k) in IGNORED_KEYS:
+                        _PENDING_WARNINGS.append("config.ini: chave [%s] %s ignorada: %s; apague a linha"
+                                                 % (sec_name, k, IGNORED_KEYS[(sec_name, k)]))
+                        continue
                     data_sections[sec_name][k] = _convert_value(sec_name, k, sec_fields[k], cp[sec_name][k])
             continue
         if sec_name not in cp.sections():
@@ -568,6 +567,10 @@ def load(ini_path: str) -> "Config":
 
         data_sections[sec_name] = data_sec
 
+    # CR-032: os ajustes finos fixos entram sempre com o valor do codigo.
+    for (sec_name, k), value in FIXED.items():
+        data_sections[sec_name][k] = value
+
     app_name = data_sections["app"]["name"]
     folder = os.path.dirname(os.path.realpath(ini_path))
     if (app_name and os.path.dirname(folder) == os.path.realpath(os.path.join(APP_DIR, "instance"))
@@ -600,38 +603,8 @@ def load(ini_path: str) -> "Config":
     # 4. Invariantes
     app_dict = data_sections["app"]
     oracle_dict = data_sections["oracle"]
-    if oracle_dict["pool_min"] > oracle_dict["pool_max"]:
-        raise ConfigError(
-            section="oracle", key="pool_min",
-            reason="pool_min (%d) nao pode ser maior que pool_max (%d)" % (
-                oracle_dict["pool_min"], oracle_dict["pool_max"]
-            )
-        )
-
-    if role != "web" and agent_dict["max_parallel_jobs"] > agent_dict["max_parallel_hard_limit"]:
-        raise ConfigError(
-            section="agent", key="max_parallel_jobs",
-            reason="max_parallel_jobs (%d) nao pode ser maior que max_parallel_hard_limit (%d)" % (
-                agent_dict["max_parallel_jobs"], agent_dict["max_parallel_hard_limit"]
-            )
-        )
-
-    if agent_dict["fence_timeout_s"] * 2 > agent_dict["node_offline_timeout_s"]:
-        raise ConfigError(
-            section="agent", key="fence_timeout_s",
-            reason="Invariante violada: fence_timeout_s * 2 (%d) deve ser <= node_offline_timeout_s (%d)" % (
-                agent_dict["fence_timeout_s"] * 2, agent_dict["node_offline_timeout_s"]
-            )
-        )
-
-    if agent_dict["heartbeat_interval_s"] * 3 > agent_dict["fence_timeout_s"]:
-        raise ConfigError(
-            section="agent", key="heartbeat_interval_s",
-            reason="Invariante violada: heartbeat_interval_s * 3 (%d) deve ser <= fence_timeout_s (%d)" % (
-                agent_dict["heartbeat_interval_s"] * 3, agent_dict["fence_timeout_s"]
-            )
-        )
-
+    # CR-032 (D3): os tempos de saude sao fixos (heartbeat 10, fence 90, offline 180); as invariantes I3/I4 so
+    # limitam o call_timeout_ms (ate 40 s), em _validate_cr007.
     _validate_cr007(app_dict, oracle_dict, agent_dict, data_sections["logging"], role)
 
     # 5. Instanciar arvore de configuracao imutavel
@@ -687,17 +660,13 @@ def _validate_cr007(app, oracle, agent, logging_dict, role="all"):
     so as que valem para ele (invariantes e a conta Oracle); as do agente ficam de fora. CR-030: sem purge."""
     call_s = call_timeout_s(oracle["call_timeout_ms"])
     i3 = agent["heartbeat_interval_s"] + 2 * call_s
-    if i3 > agent["fence_timeout_s"]:
-        raise ConfigError(
-            section="agent", key="fence_timeout_s",
-            reason="Invariante I3 violada: heartbeat_interval_s + 2 * call_timeout_s (%d) deve ser <= "
-                   "fence_timeout_s (%d) (README §8.9)" % (i3, agent["fence_timeout_s"]))
     i4 = agent["fence_timeout_s"] + call_s + agent["kill_grace_s"] + 2
-    if i4 > agent["node_offline_timeout_s"]:
+    if i3 > agent["fence_timeout_s"] or i4 > agent["node_offline_timeout_s"]:
+        # CR-032 (D3): com os tempos de saude fixos, I3 e I4 (README §8.9) so limitam o call_timeout_ms.
         raise ConfigError(
-            section="agent", key="node_offline_timeout_s",
-            reason="Invariante I4 violada: fence_timeout_s + call_timeout_s + kill_grace_s + 2 (%d) deve ser <= "
-                   "node_offline_timeout_s (%d) (README §8.9)" % (i4, agent["node_offline_timeout_s"]))
+            section="oracle", key="call_timeout_ms",
+            reason="call_timeout_ms (%d) acima do limite dos tempos de saude fixos: no maximo 40000 "
+                   "(invariantes I3 e I4, README §8.9)" % oracle["call_timeout_ms"])
 
     if role != "web":
         _validate_agent_paths(app, agent, logging_dict)

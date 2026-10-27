@@ -25,6 +25,14 @@ import zipfile
 
 APP = _testenv.APP_DIR
 RUN_SCHEDULER = os.path.join(APP, "scripts", "run_scheduler.py")
+# CR-032 (D2, D3): os tempos sao fixos no codigo (sss_config.FIXED). Para nao esperar os valores reais, os
+# testes sobem o agente por este lancador, que so troca a tabela FIXED do processo antes do main().
+_LAUNCHER = ("import json, sys\n"
+             "sys.path.insert(0, sys.argv[1])\n"
+             "from sss.config import sss_config\n"
+             "sss_config.FIXED.update(dict((tuple(k.split('.')), v) for k, v in json.loads(sys.argv[2]).items()))\n"
+             "from sss.cli import run_scheduler\n"
+             "sys.exit(run_scheduler.main(sys.argv[3:]))\n")
 N_TICKETS = 10
 CAP = 2
 LONG_MARK = 3017  # sleep exclusivo do script longo, para achar orfaos pelo argv
@@ -35,6 +43,8 @@ class _TwoAgentsBase(unittest.TestCase):
 
     AGENT_PREFIX = "tst-f83d"
     CONFIG_EXTRA = {}
+    # Valores de sss_config.FIXED trocados so nos agentes deste teste ("secao.chave": valor).
+    FIXED_OVERRIDE = {"agent.orchestrator_interval_s": 1, "agent.cancel_poll_interval_s": 1}
 
     @classmethod
     def setUpClass(cls):
@@ -137,7 +147,7 @@ class _TwoAgentsBase(unittest.TestCase):
         cp["app"].pop("name", None)
         cp["agent"].update({"agent_id": agent, "environments": self.amb["name"], "work_dir": dirs["work"],
                             "exec_users": "", "exec_work_dir": "",
-                            "max_parallel_jobs": "4", "orchestrator_interval_s": "1", "cancel_poll_interval_s": "1",
+                            "max_parallel_jobs": "4",
                             "output_dir": dirs["output"], "input_dir": dirs["input"],
                             "log_dir_min_free_mb": "0"})
         for section, values in self.CONFIG_EXTRA.items():
@@ -158,8 +168,9 @@ class _TwoAgentsBase(unittest.TestCase):
         path, dirs = self._config(agent)
         output = open(os.path.join(self.root, agent + ".out"), "w")
         self.addCleanup(output.close)
-        p = subprocess.Popen([sys.executable, RUN_SCHEDULER, "--config", path], cwd=APP, stdout=output,
-                             stderr=subprocess.STDOUT, start_new_session=True)
+        argv = [sys.executable, "-c", _LAUNCHER, os.path.join(APP, "src"), json.dumps(self.FIXED_OVERRIDE),
+                "--config", path]
+        p = subprocess.Popen(argv, cwd=APP, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
         self.processes.append((agent, p, dirs))
         return p, dirs
 

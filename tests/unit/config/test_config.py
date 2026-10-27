@@ -132,7 +132,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(cfg.oracle.owner, "openrisow")
         self.assertEqual(cfg.oracle.table_prefix, "tbsss_")
         self.assertEqual(cfg.oracle.driver_mode, "thick")
-        self.assertIsNone(cfg.oracle.oracle_client_lib_dir)
+        self.assertFalse(hasattr(cfg.oracle, "oracle_client_lib_dir"), "CR-032 (D1)")
         self.assertEqual(cfg.oracle.call_timeout_ms, 30000)
         self.assertEqual(cfg.oracle.pool_min, 1)
         self.assertEqual(cfg.oracle.pool_max, 4)
@@ -147,8 +147,8 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(cfg.agent.work_dir, "/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/work")
         self.assertFalse(hasattr(cfg.agent, "script_owner_uids"), "CR-011")
         self.assertEqual(cfg.agent.max_parallel_jobs, 4)
-        self.assertEqual(cfg.agent.max_parallel_hard_limit, 32)
-        self.assertEqual(cfg.agent.claim_batch_size, 20)
+        self.assertFalse(hasattr(cfg.agent, "max_parallel_hard_limit"), "CR-032 (D1)")
+        self.assertFalse(hasattr(cfg.agent, "claim_batch_size"), "CR-032 (D1)")
         self.assertEqual(cfg.agent.schedule_batch_size, 50)
         self.assertEqual(cfg.agent.orchestrator_interval_s, 10)
         self.assertEqual(cfg.agent.cancel_poll_interval_s, 2)
@@ -234,7 +234,7 @@ class TestConfig(unittest.TestCase):
     def test_tipo_invalido(self):
         """Verifica rejeicao de valores com tipo incompativel."""
         # int invalido
-        ini_int = self._copy_and_edit_ini(changes={"oracle": {"pool_min": "um"}})
+        ini_int = self._copy_and_edit_ini(changes={"oracle": {"call_timeout_ms": "um"}})
         with self.assertRaises(sss_config.ConfigError):
             sss_config.load(ini_int)
 
@@ -272,8 +272,8 @@ class TestConfig(unittest.TestCase):
 
     def test_fora_da_faixa(self):
         """Verifica rejeicao de valores fora das faixas minimas/maximas."""
-        # pool_min < 1
-        ini = self._copy_and_edit_ini(changes={"oracle": {"pool_min": "0"}})
+        # call_timeout_ms < 1
+        ini = self._copy_and_edit_ini(changes={"oracle": {"call_timeout_ms": "0"}})
         with self.assertRaises(sss_config.ConfigError):
             sss_config.load(ini)
 
@@ -294,38 +294,24 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(ctx_old.exception.key, "app_log_backups")
 
     def test_cada_invariante(self):
-        """Verifica a validacao de cada invariante de integridade operacional."""
-        # 1. max_parallel_jobs <= max_parallel_hard_limit
-        ini1 = self._copy_and_edit_ini(changes={
-            "agent": {"max_parallel_jobs": "33", "max_parallel_hard_limit": "32"}
-        })
-        with self.assertRaises(sss_config.ConfigError) as ctx1:
-            sss_config.load(ini1)
-        self.assertEqual(ctx1.exception.key, "max_parallel_jobs")
-
-        # 2. fence_timeout_s * 2 <= node_offline_timeout_s
-        ini2 = self._copy_and_edit_ini(changes={
-            "agent": {"fence_timeout_s": "100", "node_offline_timeout_s": "180"}
-        })
-        with self.assertRaises(sss_config.ConfigError) as ctx2:
-            sss_config.load(ini2)
-        self.assertEqual(ctx2.exception.key, "fence_timeout_s")
-
-        # 3. heartbeat_interval_s * 3 <= fence_timeout_s
-        ini3 = self._copy_and_edit_ini(changes={
-            "agent": {"heartbeat_interval_s": "31", "fence_timeout_s": "90"}
-        })
-        with self.assertRaises(sss_config.ConfigError) as ctx3:
-            sss_config.load(ini3)
-        self.assertEqual(ctx3.exception.key, "heartbeat_interval_s")
-
-        # 4. pool_min <= pool_max
-        ini4 = self._copy_and_edit_ini(changes={
-            "oracle": {"pool_min": "5", "pool_max": "4"}
-        })
-        with self.assertRaises(sss_config.ConfigError) as ctx4:
-            sss_config.load(ini4)
-        self.assertEqual(ctx4.exception.key, "pool_min")
+        """CR-032 (D1, D2, D3): os tempos de saude, o teto e o pool sao fixos; as linhas antigas viram aviso
+        e o valor fixo vale."""
+        sss_config.pending_warnings()
+        ini = self._copy_and_edit_ini(changes={
+            "agent": {"max_parallel_hard_limit": "2", "fence_timeout_s": "100", "heartbeat_interval_s": "31",
+                      "claim_batch_size": "1", "kill_grace_s": "60", "shutdown_mode": "DRAIN"},
+            "oracle": {"pool_min": "5", "pool_max": "4", "oracle_client_lib_dir": "/opt/ic"},
+            "web": {"max_threads": "1"}})
+        cfg = sss_config.load(ini)
+        self.assertEqual((cfg.agent.fence_timeout_s, cfg.agent.heartbeat_interval_s, cfg.agent.kill_grace_s,
+                          cfg.agent.shutdown_mode, cfg.oracle.pool_min, cfg.oracle.pool_max, cfg.web.max_threads),
+                         (90, 10, 5, "TERMINATE", 1, 4, 16))
+        warnings = "\n".join(sss_config.pending_warnings())
+        for key in ("[agent] max_parallel_hard_limit", "[agent] fence_timeout_s", "[oracle] pool_min",
+                    "[oracle] oracle_client_lib_dir", "[web] max_threads", "[agent] shutdown_mode"):
+            self.assertIn(key, warnings)
+        self.assertIn("valor fixo no codigo desde o CR-032 (90)", warnings)
+        self.assertIn("sem efeito, retirada no CR-032", warnings)
 
     def test_data_backend_removida(self):
         """F7.3: a aplicacao usa sempre o Oracle; a chave antiga e recusada com mensagem clara."""
@@ -675,14 +661,12 @@ class TestConfigCR007(unittest.TestCase):
 
     def test_faixas_novas(self):
         # CR-008, R-32: minimo de 1461 dias (cobre o 29/02).
-        self._refusal("cron_horizon_days", agent={"cron_horizon_days": "1460"})
-        self.assertEqual(self._load(agent={"cron_horizon_days": "1461"}).agent.cron_horizon_days, 1461)
+        self.assertEqual(self._load().agent.cron_horizon_days, 1461, "CR-032: fixo")
         self.assertEqual(self._load().agent.log_dir_min_free_mb, 1024)
         self.assertEqual(self._load(agent={"log_dir_min_free_mb": "0"}).agent.log_dir_min_free_mb, 0)
         self._refusal("log_dir_min_free_mb", agent={"log_dir_min_free_mb": "-1"})
         self._refusal("max_log_size_bytes", logging={"max_log_size_bytes": str(64 * 1024 * 1024 + 1)})
-        self._refusal("queue_aging_min", agent={"queue_aging_min": "1441"})
-        self.assertEqual(self._load(agent={"queue_aging_min": "0"}).agent.queue_aging_min, 0)
+        self.assertEqual(self._load(agent={"queue_aging_min": "0"}).agent.queue_aging_min, 60, "CR-032: fixo")
 
     def test_cr026_interpreters_ignorado_com_aviso(self):
         """CR-026 (D1): a linha antiga nao impede a subida; o aviso espera o log da aplicacao (026f)."""
@@ -753,7 +737,7 @@ class TestConfigCR007(unittest.TestCase):
                 "[web]\nallowed_origins = https://x\n[agent]\n")
         web = sss_config.load(self._ini_text(base + "misfire_policy = SKIP\nqueue_aging_min = 15\n"))
         self.assertEqual((web.app.role, web.agent.misfire_policy, web.agent.queue_aging_min,
-                          web.agent.heartbeat_interval_s), ("web", "SKIP", 15, 10))
+                          web.agent.heartbeat_interval_s), ("web", "SKIP", 60, 10), "CR-032: fixos, com aviso")
         with self.assertRaises(sss_config.ConfigError) as ctx:
             sss_config.load(self._ini_text(base + "misfire_policy = SKIP\nwork_dir = /tmp/x\n"))
         self.assertEqual(ctx.exception.key, "work_dir")
@@ -864,7 +848,6 @@ class TestConfigCR007(unittest.TestCase):
         cfg = sss_config.load(ini)
         self.assertEqual(cfg.secrets.secrets_file, os.path.join(self.tmp_dir, "secrets.cfg"))
         expected = {("oracle", "call_timeout_ms"): 30000, ("oracle", "pool_min"): 1, ("oracle", "pool_max"): 4,
-                    ("agent", "max_parallel_hard_limit"): 32, ("agent", "claim_batch_size"): 20,
                     ("agent", "schedule_batch_size"): 50, ("agent", "orchestrator_interval_s"): 10,
                     ("agent", "cancel_poll_interval_s"): 2, ("agent", "heartbeat_interval_s"): 10,
                     ("agent", "fence_timeout_s"): 90, ("agent", "node_offline_timeout_s"): 180,
@@ -945,13 +928,7 @@ class TestConfigCR007(unittest.TestCase):
         self.assertEqual(self._load(web={"input_upload_max_bytes": "1048576"}).web.input_upload_max_bytes, 1048576)
         # CR-021e (D5): servidor web proprio.
         web_cfg = self._load().web
-        self.assertEqual((web_cfg.max_threads, web_cfg.socket_timeout_s), (16, 30))
-        for key, bad, good in (("max_threads", ("0", "257"), ("1", "256")),
-                               ("socket_timeout_s", ("4", "301"), ("5", "300"))):
-            for v in bad:
-                self._refusal(key, web={key: v})
-            for v in good:
-                self.assertEqual(getattr(self._load(web={key: v}).web, key), int(v))
+        self.assertEqual((web_cfg.max_threads, web_cfg.socket_timeout_s), (16, 30), "CR-032: fixos")
         for key, bad, good in (("output_max_bytes", ("1048575", "209715201"), ("1048576", "209715200")),
                                    ("output_max_files", ("0", "10001"), ("1", "10000"))):
             for v in bad:
@@ -960,10 +937,9 @@ class TestConfigCR007(unittest.TestCase):
                 self.assertEqual(getattr(self._load(agent={key: v}).agent, key), int(v))
 
     def test_invariantes_i3_e_i4(self):
-        # I3: heartbeat + 2*call <= fence (10 + 2*41 = 92 > 90).
-        self._refusal("fence_timeout_s", oracle={"call_timeout_ms": "41000"})
-        # I4: fence + call + kill + 2 <= offline (90 + 30 + 60 + 2 = 182 > 180).
-        self._refusal("node_offline_timeout_s", agent={"kill_grace_s": "60"})
+        # CR-032 (D3): com heartbeat 10, fence 90, offline 180 e kill 5 fixos, I3 limita o call_timeout_ms a 40 s.
+        self._refusal("call_timeout_ms", oracle={"call_timeout_ms": "41000"})
+        self.assertEqual(self._load(oracle={"call_timeout_ms": "40000"}).oracle.call_timeout_ms, 40000)
         self.assertEqual(sss_config.call_timeout_s(30001), 31)
         self._load()  # o exemplo atende I3 = 70 <= 90 e I4 = 127 <= 180
 

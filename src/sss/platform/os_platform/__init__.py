@@ -5,7 +5,6 @@ Toda primitiva dependente do sistema operacional fica aqui (AGENTS §3.2): o mot
 startup check) chama apenas esta interface e nao conhece o SO. A implementacao e posix.py.
 """
 import os
-import sys
 
 if os.name != "posix":
     raise ImportError("SSS: somente POSIX e suportado (CR-005)")
@@ -57,16 +56,3 @@ from sss.platform.os_platform.posix import (  # noqa: E402,F401
                                             set_helper,
                                             validate_output_dirs,
                                             )
-
-
-def is_macos():
-    # type: () -> bool
-    """Indica se a plataforma atual eh macOS (Darwin)."""
-    return sys.platform == "darwin"
-
-
-def get_oracle_lib_dir(cfg):
-    """Retorna lib_dir do Instant Client apenas se estiver no macOS (dev) com config definido."""
-    if is_macos() and cfg is not None and hasattr(cfg, "oracle") and cfg.oracle.oracle_client_lib_dir:
-        return cfg.oracle.oracle_client_lib_dir
-    return None
