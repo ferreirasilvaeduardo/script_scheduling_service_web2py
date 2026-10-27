@@ -1,6 +1,6 @@
 #!/bin/bash
 # Parada controlada do agente sem sinal (README §8.11, §12.2): cria work_dir/sss-<agent_id>.stop.
-# Uso: sss-stop.sh <nome> | --config <config.ini>  (CR-028: instance/<nome>/config.ini; padrao: instance/config.ini)
+# Uso: sss-stop.sh <nome> | --config <config.ini>  (CR-028: instance/<nome>/config.ini; CR-029: sem padrao)
 set -euo pipefail
 
 if [ "$(id -u)" -eq 0 ]; then
@@ -13,13 +13,15 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${REPO_ROOT}"
 PYTHON="${PYTHON:-python3}"
 
-CONFIG="instance/config.ini"
 if [ "$#" -eq 2 ] && [ "$1" = "--config" ] && [ -n "$2" ]; then
     CONFIG="$2"
 elif [ "$#" -eq 1 ] && [[ "$1" =~ ^[a-z][a-z0-9_-]{0,29}$ ]]; then
     CONFIG="instance/$1/config.ini"
-elif [ "$#" -ne 0 ]; then
-    echo "Erro: uso: sss-stop.sh [<nome> | --config <config.ini>]" >&2
+else
+    # CR-029: sem config padrao; lista os processos de instance/ (menos os modelos de exemplos/).
+    found="$(for f in instance/*/config.ini; do d="${f%/config.ini}"; d="${d#instance/}"
+             if [ -f "${f}" ] && [ "${d}" != "exemplos" ]; then printf '%s ' "${d}"; fi; done)"
+    echo "Erro: uso: sss-stop.sh <nome> | --config <config.ini> (em instance/: ${found:-nenhum})" >&2
     exit 2
 fi
 

@@ -49,7 +49,7 @@ class TestUpdate(unittest.TestCase):
 
     def _code(self, root, version):
         for rel in ("src/sss/versao.txt", "scripts/run_web.py", "docs/DEPLOYMENT.md", "README.md",
-                    "AGENTS.md", "bin/sss-web.sh", "instance/config.ini.example",
+                    "AGENTS.md", "bin/sss-web.sh",
                     "instance/exemplos/web0001/config.ini.example"):
             _write(os.path.join(root, rel), "%s %s\n" % (rel, version))
 
@@ -90,7 +90,7 @@ class TestUpdate(unittest.TestCase):
     def test_atualiza_preserva_e_volta_pelo_pacote_de_retorno(self):
         code, out, err = self._run(self._package("v2"))
         self.assertEqual(code, 0, err)
-        for rel in ("src/sss/versao.txt", "README.md", "instance/config.ini.example",
+        for rel in ("src/sss/versao.txt", "README.md",
                     "instance/exemplos/web0001/config.ini.example"):
             self.assertIn("v2", _read(os.path.join(self.app, rel)), rel)
         self._preserved()
@@ -100,7 +100,8 @@ class TestUpdate(unittest.TestCase):
         code, _out, err = self._run(back)
         self.assertEqual(code, 0, err)
         self.assertIn("v1", _read(os.path.join(self.app, "src", "sss", "versao.txt")))
-        self.assertIn("v1", _read(os.path.join(self.app, "instance", "config.ini.example")))
+        self.assertIn("v1", _read(os.path.join(self.app, "instance", "exemplos", "web0001",
+                                               "config.ini.example")))
         self._preserved()
 
     def test_pacote_que_nao_confere_nao_muda_nada(self):

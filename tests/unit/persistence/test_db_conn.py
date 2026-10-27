@@ -775,7 +775,7 @@ class TestOracleTestSupportMocks(unittest.TestCase):
             _oracle_test_support.validate_disposable_schema(mock_conn, "OPENRISOW", "OPENRISOW")
 
     def test_preparar_usa_o_config_da_aplicacao_e_registra_o_modo(self):
-        """Sem cfg, usa sss_config.get_config() (instance/config.ini) e guarda o modo validado."""
+        """Sem cfg, usa o config do agente0001 do DEV (CR-029) e guarda o modo validado."""
         from sss.core import sql_ident
         mock_conn, _cur = self._conn("OPENRISOW", sql_ident.SCHEMA_VERSION)
         cfg = self._cfg()
@@ -784,7 +784,7 @@ class TestOracleTestSupportMocks(unittest.TestCase):
                 with mock.patch("sss.config.sss_config.load_secrets", return_value=mock.MagicMock()):
                     with mock.patch("sss.persistence.db_conn.connect", return_value=mock_conn):
                         self.assertIs(_oracle_test_support.prepare_disposable_schema("web"), cfg)
-        get.assert_called_once_with()
+        get.assert_called_once_with(path=_oracle_test_support.ORACLE_CONFIG)
         mock_conn.close.assert_called_once()
         self.assertEqual(_oracle_test_support.schema_mode(), _oracle_test_support.SHARED_MODE)
 
@@ -851,6 +851,18 @@ class TestProbeWithRoleAccount(unittest.TestCase):
         self.assertEqual(cmd[-2:], ["--user", "sss_monitor"])
         self.assertNotIn("senha-mon-77", " ".join(cmd))
         self.assertEqual(process.communicate.call_args[1]["input"], b"senha-mon-77")
+
+    def test_cr029_subprocesso_recebe_o_config_do_processo(self):
+        """CR-029: a sondagem le o mesmo config.ini do processo (cfg.app.config_path), sem padrao."""
+        process = mock.Mock(returncode=0)
+        process.communicate.return_value = (b'{"candidate": "thin", "ok": true}', b"")
+        cfg = _FakeConfig(driver_mode="thin")
+        ini = os.path.abspath(__file__)
+        cfg.app = collections.namedtuple("AppConfig", ["sss_env", "config_path"])(sss_env="DEV", config_path=ini)
+        with mock.patch.object(db_conn.subprocess, "Popen", return_value=process) as popen:
+            db_conn.select_driver(cfg, _FakeSecrets(password="x"))
+        cmd = popen.call_args[0][0]
+        self.assertEqual(cmd[cmd.index("--config") + 1], ini)
 
     def test_conectar_monitor_sonda_com_a_conta_do_monitor(self):
         secrets_value = mock.Mock(monitor=mock.Mock(user="sss_monitor", password="senha-mon-77"))

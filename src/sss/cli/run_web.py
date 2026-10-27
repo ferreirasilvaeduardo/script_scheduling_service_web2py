@@ -30,7 +30,7 @@ EXIT_ADDRESS = 3
 def main(argv: Optional[List[str]] = None) -> int:
     """Sobe o servidor e atende ate a parada; devolve o codigo de saida."""
     parser = argparse.ArgumentParser(description="Servidor web do SSS (CR-021e)")
-    parser.add_argument("--config", default=None, help="config.ini (padrao: instance/config.ini)")
+    parser.add_argument("--config", default=None, help="config.ini do web (ou --name)")
     parser.add_argument("--name", default=None,
                         help="processo: instance/<nome>/config.ini (CR-028)")
     parser.add_argument("--host", default="127.0.0.1", help="endereco local (padrao: 127.0.0.1)")

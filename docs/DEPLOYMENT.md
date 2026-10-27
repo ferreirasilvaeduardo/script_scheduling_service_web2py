@@ -243,7 +243,7 @@ python3 scripts/generate_sql.py --config instance/web0001/config.ini --grants-to
 # gera docs/sql/01_deploy_sss_openrisow_tbsss.sql, 02_rollback_sss_<owner>_<prefixo>.sql, 99_validate_deploy_<owner>_<prefixo>.sql e 03_grants_sss_<owner>_<prefixo>.sql
 ```
 
-O DBA revisa o `01` (ou a saída de `python3 scripts/init_db.py --dry-run`, que imprime o DDL sem conectar) **antes** de executar. Depois:
+O DBA revisa o `01` (ou a saída de `python3 scripts/init_db.py --name agente0001 --dry-run`, que imprime o DDL sem conectar) **antes** de executar. Depois:
 
 ```sql
 -- como a conta dona do esquema, gravando a saída
@@ -286,7 +286,7 @@ O seed cria os usuários de homologação `admin`, `op.prod`, `op.hml` e `consul
 * **Linha da combinação escolhida**, no log da aplicação de cada processo (ensaio, banco 19c):
   `INFO ... [action=INICIO] driver=oracledb modo=thin servidor=19.24.0.0.0 cliente=-`
   Com Thick ou cx_Oracle, `cliente=` mostra a versão do Instant Client (precisa ser 19). Registre essa linha no checklist (§19).
-* **Conferência antes de subir:** `python3 scripts/check_env.py`, a partir de `W`. Ela confere os pré-requisitos (código 0 = tudo OK, 1 = falta arquivo, 2 = Python menor que 3.6.0).
+* **Conferência antes de subir:** `python3 scripts/check_env.py --name <nome>`, a partir de `W`. Ela confere os pré-requisitos (código 0 = tudo OK, 1 = falta arquivo, 2 = Python menor que 3.6.0).
 * **Quando forçar:**
   * `driver_mode = thick` quando o banco é 11g. O Thin recusa com `DPY-3010` e a cadeia já pula para o Thick, mas forçar evita a sondagem a cada subida.
   * `driver_mode = cx_oracle` quando o `python-oracledb` não estiver disponível ou falhar nesse servidor.
@@ -425,7 +425,7 @@ export PYTHON=/usr/bin/python3 SSS_TZ=America/Sao_Paulo
 bin/sss-scheduler.sh agente0001            # instance/agente0001/config.ini (CR-028); ou --config <arquivo>
 ```
 
-* O launcher aceita o nome do processo, `--config <arquivo>` ou nada (o `instance/config.ini` de formato único); qualquer outro argumento sai com código 2.
+* O launcher aceita o nome do processo ou `--config <arquivo>`. Sem nada, o `run_scheduler.py` sai com código 2 e lista os processos de `instance/` (CR-029: não há config padrão); qualquer outro argumento também sai com código 2.
 * Subida bem-sucedida, no log da aplicação (`var/<nome>/logs/internal/app/AAAA/MM/DD/HH/MI/sss_scheduler_<PID>.log`):
   ```text
   INFO ... [action=INICIO] tempos do fencing: fence_timeout_s=90 node_offline_timeout_s=180
@@ -678,7 +678,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | 1 (launcher) | `Erro: execucao como root nao e permitida.` (stderr) | Executado como root | Suba como `sss` (`sudo -u sss -H bash`) |
 | 10 | `o agente nao pode rodar como root (README §8.12 passo 1)` | Idem, sem o launcher | Idem |
 | 11 | `configuracao invalida: Arquivo de configuracao nao encontrado: <caminho>` | `config.ini` ausente ou `--config` errado | §7.1 |
-| 11 | `configuracao invalida: [secao] chave: <motivo>` | Chave ausente, desconhecida ou fora da faixa | Compare com o `config.ini.example`; uma chave removida pede "apague a linha" |
+| 11 | `configuracao invalida: [secao] chave: <motivo>` | Chave ausente, desconhecida ou fora da faixa | Compare com o modelo de `instance/exemplos/`; uma chave removida pede "apague a linha" |
 | 11 | `child_locale <x> nao consta em locale -a (CR-007, R-17)` | Locale do filho não instalado | Instale o locale ou ajuste `[agent] child_locale` |
 | 12 | `secrets.cfg invalido: <reason>` (ex.: `Arquivo de segredos possui permissoes inseguras (mode 644, ...)`, `... deve pertencer ao usuario corrente`, `Secao [web] nao pertence ao papel 'agente'`) | Modo, dono ou seções do `secrets.cfg` | `chmod 0600`, `chown sss`, e só as seções do papel (§7.2) |
 | 13 | `work_dir <pasta> recusado: NOT_FOUND` (ou `output_dir`, `input_dir`, `script_work_dir`) | A pasta configurada não existe: o SSS não cria as pastas, exceto o `log_dir` (README §12.1) | `scripts/prepare_dirs.py` como root (§8) e suba de novo |
@@ -816,7 +816,7 @@ Com a estrutura por processo, o código é trocado **no lugar** pelo `bin/sss-up
    <RAIZ>/bin/sss-update.sh sss-<versao>.tar.gz
    # a última linha mostra o comando de retorno: <RAIZ>/bin/sss-update.sh <RAIZ>/var/update/<data>/sss-retorno-<data>.tar.gz
    ```
-   O comando confere o pacote (`SHA256SUMS` externo e interno) e recusa root (código 1), pacote inválido ou sem permissão para criar `var/update/` (código 2, nada muda) e um `python` rodando um comando do SSS a partir da `<RAIZ>` (código 3, nada muda; um processo de outro usuário, que não dá para conferir, só gera aviso). Ele guarda o código atual num pacote de retorno, no mesmo formato, em `var/update/<data>/`, e troca só `bin/`, `docs/`, `scripts/`, `src/`, `AGENTS.md`, `README.md`, `SHA256SUMS` e os exemplos de `instance/`. A extração e o código anterior ficam em `<RAIZ>/.update-<data>/` (mesma partição da raiz: a troca é por renomeação, mesmo com `var/` em partição própria), apagada no sucesso. Código 4: falha no meio da troca; o código anterior fica em `.update-<data>/anterior/` e o retorno é o pacote impresso.
+   O comando confere o pacote (`SHA256SUMS` externo e interno) e recusa root (código 1), pacote inválido ou sem permissão para criar `var/update/` (código 2, nada muda) e um `python` rodando um comando do SSS a partir da `<RAIZ>` (código 3, nada muda; um processo de outro usuário, que não dá para conferir, só gera aviso). Ele guarda o código atual num pacote de retorno, no mesmo formato, em `var/update/<data>/`, e troca só `bin/`, `docs/`, `scripts/`, `src/`, `AGENTS.md`, `README.md`, `SHA256SUMS` e `instance/exemplos/`. A extração e o código anterior ficam em `<RAIZ>/.update-<data>/` (mesma partição da raiz: a troca é por renomeação, mesmo com `var/` em partição própria), apagada no sucesso. Código 4: falha no meio da troca; o código anterior fica em `.update-<data>/anterior/` e o retorno é o pacote impresso.
    * **`bin/` é trocado inteiro:** um arquivo local que você tenha posto em `bin/` some (fica só no pacote de retorno). Guarde scripts próprios fora do código, por exemplo em `scripts_ambiente/`.
    * **Pacotes de retorno:** `var/update/<data>/` não é apagado pelo purge. Depois de validar a versão nova, apague à mão os pacotes antigos que não quiser guardar.
    * **Dono de `var/`:** o `sss-update.sh` roda com o usuário do serviço e grava em `var/update/`. O `prepare_dirs.py` deixa `var/`, `var/<nome>/` e `var/update/` com esse usuário (§8).

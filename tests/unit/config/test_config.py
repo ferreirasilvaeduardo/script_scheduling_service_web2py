@@ -31,7 +31,8 @@ class TestConfig(unittest.TestCase):
         self.tmp_dir = tempfile.mkdtemp(prefix="sss_test_")
         self.app_dir = _testenv.APP_DIR
         self.repo_root = self.app_dir  # CR-022a: a aplicacao e a raiz do repositorio
-        self.example_ini = os.path.join(self.app_dir, "instance", "config.ini.example")
+        # CR-029: o exemplo do formato unico so existe para os testes.
+        self.example_ini = os.path.join(self.app_dir, "tests", "support", "config.ini.example")
 
         # O substituto registra o que load_secrets entrega (sss_config importa sss.core.masking dentro da funcao).
         self.masked = []
@@ -137,7 +138,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(cfg.oracle.pool_max, 4)
 
         # [secrets]
-        self.assertEqual(cfg.secrets.secrets_file, "/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/instance/secrets.cfg")
+        self.assertEqual(cfg.secrets.secrets_file, os.path.join(self.app_dir, "tests", "support", "secrets.cfg"))
 
         # [agent]
         self.assertEqual(cfg.agent.agent_id, "srv-linux-prod-01")
@@ -383,8 +384,7 @@ class TestConfig(unittest.TestCase):
     def _get_with_ini(self, ini, log_name="sss_web"):
         sss_config.reset_config_cache()
         self.addCleanup(sss_config.reset_config_cache)
-        with mock.patch.object(sss_config, "default_config_path", return_value=ini):
-            return sss_config.get_config(log_name)
+        return sss_config.get_config(log_name, path=ini)
 
     def _read_app_log(self, log_dir, log_name):
         """CR-005 D6: o CRITICAL inicial fica em log_dir/app/AAAA/MM/DD/HH/MI/<log_name>_<PID>.log."""
@@ -823,7 +823,22 @@ class TestConfigCR007(unittest.TestCase):
         self.assertEqual(sss_config.config_path(None, "agente0001"),
                          os.path.join(sss_config.APP_DIR, "instance", "agente0001", "config.ini"))
         self.assertEqual(sss_config.config_path("/x.ini", "agente0001"), "/x.ini")
-        self.assertIsNone(sss_config.config_path(None, None))
+        # CR-029 (D1, opcao A): sem --name nem --config, erro com a lista dos processos de instance/.
+        with self.assertRaises(sss_config.ConfigError) as ctx:
+            sss_config.config_path(None, None)
+        self.assertIn("Informe o processo", str(ctx.exception))
+        with mock.patch.object(sss_config, "APP_DIR", self.tmp_dir):
+            os.makedirs(os.path.join(self.tmp_dir, "instance", "web0001"))
+            os.makedirs(os.path.join(self.tmp_dir, "instance", "exemplos", "agente0001"))
+            open(os.path.join(self.tmp_dir, "instance", "web0001", "config.ini"), "w").close()
+            open(os.path.join(self.tmp_dir, "instance", "exemplos", "agente0001", "config.ini"), "w").close()
+            self.assertEqual(sss_config.processes(), ["web0001"], "sem os modelos de exemplos/")
+        sss_config.reset_config_cache()
+        self.addCleanup(sss_config.reset_config_cache)
+        with self.assertRaises(sss_config.ConfigError):
+            sss_config.get_config()
+        cfg = sss_config.load(self.example_ini)
+        self.assertEqual(cfg.app.config_path, self.example_ini, "caminho repassado a sondagem do driver")
         for bad in ("Agente", "a/b", "../x", ""):
             if bad:
                 with self.assertRaises(sss_config.ConfigError):
@@ -838,7 +853,7 @@ class TestConfigCR007(unittest.TestCase):
         """CR-026: a tabela do README §12.1 lista toda chave do SCHEMA, com a obrigatoriedade e o padrao do codigo."""
         with open(os.path.join(self.app_dir, "README.md"), "r", encoding="utf-8") as f:
             text = f.read()
-        section = text[text.index("### 12.1 `instance/config.ini`"):text.index("### 12.2 Launchers")]
+        section = text[text.index("### 12.1 `instance/<nome>/config.ini`"):text.index("### 12.2 Launchers")]
         rows = {}
         for line in section.splitlines():
             m = re.match(r"^\| `\[(\w+)\]` \| (.+?) \| (sim|não|fora de DEV) \| (.+?) \| .+ \|$", line)

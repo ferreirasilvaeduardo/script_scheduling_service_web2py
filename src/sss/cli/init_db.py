@@ -729,7 +729,9 @@ def main(argv=None):
         description="Bootstrap de DDL e seed Oracle 11gR2 do SSS (F7.1)",
         add_help=True,
     )
-    parser.add_argument("--config", dest="config", default=None, help="Caminho do config.ini")
+    parser.add_argument("--config", dest="config", default=None, help="Caminho do config.ini (ou --name)")
+    parser.add_argument("--name", dest="name", default=None,
+                        help="processo: instance/<nome>/config.ini (CR-029)")
     parser.add_argument("--dry-run", dest="dry_run", action="store_true", help="Imprime o DDL sem conectar")
     parser.add_argument("--lob-basicfile", dest="lob_basicfile", action="store_true", help="Fallback LOB BASICFILE")
     parser.add_argument("--owner-user", dest="usuario_dono", default=None, help="Usuario dono do esquema")
@@ -754,13 +756,9 @@ def main(argv=None):
 
     # Carrega configuracao
     cfg = None
-    path_cfg = args.config or sss_config.default_config_path()
-    if not os.path.isfile(path_cfg):
-        example = os.path.join(os.path.dirname(path_cfg), "config.ini.example")
-        if os.path.isfile(example):
-            path_cfg = example
-
     try:
+        # CR-029: sem config padrao; --name <processo> ou --config <arquivo>.
+        path_cfg = sss_config.config_path(args.config, args.name)
         cfg = sss_config.load(path_cfg)
     except Exception as exc:
         msg = "Falha ao carregar configuracao: %s" % exc

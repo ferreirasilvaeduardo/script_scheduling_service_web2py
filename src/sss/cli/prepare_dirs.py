@@ -3,7 +3,7 @@
 
 Uso (como root no servidor; no DEV, com o proprio usuario):
   python3 scripts/prepare_dirs.py <nome> [--service-user sss] [--dry-run]   (CR-028)
-  python3 scripts/prepare_dirs.py [--config <config.ini>] [--service-user sss] [--dry-run]
+  python3 scripts/prepare_dirs.py --config <config.ini> [--service-user sss] [--dry-run]
 
 O SSS nao cria as pastas configuradas na subida (README §12.1): este comando as cria antes.
   log_dir                                 sss          0750
@@ -130,7 +130,7 @@ def apply(folder: Folder, chown: bool) -> str:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         description="Cria as pastas do config.ini do SSS com dono e modo (CR-026e)")
-    parser.add_argument("--config", default=None, help="config.ini (padrao: instance/config.ini)")
+    parser.add_argument("--config", default=None, help="config.ini (ou o nome do processo)")
     parser.add_argument("--name", default=None,
                         help="processo: instance/<nome>/config.ini (CR-028)")
     parser.add_argument("nome", nargs="?", default=None,
@@ -144,7 +144,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("Configuracao invalida: %s" % exc, file=sys.stderr)
         return 2
     try:
-        cfg = sss_config.load(args.config or sss_config.default_config_path())
+        cfg = sss_config.load(args.config)
     except sss_config.ConfigError as exc:
         print("Configuracao invalida: %s" % exc, file=sys.stderr)
         return EXIT_INVALID

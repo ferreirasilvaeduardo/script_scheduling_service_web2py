@@ -2,7 +2,7 @@
 """Testes do repo_oracle.scheduler_output (CR-012; README §8.13 e §10, tabela 18).
 
 Sem banco: conexao roteirizada do test_scheduler_queue (SQL, binds, posse e ausencia de COMMIT).
-Com SSS_TEST_ORACLE=1: o ciclo real no owner e prefixo do instance/config.ini, com massa propria, e a
+Com SSS_TEST_ORACLE=1: o ciclo real no owner e prefixo do instance/agente0001/config.ini, com massa propria, e a
 leitura pelo repositorio da web (output_get, output_read); tudo removido no fim (cascata do ticket).
 """
 from tests.support import _testenv  # noqa: F401
@@ -108,7 +108,9 @@ sys.path[:0] = [sys.argv[1]]
 from sss.persistence import db_conn
 from sss.config import sss_config
 from sss.persistence.oracle.scheduler_output import RepoSchedulerOutput
-cfg = sss_config.get_config()
+# CR-029 (como _oracle_test_support): config e segredos do agente0001 do DEV.
+cfg = sss_config.get_config(path=os.path.join(os.path.dirname(sys.argv[1]), "instance", "agente0001",
+                                              "config.ini"))
 cfg = cfg._replace(oracle=cfg.oracle._replace(driver_mode=sys.argv[2]))
 seg = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role="web")
 try:

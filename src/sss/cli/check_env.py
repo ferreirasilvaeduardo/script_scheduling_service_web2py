@@ -5,6 +5,7 @@ CLI de verificacao de ambiente sem efeitos colaterais (somente leitura).
 Executa fail-fast caso a versao do Python seja anterior a 3.6.0 ou caso algum
 recurso obrigatorio esteja ausente ou invalido (AGENTS §2.1: sintaxe 3.6, execucao em >= 3.6.0).
 """
+import argparse
 import os
 import sys
 
@@ -17,7 +18,11 @@ if sys.version_info[:3] < (3, 6, 0):
     sys.exit(2)
 
 
-def main():
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Verificador de ambiente do SSS")
+    parser.add_argument("--config", default=None, help="config.ini (ou --name)")
+    parser.add_argument("--name", default=None, help="processo: instance/<nome>/config.ini (CR-029)")
+    args = parser.parse_args(argv)
     # src/sss/cli/ -> raiz da aplicacao (CR-022b8); o comando continua sendo scripts/<nome>.py
     app_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
     # Servidor web proprio (CR-021e); o web2py saiu do repositorio no CR-021f.
@@ -55,7 +60,7 @@ def main():
     # Item 5: Driver Oracle (driver_mode e cadeia adaptativa)
     try:
         from sss.config import sss_config
-        cfg = sss_config.get_config()
+        cfg = sss_config.get_config(path=sss_config.config_path(args.config, args.name))
         mode = getattr(cfg.oracle, "driver_mode", "auto")
         chain_desc = "auto (Thin -> Thick -> cx_Oracle)" if mode == "auto" else mode
 

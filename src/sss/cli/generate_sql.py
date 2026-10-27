@@ -29,6 +29,8 @@ def main(argv=None):
         add_help=True,
     )
     parser.add_argument("--config", dest="config", default=None, help="Caminho do config.ini (opcional)")
+    parser.add_argument("--name", dest="name", default=None,
+                        help="processo: instance/<nome>/config.ini (opcional; CR-029)")
     parser.add_argument("--owner", dest="owner", default=None, help="Owner do esquema Oracle (ex: OPENRISOW)")
     parser.add_argument("--prefix", dest="prefixo", default=None, help="Prefixo de tabelas (ex: tbsss_)")
     parser.add_argument("--lob-basicfile", dest="lob_basicfile", action="store_true", help="Fallback LOB BASICFILE")
@@ -49,18 +51,17 @@ def main(argv=None):
 
     cfg = None
     # O config tambem fornece as contas dos papeis quando --grants-to nao e informado (README §11.1).
-    if args.config or (not owner or not prefix) or not args.grants_para:
-        path_cfg = args.config
-        if not path_cfg:
-            candidate = sss_config.default_config_path()
-            if os.path.isfile(candidate):
-                path_cfg = candidate
-            else:
-                candidate_ex = candidate + ".example"
-                if os.path.isfile(candidate_ex):
-                    path_cfg = candidate_ex
-
-        if path_cfg and os.path.isfile(path_cfg):
+    # CR-029: sem config padrao; sem --config nem --name, owner e prefixo vem das opcoes ou dos padroes.
+    if args.config or args.name:
+        try:
+            path_cfg = sss_config.config_path(args.config, args.name)
+        except sss_config.ConfigError as exc:
+            print("Configuracao invalida: %s" % exc, file=sys.stderr)
+            return 2
+        if not os.path.isfile(path_cfg):
+            print("Configuracao invalida: arquivo nao encontrado: %s" % path_cfg, file=sys.stderr)
+            return 2
+        if path_cfg:
             try:
                 cfg = sss_config.load(path_cfg)
                 if hasattr(cfg, "oracle"):

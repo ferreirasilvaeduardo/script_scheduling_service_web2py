@@ -258,12 +258,14 @@ class _ItemAccessMixin(object):
         return super(_ItemAccessMixin, self).__getitem__(item)
 
 
-class AppConfig(_ItemAccessMixin, collections.namedtuple("AppConfig", ["sss_env", "name", "role"])):
+class AppConfig(_ItemAccessMixin, collections.namedtuple("AppConfig",
+                                                         ["sss_env", "name", "role", "config_path"])):
     __slots__ = ()
 
 
-# name e role sao opcionais na construcao direta (testes); o load() sempre os preenche (CR-028).
-AppConfig.__new__.__defaults__ = (None, "all")
+# name, role e config_path sao opcionais na construcao direta (testes); o load() sempre os preenche (CR-028,
+# CR-029: config_path e o arquivo lido, repassado a sondagem do driver).
+AppConfig.__new__.__defaults__ = (None, "all", None)
 
 
 class OracleConfig(_ItemAccessMixin, collections.namedtuple("OracleConfig", [
@@ -586,6 +588,7 @@ def load(ini_path: str) -> "Config":
         raise ConfigError(section="agent", key="agent_id",
                           reason="Com [app] name, o agent_id e o proprio nome (CR-028); apague a linha agent_id")
     data_sections["app"]["role"] = role
+    data_sections["app"]["config_path"] = os.path.abspath(ini_path)
     if role != "web" and data_sections["agent"]["helper_path"] is None:
         data_sections["agent"]["helper_path"] = HELPER_DEFAULT
 
@@ -1144,23 +1147,33 @@ _CONFIG_CACHE = None
 _RE_PROCESS_NAME = re.compile(r"^[a-z][a-z0-9_-]{0,29}$")
 
 
-def config_path(config: "Optional[str]" = None, name: "Optional[str]" = None) -> "Optional[str]":
+def processes() -> List[str]:
+    """Processos configurados: pastas de instance/ com config.ini (sem os modelos de exemplos/)."""
+    base = os.path.join(APP_DIR, "instance")
+    try:
+        names = sorted(os.listdir(base))
+    except OSError:
+        return []
+    return [n for n in names if n != "exemplos" and os.path.isfile(os.path.join(base, n, "config.ini"))]
+
+
+def missing_process_error() -> ConfigError:
+    """CR-029 (D1, opcao A): sem --name nem --config nao ha config padrao; a mensagem lista os processos."""
+    found = processes()
+    return ConfigError(reason="Informe o processo: --name <nome> (em instance/: %s) ou --config <arquivo> (CR-029)"
+                              % (", ".join(found) if found else "nenhum; veja instance/exemplos/"))
+
+
+def config_path(config: "Optional[str]" = None, name: "Optional[str]" = None) -> str:
     """config.ini pedido na linha de comando (CR-028, D7): --config vence; --name <nome> e
-    instance/<nome>/config.ini; sem os dois, None (o padrao, instance/config.ini)."""
+    instance/<nome>/config.ini; sem os dois, ConfigError com a lista dos processos (CR-029)."""
     if config:
         return config
     if name:
         if not _RE_PROCESS_NAME.match(name):
             raise ConfigError(reason="Nome de processo invalido: '%s' (ex.: web0001, agente0001)" % name)
         return os.path.join(APP_DIR, "instance", name, "config.ini")
-    return None
-
-
-def default_config_path() -> str:
-    """Caminho canonico do config.ini da aplicacao (instance/config.ini)."""
-    # src/sss/config/ -> raiz da aplicacao (CR-022b3)
-    app_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
-    return os.path.join(app_dir, "instance", "config.ini")
+    raise missing_process_error()
 
 
 def _raw_log_dir(ini_path):
@@ -1185,11 +1198,13 @@ def get_config(log_name=None, path=None):
 
     Com log_name ('sss_web' ou 'sss_scheduler'), uma falha e registrada em CRITICAL antes de
     ser relancada (README §12.1, "Falha de configuracao"). caminho: outro config.ini (so o
-    agente, por --config do run_scheduler; README §12.2); sem ele, instance/config.ini.
+    agente, por --config do run_scheduler; README §12.2). Sem ele e sem cache, ConfigError: nao ha
+    config padrao (CR-029).
     """
     global _CONFIG_CACHE
     if _CONFIG_CACHE is None:
-        path = path or default_config_path()
+        if not path:
+            raise missing_process_error()
         try:
             # Corrida entre threads do servidor web apenas recarrega o mesmo arquivo imutavel.
             _CONFIG_CACHE = load(path)

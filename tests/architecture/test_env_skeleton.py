@@ -75,8 +75,9 @@ class TestEnvSkeleton(unittest.TestCase):
             os.path.join(self.app_dir, "src", "sss", "web", "static", "js", "app", ".gitkeep"),
             os.path.join(self.app_dir, "src", "sss", "web", "static", "fonts", ".gitkeep"),
             os.path.join(self.app_dir, "dev", "scripts", ".gitkeep"),
-            os.path.join(self.app_dir, "instance", ".gitkeep"),
         ]
+        # CR-029: instance/ fica no git pelos modelos de instance/exemplos/, sem .gitkeep.
+        self.assertTrue(os.path.isdir(os.path.join(self.app_dir, "instance", "exemplos")))
         for f in expected_gitkeeps:
             self.assertTrue(os.path.isfile(f), "Arquivo .gitkeep ausente: %s" % f)
 
@@ -115,7 +116,9 @@ class TestEnvSkeleton(unittest.TestCase):
 
     def test_check_env_success(self):
         """Executa check_env.py e verifica retorno 0 e presenca de OK."""
-        cmd = [sys.executable, os.path.join(self.app_dir, "scripts", "check_env.py")]
+        # CR-029: sem config padrao; o exemplo do formato unico dos testes.
+        cmd = [sys.executable, os.path.join(self.app_dir, "scripts", "check_env.py"),
+               "--config", os.path.join(self.app_dir, "tests", "support", "config.ini.example")]
         proc = subprocess.Popen(
             cmd,
             cwd=self.app_dir,

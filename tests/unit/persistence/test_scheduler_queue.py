@@ -3,7 +3,7 @@
 CR-008 R-02, R-07, R-08, R-09, R-20).
 
 Sem banco: conexao roteirizada (SQL literal, binds gerados por contagem, rowcount, transacoes e updated_*).
-Com SSS_TEST_ORACLE=1: as mesmas operacoes no owner e prefixo do instance/config.ini, com massa propria
+Com SSS_TEST_ORACLE=1: as mesmas operacoes no owner e prefixo do instance/agente0001/config.ini, com massa propria
 (ambientes, perfil, usuarios, script e tickets do teste) e um agent_id de teste; tudo removido no fim.
 """
 from tests.support import _testenv  # noqa: F401

@@ -4,7 +4,7 @@ README §7.5, §8.8, §8.9; CR-006; CR-007 R-05, R-08, R-12, R-19, R-27; CR-008 
 
 Sem banco: conexao roteirizada do test_scheduler_queue (SQL literal, binds de data sem microssegundos e com
 TIPO_DATE, nenhuma operacao do agenda faz COMMIT/ROLLBACK). Com SSS_TEST_ORACLE=1: as operacoes reais no
-owner do instance/config.ini com massa propria (inclusive o teste obrigatorio de microssegundos).
+owner do instance/agente0001/config.ini com massa propria (inclusive o teste obrigatorio de microssegundos).
 """
 from tests.support import _testenv  # noqa: F401
 

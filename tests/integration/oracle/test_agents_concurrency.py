@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""F8.3d: dois agentes reais (scripts/run_scheduler.py) contra o Oracle do instance/config.ini.
+"""F8.3d: dois agentes reais (scripts/run_scheduler.py) contra o Oracle do instance/agente0001/config.ini.
 
 Com SSS_TEST_ORACLE=1 (README §2.5): esquema validado por prepare_disposable_schema('agent') antes de DML;
 ambiente, perfil, usuario, scripts e tickets so da fixture; cada agente com o proprio config.ini temporario
@@ -132,7 +132,9 @@ class _TwoAgentsBase(unittest.TestCase):
         for p in dirs.values():
             os.makedirs(p, 0o750, exist_ok=True)
         cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
-        cp.read(os.path.join(APP, "instance", "config.ini"), encoding="utf-8")
+        cp.read(os.path.join(APP, "instance", "agente0001", "config.ini"), encoding="utf-8")
+        # CR-029: o agente0001 tem [app] name; aqui cada agente tem o seu agent_id e as suas pastas.
+        cp["app"].pop("name", None)
         cp["agent"].update({"agent_id": agent, "environments": self.amb["name"], "work_dir": dirs["work"],
                             "exec_users": "", "exec_work_dir": "",
                             "max_parallel_jobs": "4", "orchestrator_interval_s": "1", "cancel_poll_interval_s": "1",
@@ -146,7 +148,7 @@ class _TwoAgentsBase(unittest.TestCase):
         # CR-026 (D9): sem secrets_file, o padrao e o secrets.cfg da pasta do config.ini (aqui, a temporaria).
         if not cp.has_section("secrets"):
             cp.add_section("secrets")
-        cp["secrets"]["secrets_file"] = os.path.join(APP, "instance", "secrets.cfg")
+        cp["secrets"]["secrets_file"] = os.path.join(APP, "instance", "agente0001", "secrets.cfg")
         path = os.path.join(base, "config.ini")
         with open(path, "w", encoding="utf-8") as f:
             cp.write(f)

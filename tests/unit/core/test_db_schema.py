@@ -38,9 +38,9 @@ class TestDbSchema(unittest.TestCase):
     """Bateria de testes de schema do modelo Oracle 11gR2."""
 
     def _get_config_example_prefix(self):
-        """Le table_prefix diretamente de instance/config.ini.example."""
+        """Le table_prefix diretamente de tests/support/config.ini.example (CR-029)."""
         app_dir = _testenv.APP_DIR
-        cfg_path = os.path.join(app_dir, "instance", "config.ini.example")
+        cfg_path = os.path.join(app_dir, "tests", "support", "config.ini.example")
         self.assertTrue(os.path.isfile(cfg_path), "config.ini.example deve existir")
         with open(cfg_path, "r", encoding="utf-8") as f:
             for line in f:

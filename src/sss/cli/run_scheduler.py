@@ -2,8 +2,8 @@
 """Inicia o daemon do agente (README §8.1, §8.12; F8.3).
 
 Python puro, fora do web2py: o processo inteiro precisa ter uma unica thread antes do primeiro spawn (README §3.1,
-C10). Uso: python scripts/run_scheduler.py [--config <config.ini>] (sem --config, instance/config.ini, como a
-aplicacao; com ele, outro arquivo, por exemplo para dois agentes no mesmo servidor, README §12.2).
+C10). Uso: python scripts/run_scheduler.py --name <nome> | --config <config.ini> (CR-028, CR-029: sem
+config padrao; um instance/<nome>/ por agente, README §12.2).
 
 Saida: 0 na parada normal; 10 a 19 na falha de um passo da subida (README §8.12); 20 em REGISTRO_PERDIDO.
 """
@@ -32,7 +32,7 @@ def _wait(stop_event):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Daemon do agente do SSS (README §8.1)")
-    parser.add_argument("--config", dest="config", default=None, help="config.ini do agente (padrao: instance/)")
+    parser.add_argument("--config", dest="config", default=None, help="config.ini do agente (ou --name)")
     parser.add_argument("--name", default=None,
                         help="processo: instance/<nome>/config.ini (CR-028)")
     args = parser.parse_args(argv)

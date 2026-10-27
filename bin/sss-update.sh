@@ -106,9 +106,6 @@ done
 for f in "${CODE_FILES[@]}"; do
     [ -f "${REPO_ROOT}/${f}" ] && cp -a "${REPO_ROOT}/${f}" "${WORK}/retorno/${BACK}/"
 done
-for f in "${REPO_ROOT}"/instance/*.example; do
-    [ -f "${f}" ] && cp -a "${f}" "${WORK}/retorno/${BACK}/instance/"
-done
 [ -d "${REPO_ROOT}/instance/exemplos" ] && cp -a "${REPO_ROOT}/instance/exemplos" "${WORK}/retorno/${BACK}/instance/"
 (cd "${WORK}/retorno/${BACK}" && rm -f SHA256SUMS \
     && find . -type f ! -name SHA256SUMS -printf '%P\n' | LC_ALL=C sort | xargs -r -d '\n' sha256sum > SHA256SUMS)
@@ -130,15 +127,9 @@ trocar() {
         if [ -e "${NEW}/${f}" ]; then mv "${NEW}/${f}" "${REPO_ROOT}/${f}" || return 1; fi
     done
     mkdir -p "${REPO_ROOT}/instance" || return 1
-    for f in "${REPO_ROOT}"/instance/*.example; do
-        if [ -f "${f}" ]; then mv "${f}" "${WORK}/anterior/instance/" || return 1; fi
-    done
     if [ -d "${REPO_ROOT}/instance/exemplos" ]; then
         mv "${REPO_ROOT}/instance/exemplos" "${WORK}/anterior/instance/" || return 1
     fi
-    for f in "${NEW}"/instance/*.example; do
-        if [ -f "${f}" ]; then mv "${f}" "${REPO_ROOT}/instance/" || return 1; fi
-    done
     if [ -d "${NEW}/instance/exemplos" ]; then mv "${NEW}/instance/exemplos" "${REPO_ROOT}/instance/" || return 1; fi
     return 0
 }

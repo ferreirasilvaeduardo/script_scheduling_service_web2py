@@ -192,11 +192,17 @@ class TestLaunchers(unittest.TestCase):
     def test_stop_recusa_configuracao_invalida(self):
         cases = [("--config", self._config(agent_id="purge")), ("--config", self._config(work="relativo/work")),
                  ("--config", self._config(work=os.path.join(self.root, "nao_existe"))),
-                 ("--config", os.path.join(self.root, "sem_arquivo.ini")), ("--outro",)]
+                 ("--config", os.path.join(self.root, "sem_arquivo.ini")), ("--outro",), ()]
         for args in cases:
             code, _r, error = self._run_loop("sss-stop.sh", *args, PYTHON=sys.executable)
             self.assertEqual(code, 2, (args, error))
         self.assertEqual(os.listdir(os.path.join(self.root, "work")), [])
+        # CR-029: sem argumento nao ha config padrao; a mensagem lista os processos de instance/.
+        os.makedirs(os.path.join(self.root, "instance", "agente0007"))
+        open(os.path.join(self.root, "instance", "agente0007", "config.ini"), "w").close()
+        code, _r, error = self._run_loop("sss-stop.sh", PYTHON=sys.executable)
+        self.assertEqual(code, 2, error)
+        self.assertIn("agente0007", error)
 
 
 if __name__ == "__main__":

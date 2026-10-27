@@ -103,8 +103,12 @@ class _ConnNow(object):
         self.closed = True
 
 
+# CR-029: sem config padrao; os testes passam um --config qualquer (o get_config e substituido).
+_CONFIG_ARGS = ["--config", "config-de-teste.ini"]
+
+
 def _args(argv=()):
-    return saude_cli._arguments(list(argv))
+    return saude_cli._arguments(_CONFIG_ARGS + list(argv))
 
 
 class TestChecks(unittest.TestCase):
@@ -212,7 +216,7 @@ class TestMain(unittest.TestCase):
         with mock.patch.object(saude_cli.sss_config, "get_config", get), \
                 mock.patch.object(saude_cli.sss_config, "load_secrets", load), \
                 mock.patch.object(saude_cli.saude_sql.RepoHealth, "from_config", return_value=_Repo()):
-            code = saude_cli.main(list(argv), connect=connect, output=output)
+            code = saude_cli.main(_CONFIG_ARGS + list(argv), connect=connect, output=output)
         self.load = load
         return code, output.getvalue()
 

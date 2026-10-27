@@ -170,10 +170,8 @@ def main():
     elif password.endswith("\n") or password.endswith("\r"):
         password = password[:-1]
 
-    if args.config:
-        cfg = sss_config.load(args.config)
-    else:
-        cfg = sss_config.get_config()
+    # CR-029: sem config padrao; o db_conn sempre passa o --config do processo que sonda.
+    cfg = sss_config.load(args.config) if args.config else sss_config.get_config()
 
     result = probe(args.candidate, cfg, password, user=args.usuario)
     sys.stdout.write(json.dumps(result) + "\n")

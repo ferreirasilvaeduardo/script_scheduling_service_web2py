@@ -2,7 +2,7 @@
 """Testes do log_pump e do repo_oracle.scheduler_log (README §8.10; AGENTS §4.13; CR-007 R-25; CR-008 R-11).
 
 Sem banco: dubles do repositorio e da conexao. Com SSS_TEST_ORACLE=1: WRITEAPPEND real num ticket proprio
-(criado e removido pelo teste) no owner e prefixo do instance/config.ini, com o driver do config e, em
+(criado e removido pelo teste) no owner e prefixo do instance/agente0001/config.ini, com o driver do config e, em
 processos separados, com cada combinacao de driver disponivel (Thin, Thick, cx_Oracle).
 """
 from tests.support import _testenv  # noqa: F401
@@ -553,7 +553,9 @@ sys.path[:0] = [sys.argv[1]]
 from sss.persistence import db_conn
 from sss.config import sss_config
 from sss.persistence.oracle.scheduler_log import RepoSchedulerLog
-cfg = sss_config.get_config()
+# CR-029 (como _oracle_test_support): config e segredos do agente0001 do DEV.
+cfg = sss_config.get_config(path=os.path.join(os.path.dirname(sys.argv[1]), "instance", "agente0001",
+                                              "config.ini"))
 cfg = cfg._replace(oracle=cfg.oracle._replace(driver_mode=sys.argv[2]))
 seg = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role="web")
 try:

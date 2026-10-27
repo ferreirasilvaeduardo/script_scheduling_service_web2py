@@ -12,7 +12,7 @@ Entram: os launchers de producao e o helper do bin/ e a aplicacao (APP_DIRS e AP
 aplicacao desde o CR-022a) sem codigo de DEV, sem testes e sem pastas de runtime. Desde o CR-021f nao ha web2py: o servidor web e o scripts/run_web.py da propria aplicacao.
 Falha (codigo 1, sem gravar nada) se o pacote tiver secrets.cfg real, *.pyc, __pycache__, controllers/dev.py,
 o FAKE (src/sss/persistence/fake), /admin/, resto do web2py (gluon/, web2py.py, anyserver.py, routes.py ou pasta de runtime dele), link
-simbolico ou credencial que nao seja o CHANGE_ME de instance/secrets.cfg.example. A mensagem cita o arquivo e a
+simbolico ou credencial que nao seja o CHANGE_ME de um */secrets.cfg.example (instance/exemplos/). A mensagem cita o arquivo e a
 linha, nunca o valor.
 """
 import argparse

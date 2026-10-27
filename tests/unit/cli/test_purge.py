@@ -517,7 +517,9 @@ class TestMain(_Base):
                 mock.patch.object(purge_cli.sss_config, "load_secrets", load), \
                 mock.patch.object(purge_cli.sss_logging, "configure", return_value=self.log), \
                 mock.patch.object(purge_cli.masking, "install_filter_on_handlers"):
-            code = purge_cli.main(argv, connect=conectar, plat=plat or _Plat(), output=output)
+            # CR-029: sem config padrao; o get_config e substituido, o caminho so precisa existir na linha.
+            code = purge_cli.main(["--config", "config-de-teste.ini"] + list(argv), connect=conectar,
+                                  plat=plat or _Plat(), output=output)
         self.load = load
         return code, output.getvalue()
 
@@ -548,7 +550,7 @@ class TestMain(_Base):
     def test_configuracao_invalida(self):
         with mock.patch.object(purge_cli.sss_config, "get_config",
                                side_effect=purge_cli.sss_config.ConfigError(reason="x")):
-            self.assertEqual(purge_cli.main([], connect=None), purge_cli.EXIT_CONFIG)
+            self.assertEqual(purge_cli.main(["--config", "config-de-teste.ini"], connect=None), purge_cli.EXIT_CONFIG)
         self.assertEqual(self._main([], cfg=_cfg(self.root, purge_user=None))[0], purge_cli.EXIT_CONFIG)
         self.assertEqual(self._main(["--export-audit", os.path.join(self.root, "nao_existe")])[0],
                          purge_cli.EXIT_CONFIG)
@@ -573,7 +575,7 @@ class TestMain(_Base):
                 mock.patch.object(purge_cli.sss_config, "load_secrets", return_value=object()), \
                 mock.patch.object(purge_cli.sss_logging, "configure", return_value=self.log), \
                 mock.patch.object(purge_cli.masking, "install_filter_on_handlers"):
-            code = purge_cli.main([], connect=mock.Mock(side_effect=RuntimeError("ORA-12541: no listener")),
+            code = purge_cli.main(["--config", "config-de-teste.ini"], connect=mock.Mock(side_effect=RuntimeError("ORA-12541: no listener")),
                                     plat=_Plat(), output=io.StringIO())
         self.assertEqual(code, purge_cli.EXIT_DATABASE)
 

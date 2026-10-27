@@ -93,7 +93,9 @@ def _run_probe_subprocess(candidate, cfg, password_value, user=None):
     probe_script = os.path.join(app_dir, "scripts", "probe_driver.py")
 
     cmd = [sys.executable, "-I", probe_script, candidate]
-    path_cfg = getattr(cfg, "caminho_arquivo", None)
+    # CR-029: o subprocesso le o mesmo config.ini do processo (antes buscava um atributo que nao existia e
+    # caia sempre no instance/config.ini, que deixou de existir).
+    path_cfg = getattr(getattr(cfg, "app", None), "config_path", None)
     if path_cfg and os.path.isfile(path_cfg):
         cmd.extend(["--config", path_cfg])
     if user:

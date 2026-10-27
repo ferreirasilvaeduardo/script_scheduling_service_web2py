@@ -284,7 +284,7 @@ class Purge(object):
 
 def _arguments(argv):
     parser = argparse.ArgumentParser(description="Retencao de dados do SSS (README §11.3)")
-    parser.add_argument("--config", default=None, help="config.ini do agente (padrao: instance/)")
+    parser.add_argument("--config", default=None, help="config.ini do agente (ou --name)")
     parser.add_argument("--name", default=None, help="processo: instance/<nome>/config.ini (CR-028)")
     parser.add_argument("--dry-run", action="store_true", help="so conta (estimativas), sem gravar nem remover")
     parser.add_argument("--target", dest="alvo", choices=CLI_TARGETS, default="all")

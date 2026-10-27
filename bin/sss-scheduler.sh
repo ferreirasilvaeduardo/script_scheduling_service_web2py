@@ -1,6 +1,6 @@
 #!/bin/bash
 # Launcher do daemon do agente (README §3.1, §12.2): somente scripts/run_scheduler.py.
-# Uso: sss-scheduler.sh <nome>  (CR-028: instance/<nome>/config.ini, ex.: agente0001) | --config <config.ini> | nada
+# Uso: sss-scheduler.sh <nome>  (CR-028: instance/<nome>/config.ini, ex.: agente0001) | --config <config.ini> (CR-029: sem nada, o run_scheduler sai com codigo 2 e lista os processos)
 set -euo pipefail
 
 # 1. Recusar execucao como root

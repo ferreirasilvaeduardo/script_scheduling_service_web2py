@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Suporte a testes reais e contratos Oracle (F7.2, F7.3; README §2.5, "Testes Oracle reais").
 
-Uma chave so: SSS_TEST_ORACLE=1. Owner, prefixo, DSN e conta vem do instance/config.ini, os mesmos
+Uma chave so: SSS_TEST_ORACLE=1. Owner, prefixo, DSN e conta vem do instance/agente0001/config.ini (CR-029), os mesmos
 da aplicacao; nada e repetido em variaveis de ambiente. Garante que nenhuma operacao real rode fora
 de DEV ou sobre um esquema nao autorizado. O modo e deduzido do owner:
 - DESCARTAVEL (owner SSS_TEST_*): owner dedicado e conta de teste distinta do owner;
@@ -20,6 +20,10 @@ from sss.persistence import db_conn
 
 KEY = "SSS_TEST_ORACLE"
 RESERVED_OWNER_PREFIX = "SSS_TEST_"
+# CR-029: sem instance/config.ini; o banco, as contas e os segredos vem do agente do DEV (no DEV, o secrets.cfg
+# dele tambem tem [web] cookie_key, para conectar como web; opcao C).
+_APP = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+ORACLE_CONFIG = os.path.join(_APP, "instance", "agente0001", "config.ini")
 DISPOSABLE_MODE = "DESCARTAVEL"
 SHARED_MODE = "COMPARTILHADO"
 # Variaveis da versao anterior da guarda: recusadas para nao serem ignoradas em silencio.
@@ -62,7 +66,7 @@ def check_environment_preconditions(cfg=None):
         return False, "Testes Oracle reais desligados: defina %s=1" % KEY
     old = [v for v in OLD_VARIABLES if os.environ.get(v)]
     if old:
-        return False, ("Variaveis antigas definidas (%s): owner, prefixo e DSN vem so do instance/config.ini; "
+        return False, ("Variaveis antigas definidas (%s): owner, prefixo e DSN vem so do instance/agente0001/config.ini; "
                        "use apenas %s=1" % (", ".join(old), KEY))
     if cfg is None:
         return True, ""
@@ -139,7 +143,7 @@ def _check_sss_schema(cur, owner, prefix):
 
 
 def prepare_disposable_schema(role="web", cfg=None, secrets=None):
-    """Valida o banco real para o papel e devolve o cfg do instance/config.ini (ou o informado)."""
+    """Valida o banco real para o papel e devolve o cfg do instance/agente0001/config.ini (ou o informado)."""
     global _current_mode
     from sss.config import sss_config
 
@@ -147,7 +151,7 @@ def prepare_disposable_schema(role="web", cfg=None, secrets=None):
     if not ok:
         raise SchemaPreconditionError(reason)
     if cfg is None:
-        cfg = sss_config.get_config()
+        cfg = sss_config.get_config(path=ORACLE_CONFIG)
     ok, reason = check_environment_preconditions(cfg=cfg)
     if not ok:
         raise SchemaPreconditionError(reason)

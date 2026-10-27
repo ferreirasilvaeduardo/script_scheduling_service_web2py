@@ -16,6 +16,10 @@ from sss.persistence import ddl_builder
 from sss.cli import init_db
 from sss.core import sql_ident
 
+# CR-029: sem config padrao; o init_db dos testes le o exemplo do formato unico.
+_EXAMPLE_CONFIG = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                               "support", "config.ini.example")
+
 
 class TestDdlBuilder(unittest.TestCase):
     """Testes da geracao declarativa de DDL a partir de sql_ident."""
@@ -329,10 +333,21 @@ class TestOracle11gExpressionNormalization(unittest.TestCase):
 class TestInitDbCli(unittest.TestCase):
     """Testes do CLI scripts/init_db.py."""
 
+    def test_cr029_sem_config_padrao(self):
+        """CR-029: init_db sem --name nem --config sai com 2; generate_sql com --name invalido tambem; sem
+        config, o generate_sql usa as opcoes (owner e prefixo)."""
+        with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+            self.assertEqual(init_db.main(["--dry-run"]), 2)
+        self.assertIn("Informe o processo", err.getvalue())
+        from sss.cli import generate_sql
+        with mock.patch("sys.stderr", new_callable=io.StringIO):
+            self.assertEqual(generate_sql.main(["--name", "Nome Invalido", "--stdout", "deploy"]), 2)
+            self.assertEqual(generate_sql.main(["--name", "processo_inexistente", "--stdout", "deploy"]), 2)
+
     def test_dry_run_executavel_sem_conexao(self):
         """--dry-run imprime DDL completo e retorna codigo 0 sem abrir conexao."""
         with mock.patch("sys.stdout", new_callable=io.StringIO) as mock_out:
-            code = init_db.main(["--dry-run"])
+            code = init_db.main(["--config", _EXAMPLE_CONFIG, "--dry-run"])
         self.assertEqual(code, 0)
         output = mock_out.getvalue()
         self.assertIn("FASE 1: SEQUENCES", output)
@@ -549,6 +564,7 @@ class TestDdlSeedAndRollback(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp_dir2:
             ret = init_db.main([
+                "--config", _EXAMPLE_CONFIG,
                 "--owner-user", self.owner,
                 "--generate-sql", tmp_dir2,
             ])

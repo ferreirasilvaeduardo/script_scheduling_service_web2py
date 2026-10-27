@@ -79,10 +79,10 @@ if [ -f "${PID_FILE}" ]; then
     rm -f "${PID_FILE}"
 fi
 
-# 6. Carregar segredos e variaveis de ambiente
-if [ -f "${APP_DIR}/instance/web.env" ]; then
+# 6. Carregar segredos e variaveis de ambiente (CR-029: instance/<nome>/web.env, junto do config do web)
+if [ -f "${APP_DIR}/instance/${NAME}/web.env" ]; then
     set -a
-    eval "$(tr -d '\r' < "${APP_DIR}/instance/web.env")"
+    eval "$(tr -d '\r' < "${APP_DIR}/instance/${NAME}/web.env")"
     set +a
 elif [ -f "${HOME}/.sss/web.env" ]; then
     set -a

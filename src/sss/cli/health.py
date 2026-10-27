@@ -136,7 +136,7 @@ class Check(object):
 
 def _arguments(argv):
     parser = argparse.ArgumentParser(description="Saude do SSS no padrao Nagios (README §13)")
-    parser.add_argument("--config", default=None, help="config.ini (padrao: instance/)")
+    parser.add_argument("--config", default=None, help="config.ini (ou --name)")
     parser.add_argument("--name", default=None, help="processo: instance/<nome>/config.ini (CR-028)")
     parser.add_argument("--no-pid-min", dest="sem_pid_min", type=int, default=2, help="RUNNING sem PID ha mais de N minutos")
     parser.add_argument("--queue-warn", dest="fila_warn", type=int, default=500, help="PENDING vencidos para WARNING")

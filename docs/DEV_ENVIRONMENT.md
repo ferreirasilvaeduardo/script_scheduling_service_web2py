@@ -100,7 +100,7 @@ Antes de iniciar qualquer atividade de desenvolvimento, execute o verificador de
 
 ```bash
 cd /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
-python scripts/check_env.py
+python scripts/check_env.py --name web0001
 ```
 
 O script é somente leitura e exibirá uma tabela detalhada com o status `OK` ou `FALHA` de cada item. O código de retorno será `0` se todos os pré-requisitos forem atendidos, `1` em caso de falha de ativos/estrutura, e `2` se a versão do Python for anterior à 3.6.0. O `check_env.py` confere só o mínimo; o projeto é validado da 3.6.0 à 3.13 (a sintaxe do código continua restrita à 3.6, AGENTS §2.1).
@@ -118,9 +118,9 @@ cd /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
 ~/.pyenv/versions/3.6.15/bin/python scripts/run_web.py --check
 ```
 
-**A aplicação usa sempre o Oracle** do `[oracle]` do `instance/config.ini` (owner e prefixo; F7.3). Por isso, o Python precisa ter o driver Oracle (`oracledb` ou `cx_Oracle`). Nesta máquina, o 3.6.0 e o 3.6.15 têm; no `bin/start_local.sh`, use `PYTHON=~/.pyenv/versions/3.6.15/bin/python3` (o launcher só aceita interpretador chamado `python3` ou `python3.X`, não o `python` do pyenv). Para parar, `Ctrl+C` ou `SIGTERM`: o servidor espera as requisições em andamento até `[web] socket_timeout_s`.
+**A aplicação usa sempre o Oracle** do `[oracle]` do config do processo (`instance/web0001/` e `instance/agente0001/`: owner e prefixo; F7.3). Por isso, o Python precisa ter o driver Oracle (`oracledb` ou `cx_Oracle`). Nesta máquina, o 3.6.0 e o 3.6.15 têm; no `bin/start_local.sh`, use `PYTHON=~/.pyenv/versions/3.6.15/bin/python3` (o launcher só aceita interpretador chamado `python3` ou `python3.X`, não o `python` do pyenv). Para parar, `Ctrl+C` ou `SIGTERM`: o servidor espera as requisições em andamento até `[web] socket_timeout_s`.
 
-**Estrutura por processo (CR-028):** o DEV tem a mesma estrutura de HOM e PROD (DEPLOYMENT §1), com `<RAIZ>` = `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`: `instance/web0001/` e `instance/agente0001/` (cada um com `config.ini` e `secrets.cfg` `0600`, fora do git), logs do web em `var/web0001/logs` e as pastas do agente em `var/agente0001/` (`logs`, `work`, `output`, `input`, `script_work`). Para criar do zero, copie os modelos de `instance/exemplos/` (`sss_env = DEV`, o `[oracle]` com owner, prefixo e DSN), crie as pastas com `python3 scripts/prepare_dirs.py agente0001` e `python3 scripts/prepare_dirs.py web0001` (no DEV, com o próprio usuário) e siga o `docs/DEPLOYMENT.md` §7. O `bin/start_local.sh` sobe o `web0001` (outro nome com `SSS_WEB_NAME`). O `instance/config.ini` de formato único continua no DEV, com os caminhos de `var/agente0001/`, porque a bateria de testes (inclusive `SSS_TEST_ORACLE=1`) e as ferramentas de banco (`init_db.py`, `generate_sql.py`) o leem por padrão.
+**Estrutura por processo (CR-028):** o DEV tem a mesma estrutura de HOM e PROD (DEPLOYMENT §1), com `<RAIZ>` = `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`: `instance/web0001/` e `instance/agente0001/` (cada um com `config.ini` e `secrets.cfg` `0600`, fora do git), logs do web em `var/web0001/logs` e as pastas do agente em `var/agente0001/` (`logs`, `work`, `output`, `input`, `script_work`). Para criar do zero, copie os modelos de `instance/exemplos/` (`sss_env = DEV`, o `[oracle]` com owner, prefixo e DSN), crie as pastas com `python3 scripts/prepare_dirs.py agente0001` e `python3 scripts/prepare_dirs.py web0001` (no DEV, com o próprio usuário) e siga o `docs/DEPLOYMENT.md` §7. O `bin/start_local.sh` sobe o `web0001` (outro nome com `SSS_WEB_NAME`) e carrega `instance/web0001/web.env` (`SSS_DEV_SEED_PASSWORD` e `SSS_TZ`; `0600`, fora do git). Não há config padrão (CR-029): as ferramentas de banco rodam com `--name agente0001` (`init_db.py`, `generate_sql.py`, `check_env.py`), e a bateria Oracle lê `instance/agente0001/` (config e segredos).
 
 A aplicação fica no endereço local `127.0.0.1:8000/script_scheduling_service` (porta 8000, caminho `/script_scheduling_service`).
 
@@ -273,10 +273,10 @@ O backend FAKE não precisa de banco. Para o backend ORACLE (README §2.3, CR-00
   * macOS (só desenvolvimento): `oracle_client_lib_dir` no `config.ini`. Windows não é suportado (CR-005).
 * **Credencial:** só no `secrets.cfg` (`0600`, dono = usuário do processo), nunca no `config.ini`.
 * **Inicialização e DDL/DML:**
-  * Via Python: `python3 scripts/init_db.py`
+  * Via Python: `python3 scripts/init_db.py --name agente0001`
   * Via SQL*Plus (autônomo): `sqlplus usuario/senha@//host:porta/servico @docs/sql/01_deploy_sss_openrisow_tbsss.sql`
   * Rollback total: `sqlplus usuario/senha@//host:porta/servico @docs/sql/02_rollback_sss_openrisow_tbsss.sql`
-* **Testes contra banco real:** só `SSS_TEST_ORACLE=1` (README §2.5). Owner, prefixo, DSN e conta vêm do `instance/config.ini`. O modo sai do owner: `SSS_TEST_*` é descartável e qualquer outro é compartilhado. Sem a chave, as partes de banco ficam `NÃO TESTADO` no relatório.
+* **Testes contra banco real:** só `SSS_TEST_ORACLE=1` (README §2.5). Owner, prefixo, DSN e conta vêm do `instance/agente0001/config.ini`, também os segredos. No DEV, o `secrets.cfg` do agente0001 tem `[web] cookie_key` (o mesmo do web0001) para a bateria conectar como web; a subida do agente avisa que a seção não é do papel dele (CR-029, opção C). O modo sai do owner: `SSS_TEST_*` é descartável e qualquer outro é compartilhado. Sem a chave, as partes de banco ficam `NÃO TESTADO` no relatório.
   * **No `GFPR`** (owner `openrisow`, modo compartilhado), o driver Oracle só está instalado no Python 3.6.15 desta máquina. Exemplo para um agregado do F7.3:
     ```bash
     SSS_TEST_ORACLE=1 SSS_TEST_REPO_AGREGADO=TICKETS \
@@ -284,7 +284,7 @@ O backend FAKE não precisa de banco. Para o backend ORACLE (README §2.3, CR-00
     ```
   * **Outro driver:** os testes usam o `[oracle] driver_mode` do config (`auto`, `thin`, `thick` ou `cx_oracle`).
   * **Produção:** só os scripts SQL de `docs/sql/` (`01_deploy_sss_<owner>_<prefixo>.sql`, `02_rollback_sss_<owner>_<prefixo>.sql`, `99_validate_deploy_<owner>_<prefixo>.sql`), sem Python. Os testes acima são só para DEV.
-* `python scripts/check_env.py` mostra a combinação de driver escolhida.
+* `python scripts/check_env.py --name web0001` mostra a combinação de driver escolhida.
 
 ---
 

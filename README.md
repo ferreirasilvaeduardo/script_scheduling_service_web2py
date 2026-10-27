@@ -50,7 +50,7 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 
 **Seleção do driver (CR-002, `[oracle] driver_mode`):**
 
-* **Recomendado: `thick`** (o `config.ini.example` e o DEV já vêm assim). O projeto não usa a biblioteca `cryptography`, e o modo Thin depende dela; com `thick`, o Thin nunca é tentado. Com `auto` num nó sem `cryptography`, a sondagem do Thin falha com `DPY-3016` (WARN) e a cadeia segue para o Thick: funciona, mas registra o aviso a cada subida.
+* **Recomendado: `thick`** (os modelos de `instance/exemplos/` e o DEV já vêm assim). O projeto não usa a biblioteca `cryptography`, e o modo Thin depende dela; com `thick`, o Thin nunca é tentado. Com `auto` num nó sem `cryptography`, a sondagem do Thin falha com `DPY-3016` (WARN) e a cadeia segue para o Thick: funciona, mas registra o aviso a cada subida.
 
 * `auto` (padrão): ordem **Thin → Thick → cx_Oracle**.
   * O modo Thin dispensa o Instant Client, mas só conecta a banco **12.1 ou superior** (no 11gR2 falha com `DPY-3010`).
@@ -200,7 +200,7 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
 * **Exceções de contrato** (`src/sss/persistence/repo_errors.py`): `RepoError`, `RepoNotFound`, `RepoConflict`, `RepoViolation` e `RepoUnavailable`.
 * A suíte `tests/unit/persistence/test_repo_contract.py` roda **a mesma bateria** contra os dois backends. Contra ORACLE, ela só executa com `SSS_TEST_ORACLE=1` (abaixo).
 * **Testes Oracle reais: uma chave só, `SSS_TEST_ORACLE=1`** (`tests/support/_oracle_test_support.py`).
-  * **Origem dos parâmetros:** owner, prefixo, DSN e conta vêm só do `instance/config.ini`, os mesmos da aplicação. Nada é repetido em variáveis de ambiente.
+  * **Origem dos parâmetros:** owner, prefixo, DSN e conta vêm só do `instance/agente0001/config.ini` do DEV, os mesmos da aplicação. No DEV, o `secrets.cfg` do agente0001 tem também `[web] cookie_key`, para a bateria conectar como web (CR-029, opção C). Nada é repetido em variáveis de ambiente.
   * **Recusas antes de qualquer conexão:** sem a chave, os testes de banco ficam pulados (`NÃO TESTADO`). Fora de `sss_env = DEV`, ou com `[oracle] dsn`/`owner` inválidos, a execução é recusada. As variáveis da versão anterior (`SSS_TEST_DSN`, `SSS_TEST_OWNER`, `SSS_TEST_CONFIG`, `SSS_TEST_SCHEMA_DISPOSABLE`, `SSS_TEST_SCHEMA_COMPARTILHADO`) também são recusadas, para não serem ignoradas em silêncio.
   * **A partir do F7, aplicação e validações usam as tabelas reais** do owner e do prefixo do config. O FAKE fica só como dublê dos testes automáticos sem banco (os casos que dá para mockar). Desde o fim do F7.3, a aplicação não tem mais `data_backend`: é sempre Oracle.
   * **Modo deduzido do owner:**
@@ -375,7 +375,7 @@ bin/
   instance/                   # [CR-028] configuração por processo; preservada pela atualização
     exemplos/web0001/, exemplos/agente0001/   # modelos config.ini.example e secrets.cfg.example (vêm no pacote)
     <nome>/config.ini, <nome>/secrets.cfg     # um por processo (web0001, agente0001...); fora do git
-    config.ini, config.ini.example            # formato único anterior; no DEV, usado pelos testes e pelas ferramentas de banco
+    <nome>/web.env                            # só DEV: variáveis do start_local.sh (fora do git)
   .flake8                     # [CR-022b9] lint: 99 colunas e a dívida anterior por arquivo (só diminui; AGENTS §1)
   pyproject.toml              # [CR-022b9] só configuração de ferramentas (mypy estrito com a dívida por módulo, isort, autopep8, pylint); sem [project], sem pip install
   Makefile                    # alvos de teste (test-*), lint (portão flake8), type-check (mypy) e pacote; só DEV
@@ -388,7 +388,6 @@ bin/
 docs/
   prompts/                    # histórico: prompts com que as fases F0 a F9 foram construídas (caminhos de antes do CR-022a)
   homologation/               # manual de homologação (UI Freeze, histórico) e evidências reais no DEV (2026-10-22)
-instance/secrets.cfg          # segredos do formato único no DEV, fora do git (.gitignore), modo 0600; por processo, instance/<nome>/secrets.cfg (§4.1)
 var/                          # [CR-028] dados, fora do git e preservados pela atualização:
   <nome>/logs/                #   log_dir de cada processo (web e agentes)
   <agente>/work/ output/ input/ script_work/   # pastas de cada agente
@@ -407,7 +406,7 @@ A raiz é `/portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service`, com `<TI
 ### 4.1 Gestão de segredos
 
 * **Nenhum segredo** reside no `config.ini`, no repositório ou no banco.
-* Os segredos ficam em `secrets_file` (no DEV, `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/instance/secrets.cfg`). Cada servidor tem o **seu** arquivo, só com os segredos do papel do processo que roda nele (CR-007, D1b). Na inicialização, web e daemon validam o arquivo pela camada de plataforma e **recusam a subida** caso ele:
+* Os segredos ficam em `secrets_file` (por padrão, o `secrets.cfg` da pasta do `config.ini`: `instance/<nome>/secrets.cfg`, CR-028). Cada servidor tem o **seu** arquivo, só com os segredos do papel do processo que roda nele (CR-007, D1b). Na inicialização, web e daemon validam o arquivo pela camada de plataforma e **recusam a subida** caso ele:
   * não seja um arquivo regular;
   * tenha dono diferente de `os.geteuid()` ou `mode & 0o077 != 0`.
 
@@ -2826,7 +2825,9 @@ END;
 
 ## 12. Configuração
 
-### 12.1 `instance/config.ini` (sem segredos; unidades no nome da chave)
+### 12.1 `instance/<nome>/config.ini` (sem segredos; unidades no nome da chave)
+
+**Sem config padrão (CR-029):** todo comando (`run_web`, `run_scheduler`, `purge`, `health`, `prepare_dirs`, `init_db`, `check_env`, os launchers e o `sss-stop.sh`) recebe o processo (`--name <nome>`, ou o nome nos launchers) ou `--config <arquivo>`; sem nenhum dos dois, sai com código 2 e lista os processos de `instance/`. O `generate_sql` aceita os dois, mas também roda só com `--owner` e `--prefix`. O formato único (um arquivo com `[web]` e `[agent]`) continua aceito por `--config`; o modelo dele fica em `tests/support/`, só para os testes.
 
 **Config por processo (CR-028) e mínimo (CR-026):** um `config.ini` por processo, em `instance/<nome>/`, só com as chaves obrigatórias e as que dependem do servidor. As demais têm padrão (tabela abaixo) e só entram no arquivo quando o valor for outro. O papel vem do próprio arquivo (D4): com `[web]` e sem `[agent]`, é o web; com `[agent]` e sem `[web]`, o agente (que também roda o purge); com as duas, o formato único anterior, validado inteiro. Com `[app] name`, as pastas saem do nome (D5): `log_dir` = `var/<nome>/logs`; no agente, `work_dir` = `var/<nome>/work`, `output_dir`, `input_dir` e `script_work_dir` em `var/<nome>/`, `exec_work_dir` = `var/exec`, `script_base_dir` = `scripts_ambiente` e `agent_id` = o nome. Em `instance/<pasta>/config.ini`, o `name` precisa ser o nome da pasta: um `instance/agente0002/` copiado sem trocar o `name` é recusado na subida e pelo `sss-stop.sh`. Modelos em `instance/exemplos/`.
 
@@ -2955,16 +2956,16 @@ Chaves que saíram ou mudaram de nome são recusadas na subida: uma chave removi
 * iniciar **somente** o processo Python do SSS. O `sss-web.sh` faz sempre `exec <python> scripts/run_web.py [opções]` (CR-021e2) e aceita três formas: sem argumentos (`127.0.0.1:8000`), só opções (`--config`, `--host`, `--port`, `--check`, repassadas ao `run_web.py`, cujo `argparse` recusa as demais) ou `<python3[.x]> [opções]`. Outro executável, `web2py.py`, `anyserver.py` ou qualquer outro `.py` é recusado com código 2; repassar um comando arbitrário (`exec "$@"` sem essas checagens) é proibido.
 
 * executar a partir da raiz do repositório, qualquer que seja o diretório corrente de quem o chama.
-* **atualizar no lugar (CR-028, D10):** `bin/sss-update.sh <pacote> [<SHA256SUMS>]`, com tudo parado, troca só o código (`bin/`, `docs/`, `scripts/`, `src/`, `AGENTS.md`, `README.md` e os exemplos de `instance/`), preserva `instance/<nome>/`, `var/` e `scripts_ambiente/` e deixa um pacote de retorno em `var/update/<data>/`, aplicado pelo mesmo comando. A extração e o código anterior ficam numa pasta temporária da própria raiz (`.update-<data>/`, mesma partição, para a troca ser por renomeação), apagada no sucesso. Recusa root (1), pacote que não confere ou sem permissão em `var/update/` (2) e um `python` rodando um comando do SSS a partir da pasta (3, conferido pelo caminho físico); falha no meio da troca: código 4, com o código anterior em `.update-<data>/anterior/` (DEPLOYMENT §18).
+* **atualizar no lugar (CR-028, D10):** `bin/sss-update.sh <pacote> [<SHA256SUMS>]`, com tudo parado, troca só o código (`bin/`, `docs/`, `scripts/`, `src/`, `AGENTS.md`, `README.md` e `instance/exemplos/`), preserva `instance/<nome>/`, `var/` e `scripts_ambiente/` e deixa um pacote de retorno em `var/update/<data>/`, aplicado pelo mesmo comando. A extração e o código anterior ficam numa pasta temporária da própria raiz (`.update-<data>/`, mesma partição, para a troca ser por renomeação), apagada no sucesso. Recusa root (1), pacote que não confere ou sem permissão em `var/update/` (2) e um `python` rodando um comando do SSS a partir da pasta (3, conferido pelo caminho físico); falha no meio da troca: código 4, com o código anterior em `.update-<data>/anterior/` (DEPLOYMENT §18).
 * **subir pelo nome do processo (CR-028, D7):** `bin/sss-web.sh [<python3[.x]>] web0001 [opções]`, `bin/sss-scheduler.sh agente0001` e `bin/sss-stop.sh agente0001` usam `instance/<nome>/config.ini` (a forma `--config <arquivo>` continua aceita). O nome segue `^[a-z][a-z0-9_-]{0,29}$`; outro texto é recusado com código 2. Os comandos `scripts/run_web.py`, `run_scheduler.py`, `purge.py`, `health.py` e `prepare_dirs.py` aceitam `--name <nome>` (o `prepare_dirs.py` também o nome como primeiro argumento).
 
 O `sss-scheduler.sh` aceita só a linha do daemon: o nome do processo, `--config <arquivo>` ou nada, e faz `exec <python> scripts/run_scheduler.py [--name <nome> | --config <arquivo>]`. Qualquer outro argumento é recusado com código 2. O Python vem da variável `PYTHON` (padrão `python3`) nos dois launchers.
 
-`bin/sss-stop.sh [<nome> | --config <config.ini>]` (com o nome, `instance/<nome>/config.ini`; sem nada, `instance/config.ini`) cria o arquivo `work_dir/sss-<agent_id>.stop` com `0600`, para a parada controlada sem sinal (§8.11), e imprime o caminho. Recusa root. Lê só `[agent] agent_id` e `work_dir` (ou, com `[app] name`, o nome e `var/<nome>/work`, CR-028) com a biblioteca padrão (sem importar a aplicação), com a mesma regra de `agent_id` do §12.1 e o `work_dir` absoluto e existente; senão, sai com código 2. O daemon remove o arquivo ao parar.
+`bin/sss-stop.sh <nome> | --config <config.ini>` (com o nome, `instance/<nome>/config.ini`; sem nada, código 2 com a lista dos processos, CR-029) cria o arquivo `work_dir/sss-<agent_id>.stop` com `0600`, para a parada controlada sem sinal (§8.11), e imprime o caminho. Recusa root. Lê só `[agent] agent_id` e `work_dir` (ou, com `[app] name`, o nome e `var/<nome>/work`, CR-028) com a biblioteca padrão (sem importar a aplicação), com a mesma regra de `agent_id` do §12.1 e o `work_dir` absoluto e existente; senão, sai com código 2. O daemon remove o arquivo ao parar.
 
 **Servidor web:** `python scripts/run_web.py [--name <nome> | --config <config.ini>] [--host 127.0.0.1] [--port 8000] [--check]` (CR-021e). Atende em `127.0.0.1` (os usuários chegam pelo proxy reverso HTTPS ou por túnel), com até `[web] max_threads` requisições ao mesmo tempo e `[web] socket_timeout_s` por conexão. `SIGTERM` ou `SIGINT` param de aceitar conexões e esperam as requisições em andamento até `socket_timeout_s`. O endereço `/` responde 303 para `/script_scheduling_service/`, que é a tela inicial (sem sessão, o login), como no web2py. `--check` só confere configuração, segredos e montagem da aplicação, sem abrir a porta, e imprime `CONFIG_OK sss_env=<ambiente>`. Saída: 0 na parada normal ou no `--check` bem-sucedido, 2 configuração ou segredos inválidos, 3 endereço indisponível.
 
-**Daemon do agente:** `python scripts/run_scheduler.py [--name <nome> | --config <config.ini>]` (F8.3, CR-028). Com `--name`, lê `instance/<nome>/config.ini`; com `--config`, o arquivo informado; sem nada, `instance/config.ini`. Assim cabe **mais de um agente no mesmo servidor**, cada um com o seu `instance/<nome>/` e, pelo nome, `agent_id`, `work_dir`, `log_dir` e pastas próprios (a trava de instância é `work_dir/sss-<agent_id>.lock`). Os tempos do `critical_config` precisam ser iguais em todos os agentes (§8.12). Saída: 0 na parada normal, 10 a 19 na falha de um passo da subida, 20 em `REGISTRO_PERDIDO`. O teste com dois agentes reais contra o Oracle (`tests/integration/oracle/test_agents_concurrency.py`, F8.3d) usa essa forma.
+**Daemon do agente:** `python scripts/run_scheduler.py [--name <nome> | --config <config.ini>]` (F8.3, CR-028). Com `--name`, lê `instance/<nome>/config.ini`; com `--config`, o arquivo informado; sem nenhum dos dois, sai com código 2 e lista os processos de `instance/` (CR-029: não há config padrão). Assim cabe **mais de um agente no mesmo servidor**, cada um com o seu `instance/<nome>/` e, pelo nome, `agent_id`, `work_dir`, `log_dir` e pastas próprios (a trava de instância é `work_dir/sss-<agent_id>.lock`). Os tempos do `critical_config` precisam ser iguais em todos os agentes (§8.12). Saída: 0 na parada normal, 10 a 19 na falha de um passo da subida, 20 em `REGISTRO_PERDIDO`. O teste com dois agentes reais contra o Oracle (`tests/integration/oracle/test_agents_concurrency.py`, F8.3d) usa essa forma.
 
 `bin/sss-helper` (CR-007, D1) é o helper de execução do §8.0. O pacote o leva, mas ele só vale depois de copiado pelo root para o `[agent] helper_path` (padrão `<RAIZ>/../sss-root/bin/sss-helper`, CR-028; dono root, `0755`), com a regra de sudoers do `DEPLOYMENT.md`.
 
