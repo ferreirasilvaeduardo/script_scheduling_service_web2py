@@ -119,9 +119,13 @@ class TestEnvSkeleton(unittest.TestCase):
         # CR-029: sem config padrao; o exemplo do formato unico dos testes.
         cmd = [sys.executable, os.path.join(self.app_dir, "scripts", "check_env.py"),
                "--config", os.path.join(self.app_dir, "tests", "support", "config.ini.example")]
+        # CR-031: teste de estrutura, sem a sondagem do driver (o exemplo nao tem segredos; com
+        # SSS_TEST_ORACLE=1 a sondagem falharia e, desde o CR-031, a linha sai como FALHA).
+        env = dict((k, v) for k, v in os.environ.items() if k != "SSS_TEST_ORACLE")
         proc = subprocess.Popen(
             cmd,
             cwd=self.app_dir,
+            env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )

@@ -1,6 +1,9 @@
 ; config.ini do NO WEB (CR-028): copie para instance/web0001/config.ini (o nome da pasta e o do processo).
 ; So [app], [oracle] e [web]: o web nao tem [agent] (README §12.1). As pastas saem de var/web0001/.
 ; Suba com: bin/sss-web.sh web0001 --host 127.0.0.1 --port 8000
+;
+; UM USUARIO SO (sem root; DEPLOYMENT §4.0): sss_env = DEV; [oracle] user = a conta unica (dona do esquema);
+; suba pelo bin/sss-keepalive.sh web0001:<porta> no cron (§10.6).
 
 [app]
 sss_env = PROD                    ; DEV | HML | PROD

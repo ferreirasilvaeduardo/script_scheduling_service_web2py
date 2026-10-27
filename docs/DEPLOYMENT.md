@@ -130,6 +130,7 @@ Leve os dois arquivos (`sss-<version>.tar.gz` e `SHA256SUMS`) ao servidor e conf
 ```bash
 # como sss, na pasta onde estão os dois arquivos
 sha256sum -c SHA256SUMS                                     # esperado: "sss-<versao>.tar.gz: OK"
+mkdir -p /portaloptrib/TESHUVA/SSS/<TIPO>                    # se ainda nao existir (com administrador: §4.1)
 cd /portaloptrib/TESHUVA/SSS/<TIPO>                          # a pasta de cima da <RAIZ>
 tar -xzf <pasta do pacote>/sss-<versao>.tar.gz
 mv sss-<versao> script_scheduling_service                    # a <RAIZ>
@@ -550,7 +551,9 @@ Sem `systemd` (§4.0), o `bin/sss-keepalive.sh` mantém os processos no ar pelo 
 # na <RAIZ>; o web precisa da porta (<nome>:<porta>), o agente so do nome
 PYTHON=/usr/bin/python3 SSS_TZ=America/Sao_Paulo bin/sss-keepalive.sh web0001:18000 agente0001
 bin/sss-keepalive.sh --pause agente0001     # antes de parar de proposito: o keepalive nao sobe mais
-bin/sss-stop.sh agente0001                  # para o agente (o web: SIGTERM no PID dele)
+bin/sss-stop.sh agente0001                  # para o agente
+# para o web: SIGTERM no PID do python dele ([p] evita achar o proprio grep)
+kill -TERM $(ps -eo pid,args | grep '[p]ython3 scripts/run_web.py --name web0001' | awk '{print $1}')
 bin/sss-keepalive.sh --resume agente0001    # volta a subir na proxima passada
 ```
 
@@ -822,7 +825,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 Com a estrutura por processo, o código é trocado **no lugar** pelo `bin/sss-update.sh`. `instance/<nome>/`, `var/` e `scripts_ambiente/` não são tocados:
 
 1. Gere e confira o pacote novo (§3). Leia as notas da versão (§18.3) e, se o esquema mudou, combine a janela com o DBA.
-2. Pare o web e **todos** os agentes do servidor (`systemctl stop sss-web@web0001 sss-agente@agente0001 ...` ou `bin/sss-stop.sh <nome>`). Com SQL de migração, pare os de todos os servidores e o DBA aplica o SQL agora (§5.2).
+2. Pare o web e **todos** os agentes do servidor (`systemctl stop sss-web@web0001 sss-agente@agente0001 ...`; sem `systemd`, §10.6: `sss-keepalive.sh --pause` de cada nome, `bin/sss-stop.sh` nos agentes e `SIGTERM` no web). Com SQL de migração, pare os de todos os servidores e o DBA aplica o SQL agora (§5.2).
 3. Atualize, como `sss`:
    ```bash
    # na pasta onde estão o pacote e o SHA256SUMS
@@ -835,9 +838,9 @@ Com a estrutura por processo, o código é trocado **no lugar** pelo `bin/sss-up
    * **Dono de `var/`:** o `sss-update.sh` roda com o usuário do serviço e grava em `var/update/`. O `prepare_dirs.py` deixa `var/`, `var/<nome>/` e `var/update/` com esse usuário (§8).
 4. Como root, em cada agente: copie o helper novo (`install -o root -g root -m 0755 <RAIZ>/bin/sss-helper <helper_path>`, §8).
 5. Compare cada `instance/<nome>/config.ini` com o modelo novo (`diff instance/exemplos/agente0001/config.ini.example instance/agente0001/config.ini`). Chave obrigatória nova ou removida aparece na subida como `configuracao invalida` (§15.1).
-6. Suba e valide (§11): `systemctl start sss-web@web0001 sss-agente@agente0001 ...`.
+6. Suba e valide (§11): `systemctl start sss-web@web0001 sss-agente@agente0001 ...`; sem `systemd`, `sss-keepalive.sh --resume` de cada nome e uma passada do `sss-keepalive.sh` (ou espere a do cron).
 
-**Retorno:** pare tudo de novo, rode o comando de retorno impresso no passo 3 e copie o helper anterior (que está no `bin/` restaurado). Com migração de esquema, o retorno precisa também do SQL de retorno ou do backup do banco (§17).
+**Retorno:** pare tudo de novo (como no passo 2), rode o comando de retorno impresso no passo 3 e copie o helper anterior (que está no `bin/` restaurado). Com migração de esquema, o retorno precisa também do SQL de retorno ou do backup do banco (§17).
 
 ### 18.2 Da instalação anterior para a estrutura por processo (CR-028, D9)
 

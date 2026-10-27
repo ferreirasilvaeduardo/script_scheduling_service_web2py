@@ -3,6 +3,10 @@
 ; var/agente0001/ (logs, work, output, input, script_work), var/exec/ e scripts_ambiente/.
 ; Crie as pastas com: python3 scripts/prepare_dirs.py agente0001 --service-user <conta>   (como root)
 ; Suba com: bin/sss-scheduler.sh agente0001
+;
+; UM USUARIO SO (sem root; DEPLOYMENT §4.0): sss_env = DEV; [oracle] user = a conta unica (dona do esquema);
+; apague exec_users; prepare_dirs.py agente0001 com a sua conta (sem --service-user); suba pelo
+; bin/sss-keepalive.sh agente0001 no cron (§10.6).
 
 [app]
 sss_env = PROD                    ; DEV | HML | PROD

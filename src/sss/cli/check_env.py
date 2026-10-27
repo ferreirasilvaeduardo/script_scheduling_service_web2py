@@ -65,22 +65,26 @@ def main(argv=None):
         chain_desc = "auto (Thin -> Thick -> cx_Oracle)" if mode == "auto" else mode
 
         sel_desc = None
+        status = "OK"
         # Sondagem real do driver so com os testes Oracle ligados (SSS_TEST_ORACLE=1, README §2.5).
         if os.environ.get("SSS_TEST_ORACLE") == "1":
             try:
                 from sss.persistence import db_conn
-                secrets_value = sss_config.get_secrets()
+                # CR-031: os segredos do papel do proprio processo (o agente nao tem [web]).
+                role = "agent" if getattr(cfg.app, "role", "all") == "agent" else "web"
+                secrets_value = sss_config.get_secrets(role=role)
                 sel = db_conn.select_driver(cfg, secrets_value)
                 sel_desc = "modo=%s (servidor=%s driver=%s cliente=%s)" % (
                     sel.candidate, sel.server_version or "-", sel.driver_version or "-", sel.client_version or "-"
                 )
             except Exception as and_probe:
                 sel_desc = "sondagem falhou: %s" % and_probe
+                status = "FALHA"
 
         detail_driver = chain_desc
         if sel_desc:
             detail_driver = "%s | Selecionado: %s" % (chain_desc, sel_desc)
-        results.append(("Driver Oracle (driver_mode)", "OK", detail_driver))
+        results.append(("Driver Oracle (driver_mode)", status, detail_driver))
     except Exception as exc:
         results.append(("Driver Oracle (driver_mode)", "FALHA", "Erro ao carregar configuracao: %s" % exc))
 
