@@ -1,5 +1,6 @@
 #!/bin/bash
-# Launcher do daemon do agente (README §3.1, §12.2): somente scripts/run_scheduler.py [--config <config.ini>].
+# Launcher do daemon do agente (README §3.1, §12.2): somente scripts/run_scheduler.py.
+# Uso: sss-scheduler.sh <nome>  (CR-028: instance/<nome>/config.ini, ex.: agente0001) | --config <config.ini> | nada
 set -euo pipefail
 
 # 1. Recusar execucao como root
@@ -40,7 +41,7 @@ cd "${REPO_ROOT}"
 
 PYTHON="${PYTHON:-python3}"
 
-# 5. Somente a linha do daemon (README §3.1): sem argumentos ou --config <arquivo>; outro comando: codigo 2.
+# 5. Somente a linha do daemon (README §3.1): sem argumentos, <nome> ou --config <arquivo>; outro: codigo 2.
 DAEMON="scripts/run_scheduler.py"
 if [ "$#" -eq 0 ]; then
     exec "${PYTHON}" "${DAEMON}"
@@ -48,5 +49,8 @@ fi
 if [ "$#" -eq 2 ] && [ "$1" = "--config" ] && [ -n "$2" ]; then
     exec "${PYTHON}" "${DAEMON}" --config "$2"
 fi
-echo "Erro: uso: sss-scheduler.sh [--config <config.ini>]" >&2
+if [ "$#" -eq 1 ] && [[ "$1" =~ ^[a-z][a-z0-9_-]{0,29}$ ]]; then
+    exec "${PYTHON}" "${DAEMON}" --name "$1"
+fi
+echo "Erro: uso: sss-scheduler.sh [<nome> | --config <config.ini>]" >&2
 exit 2

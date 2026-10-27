@@ -31,11 +31,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     """Sobe o servidor e atende ate a parada; devolve o codigo de saida."""
     parser = argparse.ArgumentParser(description="Servidor web do SSS (CR-021e)")
     parser.add_argument("--config", default=None, help="config.ini (padrao: instance/config.ini)")
+    parser.add_argument("--name", default=None,
+                        help="processo: instance/<nome>/config.ini (CR-028)")
     parser.add_argument("--host", default="127.0.0.1", help="endereco local (padrao: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8000, help="porta (padrao: 8000)")
     parser.add_argument("--check", action="store_true",
                         help="so confere configuracao e segredos, sem subir o servidor")
     args = parser.parse_args(argv)
+    try:
+        args.config = sss_config.config_path(args.config, args.name)
+    except sss_config.ConfigError as exc:
+        print("Configuracao invalida: %s" % exc, file=sys.stderr)
+        return 2
     try:
         cfg = bootstrap.load_config(args.config)
         app = bootstrap.make_app(cfg)

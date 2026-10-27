@@ -10,7 +10,7 @@ import logging
 import os
 import re
 import sys
-from typing import List
+from typing import List, Optional
 
 
 # Variaveis que nunca passam do daemon para o script (README §8.6, CR-007 R-32).
@@ -142,6 +142,9 @@ class FieldDef(object):
 SCHEMA = collections.OrderedDict([
     ("app", collections.OrderedDict([
         ("sss_env", FieldDef("enum", required=True, allowed_values=("DEV", "HML", "PROD"))),
+        # CR-028 (D5, D6): nome do processo (web0001, agente0001...); as pastas saem de var/<nome>/ e, no
+        # agente, e o agent_id.
+        ("name", FieldDef("str", required=False, default=None, regex=r"^[a-z][a-z0-9_-]{0,29}$")),
     ])),
     ("oracle", collections.OrderedDict([
         ("user", FieldDef("str", required=True)),
@@ -253,8 +256,12 @@ class _ItemAccessMixin(object):
         return super(_ItemAccessMixin, self).__getitem__(item)
 
 
-class AppConfig(_ItemAccessMixin, collections.namedtuple("AppConfig", ["sss_env"])):
+class AppConfig(_ItemAccessMixin, collections.namedtuple("AppConfig", ["sss_env", "name", "role"])):
     __slots__ = ()
+
+
+# name e role sao opcionais na construcao direta (testes); o load() sempre os preenche (CR-028).
+AppConfig.__new__.__defaults__ = (None, "all")
 
 
 class OracleConfig(_ItemAccessMixin, collections.namedtuple("OracleConfig", [
@@ -423,10 +430,48 @@ def _convert_value(section_name, key_name, cdef, raw_val):
     raise ConfigError(section_name, key_name, "Tipo de campo desconhecido no schema: '%s'" % cdef.kind)
 
 
+# CR-028: estrutura por processo. A raiz da aplicacao (src/sss/config/ -> raiz) guarda instance/<nome>/,
+# var/<nome>/ e scripts_ambiente/, iguais em DEV, HML e PROD.
+APP_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
+VAR_DIR = os.path.join(APP_DIR, "var")
+SCRIPTS_DIR = os.path.join(APP_DIR, "scripts_ambiente")
+# Secoes que cada papel nao usa (CR-028, D4): o papel vem do proprio arquivo.
+_ROLE_SKIPPED = {"web": ("agent",), "agent": ("web",), "all": ()}
+
+
+def role_of(sections):
+    """Papel do config.ini pelas secoes (CR-028, D4): [web] sem [agent] e o web; [agent] sem [web] e o agente;
+    com as duas (ou nenhuma), o formato unico anterior, validado inteiro."""
+    present = set(sections)
+    if "web" in present and "agent" not in present:
+        return "web"
+    if "agent" in present and "web" not in present:
+        return "agent"
+    return "all"
+
+
+def _derived_paths(name, role, present):
+    """Pastas que saem do nome do processo quando a chave nao esta escrita (CR-028, D5)."""
+    base = os.path.join(VAR_DIR, name)
+    derived = {("logging", "log_dir"): os.path.join(base, "logs")}
+    if role != "web":
+        derived.update({
+            ("agent", "agent_id"): name,
+            ("agent", "work_dir"): os.path.join(base, "work"),
+            ("agent", "exec_work_dir"): os.path.join(VAR_DIR, "exec"),
+            ("agent", "output_dir"): os.path.join(base, "output"),
+            ("agent", "input_dir"): os.path.join(base, "input"),
+            ("agent", "script_work_dir"): os.path.join(base, "script_work"),
+            ("agent", "script_base_dir"): SCRIPTS_DIR,
+        })
+    return dict((key, value) for key, value in derived.items() if key not in present)
+
+
 def load(ini_path: str) -> "Config":
     """Carrega e valida o config.ini de forma declarativa e fail-fast.
 
-    Retorna uma instancia imutavel de Config.
+    CR-028: o papel (web, agente ou o formato unico anterior) vem das secoes do arquivo; com [app] name, as
+    pastas nao escritas saem de var/<nome>/. Retorna uma instancia imutavel de Config.
     """
     if not os.path.exists(ini_path):
         raise ConfigError(reason="Arquivo de configuracao nao encontrado: %s" % ini_path)
@@ -447,11 +492,19 @@ def load(ini_path: str) -> "Config":
             raise ConfigError(section=sec, key=None, reason="Secao desconhecida no config.ini: [%s]" % sec)
 
     # 2. Validar presenca e chaves de cada secao
+    role = role_of(cp.sections())
+    raw_name = cp["app"].get("name", "").strip() if cp.has_section("app") else ""
+    present = set((sec, k) for sec in cp.sections() for k in cp[sec])
+    derived = _derived_paths(raw_name, role, present) if raw_name else {}
     data_sections = {}
     for sec_name, sec_fields in SCHEMA.items():
+        if sec_name in _ROLE_SKIPPED[role]:
+            # CR-028 (D4): secao que o papel nao usa fica com os padroes (obrigatorias sem valor).
+            data_sections[sec_name] = dict((k, cdef.default) for k, cdef in sec_fields.items())
+            continue
         if sec_name not in cp.sections():
             # CR-026: secao sem chave obrigatoria (ex.: [secrets]) pode faltar; vale o padrao de cada chave.
-            if any(cdef.required for cdef in sec_fields.values()):
+            if any(cdef.required and (sec_name, k) not in derived for k, cdef in sec_fields.items()):
                 raise ConfigError(section=sec_name, key=None, reason="Secao obrigatoria ausente: [%s]" % sec_name)
             cp_sec = {}
         else:
@@ -475,6 +528,9 @@ def load(ini_path: str) -> "Config":
         # Validar e converter cada chave esperada
         data_sec = {}
         for k, cdef in sec_fields.items():
+            if (sec_name, k) in derived:
+                data_sec[k] = derived[(sec_name, k)]
+                continue
             if k not in cp_sec:
                 if cdef.required:
                     raise ConfigError(
@@ -487,6 +543,13 @@ def load(ini_path: str) -> "Config":
                 data_sec[k] = _convert_value(sec_name, k, cdef, raw)
 
         data_sections[sec_name] = data_sec
+
+    app_name = data_sections["app"]["name"]
+    agent_id = data_sections["agent"]["agent_id"]
+    if role != "web" and app_name and agent_id and agent_id != app_name:
+        raise ConfigError(section="agent", key="agent_id",
+                          reason="Com [app] name, o agent_id e o proprio nome (CR-028); apague a linha agent_id")
+    data_sections["app"]["role"] = role
 
     if data_sections["secrets"]["secrets_file"] is None:
         data_sections["secrets"]["secrets_file"] = os.path.join(os.path.dirname(os.path.abspath(ini_path)), "secrets.cfg")
@@ -511,7 +574,7 @@ def load(ini_path: str) -> "Config":
             )
         )
 
-    if agent_dict["max_parallel_jobs"] > agent_dict["max_parallel_hard_limit"]:
+    if role != "web" and agent_dict["max_parallel_jobs"] > agent_dict["max_parallel_hard_limit"]:
         raise ConfigError(
             section="agent", key="max_parallel_jobs",
             reason="max_parallel_jobs (%d) nao pode ser maior que max_parallel_hard_limit (%d)" % (
@@ -535,7 +598,8 @@ def load(ini_path: str) -> "Config":
             )
         )
 
-    _validate_cr007(app_dict, oracle_dict, agent_dict, data_sections["logging"], data_sections["retention"])
+    _validate_cr007(app_dict, oracle_dict, agent_dict, data_sections["logging"], data_sections["retention"],
+                    role)
 
     # 5. Instanciar arvore de configuracao imutavel
     app_cfg = AppConfig(**app_dict)
@@ -587,8 +651,9 @@ def _validate_script_base_dir(agent: dict, log_dir: str, dev: bool) -> None:
                           reason=reasons.get(exc.code, exc.code))
 
 
-def _validate_cr007(app, oracle, agent, logging_dict, retention):
-    """Validacoes cruzadas do CR-007: invariantes I3/I4, execucao, retencao e purge."""
+def _validate_cr007(app, oracle, agent, logging_dict, retention, role="all"):
+    """Validacoes cruzadas do CR-007: invariantes I3/I4, execucao, retencao e purge. CR-028 (D4): no papel web,
+    so as que valem para ele (invariantes, retencao e a conta Oracle); as do agente e do purge ficam de fora."""
     call_s = call_timeout_s(oracle["call_timeout_ms"])
     i3 = agent["heartbeat_interval_s"] + 2 * call_s
     if i3 > agent["fence_timeout_s"]:
@@ -603,6 +668,30 @@ def _validate_cr007(app, oracle, agent, logging_dict, retention):
             reason="Invariante I4 violada: fence_timeout_s + call_timeout_s + kill_grace_s + 2 (%d) deve ser <= "
                    "node_offline_timeout_s (%d) (README §8.9)" % (i4, agent["node_offline_timeout_s"]))
 
+    if role != "web":
+        _validate_agent_paths(app, agent, logging_dict)
+
+    if retention["audit_retention_days"] < retention["ticket_retention_days"]:
+        raise ConfigError(section="retention", key="audit_retention_days",
+                         reason="audit_retention_days (%d) deve ser >= ticket_retention_days (%d)" % (
+                             retention["audit_retention_days"], retention["ticket_retention_days"]))
+    if app["sss_env"] != "DEV" and oracle["user"].upper() == oracle["owner"].upper():
+        # CR-008, R-29: a conta da aplicacao nunca e a dona do esquema fora de DEV (D1b do CR-007).
+        raise ConfigError(section="oracle", key="user",
+                         reason="Fora de DEV, a conta da aplicacao deve ser diferente do owner do esquema")
+    purge = retention["purge_user"]
+    if not purge:
+        # Em DEV, purge_user vazio significa purge desligado (scripts/purge.py recusa rodar; README §12.1).
+        # CR-028: o web nao roda o purge.
+        if app["sss_env"] != "DEV" and role != "web":
+            raise ConfigError(section="retention", key="purge_user", reason="Obrigatorio fora de DEV")
+    elif purge.upper() in (oracle["user"].upper(), oracle["owner"].upper()):
+            raise ConfigError(section="retention", key="purge_user",
+                             reason="A conta de purge deve ser diferente da conta do processo e do owner")
+
+
+def _validate_agent_paths(app, agent, logging_dict):
+    """Validacoes do agente (CR-007, CR-012, CR-014, CR-019, CR-023): ambientes, execucao e pastas."""
     if len(",".join(agent["environments"])) > _ENVIRONMENTS_MAX:
         raise ConfigError(section="agent", key="environments",
                          reason="Lista com mais de %d caracteres (coluna tbsss_agentes.ambientes)" % _ENVIRONMENTS_MAX)
@@ -659,23 +748,6 @@ def _validate_cr007(app, oracle, agent, logging_dict, retention):
                                  reason="Nao pode ficar dentro de %s nem conte-lo" % name)
     if agent["script_base_dir"]:
         _validate_script_base_dir(agent, logging_dict["log_dir"], dev)
-
-    if retention["audit_retention_days"] < retention["ticket_retention_days"]:
-        raise ConfigError(section="retention", key="audit_retention_days",
-                         reason="audit_retention_days (%d) deve ser >= ticket_retention_days (%d)" % (
-                             retention["audit_retention_days"], retention["ticket_retention_days"]))
-    if app["sss_env"] != "DEV" and oracle["user"].upper() == oracle["owner"].upper():
-        # CR-008, R-29: a conta da aplicacao nunca e a dona do esquema fora de DEV (D1b do CR-007).
-        raise ConfigError(section="oracle", key="user",
-                         reason="Fora de DEV, a conta da aplicacao deve ser diferente do owner do esquema")
-    purge = retention["purge_user"]
-    if not purge:
-        # Em DEV, purge_user vazio significa purge desligado (scripts/purge.py recusa rodar; README §12.1).
-        if app["sss_env"] != "DEV":
-            raise ConfigError(section="retention", key="purge_user", reason="Obrigatorio fora de DEV")
-    elif purge.upper() in (oracle["user"].upper(), oracle["owner"].upper()):
-            raise ConfigError(section="retention", key="purge_user",
-                             reason="A conta de purge deve ser diferente da conta do processo e do owner")
 
 
 def check_encoding(log_name=None, log_dir=None):
@@ -1016,6 +1088,21 @@ def load_secrets(path, cfg=None, sss_env=None, data_backend=None, role="web"):
 
 
 _CONFIG_CACHE = None
+
+
+_RE_PROCESS_NAME = re.compile(r"^[a-z][a-z0-9_-]{0,29}$")
+
+
+def config_path(config: "Optional[str]" = None, name: "Optional[str]" = None) -> "Optional[str]":
+    """config.ini pedido na linha de comando (CR-028, D7): --config vence; --name <nome> e
+    instance/<nome>/config.ini; sem os dois, None (o padrao, instance/config.ini)."""
+    if config:
+        return config
+    if name:
+        if not _RE_PROCESS_NAME.match(name):
+            raise ConfigError(reason="Nome de processo invalido: '%s' (ex.: web0001, agente0001)" % name)
+        return os.path.join(APP_DIR, "instance", name, "config.ini")
+    return None
 
 
 def default_config_path() -> str:

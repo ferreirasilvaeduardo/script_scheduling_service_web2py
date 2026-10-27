@@ -41,6 +41,9 @@ MAX_LENGTH = 500
 # no DEV, a subpasta dev/ guarda os scripts de exemplo e e a excecao.
 APP_DIR = os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
 APP_DEV_DIR = os.path.join(APP_DIR, "dev")
+# CR-028 (D3): scripts dos ambientes dentro do projeto, preservados pela atualizacao (bin/sss-update.sh), em
+# DEV, HML e PROD.
+APP_SCRIPTS_DIR = os.path.join(APP_DIR, "scripts_ambiente")
 
 
 class Code(object):
@@ -144,7 +147,8 @@ def check_forbidden_dirs(path_file: str, sss_dirs: Iterable[Optional[str]] = (),
             raise PathGuardError(Code.SYSTEM_DIR)
         if any(_inside(target, d) for d in sss):
             raise PathGuardError(Code.SSS_DIR)
-        if _inside(target, APP_DIR) and not (dev and _inside(target, APP_DEV_DIR)):
+        if _inside(target, APP_DIR) and not _inside(target, APP_SCRIPTS_DIR) \
+                and not (dev and _inside(target, APP_DEV_DIR)):
             raise PathGuardError(Code.APP_DIR)
 
 

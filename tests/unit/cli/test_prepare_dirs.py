@@ -114,6 +114,17 @@ class TestPrepareDirs(unittest.TestCase):
         self.assertNotIn("root", err, "root existe; so o usuario inexistente e citado")
         self.assertFalse(os.path.exists(self._p("logs")))
 
+    def test_cr028_web_so_cria_o_log_dir(self):
+        path = self._p("web.ini")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("[app]\nsss_env = DEV\n[oracle]\nuser = u\ndsn = x:1/y\nowner = o\n"
+                    "table_prefix = tbsss_\n[logging]\nlog_dir = %s\n"
+                    "[web]\nallowed_origins = http://x\n" % self._p("weblogs"))
+        code, out, _err = self._run("--config", path)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("criada"), 1)
+        self.assertEqual(self._mode("weblogs"), 0o750)
+
     def test_configuracao_invalida(self):
         path = self._p("ruim.ini")
         with open(path, "w") as f:

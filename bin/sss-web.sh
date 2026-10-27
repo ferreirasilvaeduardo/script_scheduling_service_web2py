@@ -46,21 +46,31 @@ SERVER="scripts/run_web.py"
 #      sss-web.sh                         -> run_web.py em 127.0.0.1:8000
 #      sss-web.sh --opcoes...             -> run_web.py com as opcoes
 #      sss-web.sh <python3[.x]> [--opcoes...]  -> o mesmo, com o interpretador escolhido
+#      sss-web.sh [<python3[.x]>] <nome> [--opcoes...]  -> CR-028: --name <nome> (instance/<nome>/config.ini)
 if [ "$#" -gt 0 ]; then
     case "$1" in
         -*) ;;
         *)
             case "$(basename "$1")" in
-                python3|python3.[0-9]|python3.[0-9][0-9]) ;;
+                python3|python3.[0-9]|python3.[0-9][0-9])
+                    PYTHON="$1"
+                    shift
+                    ;;
                 *)
-                    echo "Erro: o primeiro argumento deve ser um interpretador python3 ou uma opcao (recebido: $(basename "$1"))." >&2
-                    exit 2
+                    if ! [[ "$1" =~ ^[a-z][a-z0-9_-]{0,29}$ ]]; then
+                        echo "Erro: o primeiro argumento deve ser um interpretador python3, o nome do processo (ex.: web0001) ou uma opcao (recebido: $(basename "$1"))." >&2
+                        exit 2
+                    fi
                     ;;
             esac
-            PYTHON="$1"
-            shift
             ;;
     esac
+fi
+# CR-028 (D7): o nome do processo vira --name (instance/<nome>/config.ini).
+if [ "$#" -gt 0 ] && [[ "$1" =~ ^[a-z][a-z0-9_-]{0,29}$ ]]; then
+    NAME="$1"
+    shift
+    set -- --name "${NAME}" "$@"
 fi
 for arg in "$@"; do
     case "${arg}" in

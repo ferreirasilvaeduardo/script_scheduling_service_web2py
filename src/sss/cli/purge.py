@@ -285,11 +285,17 @@ class Purge(object):
 def _arguments(argv):
     parser = argparse.ArgumentParser(description="Retencao de dados do SSS (README §11.3)")
     parser.add_argument("--config", default=None, help="config.ini do agente (padrao: instance/)")
+    parser.add_argument("--name", default=None, help="processo: instance/<nome>/config.ini (CR-028)")
     parser.add_argument("--dry-run", action="store_true", help="so conta (estimativas), sem gravar nem remover")
     parser.add_argument("--target", dest="alvo", choices=CLI_TARGETS, default="all")
     parser.add_argument("--export-audit", dest="exportar_auditoria", default=None, metavar="PASTA",
                         help="grava as linhas da auditoria em CSV 0600 antes de apaga-las")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    try:
+        args.config = sss_config.config_path(args.config, args.name)
+    except sss_config.ConfigError as exc:
+        parser.error(str(exc))
+    return args
 
 
 def main(argv=None, connect=None, plat=os_platform, output=None):

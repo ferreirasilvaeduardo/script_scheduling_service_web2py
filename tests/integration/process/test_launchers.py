@@ -125,6 +125,29 @@ class TestLaunchers(unittest.TestCase):
             code, reg, _e = self._run_loop("sss-scheduler.sh", *args)
             self.assertEqual((code, reg), (2, None), args)
 
+    def test_cr028_subida_pelo_nome_do_processo(self):
+        # CR-028 (D7): o nome vira --name (instance/<nome>/config.ini); o interpretador continua opcional.
+        code, reg, _e = self._run_loop("sss-scheduler.sh", "agente0001")
+        self.assertEqual((code, reg["argv"]), (0, ["scripts/run_scheduler.py", "--name", "agente0001"]))
+        code, reg, _e = self._run_loop("sss-web.sh", "web0001", "--port", "8000")
+        self.assertEqual((code, reg["argv"]), (0, ["scripts/run_web.py", "--name", "web0001", "--port", "8000"]))
+        code, reg, _e = self._run_loop("sss-web.sh", self.python, "web0001")
+        self.assertEqual((code, reg["argv"]), (0, ["scripts/run_web.py", "--name", "web0001"]))
+        for launcher, args in (("sss-scheduler.sh", ("Agente 1",)), ("sss-scheduler.sh", ("a/b",)),
+                               ("sss-web.sh", ("Web0001",))):
+            code, reg, _e = self._run_loop(launcher, *args)
+            self.assertEqual((code, reg), (2, None), args)
+
+    def test_cr028_stop_pelo_nome_com_pastas_derivadas(self):
+        folder = os.path.join(self.root, "instance", "agente0001")
+        os.makedirs(folder)
+        os.makedirs(os.path.join(self.root, "var", "agente0001", "work"))
+        with open(os.path.join(folder, "config.ini"), "w") as f:
+            f.write("[app]\nname = agente0001\n[agent]\nenvironments = PRODUCAO\n")
+        code, _r, error = self._run_loop("sss-stop.sh", "agente0001", PYTHON=sys.executable)
+        self.assertEqual(code, 0, error)
+        self.assertTrue(os.path.exists(os.path.join(self.root, "var", "agente0001", "work", "sss-agente0001.stop")))
+
     def test_instant_client_so_sem_ldconfig(self):
         self._executable("ldconfig", "#!/bin/sh\necho '\tlibclntsh.so.19.1 (libc6,x86-64) => /opt/ic/libclntsh.so'\n")
         for name in ("sss-web.sh", "sss-scheduler.sh"):

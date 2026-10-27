@@ -2854,6 +2854,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | Seção | Chave | Obrigatória | Padrão | Faixa / formato |
 |---|---|---|---|---|
 | `[app]` | `sss_env` | sim | — | `DEV`, `HML`, `PROD` |
+| `[app]` | `name` (CR-028) | não | vazio | nome do processo (`web0001`, `agente0001`...), `^[a-z][a-z0-9_-]{0,29}$`; com ele, as pastas não escritas saem de `var/<nome>/` e, no agente, o `agent_id` é o próprio nome |
 | `[oracle]` | `user` | sim | — | não vazio; fora de DEV, diferente de `owner`, sem diferenciar maiúsculas (CR-008, R-29: a conta dona do esquema só faz DDL, D1b) |
 | `[oracle]` | `dsn` | sim | — | não vazio |
 | `[oracle]` | `owner` | sim | — | `^[A-Za-z][A-Za-z0-9_]{0,29}$` |
@@ -2929,6 +2930,7 @@ Chaves que saíram ou mudaram de nome são recusadas na subida: uma chave removi
 * iniciar **somente** o processo Python do SSS. O `sss-web.sh` faz sempre `exec <python> scripts/run_web.py [opções]` (CR-021e2) e aceita três formas: sem argumentos (`127.0.0.1:8000`), só opções (`--config`, `--host`, `--port`, `--check`, repassadas ao `run_web.py`, cujo `argparse` recusa as demais) ou `<python3[.x]> [opções]`. Outro executável, `web2py.py`, `anyserver.py` ou qualquer outro `.py` é recusado com código 2; repassar um comando arbitrário (`exec "$@"` sem essas checagens) é proibido.
 
 * executar a partir da raiz do repositório, qualquer que seja o diretório corrente de quem o chama.
+* **subir pelo nome do processo (CR-028, D7):** `bin/sss-web.sh [<python3[.x]>] web0001 [opções]`, `bin/sss-scheduler.sh agente0001` e `bin/sss-stop.sh agente0001` usam `instance/<nome>/config.ini` (a forma `--config <arquivo>` continua aceita). O nome segue `^[a-z][a-z0-9_-]{0,29}$`; outro texto é recusado com código 2. Os comandos `scripts/run_web.py`, `run_scheduler.py`, `purge.py`, `health.py` e `prepare_dirs.py` aceitam `--name <nome>` (o `prepare_dirs.py` também o nome como primeiro argumento).
 
 O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <arquivo>`, e faz `exec <python> scripts/run_scheduler.py [--config <arquivo>]`. Qualquer outro argumento é recusado com código 2. O Python vem da variável `PYTHON` (padrão `python3`) nos dois launchers.
 

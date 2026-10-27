@@ -131,7 +131,8 @@ def _credentials(rel, content):
         value = re.split(r"\s+[;#]", m.group(2), 1)[0].strip()
         if not value or value in ("...",):
             continue
-        if rel == _SECRETS_EXAMPLE and value == _PLACEHOLDER:
+        # CR-028: os exemplos de instance/exemplos/<nome>/ tambem usam o placeholder.
+        if (rel == _SECRETS_EXAMPLE or rel.endswith("/secrets.cfg.example")) and value == _PLACEHOLDER:
             continue
         problems.append("%s:%d: %s com valor que nao e o placeholder %s" % (rel, n, m.group(1).lower(), _PLACEHOLDER))
     return problems

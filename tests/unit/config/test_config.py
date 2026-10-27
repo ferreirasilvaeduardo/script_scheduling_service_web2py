@@ -714,6 +714,72 @@ class TestConfigCR007(unittest.TestCase):
             self.assertEqual(sss_config.pending_warnings(), [], "entregue uma vez so")
             self.assertFalse(hasattr(cfg.agent, "interpreters"))
 
+    def _ini_text(self, text):
+        path = os.path.join(self.tmp_dir, "proc.ini")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        return path
+
+    _ORACLE = "[oracle]\nuser = sss_app\ndsn = x:1/y\nowner = own\ntable_prefix = tbsss_\n"
+
+    def test_cr028_papel_pelo_arquivo_e_pastas_pelo_nome(self):
+        """CR-028 (D4, D5, D6): web sem [agent], agente sem [web]; pastas de var/<nome>/; agent_id = nome."""
+        web = sss_config.load(self._ini_text("[app]\nsss_env = PROD\nname = web0001\n" + self._ORACLE +
+                                             "[web]\nallowed_origins = https://x\n"))
+        var = sss_config.VAR_DIR
+        self.assertEqual((web.app.role, web.app.name, web.logging.log_dir, web.agent.agent_id),
+                         ("web", "web0001", os.path.join(var, "web0001", "logs"), None))
+        self.assertEqual(web.agent.heartbeat_interval_s, 10, "o web usa os padroes do agente (fila, saude)")
+        agent = sss_config.load(self._ini_text(
+            "[app]\nsss_env = PROD\nname = agente0001\n" + self._ORACLE +
+            "[agent]\nenvironments = PRODUCAO\nmax_parallel_jobs = 2\nexec_users = PRODUCAO=sssprd\n"
+            "output_dir =\n[retention]\npurge_user = sss_purge\n"))
+        base = os.path.join(var, "agente0001")
+        self.assertEqual((agent.app.role, agent.agent.agent_id, agent.agent.work_dir, agent.logging.log_dir,
+                          agent.agent.exec_work_dir, agent.agent.input_dir, agent.agent.script_work_dir,
+                          agent.agent.script_base_dir, agent.agent.output_dir),
+                         ("agent", "agente0001", os.path.join(base, "work"), os.path.join(base, "logs"),
+                          os.path.join(var, "exec"), os.path.join(base, "input"),
+                          os.path.join(base, "script_work"), sss_config.SCRIPTS_DIR, None),
+                         "output_dir escrito vazio desliga a funcao")
+        self.assertEqual(agent.secrets.secrets_file, os.path.join(self.tmp_dir, "secrets.cfg"))
+
+    def test_cr028_validacoes_por_papel(self):
+        # Web fora de DEV nao precisa de exec_users nem de purge_user; o agente precisa.
+        sss_config.load(self._ini_text("[app]\nsss_env = PROD\nname = web0001\n" + self._ORACLE +
+                                       "[web]\nallowed_origins = https://x\n"))
+        with self.assertRaises(sss_config.ConfigError) as ctx:
+            sss_config.load(self._ini_text("[app]\nsss_env = PROD\nname = agente0001\n" + self._ORACLE +
+                                           "[agent]\nenvironments = PRODUCAO\nmax_parallel_jobs = 2\n"))
+        self.assertEqual(ctx.exception.key, "exec_users")
+        with self.assertRaises(sss_config.ConfigError) as ctx:
+            sss_config.load(self._ini_text("[app]\nsss_env = DEV\nname = agente0001\n" + self._ORACLE +
+                                           "[agent]\nagent_id = outro\nenvironments = A\nmax_parallel_jobs = 1\n"))
+        self.assertEqual(ctx.exception.key, "agent_id", "com name, o agent_id e o proprio nome")
+        with self.assertRaises(sss_config.ConfigError):
+            sss_config.load(self._ini_text("[app]\nsss_env = DEV\nname = Agente 1\n" + self._ORACLE +
+                                           "[web]\nallowed_origins = https://x\n"))
+        # Sem name, o agente continua exigindo agent_id e work_dir; o web, log_dir.
+        with self.assertRaises(sss_config.ConfigError) as ctx:
+            sss_config.load(self._ini_text("[app]\nsss_env = DEV\n" + self._ORACLE +
+                                           "[web]\nallowed_origins = https://x\n"))
+        self.assertEqual(ctx.exception.section, "logging")
+
+    def test_cr028_caminho_pelo_nome_e_exemplos(self):
+        self.assertEqual(sss_config.config_path(None, "agente0001"),
+                         os.path.join(sss_config.APP_DIR, "instance", "agente0001", "config.ini"))
+        self.assertEqual(sss_config.config_path("/x.ini", "agente0001"), "/x.ini")
+        self.assertIsNone(sss_config.config_path(None, None))
+        for bad in ("Agente", "a/b", "../x", ""):
+            if bad:
+                with self.assertRaises(sss_config.ConfigError):
+                    sss_config.config_path(None, bad)
+        for name, role in (("web0001", "web"), ("agente0001", "agent")):
+            example = os.path.join(self.app_dir, "instance", "exemplos", name, "config.ini.example")
+            text = open(example, encoding="utf-8").read().replace("sss_env = PROD", "sss_env = DEV")
+            cfg = sss_config.load(self._ini_text(text))
+            self.assertEqual((cfg.app.role, cfg.app.name), (role, name), example)
+
     def test_cr026_readme_tabela_igual_ao_schema(self):
         """CR-026: a tabela do README §12.1 lista toda chave do SCHEMA, com a obrigatoriedade e o padrao do codigo."""
         with open(os.path.join(self.app_dir, "README.md"), "r", encoding="utf-8") as f:

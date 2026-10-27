@@ -1,6 +1,6 @@
 #!/bin/bash
 # Parada controlada do agente sem sinal (README §8.11, §12.2): cria work_dir/sss-<agent_id>.stop.
-# Uso: sss-stop.sh [--config <config.ini>]  (padrao: instance/config.ini da aplicacao)
+# Uso: sss-stop.sh <nome> | --config <config.ini>  (CR-028: instance/<nome>/config.ini; padrao: instance/config.ini)
 set -euo pipefail
 
 if [ "$(id -u)" -eq 0 ]; then
@@ -16,8 +16,10 @@ PYTHON="${PYTHON:-python3}"
 CONFIG="instance/config.ini"
 if [ "$#" -eq 2 ] && [ "$1" = "--config" ] && [ -n "$2" ]; then
     CONFIG="$2"
+elif [ "$#" -eq 1 ] && [[ "$1" =~ ^[a-z][a-z0-9_-]{0,29}$ ]]; then
+    CONFIG="instance/$1/config.ini"
 elif [ "$#" -ne 0 ]; then
-    echo "Erro: uso: sss-stop.sh [--config <config.ini>]" >&2
+    echo "Erro: uso: sss-stop.sh [<nome> | --config <config.ini>]" >&2
     exit 2
 fi
 
@@ -33,8 +35,13 @@ cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";",
 try:
     with open(caminho, encoding="utf-8") as f:
         cp.read_file(f)
-    agente = cp["agent"]["agent_id"].strip()
-    work = cp["agent"]["work_dir"].strip()
+    # CR-028 (D5, D6): com [app] name, agent_id e o nome e work_dir sai de var/<nome>/work quando nao escritos.
+    nome = cp["app"].get("name", "").strip() if cp.has_section("app") else ""
+    agente = cp["agent"].get("agent_id", "").strip() or nome
+    work = cp["agent"].get("work_dir", "").strip() or (
+        os.path.join(os.getcwd(), "var", nome, "work") if nome else "")
+    if not agente:
+        raise KeyError("agent_id")
 except (OSError, KeyError, configparser.Error) as exc:
     sys.stderr.write("Erro: config.ini invalido (%s): %s\n" % (caminho, exc.__class__.__name__))
     sys.exit(2)

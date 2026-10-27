@@ -137,13 +137,19 @@ class Check(object):
 def _arguments(argv):
     parser = argparse.ArgumentParser(description="Saude do SSS no padrao Nagios (README §13)")
     parser.add_argument("--config", default=None, help="config.ini (padrao: instance/)")
+    parser.add_argument("--name", default=None, help="processo: instance/<nome>/config.ini (CR-028)")
     parser.add_argument("--no-pid-min", dest="sem_pid_min", type=int, default=2, help="RUNNING sem PID ha mais de N minutos")
     parser.add_argument("--queue-warn", dest="fila_warn", type=int, default=500, help="PENDING vencidos para WARNING")
     parser.add_argument("--queue-crit", dest="fila_crit", type=int, default=5000, help="PENDING vencidos para CRITICAL")
     parser.add_argument("--wait-warn-min", dest="espera_warn_min", type=int, default=30, help="espera maxima (min) para WARNING")
     parser.add_argument("--wait-crit-min", dest="espera_crit_min", type=int, default=120, help="espera maxima (min) para CRITICAL")
     parser.add_argument("--purge-days", dest="purge_dias", type=int, default=2, help="dias sem PURGE auditado para WARNING")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    try:
+        args.config = sss_config.config_path(args.config, args.name)
+    except sss_config.ConfigError as exc:
+        parser.error(str(exc))
+    return args
 
 
 def _unknown(output, reason):

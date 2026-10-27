@@ -33,7 +33,14 @@ def _wait(stop_event):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Daemon do agente do SSS (README §8.1)")
     parser.add_argument("--config", dest="config", default=None, help="config.ini do agente (padrao: instance/)")
+    parser.add_argument("--name", default=None,
+                        help="processo: instance/<nome>/config.ini (CR-028)")
     args = parser.parse_args(argv)
+    try:
+        args.config = sss_config.config_path(args.config, args.name)
+    except sss_config.ConfigError as exc:
+        print("Configuracao invalida: %s" % exc, file=sys.stderr)
+        return 2
     try:
         cfg = sss_config.get_config(log_name="sss_scheduler", path=args.config)
     except sss_config.ConfigError:  # o CRITICAL ja foi registrado (README §12.1)

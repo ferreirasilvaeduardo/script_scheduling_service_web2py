@@ -309,6 +309,20 @@ class TestInterpreterCr025(unittest.TestCase):
             self.assertFalse(path_guard.is_python(no), no)
 
 
+class TestScriptsAmbienteCr028(unittest.TestCase):
+
+    def test_scripts_ambiente_aceita_em_todos_os_ambientes(self):
+        # CR-028 (D3): scripts_ambiente/ e preservada pela atualizacao; o resto da aplicacao continua proibido.
+        inside = os.path.join(path_guard.APP_SCRIPTS_DIR, "faturamento", "carga.py")
+        for dev in (False, True):
+            path_guard.check_forbidden_dirs(inside, dev=dev)
+        with self.assertRaises(PathGuardError) as ctx:
+            path_guard.check_forbidden_dirs(os.path.join(path_guard.APP_DIR, "src", "x.py"))
+        self.assertEqual(ctx.exception.code, Code.APP_DIR)
+        with self.assertRaises(PathGuardError):
+            path_guard.check_forbidden_dirs(os.path.join(path_guard.APP_DIR, "scripts_ambiente_x", "a.py"))
+
+
 class TestTextValidations(unittest.TestCase):
 
     def test_validar_cadastro(self):

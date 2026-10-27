@@ -1,0 +1,18 @@
+; config.ini do NO WEB (CR-028): copie para instance/web0001/config.ini (o nome da pasta e o do processo).
+; So [app], [oracle] e [web]: o web nao tem [agent] (README §12.1). As pastas saem de var/web0001/.
+; Suba com: bin/sss-web.sh web0001 --host 127.0.0.1 --port 8000
+
+[app]
+sss_env = PROD                    ; DEV | HML | PROD
+name = web0001                    ; nome do processo: o mesmo da pasta instance/web0001/
+
+[oracle]
+user = sss_web                    ; conta do papel web (README §4.1), nunca a dona do esquema
+dsn = servidor-banco:1521/servico
+owner = openrisow
+table_prefix = tbsss_
+driver_mode = thick               ; thick (recomendado) | cx_oracle | auto | thin (README §2.3)
+
+[web]
+allowed_origins = https://sss.empresa.local   ; a URL que o usuario digita
+; trusted_proxies = 127.0.0.1    ; com proxy na frente

@@ -2,6 +2,7 @@
 """Cria as pastas do config.ini com o dono e o modo da implantacao (CR-026e; DEPLOYMENT §4, §8).
 
 Uso (como root no servidor; no DEV, com o proprio usuario):
+  python3 scripts/prepare_dirs.py <nome> [--service-user sss] [--dry-run]   (CR-028)
   python3 scripts/prepare_dirs.py [--config <config.ini>] [--service-user sss] [--dry-run]
 
 O SSS nao cria as pastas configuradas na subida (README §12.1): este comando as cria antes.
@@ -37,6 +38,9 @@ def plan(cfg: "sss_config.Config", service_user: str, as_root: bool) -> List[Fol
     usuario atual e as pastas dos usuarios de execucao ficam de fora."""
     agent = cfg.agent
     me = service_user if as_root else pwd.getpwuid(os.getuid()).pw_name
+    if getattr(cfg.app, "role", "all") == "web":
+        # CR-028 (D4): o web so usa o log_dir.
+        return [Folder(cfg.logging.log_dir, me, 0o750, "log_dir")]
     users = dict(agent.exec_users) if as_root else {}
     folders = [Folder(cfg.logging.log_dir, me, 0o750, "log_dir"),
                Folder(agent.work_dir, me, 0o700, "work_dir")]
@@ -95,9 +99,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         description="Cria as pastas do config.ini do SSS com dono e modo (CR-026e)")
     parser.add_argument("--config", default=None, help="config.ini (padrao: instance/config.ini)")
+    parser.add_argument("--name", default=None,
+                        help="processo: instance/<nome>/config.ini (CR-028)")
+    parser.add_argument("nome", nargs="?", default=None,
+                        help="o mesmo que --name (ex.: agente0001)")
     parser.add_argument("--service-user", default="sss", help="usuario do servico (padrao: sss)")
     parser.add_argument("--dry-run", action="store_true", help="so mostra o que faria")
     args = parser.parse_args(argv)
+    try:
+        args.config = sss_config.config_path(args.config, args.name or args.nome)
+    except sss_config.ConfigError as exc:
+        print("Configuracao invalida: %s" % exc, file=sys.stderr)
+        return 2
     try:
         cfg = sss_config.load(args.config or sss_config.default_config_path())
     except sss_config.ConfigError as exc:

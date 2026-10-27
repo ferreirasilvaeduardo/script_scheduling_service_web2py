@@ -1,0 +1,26 @@
+; config.ini do AGENTE (CR-028): copie para instance/agente0001/config.ini (o nome da pasta e o do processo).
+; Sem [web] (README §12.1). O agent_id e o proprio nome, unico em toda a instalacao. As pastas saem de
+; var/agente0001/ (logs, work, output, input, script_work), var/exec/ e scripts_ambiente/.
+; Crie as pastas com: python3 scripts/prepare_dirs.py agente0001 --service-user <conta>   (como root)
+; Suba com: bin/sss-scheduler.sh agente0001
+
+[app]
+sss_env = PROD                    ; DEV | HML | PROD
+name = agente0001                 ; nome do processo e agent_id
+
+[oracle]
+user = sss_agente                 ; conta do papel agente (README §4.1), nunca a dona do esquema
+dsn = servidor-banco:1521/servico
+owner = openrisow
+table_prefix = tbsss_
+driver_mode = thick
+
+[agent]
+environments = PRODUCAO           ; ambientes que este agente atende
+max_parallel_jobs = 4
+exec_users = PRODUCAO=sssprd      ; usuario do SO por ambiente (obrigatorio fora de DEV)
+env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
+; output_dir =                    ; escrito vazio desliga a tela de Saidas (o padrao e var/agente0001/output)
+
+[retention]
+purge_user = sss_purge            ; conta Oracle do papel purge (obrigatoria fora de DEV)
