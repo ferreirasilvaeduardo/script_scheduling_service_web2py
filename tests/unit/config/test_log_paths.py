@@ -7,7 +7,6 @@ import os
 import shutil
 import tempfile
 import unittest
-from unittest import mock
 
 from sss.config import log_paths
 
@@ -165,107 +164,6 @@ class TestLogDirs(unittest.TestCase):
         # Proximo deve ser _3
         c3 = log_paths.next_app_log_path(self.tmp, "sss_web", 4321, dt)
         self.assertEqual(c3, os.path.join(d, "sss_web_4321_3.log"))
-
-    # -----------------------------------------------------------------------
-    # 4. Parsing e validacao de formato de data de pastas (README §11.3, §13)
-    # -----------------------------------------------------------------------
-
-    def test_parse_data_dia(self):
-        self.assertEqual(log_paths.parse_day_date("2026", "10", "16"), datetime.date(2026, 10, 16))
-        self.assertEqual(log_paths.parse_day_date("2026", "02", "28"), datetime.date(2026, 2, 28))
-        # Formatos invalidos ou datas inexistentes
-        self.assertIsNone(log_paths.parse_day_date("26", "10", "16"))
-        self.assertIsNone(log_paths.parse_day_date("2026", "13", "01"))
-        self.assertIsNone(log_paths.parse_day_date("2026", "02", "30"))
-        self.assertIsNone(log_paths.parse_day_date("ano", "10", "16"))
-
-    def test_parse_data_minuto(self):
-        dt = log_paths.parse_minute_date("2026", "10", "16", "14", "05")
-        self.assertEqual(dt, datetime.datetime(2026, 10, 16, 14, 5))
-        # Invalidos
-        self.assertIsNone(log_paths.parse_minute_date("2026", "10", "16", "25", "00"))
-        self.assertIsNone(log_paths.parse_minute_date("2026", "10", "16", "14", "60"))
-        self.assertIsNone(log_paths.parse_minute_date("2026", "10", "16", "14", "cinco"))
-
-    def test_limpar_retencao_app(self):
-        today = datetime.date(2026, 10, 16)
-        # 30 dias de retencao: limite = 2026-09-16.
-        # 2026-09-15 deve ser removido.
-        # 2026-09-16 e 2026-10-01 devem ser preservados.
-        p_old = os.path.join(self.tmp, "internal", "app", "2026", "09", "15", "10", "00")
-        p_limit = os.path.join(self.tmp, "internal", "app", "2026", "09", "16", "10", "00")
-        p_recent = os.path.join(self.tmp, "internal", "app", "2026", "10", "01", "10", "00")
-        p_invalid = os.path.join(self.tmp, "internal", "app", "2026", "temp", "teste")
-
-        for p in (p_old, p_limit, p_recent, p_invalid):
-            os.makedirs(p, exist_ok=True)
-            with open(os.path.join(p, "teste.log"), "w") as f:
-                f.write("dados")
-
-        removed = log_paths.clean_app_retention(self.tmp, 30, ref_dt=today)
-        self.assertEqual(len(removed), 1)
-        self.assertEqual(removed[0], os.path.join(self.tmp, "internal", "app", "2026", "09", "15"))
-
-        self.assertFalse(os.path.exists(os.path.join(self.tmp, "internal", "app", "2026", "09", "15")))
-        self.assertTrue(os.path.exists(os.path.join(self.tmp, "internal", "app", "2026", "09", "16")))
-        self.assertTrue(os.path.exists(os.path.join(self.tmp, "internal", "app", "2026", "10", "01")))
-        self.assertTrue(os.path.exists(p_invalid))
-
-    def test_limpar_retencao_app_reporta_falhas(self):
-        """Regressao (AGENTS §6): falha na remocao segue adiante e volta em `falhas`, sem ser engolida."""
-        p_old = os.path.join(self.tmp, "internal", "app", "2026", "09", "01", "10", "00")
-        p_old_2 = os.path.join(self.tmp, "internal", "app", "2026", "09", "02", "10", "00")
-        for p in (p_old, p_old_2):
-            os.makedirs(p)
-        day_1 = os.path.join(self.tmp, "internal", "app", "2026", "09", "01")
-        rmtree_real = shutil.rmtree
-
-        def rmtree_falha(path, *args, **kw):
-            if path == day_1:
-                raise PermissionError(13, "Permission denied")
-            return rmtree_real(path, *args, **kw)
-
-        failures = []
-        with mock.patch("sss.config.log_paths.shutil.rmtree", side_effect=rmtree_falha):
-            removed = log_paths.clean_app_retention(self.tmp, 30, ref_dt=datetime.date(2026, 10, 16),
-                                                       failures=failures)
-        self.assertEqual(removed, [os.path.join(self.tmp, "internal", "app", "2026", "09", "02")])
-        self.assertEqual(len(failures), 1)
-        self.assertIn(day_1, failures[0])
-        self.assertIn("Permission denied", failures[0])
-        # Sem a lista, a falha nao interrompe a retencao.
-        with mock.patch("sss.config.log_paths.shutil.rmtree", side_effect=OSError(5, "I/O error")):
-            self.assertEqual(log_paths.clean_app_retention(self.tmp, 30, ref_dt=datetime.date(2026, 10, 16)), [])
-
-    # -----------------------------------------------------------------------
-    # Retencao dos logs de execucao (purge.py, README §11.3; CR-007 R-32; CR-009)
-    # -----------------------------------------------------------------------
-
-    def _run_minute(self, rel):
-        dir_value = os.path.join(self.tmp, *rel.split("/"))
-        os.makedirs(dir_value)
-        return dir_value
-
-    def test_retencao_execucao_referencia_date_ou_datetime(self):
-        limit = self._run_minute("prod/carga/2026/09/21/23/59")  # exatamente ref - 30 dias: fica
-        old = self._run_minute("prod/carga/2026/09/20/23/59")
-        for ref in (datetime.date(2026, 10, 21), datetime.datetime(2026, 10, 21, 0, 0, 1)):
-            eligible = log_paths.clean_run_retention(self.tmp, 30, ref, dry_run=True)
-            self.assertEqual(eligible, [old], ref)
-        self.assertTrue(os.path.isdir(old), "dry_run nao remove")
-        self.assertEqual(log_paths.clean_run_retention(self.tmp, 30, datetime.date(2026, 10, 21)), [old])
-        self.assertTrue(os.path.isdir(limit))
-
-    def test_retencao_execucao_mantem_running_e_interno(self):
-        running = self._run_minute("prod/carga/2026/01/01/10/00")
-        internal = self._run_minute("internal/app/2026/01/01/10/00")
-        failures = []
-        removed = log_paths.clean_run_retention(self.tmp, 30, datetime.date(2026, 10, 21),
-                                                        keep=[running + os.sep], failures=failures)
-        self.assertEqual((removed, failures), ([], []))
-        self.assertTrue(os.path.isdir(running))
-        self.assertTrue(os.path.isdir(internal))
-        self.assertEqual(log_paths.run_minutes(self.tmp), [(running, datetime.datetime(2026, 1, 1, 10, 0))])
 
 
 if __name__ == "__main__":

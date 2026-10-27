@@ -47,7 +47,7 @@ for proc in /proc/[0-9]*; do
     sss=""
     for arg in "${args[@]:1}"; do
         case "${arg}" in
-            scripts/run_web.py|scripts/run_scheduler.py|scripts/purge.py|"${REPO_ROOT}"/scripts/*.py) sss=1 ;;
+            scripts/run_web.py|scripts/run_scheduler.py|"${REPO_ROOT}"/scripts/*.py) sss=1 ;;
         esac
     done
     [ -n "${sss}" ] || continue

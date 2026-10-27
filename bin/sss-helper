@@ -18,9 +18,6 @@ Subcomandos:
   pack <base> <relativo> <max_bytes> <max_arquivos>
                                               zip da pasta de saida do ticket na saida padrao (CR-012)
   clean-output <base> <relativo>              remove a pasta de saida do ticket sem seguir links (CR-012)
-  purge-output <base> <dias> [count]          remove as pastas de minuto de saida mais antigas que <dias>
-                                              (com "count", so conta: --dry-run do purge); serve tambem a
-                                              pasta de trabalho, que tem o mesmo formato (CR-019)
   put-input <base> <script> <subpasta|-> <nome> <Y|N> <sha256> <bytes>
                                               grava o arquivo da entrada padrao na pasta de entrada do
                                               script (CR-020c): temporario no destino, hash conferido e
@@ -497,7 +494,7 @@ def _pack(base, relative, max_bytes, max_files, destination=None):
 
 
 def _clean_output(base, relative):
-    """Remove a pasta de saida do ticket sem seguir links simbolicos (as pastas acima ficam para o purge)."""
+    """Remove a pasta de saida do ticket sem seguir links simbolicos (as pastas acima ficam; limpeza manual, README §11.3)."""
     dir_value = _output_dir(base, relative)
     if dir_value is None:
         return 0
@@ -505,63 +502,6 @@ def _clean_output(base, relative):
         shutil.rmtree(dir_value)  # rmtree nao segue links simbolicos internos (remove o proprio link)
     except OSError as e:
         _error(SYSTEM_ERROR, "limpeza da saida falhou (%s)" % e.__class__.__name__)
-    return 0
-
-
-def _purge_output(base, days, today=None, count_only=False):
-    """Remove <base>/<script>/AAAA/MM/DD/HH/MI anteriores a hoje - dias (data tirada do caminho) e as pastas
-    que ficarem vazias acima delas. Imprime 'removidas=<n>'. Itens fora do formato sao ignorados.
-    contar=True so conta (nada e removido)."""
-    base = _base_dir(base, "base")
-    limit = (today or datetime.date.today()) - datetime.timedelta(days=days)
-    removed = 0
-
-    def _subpastas(folder, regex):
-        try:
-            names = sorted(os.listdir(folder))
-        except OSError:  # pasta removida durante a varredura
-            return []
-        return [os.path.join(folder, n) for n in names
-                if regex.match(n) and _own_directory(os.path.join(folder, n))]
-
-    def _remover_se_vazia(folder):
-        try:
-            os.rmdir(folder)
-        except OSError:  # nao vazia (ou ja removida): fica
-            pass
-
-    year, two = re.compile(r"^\d{4}$"), re.compile(r"^\d{2}$")
-    for p_scr in _subpastas(base, _RE_SCRIPT_DIR):
-        for p_year in _subpastas(p_scr, year):
-            for p_month in _subpastas(p_year, two):
-                for p_day in _subpastas(p_month, two):
-                    a, m, d = (int(os.path.basename(x)) for x in (p_year, p_month, p_day))
-                    try:
-                        date = datetime.date(a, m, d)
-                    except ValueError:  # data invalida no caminho: fora do formato
-                        continue
-                    if date < limit:
-                        for p_hour in _subpastas(p_day, two):
-                            for p_min in _subpastas(p_hour, two):
-                                if count_only:
-                                    removed += 1
-                                    continue
-                                try:
-                                    shutil.rmtree(p_min)
-                                    removed += 1
-                                except OSError as e:
-                                    _error(SYSTEM_ERROR, "purga da saida falhou (%s)" % e.__class__.__name__)
-                            if not count_only:
-                                _remover_se_vazia(p_hour)
-                    if not count_only:
-                        _remover_se_vazia(p_day)
-                if not count_only:
-                    _remover_se_vazia(p_month)
-            if not count_only:
-                _remover_se_vazia(p_year)
-        if not count_only:
-            _remover_se_vazia(p_scr)
-    sys.stdout.write("removidas=%d\n" % removed)
     return 0
 
 
@@ -706,8 +646,6 @@ def run_main(argv):
                           _integer(args[3], "max_arquivos", minimum=1, maximum=_MAX_OUTPUT_FILES))
     if sub == "clean-output" and len(args) == 2:
         return _clean_output(args[0], args[1])
-    if sub == "purge-output" and (len(args) == 2 or (len(args) == 3 and args[2] == "count")):
-        return _purge_output(args[0], _integer(args[1], "dias", minimum=1, maximum=3650), count_only=len(args) == 3)
     if sub == "put-input" and len(args) == 7:
         return _put_input(args[0], args[1], args[2], args[3], args[4], args[5],
                           _integer(args[6], "bytes", maximum=_INPUT_MAX_BYTES))

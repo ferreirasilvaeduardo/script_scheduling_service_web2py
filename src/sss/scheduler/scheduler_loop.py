@@ -541,8 +541,7 @@ class Agent(object):
 
     def _secret_values(self):
         seg = self.secrets
-        values = [getattr(seg, "oracle_password", None), getattr(seg, "purge_password", None),
-                   getattr(seg, "monitor_password", None)]
+        values = [getattr(seg, "oracle_password", None), getattr(seg, "monitor_password", None)]
         for cred in (getattr(seg, "environments", None) or {}).values():
             values.append(getattr(cred, "password", None))
         return values
@@ -766,7 +765,7 @@ class Agent(object):
                 if output_phase.should_remove_dir(output):
                     try:
                         output_phase.remove_dir(output, self.plat)
-                    except Exception as exc:  # noqa: BLE001 - fica para o purge (output_retention_days)
+                    except Exception as exc:  # noqa: BLE001 - fica no disco (limpeza manual, README §11.3)
                         log.warning("pasta de saida nao removida (%s)", exc.__class__.__name__,
                                     extra={"action": "SAIDA"})
             self._clean(tid, ex.work_dir_ticket, ex)

@@ -202,7 +202,7 @@ def _already_written(conn, repo, output, agent_id, state_value):
 
 
 def remove_dir(output, plat):
-    """Com o zip gravado (ou a pasta vazia), a pasta de saida sai pelo helper; as de cima ficam para o purge."""
+    """Com o zip gravado (ou a pasta vazia), a pasta de saida sai pelo helper; as de cima ficam (limpeza manual, README §11.3)."""
     plat.clean_output(output.base, output.relative, output.exec_user)
 
 

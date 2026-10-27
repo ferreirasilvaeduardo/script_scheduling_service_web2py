@@ -711,7 +711,7 @@ def _build_table_registry():
         ('colunas_lob', ()),
     ])
 
-    # 17. Controle (CR-007, D4): linha unica com a versao do esquema e a concessao do purge.
+    # 17. Controle (CR-007, D4): linha unica com a versao do esquema (CR-030: sem a concessao do purge).
     r['control'] = OrderedDict([
         ('entity', 'control'),
         ('fisico', 'control'),
@@ -722,8 +722,6 @@ def _build_table_registry():
             ('schema_version', {'name': 'schema_version', 'tipo': 'NUMBER(6)', 'not_null': True, 'default': None}),
             ('version_applied_at', {'name': 'version_applied_at', 'tipo': 'DATE', 'not_null': True, 'default': None}),
             ('version_applied_by', {'name': 'version_applied_by', 'tipo': 'VARCHAR2(%d CHAR)' % ACTOR_MAX, 'not_null': True, 'default': None}),
-            ('purge_owner', {'name': 'purge_owner', 'tipo': 'VARCHAR2(%d CHAR)' % ACTOR_MAX, 'not_null': False, 'default': None}),
-            ('purge_lease_until', {'name': 'purge_lease_until', 'tipo': 'DATE', 'not_null': False, 'default': None}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict()),

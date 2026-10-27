@@ -39,10 +39,18 @@ REMOVED_KEYS = {
 }
 
 # Chaves que deixaram de existir e sao so ignoradas, com aviso (a subida segue).
+_NO_PURGE = "o purge e a retencao automatica foram retirados; a limpeza e manual (README §11.3, CR-030)"
 IGNORED_KEYS = {
     ("agent", "interpreters"): "o interpretador vem do script (#!), do disparo ou do cadastro (CR-026)",
     ("agent", "interpretadores"): "o interpretador vem do script (#!), do disparo ou do cadastro (CR-026)",
+    ("logging", "app_log_retention_days"): _NO_PURGE,
+    ("logging", "local_log_retention_days"): _NO_PURGE,
+    ("logging", "output_retention_days"): _NO_PURGE,
+    ("logging", "script_work_retention_days"): _NO_PURGE,
+    ("logging", "saida_retention_days"): _NO_PURGE,
 }
+# Secoes inteiras ignoradas com aviso (CR-030): o load() registra uma linha por chave.
+IGNORED_SECTIONS = {"retention": _NO_PURGE, "retencao": _NO_PURGE}
 
 # Avisos do load() que esperam o log da aplicacao (CR-026f): o load() roda antes do sss_logging.configure().
 _PENDING_WARNINGS = []  # type: List[str]
@@ -61,7 +69,6 @@ RENAMED_KEYS = {
     ("agent", "saida_max_bytes"): "output_max_bytes",
     ("agent", "saida_max_arquivos"): "output_max_files",
     ("agent", "entrada_dir"): "input_dir",
-    ("logging", "saida_retention_days"): "output_retention_days",
     # CR-016b: configuracao e operacao em ingles
     ("oracle", "modo_driver"): "driver_mode",
     ("agent", "ambientes_atendidos"): "environments",
@@ -74,7 +81,7 @@ RENAMED_KEYS = {
 }
 
 # Secoes com nome novo (CR-016b), no config.ini e no secrets.cfg ([ambiente:X] -> [environment:X]).
-RENAMED_SECTIONS = {"retencao": "retention", "ambiente:": "environment:"}
+RENAMED_SECTIONS = {"ambiente:": "environment:"}
 
 # Atores do sistema que nao podem ser agent_id (README §4.4 e §8.12).
 RESERVED_AGENT_IDS = ("init_db", "seed", "purge")
@@ -183,7 +190,9 @@ SCHEMA = collections.OrderedDict([
         ("fence_timeout_s", FieldDef("int", required=False, min_val=1, max_val=86400, default=90)),
         ("node_offline_timeout_s", FieldDef("int", required=False, min_val=1, max_val=86400, default=180)),
         ("kill_grace_s", FieldDef("int", required=False, min_val=1, max_val=300, default=5)),
-        ("script_timeout_s", FieldDef("int", required=False, min_val=1, max_val=86400, default=21600)),
+        # Pedido do responsavel pelo produto (2026-10-27): padrao de 168 h; maximo igual ao do cadastro do
+        # script (tbsss_scripts.timeout_s, NUMBER(7)).
+        ("script_timeout_s", FieldDef("int", required=False, min_val=1, max_val=9999999, default=604800)),
         ("shutdown_mode", FieldDef("enum", required=False, allowed_values=("TERMINATE", "DRAIN"), default="TERMINATE")),
         ("shutdown_grace_s", FieldDef("int", required=False, min_val=1, max_val=3600, default=30)),
         ("misfire_policy", FieldDef("enum", required=False, allowed_values=("RUN_ONCE", "SKIP"), default="RUN_ONCE")),
@@ -210,14 +219,8 @@ SCHEMA = collections.OrderedDict([
         ("log_dir", FieldDef("path", required=True)),
         ("level", FieldDef("enum", required=False, allowed_values=("DEBUG", "INFO", "WARN", "ERROR"), default="INFO")),
         ("app_log_max_bytes", FieldDef("int", required=False, min_val=1024, max_val=1073741824, default=10485760)),
-        ("app_log_retention_days", FieldDef("int", required=False, min_val=1, max_val=3650, default=30)),
         ("max_log_size_bytes", FieldDef("int", required=False, min_val=1024, max_val=67108864, default=5242880)),
         ("max_local_log_size_bytes", FieldDef("int", required=False, min_val=1024, max_val=10737418240, default=52428800)),
-        ("local_log_retention_days", FieldDef("int", required=False, min_val=1, max_val=3650, default=30)),
-        # CR-012: pastas de saida que ficaram no disco (excesso ou falha).
-        ("output_retention_days", FieldDef("int", required=False, min_val=1, max_val=365, default=7)),
-        # CR-019: pastas de trabalho dos scripts, que ficam no disco depois do ticket.
-        ("script_work_retention_days", FieldDef("int", required=False, min_val=1, max_val=365, default=7)),
     ])),
     ("web", collections.OrderedDict([
         ("session_idle_timeout_s", FieldDef("int", required=False, min_val=1, max_val=86400, default=1800)),
@@ -234,14 +237,6 @@ SCHEMA = collections.OrderedDict([
         # que uma conexao espera o cliente (o cliente lento e derrubado).
         ("max_threads", FieldDef("int", required=False, min_val=1, max_val=256, default=16)),
         ("socket_timeout_s", FieldDef("int", required=False, min_val=5, max_val=300, default=30)),
-    ])),
-    ("retention", collections.OrderedDict([
-        ("ticket_retention_days", FieldDef("int", required=False, min_val=1, max_val=3650, default=180)),
-        ("audit_retention_days", FieldDef("int", required=False, min_val=365, max_val=3650, default=730)),
-        ("purge_batch_size", FieldDef("int", required=False, min_val=1, max_val=100000, default=1000)),
-        # CR-020e: envios da tela de Entrada apagados depois de N dias (o conteudo sai antes, apos as entregas).
-        ("input_retention_days", FieldDef("int", required=False, min_val=1, max_val=3650, default=30)),
-        ("purge_user", FieldDef("str", required=False, default=None, regex=r"^[A-Za-z][A-Za-z0-9_$#]{0,29}$")),
     ])),
 ])
 
@@ -296,9 +291,7 @@ class AgentConfig(_ItemAccessMixin, collections.namedtuple("AgentConfig", [
 
 
 class LoggingConfig(_ItemAccessMixin, collections.namedtuple("LoggingConfig", [
-    "log_dir", "level", "app_log_max_bytes", "app_log_retention_days",
-    "max_log_size_bytes", "max_local_log_size_bytes", "local_log_retention_days", "output_retention_days",
-    "script_work_retention_days"
+    "log_dir", "level", "app_log_max_bytes", "max_log_size_bytes", "max_local_log_size_bytes"
 ])):
     __slots__ = ()
 
@@ -311,14 +304,8 @@ class WebConfig(_ItemAccessMixin, collections.namedtuple("WebConfig", [
     __slots__ = ()
 
 
-class RetentionConfig(_ItemAccessMixin, collections.namedtuple("RetentionConfig", [
-    "ticket_retention_days", "audit_retention_days", "purge_batch_size", "purge_user", "input_retention_days"
-])):
-    __slots__ = ()
-
-
 class Config(_ItemAccessMixin, collections.namedtuple("Config", [
-    "app", "oracle", "secrets", "agent", "logging", "web", "retention"
+    "app", "oracle", "secrets", "agent", "logging", "web"
 ])):
     __slots__ = ()
 
@@ -506,6 +493,12 @@ def load(ini_path: str) -> "Config":
 
     # 1. Validar secoes desconhecidas
     for sec in cp.sections():
+        if sec in IGNORED_SECTIONS:
+            for k in cp[sec]:
+                _PENDING_WARNINGS.append("config.ini: chave [%s] %s ignorada: %s; apague a linha"
+                                         % (sec, k, IGNORED_SECTIONS[sec]))
+            cp.remove_section(sec)
+            continue
         if sec in RENAMED_SECTIONS:
             raise ConfigError(section=sec, key=None, reason="Secao renomeada: [%s] passou a se chamar [%s] (CR-016b)"
                              % (sec, RENAMED_SECTIONS[sec]))
@@ -639,8 +632,7 @@ def load(ini_path: str) -> "Config":
             )
         )
 
-    _validate_cr007(app_dict, oracle_dict, agent_dict, data_sections["logging"], data_sections["retention"],
-                    role)
+    _validate_cr007(app_dict, oracle_dict, agent_dict, data_sections["logging"], role)
 
     # 5. Instanciar arvore de configuracao imutavel
     app_cfg = AppConfig(**app_dict)
@@ -649,7 +641,6 @@ def load(ini_path: str) -> "Config":
     agent_cfg = AgentConfig(**agent_dict)
     logging_cfg = LoggingConfig(**data_sections["logging"])
     web_cfg = WebConfig(**data_sections["web"])
-    retention_cfg = RetentionConfig(**data_sections["retention"])
 
     return Config(
         app=app_cfg,
@@ -658,7 +649,6 @@ def load(ini_path: str) -> "Config":
         agent=agent_cfg,
         logging=logging_cfg,
         web=web_cfg,
-        retention=retention_cfg
     )
 
 
@@ -692,9 +682,9 @@ def _validate_script_base_dir(agent: dict, log_dir: str, dev: bool) -> None:
                           reason=reasons.get(exc.code, exc.code))
 
 
-def _validate_cr007(app, oracle, agent, logging_dict, retention, role="all"):
-    """Validacoes cruzadas do CR-007: invariantes I3/I4, execucao, retencao e purge. CR-028 (D4): no papel web,
-    so as que valem para ele (invariantes, retencao e a conta Oracle); as do agente e do purge ficam de fora."""
+def _validate_cr007(app, oracle, agent, logging_dict, role="all"):
+    """Validacoes cruzadas do CR-007: invariantes I3/I4, execucao e a conta Oracle. CR-028 (D4): no papel web,
+    so as que valem para ele (invariantes e a conta Oracle); as do agente ficam de fora. CR-030: sem purge."""
     call_s = call_timeout_s(oracle["call_timeout_ms"])
     i3 = agent["heartbeat_interval_s"] + 2 * call_s
     if i3 > agent["fence_timeout_s"]:
@@ -712,23 +702,10 @@ def _validate_cr007(app, oracle, agent, logging_dict, retention, role="all"):
     if role != "web":
         _validate_agent_paths(app, agent, logging_dict)
 
-    if retention["audit_retention_days"] < retention["ticket_retention_days"]:
-        raise ConfigError(section="retention", key="audit_retention_days",
-                         reason="audit_retention_days (%d) deve ser >= ticket_retention_days (%d)" % (
-                             retention["audit_retention_days"], retention["ticket_retention_days"]))
     if app["sss_env"] != "DEV" and oracle["user"].upper() == oracle["owner"].upper():
         # CR-008, R-29: a conta da aplicacao nunca e a dona do esquema fora de DEV (D1b do CR-007).
         raise ConfigError(section="oracle", key="user",
                          reason="Fora de DEV, a conta da aplicacao deve ser diferente do owner do esquema")
-    purge = retention["purge_user"]
-    if not purge:
-        # Em DEV, purge_user vazio significa purge desligado (scripts/purge.py recusa rodar; README §12.1).
-        # CR-028: o web nao roda o purge.
-        if app["sss_env"] != "DEV" and role != "web":
-            raise ConfigError(section="retention", key="purge_user", reason="Obrigatorio fora de DEV")
-    elif purge.upper() in (oracle["user"].upper(), oracle["owner"].upper()):
-            raise ConfigError(section="retention", key="purge_user",
-                             reason="A conta de purge deve ser diferente da conta do processo e do owner")
 
 
 def _validate_agent_paths(app, agent, logging_dict):
@@ -880,18 +857,13 @@ class EnvironmentSecret(object):
 class Secrets(object):
     """Container seguro de segredos carregados do secrets.cfg."""
 
-    __slots__ = ("_oracle", "_web", "_environments", "_purge", "_monitor")
+    __slots__ = ("_oracle", "_web", "_environments", "_monitor")
 
-    def __init__(self, oracle_password, cookie_key, environments, purge_password=None, monitor=None):
+    def __init__(self, oracle_password, cookie_key, environments, monitor=None):
         self._oracle = OracleSecret(oracle_password) if oracle_password is not None else None
         self._web = WebSecret(cookie_key) if cookie_key is not None else None
         self._environments = dict(environments)
-        self._purge = OracleSecret(purge_password) if purge_password is not None else None
         self._monitor = monitor  # EnvironmentSecret com user e password (CR-008, E3)
-
-    @property
-    def purge_password(self):
-        return self._purge.password if self._purge else None
 
     @property
     def oracle(self):
@@ -971,12 +943,22 @@ def _other_role_section(role, section_name, env):
     _log.warning("secrets.cfg: %s; ignorada fora de HML/PROD", reason)
 
 
-def _monitor_secrets(cp, env):
+def _monitor_secrets(cp, env, cfg=None):
     """Papel monitor (README §4.1; CR-008, E3; F9.1b): so [monitor]; [web] proibida; as demais secoes do arquivo
-    do servidor sao ignoradas, sem validar nem registrar no masking os segredos de outros papeis."""
+    do servidor sao ignoradas, sem validar nem registrar no masking os segredos de outros papeis.
+
+    CR-030 (P1): com sss_env = DEV e sem [monitor], a monitoracao usa a conta do [oracle] (ambiente com um
+    usuario de banco so)."""
     if "web" in cp.sections():
         _other_role_section("monitor", "web", env)
     if "monitor" not in cp.sections():
+        user = getattr(getattr(cfg, "oracle", None), "user", None)
+        password = (cp["oracle"].get("password") or "").strip() if "oracle" in cp.sections() else ""
+        if env == "DEV" and user and password:
+            from sss.core.masking import register_secret
+            register_secret(password)
+            return Secrets(oracle_password=None, cookie_key=None, environments={},
+                           monitor=EnvironmentSecret(user=user, password=password))
         raise ConfigError(section="monitor", key=None, reason="Secao [monitor] obrigatoria ausente em secrets.cfg")
     values = {}
     for key in ("user", "password"):
@@ -987,7 +969,7 @@ def _monitor_secrets(cp, env):
             raise ConfigError(section="monitor", key=key, reason="%s nao pode ser vazio em [monitor]" % key)
     from sss.core.masking import register_secret
     register_secret(values["password"])
-    return Secrets(oracle_password=None, cookie_key=None, environments={}, purge_password=None,
+    return Secrets(oracle_password=None, cookie_key=None, environments={},
                     monitor=EnvironmentSecret(user=values["user"], password=values["password"]))
 
 
@@ -1041,7 +1023,7 @@ def load_secrets(path, cfg=None, sss_env=None, data_backend=None, role="web"):
         raise ConfigError(reason="Erro ao ler arquivo de segredos %s: %s" % (path, e))
 
     if role == "monitor":
-        return _monitor_secrets(cp, env)
+        return _monitor_secrets(cp, env, cfg)
 
     # [web] cookie_key: obrigatorio no papel web e proibido no agente (README §4.1)
     cookie_key = None
@@ -1072,15 +1054,9 @@ def load_secrets(path, cfg=None, sss_env=None, data_backend=None, role="web"):
         if not is_dev_fake:
             raise ConfigError(section="oracle", key=None, reason="Secao [oracle] obrigatoria ausente em secrets.cfg")
 
-    # [purge] password: so no papel agente (o purge.py roda no servidor do agente)
-    purge_password = None
+    # [purge]: o purge foi retirado (CR-030); a secao antiga so gera aviso, e o valor nunca e lido.
     if "purge" in cp.sections():
-        if role != "agent":
-            _other_role_section(role, "purge", env)
-        else:
-            purge_password = (cp["purge"].get("password") or "").strip() or None
-            if purge_password is None:
-                raise ConfigError(section="purge", key="password", reason="password do purge nao pode ser vazio")
+        _log.warning("secrets.cfg: secao [purge] ignorada: %s; apague a secao", _NO_PURGE)
 
     # [monitor]: so no papel monitor (CR-008, E3), tratado em _segredos_monitor
     if "monitor" in cp.sections():
@@ -1123,7 +1099,7 @@ def load_secrets(path, cfg=None, sss_env=None, data_backend=None, role="web"):
                              reason="Ambientes atendidos sem credencial em secrets.cfg: %s" % ", ".join(missing))
 
     secrets_value = Secrets(oracle_password=oracle_password, cookie_key=cookie_key, environments=environments,
-                        purge_password=purge_password, monitor=None)
+                        monitor=None)
 
     # Import tardio para nao acoplar carregar() ao masking. Sem masking.py a carga de
     # segredos falha (ImportError): segredo sem mascaramento nunca chega aos logs (AGENTS §3.3).
@@ -1133,8 +1109,6 @@ def load_secrets(path, cfg=None, sss_env=None, data_backend=None, role="web"):
         register_secret(oracle_password)
     if cookie_key:
         register_secret(cookie_key)
-    if purge_password:
-        register_secret(purge_password)
     for env_name in environments.values():
         register_secret(env_name.password)
 
@@ -1227,7 +1201,7 @@ _SECRETS_CACHE = None
 def get_secrets(log_name=None, role="web"):
     """Retorna os segredos validados de [secrets] secrets_file, carregados uma unica vez por processo.
 
-    papel: 'web' (nó web) ou 'agent' (daemon e purge), README §4.1.
+    papel: 'web' (nó web) ou 'agent' (daemon), README §4.1.
     Com log_name, uma falha e registrada em CRITICAL (sem valores de segredo) antes de ser relancada.
     """
     global _SECRETS_CACHE

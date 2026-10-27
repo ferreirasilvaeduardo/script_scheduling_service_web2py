@@ -88,7 +88,7 @@ class TestPackageLayout(unittest.TestCase):
     def test_nomes_antigos_registrados(self):
         """Regressao do CR-022b8: web e webapp (022b7) e as ferramentas de scripts/ (022b8) sao nomes movidos."""
         moved = _moved_modules()
-        for name in ("web", "webapp", "controllers", "repo_oracle", "health", "purge", "init_db", "run_web"):
+        for name in ("web", "webapp", "controllers", "repo_oracle", "health", "init_db", "run_web"):
             self.assertIn(name, moved)
 
     def test_detector_pega_import_curto(self):

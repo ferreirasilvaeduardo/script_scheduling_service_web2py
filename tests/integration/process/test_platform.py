@@ -297,18 +297,11 @@ class TestOutputDir(unittest.TestCase):
         fake.wait.assert_not_called()
         self.assertEqual((proc.pid, proc.identity, proc.exec_user), (4400, 55, "exec1"))
 
-    def test_limpar_e_purgar_pelo_helper(self):
-        with mock.patch.object(posix, "_run_short", return_value=(0, "removidas=3\n")) as ex:
+    def test_limpar_pelo_helper(self):
+        with mock.patch.object(posix, "_run_short", return_value=(0, "")) as ex:
             os_platform.clean_output(self.base, self.rel, "exec1")
-            self.assertEqual(os_platform.purge_output(self.base, 7, "exec1"), 3)
-            self.assertEqual(os_platform.purge_output(self.base, 7, "exec1", count_only=True), 3)
         self.assertEqual(ex.call_args_list[0][0][0][-3:], ["clean-output", self.base, self.rel])
-        self.assertEqual(ex.call_args_list[1][0][0][-3:], ["purge-output", self.base, "7"])
-        self.assertEqual(ex.call_args_list[2][0][0][-4:], ["purge-output", self.base, "7", "count"])
-        for return_value in ((2, ""), (0, "sem contagem")):
-            with mock.patch.object(posix, "_run_short", return_value=return_value):
-                with self.assertRaises(RuntimeError):
-                    os_platform.purge_output(self.base, 7, "exec1")
+        self.assertFalse(hasattr(os_platform, "purge_output"), "CR-030: sem purge")
         with mock.patch.object(posix, "_run_short", return_value=(4, "")):
             with self.assertRaises(RuntimeError):
                 os_platform.clean_output(self.base, self.rel, "exec1")
@@ -333,7 +326,6 @@ class TestOutputDir(unittest.TestCase):
             self.assertEqual(zipfile.ZipFile(io.BytesIO(f.read())).read("r.txt"), b"resultado")
         os_platform.clean_output(self.base, self.rel)
         self.assertFalse(os.path.exists(dir_value))
-        self.assertEqual(os_platform.purge_output(self.base, 7), 0)
 
     def test_cr014_dev_cria_a_entrada_e_preserva_a_existente(self):
         base = os.path.join(self.root, "input", "producao")
@@ -699,7 +691,7 @@ class TestInterface(unittest.TestCase):
                      "process_exists", "reopen_group", "lock_instance", "release_instance",
                      "is_privileged_user", "validate_restricted_file", "validate_restricted_dir",
                      "validate_script_path", "final_path", "create_work_dir", "install_stop_handler",
-                     "create_output_dir", "start_pack", "clean_output", "purge_output",
+                     "create_output_dir", "start_pack", "clean_output",
                      "validate_output_dirs", "set_helper"):
             self.assertTrue(hasattr(os_platform, name), name)
         self.assertIn(os_platform.NAME, ("LINUX", "UNIX"))

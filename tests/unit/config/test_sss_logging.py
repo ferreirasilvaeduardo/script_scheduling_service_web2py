@@ -20,17 +20,13 @@ class TestSSSLogging(unittest.TestCase):
         self.tmp_dir = tempfile.mkdtemp(prefix="sss_test_logging_")
         self.addCleanup(shutil.rmtree, self.tmp_dir, True)
 
-    def _create_cfg(self, log_dir, max_bytes=1048576, retention_days=30, level="INFO"):
+    def _create_cfg(self, log_dir, max_bytes=1048576, level="INFO"):
         logging_dict = {
             "log_dir": log_dir,
             "level": level,
             "app_log_max_bytes": max_bytes,
-            "app_log_retention_days": retention_days,
             "max_log_size_bytes": 5242880,
             "max_local_log_size_bytes": 52428800,
-            "local_log_retention_days": 30,
-            "output_retention_days": 7,
-            "script_work_retention_days": 7,
         }
         logging_cfg = sss_config.LoggingConfig(**logging_dict)
         cfg = mock.MagicMock()
@@ -78,7 +74,6 @@ class TestSSSLogging(unittest.TestCase):
             log_dir=log_dir,
             process_name="sss_web",
             max_bytes=300,
-            retention_days=30,
             pid=9999
         )
         self.addCleanup(handler.close)
@@ -117,14 +112,13 @@ class TestSSSLogging(unittest.TestCase):
         dt_t0 = datetime.datetime(2026, 10, 16, 8, 30, 0)
         dt_t1 = datetime.datetime(2026, 10, 16, 8, 31, 0)
 
-        with mock.patch("sss.config.sss_logging.datetime.datetime") as mock_dt, mock.patch("sss.config.log_paths.datetime.datetime", mock_dt):
+        with mock.patch("sss.config.sss_logging.datetime.datetime") as mock_dt:
             mock_dt.now.return_value = dt_t0
             mock_dt.side_effect = lambda *args, **kw: datetime.datetime(*args, **kw)
             handler = sss_logging.AppLogRotatingHandler(
                 log_dir=log_dir,
                 process_name="sss_scheduler",
                 max_bytes=200,
-                retention_days=30,
                 pid=1234
             )
             self.addCleanup(handler.close)
@@ -150,51 +144,6 @@ class TestSSSLogging(unittest.TestCase):
             self.assertTrue(path_1.endswith("sss_scheduler_1234.log"))
             self.assertTrue(os.path.exists(path_0))
             self.assertTrue(os.path.exists(path_1))
-
-    def test_retencao_na_subida_e_na_troca(self):
-        """CR-005 R-d: apaga pastas internal/app/AAAA/MM/DD anteriores a retention_days dias."""
-        log_dir = os.path.join(self.tmp_dir, "logs")
-        today = datetime.datetime(2026, 10, 16, 12, 0, 0)
-
-        # Cria estrutura de pastas antigas e recentes em log_dir/internal/app/
-        # Limite de 30 dias a partir de 2026-10-16 e 2026-09-16
-        dir_expired_1 = os.path.join(log_dir, "internal", "app", "2026", "08", "15", "10", "00")
-        dir_expired_2 = os.path.join(log_dir, "internal", "app", "2026", "09", "15", "23", "59")
-        dir_limit = os.path.join(log_dir, "internal", "app", "2026", "09", "16", "00", "00")
-        dir_recent = os.path.join(log_dir, "internal", "app", "2026", "10", "10", "12", "00")
-        dir_not_date = os.path.join(log_dir, "internal", "app", "2026", "temp", "teste")
-
-        for p in (dir_expired_1, dir_expired_2, dir_limit, dir_recent, dir_not_date):
-            os.makedirs(p, exist_ok=True)
-            with open(os.path.join(p, "dummy.log"), "w", encoding="utf-8") as f:
-                f.write("log antigo")
-
-        with mock.patch("sss.config.sss_logging.datetime.datetime") as mock_dt, mock.patch("sss.config.log_paths.datetime.datetime", mock_dt):
-            mock_dt.now.return_value = today
-            mock_dt.side_effect = lambda *args, **kw: datetime.datetime(*args, **kw)
-
-            # Subida do handler deve executar a retencao
-            handler = sss_logging.AppLogRotatingHandler(
-                log_dir=log_dir,
-                process_name="sss_web",
-                max_bytes=1048576,
-                retention_days=30,
-                pid=5000
-            )
-            self.addCleanup(handler.close)
-
-            # Expiradas devem ter sido apagadas
-            self.assertFalse(os.path.exists(dir_expired_1))
-            self.assertFalse(os.path.exists(dir_expired_2))
-            # Mes 08 ficou vazio, entao o diretorio do mes 08 deve sumir
-            self.assertFalse(os.path.exists(os.path.join(log_dir, "internal", "app", "2026", "08")))
-
-            # Limite (30 dias exatos) e recente devem permanecer
-            self.assertTrue(os.path.exists(dir_limit))
-            self.assertTrue(os.path.exists(dir_recent))
-
-            # Pasta sem formato de data (temp) deve ser ignorada
-            self.assertTrue(os.path.exists(dir_not_date))
 
     def test_todas_as_pastas_novas_com_0750_sob_umask_077(self):
         """Regressao (README §13): app/, ano, mes, dia, hora e minuto com 0750, mesmo com a umask 077 do launcher."""
@@ -243,24 +192,16 @@ class TestSSSLogging(unittest.TestCase):
         self.assertIn("[agent=srv-test-01] [ticket=-] [action=-] linha sem contexto", rows[0])
         self.assertIn("[agent=agt-explicito] [ticket=7] [action=CLAIM] com contexto", rows[1])
 
-    def test_falha_na_retencao_vira_warn_no_log(self):
-        """Regressao (AGENTS §6): falha da retencao nao e engolida; vira WARN [action=RETENCAO]."""
+    def test_cr030_sem_retencao_automatica(self):
+        """CR-030: o log da aplicacao nao apaga nada (limpeza manual, README §11.3)."""
         log_dir = os.path.join(self.tmp_dir, "logs")
         old = os.path.join(log_dir, "internal", "app", "2000", "01", "01", "00", "00")
         os.makedirs(old)
-        with mock.patch("sss.config.log_paths.shutil.rmtree", side_effect=PermissionError(13, "Permission denied")):
-            logger = sss_logging.configure("sss_web", self._create_cfg(log_dir))
+        logger = sss_logging.configure("sss_web", self._create_cfg(log_dir))
         self.addCleanup(lambda: [h.close() for h in list(logger.handlers)])
         logger.info("primeira linha")
-        logger.handlers[0].flush()
-        with open(logger.handlers[0].baseFilename, encoding="utf-8") as f:
-            rows = f.read().splitlines()
-        self.assertEqual(len(rows), 2)
-        self.assertIn(" WARNING ", rows[0])
-        self.assertIn("[agent=srv-test-01] [ticket=-] [action=RETENCAO]", rows[0])
-        self.assertIn(os.path.join(log_dir, "internal", "app", "2000", "01", "01"), rows[0])
-        self.assertIn("primeira linha", rows[1])
         self.assertTrue(os.path.isdir(old))
+        self.assertFalse(hasattr(logger.handlers[0], "executar_retencao"))
 
     def test_reconfigurar_idempotente_nao_duplica_handlers(self):
         """Chamar configurar() varias vezes nao acumula AppLogRotatingHandler."""

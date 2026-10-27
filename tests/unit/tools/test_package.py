@@ -33,6 +33,7 @@ class TestPack(unittest.TestCase):
         files = {
             "bin/sss-web.sh": "#!/bin/bash\n", "bin/sss-scheduler.sh": "#!/bin/bash\n",
             "bin/sss-stop.sh": "#!/bin/bash\n", "bin/sss-update.sh": "#!/bin/bash\n",
+            "bin/sss-keepalive.sh": "#!/bin/bash\n",
             "bin/sss-helper": "#!/usr/bin/env python3\n",
             "bin/start_local.sh": "#!/bin/bash\n", "CLAUDE.md": "x", "parameters_8000.py": "x",
             "src/sss/web/controllers/default.py": "# default\n", "src/sss/web/controllers/dev.py": "# dev\n",
@@ -102,6 +103,7 @@ class TestPack(unittest.TestCase):
         self.assertEqual((members["bin/sss-helper"].uid, members["scripts/run_web.py"].mode),
                          (0, 0o644))
         for rel in ("bin/sss-web.sh", "bin/sss-scheduler.sh", "bin/sss-stop.sh", "bin/sss-update.sh",
+                    "bin/sss-keepalive.sh",
                     "src/sss/web/controllers/default.py", "scripts/run_web.py",
                     "src/sss/web/app/bootstrap.py", "src/sss/web/templates/layout.html",
                     "src/sss/web/static/css/sss.css", "scripts/purge.py",
@@ -217,7 +219,7 @@ class TestPack(unittest.TestCase):
         self.assertFalse([a for a in files if a.startswith(("src/sss/persistence/fake/", "src/sss/web/templates/dev/"))
                           or a.endswith("controllers/dev.py")
                           or a.startswith(("tests/", "tools/", "scripts/test_")) or a.endswith("instance/config.ini")])
-        self.assertIn("src/sss/persistence/oracle/purge.py", files)
+        self.assertIn("src/sss/persistence/oracle/health.py", files)
         self.assertIn("src/sss/web/templates/layout.html", files)
         self.assertIn("src/sss/web/static/css/sss.css", files)
         self.assertIn("scripts/run_web.py", files)

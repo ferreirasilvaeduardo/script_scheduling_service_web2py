@@ -558,31 +558,13 @@ class TestSssHelper(unittest.TestCase):
         self.assertEqual(self._helper_output("clean-output", base, rel)[0], 0)
         self.assertFalse(os.path.exists(dir_value))
         self.assertTrue(os.path.exists(os.path.join(outside, "manter.txt")))
-        self.assertTrue(os.path.isdir(os.path.dirname(dir_value)), "as pastas acima ficam para o purge")
+        self.assertTrue(os.path.isdir(os.path.dirname(dir_value)), "as pastas acima ficam (limpeza manual, README §11.3)")
         self.assertEqual(self._helper_output("clean-output", base, rel)[0], 0, "ja removida")
 
-    def test_purgar_saida_pela_data_do_caminho(self):
-        helper = _load_helper()
-        base = self._output_base()
-        old = self._fill(base, "carga/2026/09/01/10/00/ticket_1", {"a": b"1"})
-        new = self._fill(base, "carga/2026/10/19/10/00/ticket_2", {"a": b"1"})
-        odd = os.path.join(base, "carga", "2026", "09", "lixo")
-        os.makedirs(odd)
-        import datetime
-        import io
-        count = io.StringIO()
-        with mock.patch.object(helper.sys, "stdout", count):  # --dry-run do purge: so conta
-            self.assertEqual(helper._purge_output(base, 7, today=datetime.date(2026, 10, 20), count_only=True), 0)
-        self.assertEqual(count.getvalue(), "removidas=1\n")
-        self.assertTrue(os.path.exists(old), "contar nao remove")
-        output = io.StringIO()
-        with mock.patch.object(helper.sys, "stdout", output):
-            self.assertEqual(helper._purge_output(base, 7, today=datetime.date(2026, 10, 20)), 0)
-        self.assertEqual(output.getvalue(), "removidas=1\n")
-        self.assertFalse(os.path.exists(os.path.join(base, "carga", "2026", "09", "01")))
-        self.assertTrue(os.path.exists(new))
-        self.assertTrue(os.path.isdir(odd), "fora do formato e ignorado")
-        self.assertFalse(os.path.exists(old))
+    def test_cr030_sem_purge_output(self):
+        """CR-030: o subcomando purge-output saiu (limpeza manual, README §11.3)."""
+        code, _out = self._helper_output("purge-output", self._output_base(), "7")[:2]
+        self.assertEqual(code, 2)
 
     def test_helper_compila_e_nao_importa_a_aplicacao(self):
         with open(HELPER, encoding="utf-8") as f:

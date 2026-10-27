@@ -38,9 +38,6 @@ _SQL_ENVIRONMENTS = "SELECT name FROM {env} WHERE active = 'Y' ORDER BY name"
 # Fila vencida inteira, so no indice ix_tbsss_tck_queue (mesma faixa do SQL_QUEUE).
 _SQL_QUEUE_OVERDUE = ("SELECT COUNT(*), MIN(" + _START + ") FROM {tck} WHERE status = 'PENDING' AND "
                      + _START + " <= :now")
-# ator na coluna de ix_tbsss_aud_actor: faixa so das linhas do purge.
-_SQL_LAST_PURGE = ("SELECT MAX(created_at) FROM {aud} WHERE actor = 'SYSTEM:purge' AND action = 'PURGE'"
-                     " AND created_at >= :cutoff")
 _SQL_VERSION = "SELECT schema_version FROM {ctl} WHERE id = 1"
 
 
@@ -78,7 +75,7 @@ class RepoHealth(object):
         self._sql = dict((name, template.format(**idents)) for name, template in (
             ("agents", _SQL_AGENTS), ("environments", _SQL_ENVIRONMENTS), ("queue", SQL_QUEUE),
             ("overdue_queue", _SQL_QUEUE_OVERDUE), ("running_no_pid", SQL_RUNNING_NO_PID),
-            ("purge", _SQL_LAST_PURGE), ("version", _SQL_VERSION)))
+            ("version", _SQL_VERSION)))
 
     @classmethod
     def from_config(cls, cfg):
@@ -117,10 +114,6 @@ class RepoHealth(object):
     def running_without_pid(self, conn, now, minutes):
         rows = self._ler(conn, "running_no_pid", {"cutoff": now - datetime.timedelta(minutes=minutes)})
         return [dict(zip(COLS_NO_PID, r)) for r in rows]
-
-    def last_purge(self, conn, now, days):
-        """created_at do PURGE mais recente desde agora - dias (inclusive 0 linhas, CR-008 R-16), ou None."""
-        return self._ler(conn, "purge", {"cutoff": now - datetime.timedelta(days=days)})[0][0]
 
     def schema_version(self, conn):
         rows = self._ler(conn, "version")

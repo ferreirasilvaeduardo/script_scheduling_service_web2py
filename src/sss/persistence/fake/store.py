@@ -53,7 +53,7 @@ class FakeDataStore(object):
         self.input_delivery = collections.OrderedDict()
         self.input_listing = collections.OrderedDict()
         self.audit = collections.OrderedDict()
-        # Linha unica de controle (tabela 17, CR-007 D4): versao do esquema e concessao do purge.
+        # Linha unica de controle (tabela 17, CR-007 D4): versao do esquema.
         self.control = collections.OrderedDict()
 
         self.seqs = collections.defaultdict(int)

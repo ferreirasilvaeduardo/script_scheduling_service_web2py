@@ -88,7 +88,7 @@ def download(delivery, conn, repo):
             try:
                 part = repo.read_content(delivery.upload_id, delivery.offset, PART_SIZE, conn=conn)
             except RepoNotFound:
-                # Conteudo ja esvaziado pelo purge ou envio removido: nada a gravar.
+                # Conteudo ja esvaziado (limpeza manual) ou envio removido: nada a gravar.
                 delivery.fail("ERROR")
                 return
             if not part:

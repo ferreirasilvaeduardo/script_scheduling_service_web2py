@@ -368,8 +368,6 @@ COLUMN_COMMENTS = {
         "schema_version": "Numero da versao estrutural do banco de dados atualmente instalada",
         "version_applied_at": "Data e hora de aplicacao da versao de esquema atual",
         "version_applied_by": "Identificador de quem realizou a aplicacao do esquema",
-        "purge_owner": "Identificador do no que detem a concessao de purga de dados",
-        "purge_lease_until": "Data e hora limite de expiracao da concessao de purga",
     },
     "ticket_output": {
         "id": "Identificador unico sequencial da saida (chave primaria)",
@@ -391,7 +389,7 @@ COLUMN_COMMENTS = {
         "sha256": "Hash SHA-256 do conteudo, conferido pelo agente na entrega",
         "replace_existing": "Se pode substituir um arquivo com o mesmo nome (Y ou N)",
         "source_ip": "Endereco IP de quem enviou",
-        "content": "Conteudo do arquivo (BLOB), esvaziado pelo purge depois das entregas",
+        "content": "Conteudo do arquivo (BLOB), mantido ate a limpeza manual (README 11.3)",
     },
     "input_delivery": {
         "id": "Identificador unico sequencial da entrega (chave primaria)",
@@ -699,14 +697,14 @@ def build_ddl_script(owner, prefix, lob_storage="SECUREFILE", include_comments=T
     return "\n".join(rows)
 
 
-GRANT_ROLES = ("web", "agent", "purge", "monitor")
+GRANT_ROLES = ("web", "agent", "monitor")  # CR-030: sem o papel purge
 
 
 def build_grants_by_role(owner, prefix, user_roles):
     """Gera comandos GRANT para os usuarios informados por papel (README §11.1).
 
     user_roles: dict com mapeamento papel -> usuario Oracle, ex:
-      {'web': 'sss_web', 'agent': 'sss_agente', 'purge': 'sss_purge', 'monitor': 'sss_monitor'}
+      {'web': 'sss_web', 'agent': 'sss_agente', 'monitor': 'sss_monitor'}
 
     Nunca concede a PUBLIC. A conta de cada papel e validada como identificador Oracle (entra no
     texto do GRANT). Papel sem conta ou cuja conta e a dona do esquema nao recebe GRANT: o owner ja
@@ -845,30 +843,7 @@ def build_grants_by_role(owner, prefix, user_roles):
                 owner, schema[ent]["sequence"], usr_agt
             ))
 
-    # 3. PAPEL: purge
-    usr_purge = user_roles.get("purge")
-    if usr_purge:
-        commands.append("GRANT SELECT, DELETE ON {}.{} TO {};".format(
-            owner, schema["tickets"]["tabela"], usr_purge
-        ))
-        commands.append("GRANT SELECT, INSERT, DELETE ON {}.{} TO {};".format(
-            owner, schema["audit"]["tabela"], usr_purge
-        ))
-        commands.append("GRANT SELECT, UPDATE (purge_owner, purge_lease_until) ON {}.{} TO {};".format(
-            owner, schema["control"]["tabela"], usr_purge
-        ))
-        commands.append("GRANT SELECT ON {}.{} TO {};".format(
-            owner, schema["audit"]["sequence"], usr_purge
-        ))
-        # Entrada (CR-020b): esvaziar o conteudo entregue e apagar envios antigos (as entregas vao em cascata)
-        commands.append("GRANT SELECT, UPDATE (content), DELETE ON {}.{} TO {};".format(
-            owner, schema["input_upload"]["tabela"], usr_purge
-        ))
-        commands.append("GRANT SELECT ON {}.{} TO {};".format(
-            owner, schema["input_delivery"]["tabela"], usr_purge
-        ))
-
-    # 4. PAPEL: monitor (CR-008, E3/R-04)
+    # 3. PAPEL: monitor (CR-008, E3/R-04)
     # Somente SELECT nas 7 tabelas que health.py consulta, zero sequences
     usr_mon = user_roles.get("monitor")
     if usr_mon:

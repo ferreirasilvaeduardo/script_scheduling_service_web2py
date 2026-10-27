@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """Verificacao de saude no padrao Nagios (README §13; F9.1b; CR-007 R-18; CR-008 E3, R-15, R-16).
 
-Roda com a conta so de leitura do papel monitor ([monitor] user e password no secrets.cfg; a conta do agente
-nao le tbsss_audit). Uso:
+Roda com a conta so de leitura do papel monitor ([monitor] user e password no secrets.cfg). CR-030 (P1): com
+sss_env = DEV e sem [monitor], usa a conta do [oracle] (ambiente com um usuario de banco so). Uso:
 
-    python scripts/health.py [--config <config.ini>] [--no-pid-min 2] [--queue-warn 500] [--queue-crit 5000]
-                            [--wait-warn-min 30] [--wait-crit-min 120] [--purge-days 2]
+    python scripts/health.py --name <nome> | --config <config.ini> [--no-pid-min 2] [--queue-warn 500]
+                            [--queue-crit 5000] [--wait-warn-min 30] [--wait-crit-min 120]
 
 Saida: a primeira linha e "SSS <ESTADO> - <n> problema(s) | <dados de desempenho>", depois uma linha por
 problema. Codigo: 0 OK, 1 WARNING, 2 CRITICAL, 3 UNKNOWN (configuracao, segredos, conexao ou erro de banco).
@@ -51,7 +51,6 @@ class Check(object):
         self._queue(agents, now)
         self._no_pid(now)
         self._config(agents)
-        self._purge(now)
         return max([level for level, _t in self.problems] or [OK])
 
     def _version(self):
@@ -121,10 +120,6 @@ class Check(object):
                 self._problem(WARNING, "agente %s com configuracao divergente: %s (local: %s)" % (
                     ag["code"], ag["critical_config"], local))
 
-    def _purge(self, now):
-        if self.repo.last_purge(self.conn, now, self.args.purge_dias) is None:
-            self._problem(WARNING, "nenhum PURGE auditado nos ultimos %d dias (README §11.3)" % self.args.purge_dias)
-
     def output(self, code):
         n = len(self.problems)
         rows = ["SSS %s - %d problema%s | %s" % (STATES[code], n, "" if n == 1 else "s",
@@ -143,7 +138,6 @@ def _arguments(argv):
     parser.add_argument("--queue-crit", dest="fila_crit", type=int, default=5000, help="PENDING vencidos para CRITICAL")
     parser.add_argument("--wait-warn-min", dest="espera_warn_min", type=int, default=30, help="espera maxima (min) para WARNING")
     parser.add_argument("--wait-crit-min", dest="espera_crit_min", type=int, default=120, help="espera maxima (min) para CRITICAL")
-    parser.add_argument("--purge-days", dest="purge_dias", type=int, default=2, help="dias sem PURGE auditado para WARNING")
     args = parser.parse_args(argv)
     try:
         args.config = sss_config.config_path(args.config, args.name)

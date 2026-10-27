@@ -22,6 +22,3 @@ exec_users = PRODUCAO=sssprd      ; usuario do SO por ambiente (obrigatorio fora
 env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
 ; helper_path = ...               ; padrao: ../sss-root/bin/sss-helper, ao lado da raiz (pasta so do root)
 ; output_dir =                    ; escrito vazio desliga a tela de Saidas (o padrao e var/agente0001/output)
-
-[retention]
-purge_user = sss_purge            ; conta Oracle do papel purge (obrigatoria fora de DEV)

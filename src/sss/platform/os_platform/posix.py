@@ -23,7 +23,7 @@ _log = logging.getLogger("sss_scheduler")
 
 NAME = "UNIX" if not sys.platform.startswith("linux") else "LINUX"
 
-# Caminho do helper: [agent] helper_path (CR-028), aplicado por set_helper na subida do agente e do purge.
+# Caminho do helper: [agent] helper_path (CR-028), aplicado por set_helper na subida do agente.
 # O valor abaixo so vale ate essa chamada.
 HELPER = "/opt/sss/bin/sss-helper"
 SUDO = "/usr/bin/sudo"
@@ -622,19 +622,6 @@ def clean_output(base, relative, exec_user=None):
     code, _output = _run_short(_helper_argv("clean-output", [base, relative], exec_user))
     if code != 0:
         raise RuntimeError("helper clean-output falhou (codigo %s)" % code)
-
-
-def purge_output(base, days, exec_user=None, count_only=False):
-    """Retencao das pastas de saida (purge.py, README §11.3): devolve quantas pastas de minuto sairam (ou, com
-    contar=True, quantas sairiam: o --dry-run, sem remover nada)."""
-    args = [base, int(days)] + (["count"] if count_only else [])
-    code, output = _run_short(_helper_argv("purge-output", args, exec_user))
-    if code != 0:
-        raise RuntimeError("helper purge-output falhou (codigo %s)" % code)
-    for line in output.splitlines():
-        if line.startswith("removidas="):
-            return int(line.split("=", 1)[1])
-    raise RuntimeError("helper purge-output sem contagem")
 
 
 def validate_output_dirs(user_dirs):

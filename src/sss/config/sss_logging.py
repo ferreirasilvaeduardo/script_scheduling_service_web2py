@@ -77,19 +77,17 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
     - Caminho: log_dir/app/AAAA/MM/DD/HH/MI/<log_name>_<PID>[_<n>].log
     - Nasce na pasta do minuto da subida pelo relogio local do processo.
     - Troca de arquivo ao atingir max_bytes, abrindo no minuto atual com sufixo _<n> em colisao.
-    - Executa retencao apagando pastas app/AAAA/MM/DD anteriores a retention_days dias na subida
-      e a cada troca de arquivo.
+    - Nao apaga nada: a limpeza dos logs e manual (README §11.3, CR-030).
     - Diretorios sao criados com 0o750 e arquivos novos com 0o640.
     - Falhas de retencao, chmod ou fechamento viram WARN no proprio arquivo, antes do proximo registro.
     """
 
-    def __init__(self, log_dir, process_name, max_bytes, retention_days,
+    def __init__(self, log_dir, process_name, max_bytes,
                  encoding="utf-8", pid=None, delay=False, default_agent="-"):
         self.log_dir = log_dir
         self.process_name = process_name[:-4] if process_name.endswith(".log") else process_name
         self.max_bytes = max_bytes
         self.maxBytes = max_bytes
-        self.retention_days = retention_days
         self.pid = pid if pid is not None else os.getpid()
         self.encoding = encoding
         self._delay = delay
@@ -101,9 +99,6 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
         )
         _ensure_directory(os.path.dirname(path_initial), self._warnings)
 
-        # Retencao na subida (CR-005, R-d)
-        self.executar_retencao(now)
-
         super(AppLogRotatingHandler, self).__init__(
             path_initial, mode="a", encoding=encoding, delay=delay
         )
@@ -113,12 +108,6 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
     def registrar_aviso(self, action, message):
         """Guarda um WARN para gravar neste arquivo antes do proximo registro."""
         self._warnings.append((action, message))
-
-    def executar_retencao(self, ref_dt=None):
-        failures = []
-        log_paths.clean_app_retention(self.log_dir, self.retention_days, ref_dt=ref_dt, failures=failures)
-        for failure in failures:
-            self.registrar_aviso("RETENCAO", "retencao do log da aplicacao nao removeu %s" % failure)
 
     def _open(self):
         _ensure_directory(os.path.dirname(self.baseFilename), self._warnings)
@@ -160,7 +149,6 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
             self.log_dir, self.process_name, self.pid, now
         )
         self.baseFilename = os.path.abspath(new_path)
-        self.executar_retencao(now)
         if not self.delay:
             self.stream = self._open()
 
@@ -197,7 +185,6 @@ def configure(log_name, cfg):
         log_dir=log_dir,
         process_name=log_name,
         max_bytes=cfg.logging.app_log_max_bytes,
-        retention_days=cfg.logging.app_log_retention_days,
         encoding="utf-8",
         default_agent=default_agent,
     )

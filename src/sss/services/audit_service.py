@@ -21,6 +21,8 @@ from sss.services.admin_crud import AccessDenied  # noqa: F401  (reexportado par
 FEATURE = "VIEW_AUDIT"
 
 # Catalogo de acoes (README §10, tabela 16), mantido em codigo e sem CK para permitir extensao.
+# PURGE e o ator SYSTEM:purge (ui_helpers) ficam so para exibir as linhas antigas: o purge saiu no CR-030 e a
+# auditoria nunca e apagada pelo sistema.
 ACTIONS = (
     "LOGIN_OK", "LOGIN_FAILED", "LOGIN_LOCKED", "LOGOUT",
     "TICKET_CREATE", "TICKET_CANCEL", "TICKET_RERUN",
@@ -226,7 +228,7 @@ def _mask(text):
 
 
 def csv_row(reg):
-    """Uma linha da exportacao (README §4.4); tambem a do --export-audit do purge (CR-007, R-22)."""
+    """Uma linha da exportacao (README §4.4)."""
     created = reg.get("created_at")
     values = (
         reg["id"],

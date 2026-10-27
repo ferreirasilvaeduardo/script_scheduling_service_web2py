@@ -41,7 +41,7 @@ env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
 ; fence_timeout_s = 90
 ; node_offline_timeout_s = 180
 ; kill_grace_s = 5
-; script_timeout_s = 21600
+; script_timeout_s = 604800
 ; shutdown_mode = TERMINATE         ; TERMINATE | DRAIN
 ; shutdown_grace_s = 30
 ; misfire_policy = RUN_ONCE         ; RUN_ONCE | SKIP
@@ -57,12 +57,8 @@ env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
 log_dir = /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/logs
 ; level = INFO                      ; DEBUG | INFO | WARN | ERROR
 ; app_log_max_bytes = 10485760
-; app_log_retention_days = 30
 ; max_log_size_bytes = 5242880
 ; max_local_log_size_bytes = 52428800
-; local_log_retention_days = 30
-; output_retention_days = 7         ; CR-012: pastas de saida que ficaram no disco
-; script_work_retention_days = 7    ; CR-019: pastas de trabalho dos scripts
 
 [web]
 allowed_origins = http://127.0.0.1:18000   ; ex.: https://sss.empresa.local; lista separada por virgula, validada contra Origin/Referer
@@ -75,10 +71,3 @@ allowed_origins = http://127.0.0.1:18000   ; ex.: https://sss.empresa.local; lis
 ; input_upload_max_bytes = 52428800 ; CR-020d: maior arquivo enviado pela tela de Entrada (1 MiB a 200 MiB)
 ; max_threads = 16                  ; CR-021e: conexoes atendidas ao mesmo tempo (1 a 256)
 ; socket_timeout_s = 30             ; CR-021e: segundos que uma conexao espera o cliente (5 a 300)
-
-[retention]
-purge_user =                      ; conta Oracle do papel purge, ex.: sss_purge (obrigatoria fora de DEV; vazia em DEV = purge desligado)
-; ticket_retention_days = 180
-; audit_retention_days = 730
-; purge_batch_size = 1000
-; input_retention_days = 30

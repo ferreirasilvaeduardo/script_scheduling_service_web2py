@@ -120,7 +120,7 @@ cd /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
 
 **A aplicação usa sempre o Oracle** do `[oracle]` do config do processo (`instance/web0001/` e `instance/agente0001/`: owner e prefixo; F7.3). Por isso, o Python precisa ter o driver Oracle (`oracledb` ou `cx_Oracle`). Nesta máquina, o 3.6.0 e o 3.6.15 têm; no `bin/start_local.sh`, use `PYTHON=~/.pyenv/versions/3.6.15/bin/python3` (o launcher só aceita interpretador chamado `python3` ou `python3.X`, não o `python` do pyenv). Para parar, `Ctrl+C` ou `SIGTERM`: o servidor espera as requisições em andamento até `[web] socket_timeout_s`.
 
-**Estrutura por processo (CR-028):** o DEV tem a mesma estrutura de HOM e PROD (DEPLOYMENT §1), com `<RAIZ>` = `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`: `instance/web0001/` e `instance/agente0001/` (cada um com `config.ini` e `secrets.cfg` `0600`, fora do git), logs do web em `var/web0001/logs` e as pastas do agente em `var/agente0001/` (`logs`, `work`, `output`, `input`, `script_work`). Para criar do zero, copie os modelos de `instance/exemplos/` (`sss_env = DEV`, o `[oracle]` com owner, prefixo e DSN), crie as pastas com `python3 scripts/prepare_dirs.py agente0001` e `python3 scripts/prepare_dirs.py web0001` (no DEV, com o próprio usuário) e siga o `docs/DEPLOYMENT.md` §7. O `bin/start_local.sh` sobe o `web0001` (outro nome com `SSS_WEB_NAME`) e carrega `instance/web0001/web.env` (`SSS_DEV_SEED_PASSWORD` e `SSS_TZ`; `0600`, fora do git). Não há config padrão (CR-029): as ferramentas de banco rodam com `--name agente0001` (`init_db.py`, `generate_sql.py`, `check_env.py`), e a bateria Oracle lê `instance/agente0001/` (config e segredos).
+**Estrutura por processo (CR-028):** o DEV tem a mesma estrutura do PROD (DEPLOYMENT §1; não há HOM, CR-030), com `<RAIZ>` = `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`: `instance/web0001/` e `instance/agente0001/` (cada um com `config.ini` e `secrets.cfg` `0600`, fora do git), logs do web em `var/web0001/logs` e as pastas do agente em `var/agente0001/` (`logs`, `work`, `output`, `input`, `script_work`). Para criar do zero, copie os modelos de `instance/exemplos/` (`sss_env = DEV`, o `[oracle]` com owner, prefixo e DSN), crie as pastas com `python3 scripts/prepare_dirs.py agente0001` e `python3 scripts/prepare_dirs.py web0001` (no DEV, com o próprio usuário) e siga o `docs/DEPLOYMENT.md` §7. O `bin/start_local.sh` sobe o `web0001` (outro nome com `SSS_WEB_NAME`) e carrega `instance/web0001/web.env` (`SSS_DEV_SEED_PASSWORD` e `SSS_TZ`; `0600`, fora do git). Não há config padrão (CR-029): as ferramentas de banco rodam com `--name agente0001` (`init_db.py`, `generate_sql.py`, `check_env.py`), e a bateria Oracle lê `instance/agente0001/` (config e segredos).
 
 A aplicação fica no endereço local `127.0.0.1:8000/script_scheduling_service` (porta 8000, caminho `/script_scheduling_service`).
 
@@ -141,7 +141,7 @@ Para subir como nos servidores via launcher oficial:
 
 **Codificação (CR-007):** o processo web aborta se a codificação do sistema de arquivos não for UTF-8 (`sys.getfilesystemencoding()`). Subindo sem o launcher, exporte antes `LANG=C.UTF-8` e `LC_ALL=C.UTF-8` (ou outro locale UTF-8 da máquina, `locale -a`).
 
-**Segredos em DEV (CR-007, D1b):** o `secrets.cfg` do nó web leva só `[web] cookie_key` (e `[oracle] password` com Oracle). Seções do agente (`[environment:*]`, `[purge]`) no arquivo do web geram WARN em DEV e recusam a subida fora de DEV.
+**Segredos em DEV (CR-007, D1b):** o `secrets.cfg` do nó web leva só `[web] cookie_key` (e `[oracle] password` com Oracle). Seções do agente (`[environment:*]`) no arquivo do web geram WARN em DEV e recusam a subida fora de DEV.
 
 ### Usuários de homologação
 
@@ -239,11 +239,11 @@ Os arquivos precisam de modo `0644` ou `0755` (`chmod -R go-w dev/scripts`). Uma
 
 * As chaves `script_owner_uids` e `ambientes_exigem_hash` foram retiradas (CR-011). Se ainda estiverem no seu `config.ini`, a subida aborta com "Chave removida: ...; apague a linha". Apague a linha.
 * As chaves `base_script_dirs` e a antiga `base_script_dir` foram retiradas (CR-005). Se ainda estiverem no seu `config.ini`, a subida aborta com "Chave desconhecida na secao [agent]". Apague a linha.
-* `app_log_backups` foi trocada por `app_log_retention_days` (dias de retenção do log da aplicação, README §13).
+* `app_log_backups` saiu no CR-005, e a retenção do log da aplicação (`app_log_retention_days`) saiu no CR-030: nada é apagado sozinho (limpeza manual, README §11.3).
 
 ### 6.2 Onde ficam os logs (CR-005)
 
-* **Log da aplicação:** `log_dir/internal/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (CR-009; até o F8.2 era `log_dir/app/...`, que pode ser apagada à mão). O arquivo nasce na pasta do minuto em que o processo sobe e troca para um novo, na pasta do minuto atual, ao atingir `app_log_max_bytes`. As pastas de dia mais antigas que `app_log_retention_days` são apagadas pelo próprio processo. Para seguir o arquivo mais recente:
+* **Log da aplicação:** `log_dir/internal/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (CR-009; até o F8.2 era `log_dir/app/...`, que pode ser apagada à mão). O arquivo nasce na pasta do minuto em que o processo sobe e troca para um novo, na pasta do minuto atual, ao atingir `app_log_max_bytes`. Nada é apagado pelo processo (CR-030; limpeza manual, README §11.3). Para seguir o arquivo mais recente:
 
   ```bash
   LOG_DIR=/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/logs     # o [logging] log_dir do seu config.ini
@@ -256,9 +256,9 @@ Os arquivos precisam de modo `0644` ou `0755` (`chmod -R go-w dev/scripts`). Uma
 ### 6.3 Agente em DEV (a partir do F8, CR-007)
 
 * **Config enxuto (CR-026, CR-028):** o `instance/agente0001/config.ini` do DEV só tem as chaves obrigatórias e as que fogem do padrão (`sss_env = DEV`, `name = agente0001`, `[oracle]`, `environments`, `max_parallel_jobs`, `script_base_dir = <RAIZ>/dev/scripts`, `env_passthrough` e `level = DEBUG`); o do `web0001`, `name`, `[oracle]`, `level` e `allowed_origins`. As pastas saem do nome. Não há `[agent] interpreters`: o agente procura `python3`, `bash`... no `PATH` do terminal que o subiu. O agente sobe pelo nome: `PYTHON=~/.pyenv/versions/3.6.15/bin/python3 bin/sss-scheduler.sh agente0001`. Para parar, `bin/sss-stop.sh agente0001` ou `SIGTERM` no PID do agente: ele encerra pela máquina de estados (README §8.11).
-* **Pasta de trabalho dos scripts (CR-019, CR-028):** no DEV é `var/agente0001/script_work` (padrão do nome; fora do git; criada pelo `prepare_dirs.py`, que no DEV a deixa com `0755`, como as outras pastas do usuário atual). Cada ticket recebe `SSS_WORK_DIR` em `script_work/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, que fica depois do ticket. Com `[retention] purge_user` vazio, o `purge.py` não roda no DEV; a retenção dessa pasta foi conferida chamando a etapa `script_work` do purge diretamente.
+* **Pasta de trabalho dos scripts (CR-019, CR-028):** no DEV é `var/agente0001/script_work` (padrão do nome; fora do git; criada pelo `prepare_dirs.py`, que no DEV a deixa com `0755`, como as outras pastas do usuário atual). Cada ticket recebe `SSS_WORK_DIR` em `script_work/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, que fica depois do ticket até a limpeza manual (README §11.3, CR-030).
 * Em DEV, `[agent] exec_users` pode ficar vazio: o agente executa os scripts com o próprio usuário e registra WARN `SEM_USUARIO_EXECUCAO`. Para testar o helper e o `sudo` como nos servidores, siga o `DEPLOYMENT.md` §8 numa VM.
-* `cron_horizon_days` vai de 1.461 a 36.500 (CR-008, R-32), `max_log_size_bytes` até 64 MiB e `audit_retention_days` de 365 a 3.650 (e não menor que `ticket_retention_days`); o `table_prefix` só aceita minúsculas. Um `config.ini` antigo fora dessas faixas aborta a subida com a chave no log.
+* `cron_horizon_days` vai de 1.461 a 36.500 (CR-008, R-32), `max_log_size_bytes` até 64 MiB; o `table_prefix` só aceita minúsculas. Um `config.ini` antigo fora dessas faixas aborta a subida com a chave no log.
 * **CR-008:** `[web] session_max_hours` (padrão 12) e `[agent] log_dir_min_free_mb` (padrão 1.024; 0 desliga, só em DEV) são opcionais. Em DEV, `[oracle] user` pode ser igual ao `owner`; fora de DEV, é recusado. O `scripts/health.py` lê só a seção `[monitor]` do `secrets.cfg`.
 
 ---

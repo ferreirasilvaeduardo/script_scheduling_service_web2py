@@ -221,7 +221,6 @@ class TestGrantsByRole(unittest.TestCase):
         self.roles = {
             "web": "sss_web",
             "agent": "sss_agente",
-            "purge": "sss_purge",
             "monitor": "sss_monitor",
         }
         self.grants = ddl_builder.build_grants_by_role("openrisow", "tbsss_", self.roles)
@@ -257,7 +256,7 @@ class TestGrantsByRole(unittest.TestCase):
             self.assertTrue(any(t in g for g in grants_monitor), "Faltou GRANT para %s" % t)
 
     def test_grants_da_saida_do_ticket(self):
-        """CR-012: web so le o zip; agente le, inclui e altera (com a sequence); purge e monitor nada."""
+        """CR-012: web so le o zip; agente le, inclui e altera (com a sequence); monitor nada."""
         grants = ddl_builder.build_grants_by_role("openrisow", "tbsss_", dict(self.roles))
         of_output = [g for g in grants if "ticket_output" in g]
         self.assertEqual(sorted(of_output), sorted([
@@ -276,16 +275,16 @@ class TestGrantsByRole(unittest.TestCase):
     def test_conta_igual_ao_owner_nao_recebe_grant(self):
         """Papel que usa a conta dona do esquema vira comentario (GRANT a si mesmo e ORA-01749)."""
         grants = ddl_builder.build_grants_by_role(
-            "openrisow", "tbsss_", {"web": "OPENRISOW", "agent": "openrisow", "purge": "sss_purge"})
+            "openrisow", "tbsss_", {"web": "OPENRISOW", "agent": "openrisow", "monitor": "sss_monitor"})
         commands = [g for g in grants if not g.startswith("--")]
         self.assertTrue(commands)
-        self.assertTrue(all(g.endswith("TO sss_purge;") for g in commands))
+        self.assertTrue(all(g.endswith("TO sss_monitor;") for g in commands))
         self.assertIn("-- papel web: usa a conta dona do esquema (openrisow); nenhum GRANT necessario", grants)
-        self.assertIn("-- papel monitor: conta nao informada; nenhum GRANT gerado", grants)
+        self.assertIn("-- papel agent: usa a conta dona do esquema (openrisow); nenhum GRANT necessario", grants)
 
     def test_sem_contas_nenhum_grant(self):
         grants = ddl_builder.build_grants_by_role("openrisow", "tbsss_", {})
-        self.assertEqual(len(grants), 4)
+        self.assertEqual(len(grants), 3)
         self.assertTrue(all(g.startswith("-- papel ") for g in grants))
 
     def test_conta_ou_papel_invalidos_recusados(self):
@@ -296,10 +295,11 @@ class TestGrantsByRole(unittest.TestCase):
         with self.assertRaises(ValueError):
             ddl_builder.build_grants_by_role("openrisow", "tbsss_", {"dba": "sss_dba"})
 
-    def test_papel_purge_concessao_controle(self):
-        """Papel purge recebe SELECT e UPDATE em controle somente nas colunas de concessao."""
-        grants_purge = [g for g in self.grants if "TO sss_purge" in g]
-        self.assertTrue(any("UPDATE (purge_owner, purge_lease_until) ON openrisow.tbsss_control" in g for g in grants_purge))
+    def test_cr030_sem_papel_purge(self):
+        """CR-030: o papel purge saiu; pedir GRANT para ele e recusado e o controle nao tem a concessao."""
+        with self.assertRaises(ValueError):
+            ddl_builder.build_grants_by_role("openrisow", "tbsss_", {"purge": "sss_purge"})
+        self.assertNotIn("purge_owner", "\n".join(self.grants))
 
 
 class TestOracle11gExpressionNormalization(unittest.TestCase):

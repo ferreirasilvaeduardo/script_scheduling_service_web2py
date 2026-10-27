@@ -18,7 +18,6 @@ per-file-ignores =
     src/sss/cli/init_db.py: E501,F401
     src/sss/cli/migrations/__init__.py: E501
     src/sss/cli/probe_driver.py: E501
-    src/sss/cli/purge.py: E127,E501
     src/sss/cli/run_scheduler.py: E501
     src/sss/config/app_context.py: E501
     src/sss/config/log_paths.py: E127,E302,E303,E501
@@ -59,7 +58,6 @@ per-file-ignores =
     src/sss/persistence/oracle/catalog.py: E127,E128,E501
     src/sss/persistence/oracle/health.py: E127,E128,E501
     src/sss/persistence/oracle/inputs.py: E303,E501
-    src/sss/persistence/oracle/purge.py: E501,E741
     src/sss/persistence/oracle/rbac.py: E501,F401
     src/sss/persistence/oracle/scheduler_input.py: E501
     src/sss/persistence/oracle/scheduler_log.py: E501
@@ -126,7 +124,6 @@ per-file-ignores =
     tests/integration/oracle/test_ha_real_agents.py: E127,E501,E741
     tests/integration/oracle/test_health_oracle.py: E127,E128,E501
     tests/integration/oracle/test_log_pump_oracle.py: E128,E501
-    tests/integration/oracle/test_purge_oracle.py: E128,E501,E741
     tests/integration/oracle/test_repo_contract_oracle.py: E501
     tests/integration/oracle/test_repo_inputs_oracle.py: E501
     tests/integration/oracle/test_repo_oracle_progressive.py: E127,E128,E303,E501
@@ -143,7 +140,6 @@ per-file-ignores =
     tests/support/_output_memory.py: E127,E501
     tests/support/_testenv.py: E501
     tests/unit/cli/test_health.py: E127,E128,E501
-    tests/unit/cli/test_purge.py: E127,E128,E501,E741,F841
     tests/unit/config/test_app_context.py: E501
     tests/unit/config/test_config.py: E127,E128,E501,F401
     tests/unit/config/test_log_paths.py: E127,E501,W391

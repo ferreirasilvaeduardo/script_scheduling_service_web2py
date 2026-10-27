@@ -678,6 +678,5 @@ def load_seed(store, force=False, dev_password=None):
                                 # Controle (tabela 17, CR-007 D4): o FAKE nasce na versao do esquema do codigo.
                                 store.control[1] = {"id": 1, "schema_version": sql_ident.SCHEMA_VERSION,
                                                      "version_applied_at": base_dt - datetime.timedelta(days=90),
-                                                     "version_applied_by": "SYSTEM:seed", "purge_owner": None,
-                                                     "purge_lease_until": None}
+                                                     "version_applied_by": "SYSTEM:seed"}
                                 store.seqs["tbsss_control"] = 1

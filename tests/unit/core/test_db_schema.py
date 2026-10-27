@@ -276,8 +276,8 @@ class TestDbSchema(unittest.TestCase):
         self.assertGreaterEqual(sql_ident.SCHEMA_VERSION, 1)
         ctl = TABLES["control"]
         self.assertEqual(ctl["cks"]["id"]["expr"], "id = 1")
-        self.assertEqual(list(ctl["colunas"]), ["id", "schema_version", "version_applied_at", "version_applied_by",
-                                                 "purge_owner", "purge_lease_until"])
+        # CR-030: sem as colunas da concessao do purge.
+        self.assertEqual(list(ctl["colunas"]), ["id", "schema_version", "version_applied_at", "version_applied_by"])
         schema = names("tbsss_")
         occ = schema["tickets"]["indices"]["ix_tbsss_tck_occur"]
         self.assertTrue(occ["unico"] and occ["fbi"])

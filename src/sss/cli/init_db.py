@@ -704,7 +704,7 @@ def _parse_grants_arg(arg_str):
         role, usr = p.split("=", 1)
         role = role.strip().lower()
         usr = usr.strip()
-        if role not in ("web", "agent", "purge", "monitor"):
+        if role not in ("web", "agent", "monitor"):
             raise ValueError("Papel desconhecido em --grants-to: '%s'" % role)
         roles[role] = usr
     return roles
@@ -739,7 +739,7 @@ def main(argv=None):
     parser.add_argument("--admin-name", dest="admin_nome", default=None, help="Nome do administrador inicial")
     parser.add_argument("--stats", dest="stats", action="store_true", default=True, help="Coleta estatisticas")
     parser.add_argument("--no-stats", dest="stats", action="store_false", help="Nao coleta estatisticas")
-    parser.add_argument("--grants-to", dest="grants_para", default=None, help="web=u1,agent=u2,purge=u3,monitor=u4")
+    parser.add_argument("--grants-to", dest="grants_para", default=None, help="web=u1,agent=u2,monitor=u3")
     parser.add_argument("--real-schema", dest="schema_real", action="store_true", default=False, help="Permite aplicacao em schema real de banco sem exigir prefixo SSS_TEST_")
     parser.add_argument("--generate-sql", dest="gerar_sql", default=None, help="Diretorio de saida para salvar os arquivos .sql de implantacao e rollback")
 

@@ -49,7 +49,7 @@ class _Repo(object):
 
     def __init__(self, **kw):
         self.d = dict(version=sql_ident.SCHEMA_VERSION, agents=[_agent("srv-a")], environments=["PRODUCAO"],
-                      fila=[], vencida=(0, None), sem_pid=[], purge=NOW - datetime.timedelta(hours=20))
+                      fila=[], vencida=(0, None), sem_pid=[])
         self.d.update(kw)
         self.calls = []
 
@@ -71,10 +71,6 @@ class _Repo(object):
     def running_without_pid(self, conn, now, minutes):
         self.calls.append(("sem_pid", minutes))
         return self.d["sem_pid"]
-
-    def last_purge(self, conn, now, days):
-        self.calls.append(("purge", days))
-        return self.d["purge"]
 
 
 class _ConnNow(object):
@@ -127,7 +123,6 @@ class TestChecks(unittest.TestCase):
         self.assertEqual(text, "SSS OK - 0 problemas | healthy_agents=1 overdue_queue=0;500;5000"
                                 " max_wait_min=0;30;120\n")
         self.assertIn(("sem_pid", 2), repo.calls)
-        self.assertIn(("purge", 2), repo.calls)
 
     def test_heartbeat_por_faixa(self):
         self.assertEqual(self._run_loop(agents=[_agent("srv-a", 90)])[0], saude_cli.OK, "DELAYED ainda atende")
@@ -185,11 +180,12 @@ class TestChecks(unittest.TestCase):
         self.assertIn("agente srv-b com configuracao divergente", text)
         self.assertNotIn("srv-c", text, "so agentes ativos")
 
-    def test_purge_ausente(self):
-        code, text, repo = self._run_loop(["--purge-days", "3"], purge=None)
-        self.assertEqual(code, saude_cli.WARNING)
-        self.assertIn("nenhum PURGE auditado nos ultimos 3 dias", text)
-        self.assertIn(("purge", 3), repo.calls)
+    def test_cr030_sem_checagem_de_purge(self):
+        """CR-030: o purge saiu; nao ha aviso de PURGE nem a opcao --purge-days."""
+        with self.assertRaises(SystemExit):
+            with mock.patch("sys.stderr", new_callable=io.StringIO):
+                _args(["--purge-days", "3"])
+        self.assertFalse(hasattr(saude_sql.RepoHealth, "last_purge"))
 
     def test_versao_do_esquema(self):
         code, text, _r = self._run_loop(version=sql_ident.SCHEMA_VERSION - 1)
@@ -197,12 +193,11 @@ class TestChecks(unittest.TestCase):
         self.assertIn("versao do esquema %d" % (sql_ident.SCHEMA_VERSION - 1), text)
 
     def test_pior_nivel_vence_e_criticos_primeiro(self):
-        code, text, _r = self._run_loop(purge=None, version=None)
+        code, text, _r = self._run_loop(version=None, sem_pid=[{"id": 9, "agent_id": "srv-a", "started_at": NOW}])
         self.assertEqual(code, saude_cli.CRITICAL)
         rows = text.splitlines()
-        self.assertTrue(rows[0].startswith("SSS CRITICAL - 2 problemas | "))
+        self.assertTrue(rows[0].startswith("SSS CRITICAL - 2 problemas | "), rows)
         self.assertTrue(rows[1].startswith("CRITICAL: versao do esquema None"))
-        self.assertTrue(rows[2].startswith("WARNING: nenhum PURGE"))
 
 
 class TestMain(unittest.TestCase):
@@ -249,20 +244,19 @@ class TestMain(unittest.TestCase):
         self.assertTrue(conn.closed)
 
     def test_segredos_do_monitor_sem_os_outros_papeis(self):
-        # Integracao com o sss_config real: o arquivo do servidor do agente, com [oracle], [purge] e [environment:*].
+        # Integracao com o sss_config real: o arquivo do servidor do agente, com [oracle] e [environment:*].
         dir_value = tempfile.mkdtemp(prefix="sss_test_saude_")
         self.addCleanup(shutil.rmtree, dir_value, True)
         path = os.path.join(dir_value, "secrets.cfg")
         with open(path, "w") as f:
-            f.write("[oracle]\npassword = senha-agt-1\n[purge]\npassword = senha-prg-1\n"
+            f.write("[oracle]\npassword = senha-agt-1\n"
                     "[environment:PRODUCAO]\nuser = app\npassword = senha-amb-1\n"
                     "[monitor]\nuser = sss_monitor\npassword = senha-mon-1\n")
         os.chmod(path, 0o600)
         registered = []
         with mock.patch("sss.core.masking.register_secret", side_effect=registered.append):
             seg = sss_config.load_secrets(path, sss_env="PROD", role="monitor")
-        self.assertEqual((seg.monitor_user, seg.oracle_password, seg.purge_password, seg.environments),
-                         ("sss_monitor", None, None, {}))
+        self.assertEqual((seg.monitor_user, seg.oracle_password, seg.environments), ("sss_monitor", None, {}))
         self.assertEqual(registered, ["senha-mon-1"])
 
 
@@ -278,8 +272,7 @@ class TestSqlRepoHealth(unittest.TestCase):
         self.assertIn("status = 'PENDING' AND GREATEST(scheduled_at, created_at) <= :now",
                       self.repo.sql("overdue_queue"))
         self.assertIn("(CASE WHEN status = 'RUNNING' THEN agent_id END) >= CHR(1)", self.repo.sql("running_no_pid"))
-        self.assertIn("actor = 'SYSTEM:purge' AND action = 'PURGE'", self.repo.sql("purge"))
-        for name in ("agents", "environments", "queue", "overdue_queue", "running_no_pid", "purge", "version"):
+        for name in ("agents", "environments", "queue", "overdue_queue", "running_no_pid", "version"):
             sql = self.repo.sql(name)
             self.assertTrue(sql.startswith("SELECT "), name)
             self.assertNotIn("submitted_params", sql)

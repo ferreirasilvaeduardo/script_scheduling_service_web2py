@@ -17,14 +17,14 @@ O README.md é a especificação. Quando este guia e o README divergirem, vale o
 ```text
  usuários ── HTTPS ──> proxy reverso ──> nó web (run_web.py, bin/sss-web.sh) ┐
                                                                            ├──> Oracle (owner do esquema, tabelas tbsss_*)
- cron ──> scripts/purge.py ──┐                                             │
+ cron ──> sss-keepalive.sh ──┐                                             │
  monitoramento ──> health.py ─┼──> agente (bin/sss-scheduler.sh) ───────────┘
                              │       └── sudo ──> sss-root/bin/sss-helper ──> script do usuário (usuário de execução do ambiente)
 ```
 
 * **Nó web:** telas, cadastros e disparo de tickets. Não executa scripts.
 * **Agente:** daemon (`scripts/run_scheduler.py`) que desdobra os agendamentos, reserva os tickets (claim), executa os scripts pelo helper, coleta o log e mantém o heartbeat. Pode haver vários agentes; cada ticket roda em um só.
-* **Purge** (`scripts/purge.py`) e **saúde** (`scripts/health.py`): linhas de comando chamadas pelo `cron` e pelo monitoramento.
+* **Keepalive** (`bin/sss-keepalive.sh`, CR-030) e **saúde** (`scripts/health.py`): chamados pelo `cron` e pelo monitoramento. Não há purge: a limpeza é manual (README §11.3, §12).
 
 ### 1.2 Contas Oracle por papel
 
@@ -33,10 +33,9 @@ O README.md é a especificação. Quando este guia e o README divergirem, vale o
 | Dono do esquema | `openrisow` (exemplo) | Só o DBA, na criação do esquema (§5) | Com o DBA; nunca em arquivo do SSS |
 | web | `sss_web` | Nó web | `[oracle] password` do `secrets.cfg` do web |
 | agente | `sss_agente` | Agente | `[oracle] password` do `secrets.cfg` do agente |
-| purge | `sss_purge` | `purge.py` | `[purge] password` do `secrets.cfg` do agente que roda o purge |
 | monitor | `sss_monitor` | `health.py` (só leitura) | `[monitor] user` e `password` do `secrets.cfg` de quem roda o `health.py` |
 
-Fora de DEV, a conta da aplicação igual à dona do esquema é recusada (CR-008, R-29). Os privilégios de cada papel estão no README §11.1 e saem do gerador de scripts SQL (§5.2).
+Fora de DEV, a conta da aplicação igual à dona do esquema é recusada (CR-008, R-29). **Com um usuário de banco só** (§4.0), essa conta é a dona do esquema e faz os papéis web, agente e monitor, com `sss_env = DEV`. Os privilégios de cada papel estão no README §11.1 e saem do gerador de scripts SQL (§5.2).
 
 ### 1.3 Ordem do procedimento
 
@@ -44,7 +43,7 @@ Fora de DEV, a conta da aplicação igual à dona do esquema é recusada (CR-008
  1. Requisitos ......................... §2     9. Scripts cadastrados ........... §9
  2. Pacote ............................. §3    10. Subida e parada .............. §10
  3. Usuários e diretórios .............. §4    11. Validação pós-subida ......... §11
- 4. Banco (DBA) ........................ §5    12. Purge ........................ §12
+ 4. Banco (DBA) ........................ §5    12. Limpeza manual ............... §12
  5. Driver Oracle ...................... §6    13. Monitoração .................. §13
  6. Configuração ....................... §7    14. Logs ......................... §14
  7. Helper e sudoers (agentes) ......... §8    15. Problemas e soluções ......... §15
@@ -53,10 +52,10 @@ Fora de DEV, a conta da aplicação igual à dona do esquema é recusada (CR-008
 
 **Convenções:**
 * Comandos com `sudo` ou "como root" são do administrador do servidor. Os demais rodam como o usuário de serviço `sss` (`sudo -u sss -H bash`). Sem um usuário chamado `sss`, use a conta de serviço que existir e passe `--service-user <conta>` ao `prepare_dirs.py` (§8).
-* **`<RAIZ>`** = `/portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service`, com `<TIPO>` = `DEV`, `HOM` ou `PROD`. A estrutura dentro da raiz é **idêntica** nos três (CR-028, D1): só o `<TIPO>` muda.
+* **`<RAIZ>`** = `/portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service`, com `<TIPO>` = `DEV` ou `PROD` (não há HOM, CR-030). A estrutura dentro da raiz é **idêntica** nos dois (CR-028, D1): só o `<TIPO>` muda.
 * **Processos e nomes (CR-028):** cada processo tem um nome, o mesmo em todo lugar: `web0001`, `web0002`... para os nós web e `agente0001`, `agente0002`... para os agentes. O nome do agente é o `agent_id`, **único em toda a instalação** (não repita um número em outro servidor).
 
-**Estrutura de pastas (CR-028)**, igual em DEV, HOM e PROD:
+**Estrutura de pastas (CR-028)**, igual em DEV e PROD:
 
 ```text
 /portaloptrib/TESHUVA/SSS/<TIPO>/       # dono: root, 0755 (§4.1)
@@ -146,26 +145,43 @@ O pacote só tem o `bin/` e a aplicação (o código, os templates e os estátic
 
 ## 4. Usuários e diretórios [não ensaiado]
 
-### 4.0 Servidor sem administrador: `sss_env = DEV` em HOM e PROD (CR-028, D12)
+### 4.0 Instalação com um usuário só (CR-028, D12; CR-030)
 
-Nos servidores em que não é possível criar usuários nem mudar dono ou permissão de pastas, HOM e PROD sobem com **`[app] sss_env = DEV`** em todos os `config.ini`. A separação entre os ambientes é física, pela pasta `<TIPO>` (`DEV`, `HOM`, `PROD`), e tudo roda com a conta de quem instala. Nesse caso:
+É o caso dos servidores sem administrador: **um usuário de banco** e **um usuário do sistema operacional** para tudo, sem root, sem `sudo` e sem `systemd`. DEV e PROD sobem com **`[app] sss_env = DEV`** em todos os `config.ini`, e a separação entre eles é física, pela pasta `<TIPO>` (`DEV` ou `PROD`). Roteiro:
 
-* **Pule** a criação do usuário `sss` (§4.1, use a sua conta no lugar dele), os usuários de execução (§4.2), as pastas acima da raiz (§4.1) e o helper com o `sudoers` (§8). As units do `systemd` (§10.5) só valem se houver quem as instale; sem elas, suba pelos launchers (§10.1 e §10.2).
-* O `prepare_dirs.py <nome>` roda com a sua conta, sem `--service-user` e sem `chown`.
-* **Risco aceito:** os scripts rodam com a mesma conta do agente e podem ler o `secrets.cfg`, o `config.ini` e os logs do SSS, além de alterar o código. Quem cadastra um script tem o poder dessa conta.
+1. **Pacote (§3)** extraído na `<RAIZ>` com a sua conta.
+2. **Pule** o usuário `sss` (§4.1; use a sua conta no lugar dele), os usuários de execução (§4.2), as pastas acima da raiz (§4.1), o helper e o `sudoers` (§8) e as units do `systemd` (§10.5).
+3. **Banco (§5):** a conta única é a **dona do esquema**. Não há GRANT a aplicar (pule o `03_grants`); o `init_db.py --name agente0001` precisa de `--real-schema`, porque o esquema não é descartável (§5.3).
+4. **Configuração (§7):** um `instance/<nome>/` por processo. Em todos, `[oracle] user` = a conta única, e o `secrets.cfg` de cada um repete a mesma senha em `[oracle]`. O do web tem `[web] cookie_key`; o de cada agente, os `[environment:<NOME>]` dos ambientes que atende (os bancos que os scripts usam têm usuários próprios). Não escreva `[monitor]`: o `health.py` usa a conta do `[oracle]` (CR-030).
+5. **Pastas:** `python3 scripts/prepare_dirs.py <nome>` com a sua conta, sem `--service-user` e sem `chown`.
+6. **Subida e permanência (§10.6):** `bin/sss-keepalive.sh` no `crontab` da sua conta, com `@reboot` e a cada 5 minutos.
+7. **Monitoração (§13)** e **limpeza manual (§12, README §11.3)** pelo mesmo `crontab`.
+
+Exemplo de `crontab -e` da conta (troque `<TIPO>`, a porta e o Python):
+
+```text
+PYTHON=/usr/bin/python3
+SSS_TZ=America/Sao_Paulo
+R=/portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service
+@reboot      cd $R && bin/sss-keepalive.sh web0001:18000 agente0001
+*/5 * * * *  cd $R && bin/sss-keepalive.sh web0001:18000 agente0001
+*/5 * * * *  cd $R && $PYTHON scripts/health.py --name agente0001 > var/agente0001/logs/health.txt 2>&1
+15 2 * * *   cd $R && find var/*/logs var/*/output var/*/script_work -mindepth 7 -maxdepth 7 -type d -mtime +30 -exec rm -rf {} + ; find var/*/logs var/*/output var/*/script_work -mindepth 3 -type d -empty -delete
+```
+
+* **Risco aceito:** os scripts rodam com a mesma conta do agente e podem ler o `secrets.cfg`, o `config.ini` e os logs do SSS, além de alterar o código. Quem cadastra um script tem o poder dessa conta. E a conta do banco, sendo a dona do esquema, pode alterar qualquer objeto dele.
 * **Proteções que o `sss_env = DEV` desliga** e que precisam ser seguidas à mão:
 
 | O que deixa de ser exigido | Faça mesmo assim |
 |---|---|
-| Conta Oracle diferente do owner do esquema | `[oracle] user` = conta do papel (`sss_web`, `sss_agente`), nunca o owner (§5) |
-| `[retention] purge_user` | Informe `purge_user`, o `[purge] password` e o `cron` do purge (§12) |
+| Conta Oracle diferente do owner do esquema | Com um usuário de banco só, não há como; guarde a senha como a do dono do esquema |
 | Segredos só do papel e credencial de todo ambiente atendido | `secrets.cfg` de cada processo só com as suas seções (§7.2); confira os `[environment:*]` de cada agente |
 | Cookie `Secure` sempre | Acesso só por HTTPS, com o proxy enviando `X-Forwarded-Proto: https` (assim o cookie continua `Secure`); nunca exponha a porta do `run_web.py` sem o proxy |
 | Origem só de `allowed_origins` | `allowed_origins` com a URL pública; o DEV aceita também a do próprio `Host` |
 | Scripts proibidos dentro da raiz | Não crie a pasta `dev/` na `<RAIZ>`: no DEV, scripts dentro dela são aceitos |
 | `init_db.py` | Recusa um esquema que não é descartável sem `--real-schema` (§5.3) |
 
-* **Faixa na tela (CR-028, D12):** a faixa "Ambiente ... — dados e execuções não produtivos" e o rodapé mostram o `<TIPO>` da pasta acima da raiz (`DEV`, `HOM` ou `PROD`), e não o `sss_env`. Em `PROD` a faixa não aparece. Fora dessas pastas, vale o `sss_env`.
+* **Faixa na tela (CR-028, D12):** a faixa "Ambiente ... — dados e execuções não produtivos" e o rodapé mostram o `<TIPO>` da pasta acima da raiz (`DEV` ou `PROD`), e não o `sss_env`. Em `PROD` a faixa não aparece. Fora dessas pastas, vale o `sss_env`.
 * A tela de DEV (`/dev/...`) não existe numa instalação feita pelo pacote, que não leva o `dev.py` (§3).
 
 ### 4.1 Usuário de serviço
@@ -210,7 +226,7 @@ useradd --system --shell /sbin/nologin --no-create-home \
 
 ### 4.3 Partição dos logs (CR-008, R-25)
 
-A pasta `<RAIZ>/var/` (onde ficam os `log_dir` de cada processo, `var/<nome>/logs`) fica de preferência num **sistema de arquivos próprio**, separado de `/`, e dimensionado para `local_log_retention_days` dias de logs. A cota do usuário de execução não protege o `log_dir`, porque o arquivo de log de cada ticket pertence ao `sss`.
+A pasta `<RAIZ>/var/` (onde ficam os `log_dir` de cada processo, `var/<nome>/logs`) fica de preferência num **sistema de arquivos próprio**, separado de `/`, e dimensionado para os dias de logs que você guarda até a limpeza manual (§12). A cota do usuário de execução não protege o `log_dir`, porque o arquivo de log de cada ticket pertence ao `sss`.
 
 O agente para de fazer claim com menos de `[agent] log_dir_min_free_mb` livres (padrão 1.024 MB; linha `DISCO_LOG` no log, §15). O monitoramento corporativo deve alertar antes, por exemplo com 80% de uso.
 
@@ -239,7 +255,7 @@ Os três scripts saem do mesmo registro de identificadores, com o owner e o pref
 ```bash
 # na máquina de desenvolvimento ou num servidor com o pacote
 cd <RAIZ>
-python3 scripts/generate_sql.py --config instance/web0001/config.ini --grants-to web=sss_web,agent=sss_agente,purge=sss_purge,monitor=sss_monitor
+python3 scripts/generate_sql.py --config instance/web0001/config.ini --grants-to web=sss_web,agent=sss_agente,monitor=sss_monitor
 # gera docs/sql/01_deploy_sss_openrisow_tbsss.sql, 02_rollback_sss_<owner>_<prefixo>.sql, 99_validate_deploy_<owner>_<prefixo>.sql e 03_grants_sss_<owner>_<prefixo>.sql
 ```
 
@@ -257,7 +273,7 @@ SPOOL OFF
 
 * O `01` termina com "concluída com sucesso!" mesmo que um comando falhe (`WHENEVER SQLERROR CONTINUE`). Procure `ORA-` e `SP2-` nos dois logs antes de dar a implantação por concluída.
 * O `99` só lê. As duas linhas de resumo precisam dizer `OK: nenhuma falha`.
-* As contas `sss_web`, `sss_agente`, `sss_purge` e `sss_monitor` são criadas pelo DBA antes do `01`, com a política de senhas da empresa. Nenhum GRANT vai para PUBLIC.
+* As contas `sss_web`, `sss_agente` e `sss_monitor` são criadas pelo DBA antes do `01` (com um usuário só, §4.0, nenhuma conta nova), com a política de senhas da empresa. Nenhum GRANT vai para PUBLIC.
 * **Rollback total** (só em instalação nova ou com autorização): `@docs/sql/02_rollback_sss_openrisow_tbsss.sql`. Ele apaga os dados.
 
 ### 5.3 Usuários iniciais
@@ -274,9 +290,9 @@ O seed cria os usuários de homologação `admin`, `op.prod`, `op.hml` e `consul
 
 ### 5.5 Dimensionamento dos LOBs (CR-007, R-29; CR-012)
 
-* **Log no banco:** num banco AL32UTF8, o CLOB guarda cerca de **2 bytes por caractere**. Estimativa do segmento LOB de `tbsss_tickets`: `tickets por dia × caracteres médios do log × 2 × ticket_retention_days × 1,3`. Exemplo: 2.000 × 50.000 × 2 × 180 × 1,3 ≈ 47 GB. O teto por ticket é `max_log_size_bytes` (até 64 MiB).
-* **Saída dos scripts:** o zip fica no BLOB de `tbsss_ticket_output` até o ticket sair pela retenção: `tickets com saída por dia × zip médio × ticket_retention_days × 1,3`. O teto por ticket é `output_max_bytes` (até 200 MiB).
-* Depois do purge, o espaço volta ao segmento, não ao tablespace. Para devolvê-lo, o DBA usa `ALTER TABLE ... MOVE LOB` ou redefinição online numa janela.
+* **Log no banco:** num banco AL32UTF8, o CLOB guarda cerca de **2 bytes por caractere**. Estimativa do segmento LOB de `tbsss_tickets`: `tickets por dia × caracteres médios do log × 2 × dias guardados até a limpeza × 1,3`. Exemplo: 2.000 × 50.000 × 2 × 180 × 1,3 ≈ 47 GB. O teto por ticket é `max_log_size_bytes` (até 64 MiB).
+* **Saída dos scripts:** o zip fica no BLOB de `tbsss_ticket_output` até o ticket sair na limpeza manual: `tickets com saída por dia × zip médio × dias guardados × 1,3`. O teto por ticket é `output_max_bytes` (até 200 MiB).
+* Depois da limpeza manual (§12), o espaço volta ao segmento, não ao tablespace. Para devolvê-lo, o DBA usa `ALTER TABLE ... MOVE LOB` ou redefinição online numa janela.
 
 ---
 
@@ -313,7 +329,7 @@ O papel vem do próprio arquivo (CR-028, D4): o do web tem `[web]` e não tem `[
 | Processo | Chaves a preencher |
 |---|---|
 | Web (`instance/web0001/`) | `[app] sss_env` e `name` (o nome da pasta); `[oracle]` (`user` = `sss_web`, `dsn`, `owner`, `table_prefix`); `[web] allowed_origins` e, atrás de proxy, `trusted_proxies` |
-| Agente (`instance/agente0001/`) | `[app] sss_env` e `name` (o nome da pasta, que é o `agent_id`); `[oracle]` (`user` = `sss_agente`...); `[agent] environments`, `max_parallel_jobs`, `exec_users`; `[retention] purge_user` |
+| Agente (`instance/agente0001/`) | `[app] sss_env` e `name` (o nome da pasta, que é o `agent_id`); `[oracle]` (`user` = `sss_agente`...); `[agent] environments`, `max_parallel_jobs`, `exec_users` (vazio com `sss_env = DEV`, §4.0) |
 
 As pastas (`log_dir`, `work_dir`, `exec_work_dir`, `output_dir`, `input_dir`, `script_work_dir` e `script_base_dir`) saem do nome e não precisam ser escritas. A tabela completa, com o padrão e a faixa de cada chave, está no README §12.1. **O SSS não cria as pastas configuradas** (exceto o `log_dir`, criado na subida): crie-as com `scripts/prepare_dirs.py <nome>` (§8); sem elas, o agente recusa subir (código 13, §15). `[agent] interpreters` não existe mais (CR-026): uma linha antiga só gera aviso. O web usa sete valores de `[agent]` que precisam ser iguais aos dos agentes (`heartbeat_interval_s`, `fence_timeout_s`, `node_offline_timeout_s`, `misfire_policy`, `misfire_tolerance_s`, `cron_horizon_days` e `queue_aging_min`). Sem `[agent]` no config do web, valem os padrões. Se mudar algum nos agentes, escreva o mesmo valor num `[agent]` do config do web, que só aceita essas sete chaves e continua com o papel web (README §12.1). Em `instance/<nome>/`, o `[app] name` precisa ser o nome da pasta: ao copiar a pasta de um agente para criar outro, troque o `name`.
 
@@ -332,7 +348,7 @@ Um arquivo **por processo**, em `<RAIZ>/instance/<nome>/secrets.cfg`, só com as
 | Processo | Seções |
 |---|---|
 | Web (`web0001`) | `[oracle] password` (conta `sss_web`) e `[web] cookie_key` (igual em todos os nós web) |
-| Agente (`agente0001`) | `[oracle] password` (conta `sss_agente`), `[environment:<NOME>]` com `user` e `password` **só dos ambientes que esse agente atende** e, no agente que roda o purge, `[purge] password` (conta `sss_purge`) |
+| Agente (`agente0001`) | `[oracle] password` (conta `sss_agente`), `[environment:<NOME>]` com `user` e `password` **só dos ambientes que esse agente atende** |
 | Quem roda o `health.py` | `[monitor] user` e `password` (conta `sss_monitor`). No agente, a seção `[monitor]` pode ficar no `secrets.cfg` dele: o papel monitor ignora as outras seções e só recusa `[web]` |
 
 ```bash
@@ -525,6 +541,23 @@ WantedBy=multi-user.target
 * Dois nós web no mesmo servidor precisam de portas diferentes: crie uma cópia da unit com outra `--port`.
 * Ative com `systemctl daemon-reload && systemctl enable --now sss-web@web0001 sss-agente@agente0001`.
 
+
+### 10.6 Sem root: `sss-keepalive.sh` no cron da conta (CR-030) [ensaiado nos testes]
+
+Sem `systemd` (§4.0), o `bin/sss-keepalive.sh` mantém os processos no ar pelo cron da conta que roda o SSS:
+
+```bash
+# na <RAIZ>; o web precisa da porta (<nome>:<porta>), o agente so do nome
+PYTHON=/usr/bin/python3 SSS_TZ=America/Sao_Paulo bin/sss-keepalive.sh web0001:18000 agente0001
+bin/sss-keepalive.sh --pause agente0001     # antes de parar de proposito: o keepalive nao sobe mais
+bin/sss-stop.sh agente0001                  # para o agente (o web: SIGTERM no PID dele)
+bin/sss-keepalive.sh --resume agente0001    # volta a subir na proxima passada
+```
+
+* Para cada nome, confere se há um `python` rodando `scripts/run_web.py` ou `scripts/run_scheduler.py` com `--name <nome>` a partir da `<RAIZ>`. Se não houver, sobe pelo launcher, em segundo plano (`nohup`), e grava em `var/<nome>/logs/keepalive.log` uma linha por subida, recusa ou falha. A saída do processo vai para `var/<nome>/logs/<nome>.out`.
+* O papel vem do `config.ini` (`[web]` sem `[agent]`: web). O web atende só em `127.0.0.1`, na porta informada; os usuários chegam pelo proxy.
+* As linhas do `crontab` estão no §4.0 (`@reboot` e a cada 5 minutos). Recusa root (código 1) e uso inválido (2); sai com 3 se algum processo não subiu (veja o `.out`).
+* Na atualização (§18.1), pause os processos antes de parar e retome depois de subir.
 ---
 
 ## 11. Validação pós-subida [ensaiado]
@@ -551,34 +584,17 @@ Depois:
    INFO ... [ticket=1000929] [action=SPAWN] script iniciado (pid 151505)
    INFO ... [ticket=1000929] [action=FINALIZAR] ticket finalizado: SUCCESS/EXIT_OK rc=0
    ```
-4. Rode o `health.py` (§13). O esperado é o código 0 depois da primeira execução do purge.
+4. Rode o `health.py` (§13). O esperado é o código 0.
 
 ---
 
-## 12. Purge (retenção; README §11.3)
+## 12. Limpeza manual (README §11.3; CR-030)
 
-* **Conta:** `[retention] purge_user = sss_purge` no `config.ini` e `[purge] password` no `secrets.cfg` do agente que roda o purge. Com `purge_user` vazio (aceito só em DEV), o purge recusa rodar [ensaiado]:
-  `CRITICAL ... [action=PURGE] purge desligado: [retention] purge_user vazio (README §12.1)` e código 2.
-* **Primeiro, `--dry-run`:** só conta (estimativas), sem gravar nem apagar nada:
-  ```bash
-  # como sss
-  cd <RAIZ>
-  LANG=C.UTF-8 LC_ALL=C.UTF-8 python3 scripts/purge.py --name agente0001 --dry-run   # config do agente (CR-028)
-  # uma linha por alvo: "tickets: N linhas elegiveis (estimativa)", ..., e o aviso de estimativa
-  ```
-* **Agendamento** em todo agente (os logs locais e a saída são de cada servidor; tickets e auditoria só um nó purga por vez, pela concessão no banco), `crontab -e` do `sss`:
-  ```text
-  15 2 * * * cd /portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service && umask 077 && LANG=C.UTF-8 LC_ALL=C.UTF-8 /usr/bin/python3 scripts/purge.py --name agente0001 > /dev/null
-  ```
-  Uma linha por agente do servidor, cada uma com o seu nome (as pastas de saída, entrada e logs são de cada agente). O resumo vai para o stdout; o registro completo vai para `var/<nome>/logs/internal/app/.../purge_<PID>.log`.
-* **Alvos:** `--target tickets|audit|inputs|local_logs|output|script_work|all` (padrão `all`; `inputs` é o conteúdo dos envios da tela de Entrada, CR-020e). `script_work` (CR-019) remove as pastas de trabalho dos scripts mais antigas que `[logging] script_work_retention_days`.
-* **Arquivamento da auditoria:** `--export-audit <pasta>` grava antes de apagar um `auditoria_purge_AAAAMMDD_HHMMSS.csv` com `0600`. A pasta precisa existir.
-* **Códigos de saída:**
-  * 0: sucesso, inclusive "outro nó está purgando" ou "outro purge neste servidor";
-  * 1: falha de banco, inclusive concessão perdida;
-  * 2: configuração inválida;
-  * 3: falha ao remover logs locais, pastas de saída ou pastas de trabalho.
-* A cada execução com a concessão, o purge audita uma linha `PURGE` por tabela, inclusive com `0 linhas`. O `health.py` alerta sem `PURGE` em 2 dias.
+O SSS não apaga nada sozinho: não há `purge.py` nem retenção automática. O README §11.3 traz o procedimento completo:
+
+* **Banco:** o SQL comentado, em lotes, para tickets terminais, auditoria e envios da tela de Entrada. Roda o DBA, ou a conta do SSS quando ela é a dona do esquema (§4.0).
+* **Arquivos:** os `find` para as pastas de minuto de `var/<nome>/logs`, `output` e `script_work`, primeiro só listando e depois apagando, e para os `.out` dos processos e os pacotes de retorno do `sss-update.sh`.
+* **Pelo cron** da conta que roda o SSS, como no exemplo do §4.0. Comece listando (`-print`) e só depois troque por `-exec rm -rf {} +`.
 
 ---
 
@@ -596,11 +612,10 @@ Saída do ensaio (um agente saudável e outros ambientes sem agente):
 SSS CRITICAL - 6 problemas | healthy_agents=1 overdue_queue=0;500;5000 max_wait_min=0;30;120
 CRITICAL: ambiente CLONE1 ativo sem nenhum agente saudavel
 ...
-WARNING: nenhum PURGE auditado nos ultimos 2 dias (README §11.3)
 ```
 
 * **Códigos (padrão Nagios):** 0 OK, 1 WARNING, 2 CRITICAL e 3 UNKNOWN (configuração, segredos, conexão ou erro de banco). A primeira linha traz os dados de desempenho; depois vem uma linha por problema, os críticos primeiro.
-* **Limites:** `--no-pid-min 2`, `--queue-warn 500`, `--queue-crit 5000`, `--wait-warn-min 30`, `--wait-crit-min 120` e `--purge-days 2`.
+* **Limites:** `--no-pid-min 2`, `--queue-warn 500`, `--queue-crit 5000`, `--wait-warn-min 30` e `--wait-crit-min 120`.
 * **Agendamento:** a cada 5 minutos no monitoramento corporativo, com alerta no código 2. Exemplo de NRPE [não ensaiado], com o `health.py` rodando como `sss` por uma regra de `sudo` só para ele:
   ```text
   # /etc/sudoers.d/sss-monitor
@@ -608,6 +623,7 @@ WARNING: nenhum PURGE auditado nos ultimos 2 dias (README §11.3)
   # nrpe.cfg
   command[check_sss]=/usr/bin/sudo -n -u sss /usr/bin/python3 /portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service/scripts/health.py --name agente0001
   ```
+  **Sem root nem `sudo` (§4.0):** rode o `health.py` pelo cron da própria conta e grave a saída num arquivo (`var/<nome>/logs/health.txt`, exemplo no §4.0); o código de saída e a primeira linha dizem o estado.
   Num servidor de monitoração separado, use um `config.ini` próprio com `--config` (mesmos tempos do de referência, para a checagem de configuração divergente) e um `secrets.cfg` só com `[monitor]`.
 
 **O que fazer em cada alerta:**
@@ -622,7 +638,6 @@ WARNING: nenhum PURGE auditado nos ultimos 2 dias (README §11.3)
 | `fila vencida: N tickets PENDING, espera maxima M min` | Agentes sem vaga: veja `max_parallel_jobs` e o teto por script, e os scripts presos em `RUNNING` |
 | `ticket N RUNNING sem PID` | O agente reservou e não iniciou: veja o log do agente para esse ticket |
 | `agente X com configuracao divergente` | Tempos diferentes do `config.ini` de referência: corrija e reinicie o agente |
-| `nenhum PURGE auditado` | O `cron` do purge não rodou ou falhou: veja o `purge_<PID>.log` |
 
 ---
 
@@ -632,14 +647,14 @@ WARNING: nenhum PURGE auditado nos ultimos 2 dias (README §11.3)
 
 | Log | Caminho | Modo |
 |---|---|---|
-| Aplicação (web, agente, purge, `init_db`) | `log_dir/internal/app/AAAA/MM/DD/HH/MI/<nome>_<PID>.log`, com `<nome>` = `sss_web`, `sss_scheduler`, `purge` ou `init_db` | `0640` |
+| Aplicação (web, agente, `init_db`) | `log_dir/internal/app/AAAA/MM/DD/HH/MI/<nome>_<PID>.log`, com `<nome>` = `sss_web`, `sss_scheduler` ou `init_db` | `0640` |
 | Execução de cada ticket | `log_dir/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log` (ambiente e script em minúsculo, sem acento) | `0600` |
 | Saída padrão do nó web | a escolhida por quem sobe (`journald` no `systemd`, `var/web0001/logs/server.out` no `start_local.sh`) | — |
 
-Com o config por processo (CR-028), o `log_dir` é `<RAIZ>/var/<nome>/logs`: os logs do web ficam em `var/web0001/logs`, e os de cada agente (inclusive os dos tickets e o do purge) em `var/agente0001/logs`.
+Com o config por processo (CR-028), o `log_dir` é `<RAIZ>/var/<nome>/logs`: os logs do web ficam em `var/web0001/logs`, e os de cada agente (inclusive os dos tickets) em `var/agente0001/logs`.
 
 * O arquivo nasce na pasta do minuto em que o processo sobe e troca por tamanho (`app_log_max_bytes`) para a pasta do minuto atual. Com o mesmo nome no mesmo minuto, ganha o sufixo `_<n>`.
-* **Retenção:** o próprio processo apaga as pastas de dia do log da aplicação com mais de `app_log_retention_days` dias. O `purge.py` apaga as pastas de minuto dos logs de execução com mais de `local_log_retention_days` dias, menos as de tickets ainda `RUNNING`.
+* **Sem retenção automática (CR-030):** nenhum processo apaga log. A limpeza é manual (§12, README §11.3).
 * Formato: `data-hora-ISO NÍVEL [pid=…] [agent=…] [ticket=…] [action=…] mensagem`. Os segredos saem como `****`.
 
 ### 14.2 Achar o log certo
@@ -663,7 +678,7 @@ Toda finalização sem execução (pré-validação, falha ao iniciar, cancelame
 
 ### 14.4 Saída padrão do nó web
 
-Desde o CR-021e o servidor web não grava `httpserver.log`: requisições e erros vão para o log da aplicação, que tem rotação e retenção próprias (§14.1). A saída padrão só recebe o que acontecer antes de o log abrir (ex.: Python sem o pacote da aplicação) e fica pequena. Se a subida não for pelo `systemd`, redirecione-a para um arquivo (como o `start_local.sh` faz com `logs/server.out`). Um `httpserver.log` que tenha sobrado da versão com web2py pode ser apagado.
+Desde o CR-021e o servidor web não grava `httpserver.log`: requisições e erros vão para o log da aplicação, que troca de arquivo por tamanho (§14.1) e é limpo à mão (§12). A saída padrão só recebe o que acontecer antes de o log abrir (ex.: Python sem o pacote da aplicação) e fica pequena. Se a subida não for pelo `systemd`, redirecione-a para um arquivo (como o `start_local.sh` faz com `logs/server.out`). Um `httpserver.log` que tenha sobrado da versão com web2py pode ser apagado.
 
 ---
 
@@ -721,7 +736,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | Status/motivo | Linha no log do agente (e `[SSS]` no log do ticket) | Causa provável | Ação |
 |---|---|---|---|
 | `PENDING` que nunca sai | Nenhuma linha. No `health.py` e na tela de agentes: `fila sem atendente: N tickets de AMB/INTERP` | Nenhum agente saudável atende o ambiente do ticket (CR-026: o interpretador não conta) | Suba um agente para o ambiente ou recupere o agente em risco |
-| `PENDING` que demora | `DISCO_LOG: N MB livres em log_dir (minimo M): sem claim` ou `DISCO_SAIDA: ...` | Disco quase cheio | Libere espaço (purge, §12) ou aumente a partição |
+| `PENDING` que demora | `DISCO_LOG: N MB livres em log_dir (minimo M): sem claim` ou `DISCO_SAIDA: ...` | Disco quase cheio | Libere espaço (limpeza manual, §12) ou aumente a partição |
 | `FAILED` / `PRECHECK_FAILED` | `pre-validacao recusada: <código>` e `[SSS] pre-validacao recusada: <código> (agente X)` | Ver os códigos abaixo | Ver abaixo |
 | ↳ `NOT_FOUND`, `NO_ACCESS`, `NOT_A_FILE` | | O arquivo real não existe, não é legível ou não é arquivo, no servidor do agente | Corrija o arquivo no agente (§9) |
 | ↳ `GROUP_OTHER_WRITABLE` | | Arquivo real com escrita de grupo ou outros | `chmod go-w <arquivo>` |
@@ -766,17 +781,15 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | Um usuário não entra: "Houve muitas tentativas com a senha errada..." | — | Bloqueio após `login_max_attempts` | Aguarde `login_lockout_s` ou desbloqueie em Gestão de Usuários |
 | `Socket 127.0.0.1:8000 in use by other process` | Terminal | Porta ocupada | `ss -ltnp \| grep :8000` |
 
-### 15.7 Purge, saúde e pacote
+### 15.7 Keepalive, saúde e pacote
 
 | Linha | Causa | Ação |
 |---|---|---|
-| `purge desligado: [retention] purge_user vazio (README §12.1)` (código 2) | Sem conta de purge | §12 |
-| `outro no esta purgando (concessao em tbsss_control); tickets e auditoria pulados` | Outro agente purgando | Normal; código 0 |
-| `outro purge ja esta em execucao neste servidor (sss-purge.lock)` | Duas execuções no mesmo servidor | Normal; código 0 |
-| `concessao do purge perdida durante a execucao; parado` (código 1) | Uma execução passou de 1 hora e outro nó tomou a concessão | Reduza `purge_batch_size` ou rode com mais frequência |
-| `retencao dos logs locais: <pasta>: <erro>` (código 3) | Sem permissão para apagar | Dono das pastas de log deve ser o `sss` |
+| `falhou ao subir: veja var/<nome>/logs/<nome>.out` (`keepalive.log`, código 3) | O processo saiu logo depois de subir | Leia o `.out` e o log da aplicação (§14, §15.1) |
+| `recusado: o web precisa da porta` (`keepalive.log`) | Faltou `<nome>:<porta>` na linha do cron | §10.6 |
+| `config.ini: chave [retention] ... ignorada` ou `secao [purge] ignorada` (WARNING na subida) | Linha antiga de antes do CR-030 | Apague a linha (o processo sobe normalmente) |
 | `SSS UNKNOWN - falha ao conectar no Oracle: ...` (`health.py`) | Conta `sss_monitor` ou rede | §15.2 |
-| `SSS UNKNOWN - configuracao invalida: Secao [monitor] obrigatoria ausente em secrets.cfg` | Falta a seção | §7.2 |
+| `SSS UNKNOWN - configuracao invalida: Secao [monitor] obrigatoria ausente em secrets.cfg` | Falta a seção (com `sss_env = DEV`, vale a conta do `[oracle]`, §4.0) | §7.2 |
 | `Pacote recusado:` (`package.py`, código 1) | Segredo, bytecode ou código de DEV na árvore | Gere de uma cópia limpa (§3) |
 
 ---
@@ -784,7 +797,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 ## 16. Rotações de segredos
 
 * **`cookie_key`** (nó web): gere um novo (§7.2), grave em todos os nós web e reinicie todos juntos. **Todas as sessões são invalidadas**; os usuários entram de novo.
-* **Senha de uma conta Oracle** (`sss_web`, `sss_agente`, `sss_purge`, `sss_monitor`): o DBA troca a senha; grave a nova no `secrets.cfg` dos servidores daquele papel e reinicie os processos. Com a senha antiga, a cadeia de driver para em `ORA-01017` (§15.2).
+* **Senha de uma conta Oracle** (`sss_web`, `sss_agente`, `sss_monitor`, ou a conta única do §4.0): o DBA troca a senha; grave a nova no `secrets.cfg` dos servidores daquele papel e reinicie os processos. Com a senha antiga, a cadeia de driver para em `ORA-01017` (§15.2).
 * **Senha de ambiente** (`[environment:X]`): grave a nova em todos os agentes que atendem o ambiente e reinicie-os. A senha chega ao script pela variável `PADRAO_VALOR_RUN_CONEXAO_BD`, só na próxima execução.
 
 ---
@@ -818,7 +831,7 @@ Com a estrutura por processo, o código é trocado **no lugar** pelo `bin/sss-up
    ```
    O comando confere o pacote (`SHA256SUMS` externo e interno) e recusa root (código 1), pacote inválido ou sem permissão para criar `var/update/` (código 2, nada muda) e um `python` rodando um comando do SSS a partir da `<RAIZ>` (código 3, nada muda; um processo de outro usuário, que não dá para conferir, só gera aviso). Ele guarda o código atual num pacote de retorno, no mesmo formato, em `var/update/<data>/`, e troca só `bin/`, `docs/`, `scripts/`, `src/`, `AGENTS.md`, `README.md`, `SHA256SUMS` e `instance/exemplos/`. A extração e o código anterior ficam em `<RAIZ>/.update-<data>/` (mesma partição da raiz: a troca é por renomeação, mesmo com `var/` em partição própria), apagada no sucesso. Código 4: falha no meio da troca; o código anterior fica em `.update-<data>/anterior/` e o retorno é o pacote impresso.
    * **`bin/` é trocado inteiro:** um arquivo local que você tenha posto em `bin/` some (fica só no pacote de retorno). Guarde scripts próprios fora do código, por exemplo em `scripts_ambiente/`.
-   * **Pacotes de retorno:** `var/update/<data>/` não é apagado pelo purge. Depois de validar a versão nova, apague à mão os pacotes antigos que não quiser guardar.
+   * **Pacotes de retorno:** `var/update/<data>/` não é apagado sozinho. Depois de validar a versão nova, apague à mão os pacotes antigos que não quiser guardar.
    * **Dono de `var/`:** o `sss-update.sh` roda com o usuário do serviço e grava em `var/update/`. O `prepare_dirs.py` deixa `var/`, `var/<nome>/` e `var/update/` com esse usuário (§8).
 4. Como root, em cada agente: copie o helper novo (`install -o root -g root -m 0755 <RAIZ>/bin/sss-helper <helper_path>`, §8).
 5. Compare cada `instance/<nome>/config.ini` com o modelo novo (`diff instance/exemplos/agente0001/config.ini.example instance/agente0001/config.ini`). Chave obrigatória nova ou removida aparece na subida como `configuracao invalida` (§15.1).
@@ -833,7 +846,7 @@ Uma instalação no formato anterior (`/opt/sss/app`, `/etc/sss/secrets.cfg`, `/
 1. Instale o pacote novo na `<RAIZ>` (§3), crie as pastas acima dela e o helper em `sss-root/bin` (§4.1, §8) e troque o `sudoers` para o caminho novo.
 2. Divida o `config.ini` antigo em um por processo (`instance/web0001/`, `instance/agente0001/`, §7.1), a partir dos modelos: copie só as chaves que fogem do padrão, e apague as de pastas (elas saem do nome). Divida o `secrets.cfg` da mesma forma (§7.2).
 3. Crie as pastas com o `prepare_dirs.py <nome>` (§8) e **mova** os dados de cada agente: `log_dir` → `var/<nome>/logs`, `output_dir` → `var/<nome>/output`, `input_dir` → `var/<nome>/input`, `script_work_dir` → `var/<nome>/script_work`. O `work_dir` não precisa ir: pare os agentes sem tickets `RUNNING` e ele é recriado vazio. Depois de mover, rode o `prepare_dirs.py` de novo para acertar donos e modos.
-4. Troque as units do `systemd` pelas novas, por nome (§10.5), e o `cron` do purge e o monitoramento (`--name`, §12 e §13).
+4. Troque as units do `systemd` pelas novas, por nome (§10.5), e o monitoramento (`--name`, §13); a limpeza passa a ser manual (§12).
 5. Suba, valide (§11) e só depois apague as pastas antigas. Retorno: as pastas antigas continuam intactas até esse passo.
 
 ### 18.3 Notas por versão (formato anterior ao CR-028)
@@ -858,7 +871,12 @@ Os passos abaixo valem para a instalação no formato anterior, com a aplicaçã
    * **Sem web2py (CR-021f):** o `bin/sss-web.sh` novo só aceita as opções do `scripts/run_web.py` e recusa `web2py.py`/`anyserver.py` (código 2). Troque, junto com a versão, a linha que sobe o web na unit do `systemd` ou no script de operação: `bin/sss-web.sh <python3> --host 127.0.0.1 --port <porta>` (§10.1). Confira antes com `bin/sss-web.sh <python3> --check`. A sessão passa a ser o cookie assinado `sss_session` (CR-021e, D1): quem estiver logado na hora da atualização entra de novo. O `httpserver.log`, os `parameters_<porta>.py` e o painel `/admin` do web2py deixam de existir: tire o `httpserver.log` do `logrotate` (§14.4) e não copie nada disso para a pasta nova.
    * **Aplicação na raiz do pacote (CR-022a):** o pacote não tem mais `applications/script_scheduling_service/`; tudo fica direto em `/opt/sss/app` (antes `/opt/sss/web2py`). Na primeira atualização com esta versão, extraia em `/opt/sss/app` (sem renomear a pasta antiga para ela), copie o `config.ini` de `/opt/sss/web2py/applications/script_scheduling_service/instance/` para `/opt/sss/app/instance/` e troque nos caminhos de operação (unit do `systemd`, `cron` do purge, `sudoers` do monitoramento, scripts de subida) `/opt/sss/web2py` por `/opt/sss/app` e `.../applications/script_scheduling_service/scripts/` por `.../scripts/`. Caminhos absolutos do `config.ini` que apontavam para dentro da pasta antiga (ex.: `log_dir`, `work_dir`) também mudam. O retorno é subir de novo pela pasta antiga, que fica intacta.
    * **Código no pacote `src/sss/` (CR-022b):** para a operação nada muda: os comandos continuam `bin/*.sh` e `scripts/<nome>.py` (agora involucros que chamam `src/sss/cli/`), com as mesmas opções e códigos de saída. O pacote passa a ter só `bin/`, `docs/`, `instance/`, `scripts/` e `src/` (§3); as pastas `modules/`, `webapp/`, `controllers/`, `views/` e `static/` saíram, e templates e estáticos ficam em `src/sss/web/`. Automação local que apontava para arquivos dessas pastas (cópia de CSS, inspeção de template) precisa do caminho novo; as URLs não mudam.
-   * **Ordem dos blocos de SQL abaixo:** estão do mais novo para o mais antigo. Quem vem de uma versão anterior ao CR-023 aplica na ordem cronológica: CR-023, CR-025 e CR-026. Instruções de um bloco antigo que um bloco mais novo substituiu estão marcadas.
+   * **Ordem dos blocos de SQL abaixo:** estão do mais novo para o mais antigo. Quem vem de uma versão anterior ao CR-023 aplica na ordem cronológica: CR-023, CR-025, CR-026 e CR-030. Instruções de um bloco antigo que um bloco mais novo substituiu estão marcadas.
+   * **Purge retirado (CR-030): com tudo parado.** O comando `purge.py`, a conta e o papel `purge`, a seção `[retention]`, as retenções de `[logging]` e a limpeza automática dos logs da aplicação saíram; a limpeza passa a ser manual (§12, README §11.3). Tire do `cron` a linha do `purge.py` e, do monitoramento, o `--purge-days`. As linhas antigas do `config.ini` e o `[purge]` do `secrets.cfg` só geram aviso; apague-as. O esquema perde as duas colunas da concessão; num banco já instalado, o DBA aplica (troque `openrisow` e `tbsss_`):
+     ```sql
+     ALTER TABLE openrisow.tbsss_control DROP (purge_owner, purge_lease_until);
+     ```
+     Se existir a conta `sss_purge`, ela pode ser removida pelo DBA. **Retorno:** a versão anterior precisa das colunas de volta (`ALTER TABLE openrisow.tbsss_control ADD (purge_owner VARCHAR2(40 CHAR), purge_lease_until DATE)`), das linhas de `[retention]` e do cron do purge.
    * **Config simplificado e interpretador só no cadastro (CR-026): com tudo parado.** O SQL abaixo troca os nomes do cadastro para minúsculas e apaga `tbsss_agents.interpreters`, e a versão anterior não funciona com ele: o web anterior recusaria os disparos, os agentes anteriores parariam de pegar tickets, e as regras agendadas que vencessem nesse meio-tempo ficariam pausadas (`INVALID_PARAM`, reativação à mão). Por isso: **pare o web e todos os agentes**, aplique o SQL, troque as pastas (passo 5) e suba web e agentes na versão nova. O ticket passa à versão 7 do snapshot, que um agente anterior recusaria (`UNSUPPORTED_VERSION`). No `config.ini`, a linha `[agent] interpreters` pode ser apagada (só gera aviso), e as chaves com o valor padrão também (README §12.1). Confira o `PATH` do serviço de cada agente (§9). Num banco já instalado, o DBA aplica antes da subida (troque `openrisow` e `tbsss_`):
      ```sql
      ALTER TABLE openrisow.tbsss_scripts DROP CONSTRAINT ck_tbsss_scr_int;
@@ -914,7 +932,8 @@ Os passos abaixo valem para a instalação no formato anterior, com a aplicaçã
 - [ ] Tela de Entrada (CR-020): cada agente com `[agent] input_dir` e a pasta `input_dir/<ambiente>` criada pelo root (§8), o helper novo instalado, e o proxy com limite de corpo acima de `[web] input_upload_max_bytes`
 - [ ] Nenhuma linha `data_backend` no `config.ini` (removida no F7.3; a aplicação usa sempre o Oracle)
 - [ ] `[oracle] user` de cada servidor é a conta do papel, nunca a dona do esquema
-- [ ] `[retention] purge_user` informado e `[purge] password` no agente do purge; `purge.py --dry-run` com código 0
+- [ ] Nenhuma linha `[retention]`, `*_retention_days` nem `[purge]` (CR-030; só geram aviso)
+- [ ] Limpeza manual combinada: quem roda o SQL do banco e o `find` dos arquivos, e com que frequência (§12, README §11.3)
 - [ ] `[web] allowed_origins` com a URL pública e `trusted_proxies` com o proxy
 - [ ] `[logging] level = INFO`
 - [ ] `fence_timeout_s` e `node_offline_timeout_s` iguais em todos os agentes, conferidos pela linha `tempos do fencing` de cada um
@@ -928,7 +947,7 @@ Os passos abaixo valem para a instalação no formato anterior, com a aplicaçã
 - [ ] `config.ini` só com as chaves obrigatórias e as que fogem do padrão (README §12.1); todas as pastas configuradas criadas antes da primeira subida (§8)
 - [ ] `<RAIZ>/var` em partição própria, com alerta de uso (§4.3)
 - [ ] Senha inicial do seed trocada (§5.3)
-- [ ] `cron` do purge e `health.py` no monitoramento (§12, §13)
+- [ ] `sss-keepalive.sh` no cron (§10.6) e `health.py` no monitoramento (§13)
 - [ ] Saída padrão do nó web redirecionada (`journald` ou arquivo, §14.4)
 - [ ] Backup do esquema e dos arquivos de configuração (§17)
 
@@ -958,7 +977,6 @@ Para demonstração ou homologação interna, web e agente podem ficar no mesmo 
 * `[agent] exec_users` vazio: os scripts rodam com o próprio `sss`, sem helper nem `sudo` (§8 não se aplica).
 * Um único `secrets.cfg` pode ter `[oracle]`, `[web]`, `[environment:*]` e `[monitor]`. Em DEV, a seção de outro papel só gera `WARNING ... Secao [x] nao pertence ao papel '...'; ignorada fora de HML/PROD`.
 * A conta Oracle pode ser a dona do esquema (recusado fora de DEV).
-* `purge_user` vazio desliga o purge (código 2, §12).
 * Siga o §3 (pacote), o §7 (configuração), o §10.1 e o §10.2 (subida), o §10.4 (túnel SSH) e o §11 (validação). **Esse é o cenário ensaiado em 2026-10-21.**
 
 Os scripts `bin/start_local.sh` e `bin/stop_local.sh` do repositório são só da máquina de desenvolvimento e não vêm no pacote. Um DEV instalado pelo pacote não tem a vitrine `/dev/...` (o `src/sss/web/controllers/dev.py` não vai no pacote): ela responde 404, e o resto sobe normalmente (CR-021f3).

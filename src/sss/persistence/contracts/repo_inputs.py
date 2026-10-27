@@ -61,7 +61,7 @@ class RepoInputs(object):
 
     def read_content(self, upload_id, offset, size):
         """Parte do arquivo (bytes) a partir de offset (base 0), com 1 a 1 MiB; fim: b''. Sem conteudo
-        (esvaziado pelo purge) ou envio inexistente: RepoNotFound."""
+        (esvaziado na limpeza manual, README §11.3) ou envio inexistente: RepoNotFound."""
         raise NotImplementedError
 
     def mark_delivery(self, delivery_id, agent_id, state, reason=None):

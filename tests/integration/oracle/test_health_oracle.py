@@ -40,7 +40,6 @@ class TestHealthOracle(unittest.TestCase):
         count, _old = self.repo.overdue_queue(self.conn, now)
         self.assertEqual(count, sum(int(r[2]) for r in self.repo.queue_by_pair(self.conn, now)))
         self.repo.running_without_pid(self.conn, now, 2)
-        self.repo.last_purge(self.conn, now, 2)
         v = saude_cli.Check(self.cfg, self.conn, _args(), repo=self.repo)
         code = v.run()
         self.assertIn(code, (0, 1, 2))
@@ -49,7 +48,7 @@ class TestHealthOracle(unittest.TestCase):
     def test_explain_sem_varredura_de_tickets_e_auditoria(self):
         # EXPLAIN PLAN nao aceita valores de bind no modo Thick (ORA-01036): os binds de data viram SYSDATE,
         # a mesma comparacao de data que os indices usam.
-        for name in ("queue", "overdue_queue", "running_no_pid", "purge"):
+        for name in ("queue", "overdue_queue", "running_no_pid"):
             cur = self.conn.cursor()
             stmt = "SSS_F91B_%s" % name.upper()
             cur.execute("DELETE FROM plan_table WHERE statement_id = :s", {"s": stmt})
