@@ -17,12 +17,13 @@ from typing import Iterable, Optional, Tuple
 from sss.platform import os_platform
 
 # Interpretador do cadastro (CR-026, D3): so o nome, procurado no PATH do agente. A ordem na execucao e o
-# #! do script (se existir no servidor), o digitado no disparo e, por ultimo, o do cadastro (D5).
+# digitado no disparo, o #! do script e, por ultimo, o do cadastro (CR-027); quem nao existe e pulado.
 ALLOWLIST = ('python', 'python3', 'sh', 'bash')
 # Chaves logicas anteriores ao CR-026 (snapshots v5 e v6 ainda na fila): o nome equivalente.
 LEGACY = {'PYTHON3': 'python3', 'PYTHON': 'python', 'BASH': 'bash', 'SH': 'sh',
           'PYTHON_SCRIPT': 'python3', 'SHELL_SCRIPT': 'sh'}
-# Argumentos entre o executavel e o script (README §6.4, CR-026 D7): o python3 do cadastro roda com -I;
+# Argumentos entre o executavel e o script (README §6.4, CR-026 D7): o python3 achado pelo cadastro (inclusive
+# na troca python <-> python3, CR-027) roda com -I;
 # os demais Python (python, que pode ser o 2, o do #! e o digitado) com -E -s, que existem no 2 e no 3.
 PYTHON3_ARGS = ('-I',)
 PYTHON_PORTABLE_ARGS = ('-E', '-s')

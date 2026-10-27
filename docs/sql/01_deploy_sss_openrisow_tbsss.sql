@@ -1213,7 +1213,7 @@ COMMENT ON COLUMN openrisow.tbsss_scripts.description IS 'Detalhamento da finali
 COMMENT ON COLUMN openrisow.tbsss_scripts.script_group IS 'Coluna script_group da tabela tbsss_scripts';
 COMMENT ON COLUMN openrisow.tbsss_scripts.category IS 'Categoria de negocio ou agrupador funcional da rotina';
 COMMENT ON COLUMN openrisow.tbsss_scripts.stage IS 'Coluna stage da tabela tbsss_scripts';
-COMMENT ON COLUMN openrisow.tbsss_scripts.interpreter IS 'Interpretador do cadastro (python, python3, sh, bash), usado sem #! valido nem digitado no disparo';
+COMMENT ON COLUMN openrisow.tbsss_scripts.interpreter IS 'Interpretador do cadastro (python, python3, sh, bash), usado quando nem o digitado nem o #! existem no servidor';
 COMMENT ON COLUMN openrisow.tbsss_scripts.path_file IS 'Caminho normalizado do script: absoluto ou relativo a [agent] script_base_dir de cada agente';
 COMMENT ON COLUMN openrisow.tbsss_scripts.param_type IS 'Coluna param_type da tabela tbsss_scripts';
 COMMENT ON COLUMN openrisow.tbsss_scripts.max_parallel_env IS 'Coluna max_parallel_env da tabela tbsss_scripts';
@@ -1317,7 +1317,7 @@ COMMENT ON COLUMN openrisow.tbsss_tickets.process_id IS 'Identificador do proces
 COMMENT ON COLUMN openrisow.tbsss_tickets.process_start IS 'Coluna process_start da tabela tbsss_tickets';
 COMMENT ON COLUMN openrisow.tbsss_tickets.script_path IS 'Caminho real do script executado, resolvido pelo agente (CR-023); vazio antes do inicio';
 COMMENT ON COLUMN openrisow.tbsss_tickets.interpreter_path IS 'Interpretador digitado no disparo (caminho ou nome, CR-026); vazio quando nao informado';
-COMMENT ON COLUMN openrisow.tbsss_tickets.interpreter_used IS 'Interpretador executado (#!, digitado ou do cadastro, CR-026); vazio antes do inicio';
+COMMENT ON COLUMN openrisow.tbsss_tickets.interpreter_used IS 'Interpretador executado (digitado, #! ou do cadastro, CR-027); vazio antes do inicio';
 COMMENT ON COLUMN openrisow.tbsss_tickets.status IS 'Situacao da execucao (PENDING, RUNNING, SUCCESS, FAILED, CANCELLED)';
 COMMENT ON COLUMN openrisow.tbsss_tickets.priority IS 'Prioridade de atendimento na fila (1=Critico, 2=Alta, 3=Normal, 4=Baixa)';
 COMMENT ON COLUMN openrisow.tbsss_tickets.cancel_requested IS 'Indicador se o cancelamento foi requisitado pelo operador (Y/N)';

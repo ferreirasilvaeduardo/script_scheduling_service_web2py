@@ -561,7 +561,7 @@ class TestSeedFake(unittest.TestCase):
             path_guard.validate_registration(snap["path_file"])
 
 
-class TestInterpreterOrderCr026(unittest.TestCase):
+class TestInterpreterOrderCr027(unittest.TestCase):
     """CR-027: o digitado no disparo (se existir), depois o #! existente, depois o cadastro (no PATH do
     agente; python e python3 servem um ao outro). Quem nao existe e pulado, com nota."""
 
@@ -641,6 +641,18 @@ class TestInterpreterOrderCr026(unittest.TestCase):
         os.remove(self._p("bash"))
         self.assertEqual(self._reason(self._script("bash", name="semtroca")), "PATH_GUARD_INTERPRETER_NOT_FOUND",
                          "sh e bash nao tem troca")
+
+    def test_notas_ficam_mesmo_quando_nenhum_existe(self):
+        # CR-027 (027b, decisao A): o agente grava as tentativas antes da recusa.
+        os.remove(self._p("bash"))
+        scr = self._script("bash", b"#!/nao/existe/sh", name="nenhum")
+        js, _r, _e = pc.compile_snapshot(scr, [], {}, NOW, interpreter_override="python9.99")
+        notes = []
+        with self.assertRaises(SnapshotError) as ctx:
+            pc.validate_snapshot(js, self.cfg, notes=notes)
+        self.assertEqual(ctx.exception.reason, "PATH_GUARD_INTERPRETER_NOT_FOUND")
+        self.assertEqual(notes, ["interpretador informado nao encontrado neste servidor: python9.99",
+                                 "#! ignorado: /nao/existe/sh nao encontrado ou nao executavel neste servidor"])
 
     def test_shebang_quando_nada_e_digitado(self):
         py = self._script("sh", ("#!%s -u" % self.exe).encode())

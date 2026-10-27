@@ -1914,7 +1914,7 @@ CTS['CT-31'] = async () => {
 };
 
 CTS['CT-32'] = async () => {
-    begin('CT-32', 'CR-025/CR-026: interpretador do #!, do disparo e do cadastro');
+    begin('CT-32', 'CR-025 a CR-027: interpretador do disparo, do #! e do cadastro');
     const PY36 = '/home/eduardof/.pyenv/versions/3.6.0/bin/python3.6';
     const PY313 = '/home/eduardof/.pyenv/versions/3.13.2/bin/python3.13';
     // 025d: virtualenv sem pip criado fora do repositorio (/usr/bin/python3 -m venv --without-pip ~/.sss_homolog_venv)
@@ -1924,7 +1924,8 @@ CTS['CT-32'] = async () => {
     const opcoes = await page.$$eval('#field-interpreter option', (os) => os.map((o) => o.value).filter((v) => v));
     check('Cadastro com os quatro nomes de interpretador (CR-026)',
         JSON.stringify(opcoes) === JSON.stringify(['python3', 'python', 'bash', 'sh']), opcoes.join(','));
-    await expectText('Ajuda do cadastro com a ordem #!, disparo e cadastro', 'Na execução vale, nesta ordem');
+    await expectText('Ajuda do cadastro com a ordem disparo, #! e cadastro (CR-027)', 'Na execução vale, nesta ordem',
+        'o interpretador informado no disparo; o #! da primeira linha', 'python e python3 servem um ao outro');
     // Diagnosticos cadastrados pela tela (so GFPREPROD)
     const py36 = await diagScript('diag_interp_py36', 'diagnostico/interp_py36.py',
         'Diagnostico do CR-026: #! do Python 3.6', 'python3');
@@ -1940,25 +1941,28 @@ CTS['CT-32'] = async () => {
     const t1 = await runDirect(py36, 'GFPREPROD', {});
     // (2) sem #!: caminho completo digitado pela tela, com a ajuda da ordem e o modal
     await go(`/tickets/new?script_id=${info}&environment=GFPREPROD`);
-    await expectText('Campo Interpretador opcional com a ajuda da ordem (CR-026)', 'Interpretador (opcional)',
-        'Na execução vale primeiro o #!', 'Em branco, vale o cadastrado (python3)');
+    await expectText('Campo Interpretador opcional com a ajuda da ordem (CR-027)', 'Interpretador (opcional)',
+        'ele vence o #! do script', 'vale o #! da primeira linha do script e, sem ele, o cadastrado (python3)');
     await fill('#field-interpreter', PY313);
     await clickText('[data-component="ticketTrigger"] [data-action="open"]', 'Criar ticket', { wait: 1500 });
     await expectText('Confirmação mostra o interpretador informado e o comando com ele', 'Interpretador:', PY313);
     await snap('Disparo com o interpretador informado (caminho completo)');
     await confirmModal();
     const t2 = ticketFromUrl();
-    // (3) so o nome, no PATH do agente; (4) nome que nao existe; (5) sem #! e sem digitado: cadastro (sh)
+    // (3) so o nome, no PATH do agente; (4) nome que nao existe: pulado, vale o cadastro (CR-027);
+    // (5) sem #! e sem digitado: cadastro (sh)
     const t3 = await runDirect(info, 'GFPREPROD', {}, 'python3.12');
     const t4 = await runDirect(info, 'GFPREPROD', {}, 'python9.99');
     const t5 = await runDirect(sem, 'GFPREPROD', {});
     // (6) #!/usr/bin/env python3; (7) Python de virtualenv digitado (link, sem resolver)
     const t6 = await runDirect(envpy, 'GFPREPROD', {});
     const t7 = await runDirect(info, 'GFPREPROD', {}, VENV + '/bin/python3');
-    // (8) #! existente vence o digitado; (9) #! inexistente e ignorado, vale o cadastro (python3)
+    // (8) CR-027: o digitado vence o #! existente; (9) #! inexistente e ignorado, vale o cadastro (python3)
     const t8 = await runDirect(py36, 'GFPREPROD', {}, PY313);
     const t9 = await runDirect(ausente, 'GFPREPROD', {});
-    const todos = [t1, t2, t3, t4, t5, t6, t7, t8, t9];
+    // (10) CR-027: digitado inexistente cai para o #! existente (Python 3.6)
+    const t10 = await runDirect(py36, 'GFPREPROD', {}, 'python9.99');
+    const todos = [t1, t2, t3, t4, t5, t6, t7, t8, t9, t10];
     state.tickets.ct32 = todos;
     saveState();
     const fim = [];
@@ -1971,15 +1975,19 @@ CTS['CT-32'] = async () => {
             '#! do Python 3.6, nada digitado'],
         [t2, true, [PY313, PY313], ['Interpretador: ' + PY313 + ' 3.13.2'], 'sem #!, caminho completo digitado (3.13)'],
         [t3, true, ['python3.12', '/usr/bin/python3.12'], ['Interpretador: /usr/bin/python3.12'], 'sem #!, só o nome digitado'],
-        [t4, false, ['python9.99', 'Ainda não executado'], ['INTERPRETER_NOT_FOUND'], 'nome digitado que não existe'],
+        [t4, true, ['python9.99'], ['interpretador informado nao encontrado neste servidor: python9.99',
+            'interpretador usado: '], 'nome digitado que não existe: pulado, vale o cadastro (CR-027)'],
         [t5, true, ['Não informado'], ['interpretador usado: ', 'Diagnostico do CR-026: script sem #!'],
             'sem #! e sem digitado: o cadastro (sh)'],
         [t6, true, ['Não informado', '/usr/bin/env'], ['Interpretador: /usr/bin/python3 '], '#!/usr/bin/env python3'],
         [t7, true, [VENV + '/bin/python3', VENV + '/bin/python3'], ['Interpretador: ' + VENV + '/bin/python3', 'Prefixo: ' + VENV],
             'Python de virtualenv digitado (link)'],
-        [t8, true, [PY313, PY36], ['Interpretador: ' + PY36 + ' 3.6.0'], '#! existente vence o digitado'],
+        [t8, true, [PY313, PY313], ['interpretador usado: ' + PY313, 'Interpretador: ' + PY313 + ' 3.13.2'],
+            'o digitado vence o #! existente (CR-027)'],
         [t9, true, ['Não informado'], ['#! ignorado: /nao/existe/python3', 'interpretador usado: '],
             '#! inexistente ignorado, vale o cadastro (python3)'],
+        [t10, true, ['python9.99', PY36], ['interpretador informado nao encontrado neste servidor: python9.99',
+            'interpretador usado: ' + PY36], 'digitado inexistente, vale o #! (CR-027)'],
     ];
     for (let i = 0; i < casos.length; i++) {
         const [t, ok, detalhe, log, nome] = casos[i];
@@ -2003,7 +2011,7 @@ CTS['CT-32'] = async () => {
     for (const sid of [py36, info, sem, envpy, ausente]) {
         check(`Script de diagnóstico ${sid} desativado ao final`, await deactivateScript(sid));
     }
-    note('Risco aceito pelo responsável (README §8.5): quem dispara escolhe o executável quando o script não tem #! válido, e o #! vence o digitado. No DEV, o agente herda o PATH do terminal que o subiu; os casos usam caminhos do pyenv e o python3.12 do sistema.');
+    note('Risco aceito pelo responsável (README §8.5): quem dispara escolhe o executável, e o digitado vence o #! (CR-027). A troca python <-> python3 do cadastro não é reproduzível aqui (o servidor tem os dois); está coberta pelos testes automatizados. No DEV, o agente herda o PATH do terminal que o subiu; os casos usam caminhos do pyenv e o python3.12 do sistema.');
 };
 
 CTS['ENCERRAMENTO'] = async () => {

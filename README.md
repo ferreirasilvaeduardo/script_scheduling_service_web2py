@@ -1159,8 +1159,8 @@ O catálogo guarda o **nome do interpretador** (`python`, `python3`, `sh` ou `ba
 ```text
 1. digitado      -> [<exe digitado>, ("-E", "-s" se for Python), <script_real>, ...args]
 2. #!            -> [<exe do #!>, [<arg do #!>], ("-E", "-s" se for Python), <script_real>, ...args]
-3. cadastro      -> python3: [<python3 do PATH>, "-I", <script_real>, ...args]
-                    python:  [<python do PATH>, "-E", "-s", <script_real>, ...args]
+3. cadastro      -> python3: [<python3 do PATH>, "-I", <script_real>, ...args]   (opções pelo executável usado,
+                    python:  [<python do PATH>, "-E", "-s", <script_real>, ...args]   inclusive na troca, CR-027)
                     sh/bash: [<sh ou bash do PATH>, <script_real>, ...args]
 ```
 
@@ -1631,7 +1631,7 @@ SELECT id, script_id, environment FROM (
 * **Ordem:** pela prioridade efetiva (§5.3, `:env_min` = `queue_aging_min`, idade contada desde `GREATEST(scheduled_at, created_at)`, CR-008 R-20), depois esse mesmo início da espera e `id`. O `EXPLAIN` está em `docs/explain/SCHEDULER.md`.
 * **Ambientes ativos (CR-007, D2):** o agente relê `tbsss_environments` a cada ciclo do orquestrador e usa só os ambientes atendidos que estão ativos. Desativar um ambiente para os claims sem reiniciar os agentes; reativá-lo volta a atendê-lo.
 
-Desde o CR-026 a leitura 1 não filtra o interpretador: o agente pega qualquer script dos ambientes que atende, e o interpretador é conferido na execução (§8.5); num servidor sem ele, o ticket termina em `PRECHECK_FAILED` (`INTERPRETER_NOT_FOUND`) em vez de esperar outro agente.
+Desde o CR-026 a leitura 1 não filtra o interpretador: o agente pega qualquer script dos ambientes que atende, e o interpretador é conferido na execução (§8.5); num servidor sem nenhum interpretador possível (digitado, `#!` e cadastro, com a troca `python` ↔ `python3`; CR-027), o ticket termina em `PRECHECK_FAILED` (`INTERPRETER_NOT_FOUND`) em vez de esperar outro agente.
 
 Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olha o caminho, e um agente que não tenha o arquivo, não tenha a pasta base de um caminho relativo (`NO_BASE_DIR`) ou em que o arquivo não passe na §8.5 finaliza o ticket com `PRECHECK_FAILED`.
 
@@ -1749,7 +1749,7 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
           interpreter_used = :interpreter_used
     WHERE id = :ticket_id AND agent_id = :agent_id AND status = 'RUNNING'
    ```
-   `script_path` é o caminho real executado (CR-023, D6) e `interpreter_used`, o interpretador executado (o do `#!`, o digitado ou o do cadastro, CR-026, D6); os dois aparecem no detalhe do ticket. O digitado no disparo já está em `interpreter_path`, gravado pelo nó web na criação. Antes de iniciar o script, o agente escreve no log as linhas `[SSS] #! ignorado: ...` (se houver) e `[SSS] interpretador usado: ...`.
+   `script_path` é o caminho real executado (CR-023, D6) e `interpreter_used`, o interpretador executado (o digitado, o do `#!` ou o do cadastro, CR-027); os dois aparecem no detalhe do ticket. O digitado no disparo já está em `interpreter_path`, gravado pelo nó web na criação. Antes de iniciar o script, o agente escreve no log as linhas `[SSS]` das tentativas puladas (`interpretador informado nao encontrado...`, `#! ignorado...`, `python nao encontrado...; usando python3`), se houver, e `[SSS] interpretador usado: ...`.
    Se `rowcount = 0`, a posse foi perdida (por exemplo, `NODE_OFFLINE` durante o spawn): encerramento do grupo pela máquina de estados do executor (`request_stop`/`advance_stop`, sem esperar) e ERROR `OWNERSHIP_LOST`. Se o `UPDATE` falhar por erro de banco, o ticket fica "PID pendente" no mapa local e o `UPDATE` é refeito a cada ciclo rápido até `rowcount` 1 ou 0 (CR-008, R-08); enquanto isso, o processo é acompanhado normalmente (heartbeat, cancelamento, timeout, fencing). O registro do PID é rotina técnica e não grava `updated_*` (§10, CR-006).
 
 ### 8.5 Validação de interpretador e caminho (`path_guard.py`, CR-005, CR-011)
@@ -1760,7 +1760,7 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
 
 * **No cadastro**, só o nome: `python`, `python3`, `sh` ou `bash` (CK `ck_tbsss_scr_int`). Não há `[agent] interpreters`: o agente procura o nome no próprio `PATH` e pega tickets de qualquer interpretador (a fila escolhe só pelo ambiente).
 * **No disparo**, todo script tem o campo opcional **Interpretador**, em branco por padrão. O operador pode digitar o caminho absoluto (`/opt/py311/bin/python3`) ou só o nome (`python3.13`). No nó web só o formato é conferido: caminho absoluto sem caractere de controle (até 500 caracteres; pode ter espaço), ou nome sem espaço com letras, números, `.`, `_`, `+` e `-` (até 100 caracteres) (`INTERPRETER_INVALID`, mostrado no campo). O digitado vai para o snapshot, para `tbsss_tickets.interpreter_path` e para a auditoria do disparo. A reexecução repete o valor; o agendamento roda sem digitado.
-* **No agente, a ordem (CR-027):** o digitado no disparo, se existir no servidor; senão o `#!` da primeira linha do script, se o executável existir; senão o nome do cadastro (`python` e `python3` servem um ao outro). Montagem do `argv` no §6.4. Quem não existe é pulado, com uma linha `[SSS]` no log do ticket (`interpretador informado nao encontrado`, `#! ignorado`, `python nao encontrado; usando python3`). A conferência é mínima e não restringe: o escolhido precisa existir e ser executável; nenhum dos três: `PRECHECK_FAILED` com `INTERPRETER_NOT_FOUND`. Não há conferência de pasta do SSS para o interpretador (risco abaixo).
+* **No agente, a ordem (CR-027):** o digitado no disparo, se existir no servidor; senão o `#!` da primeira linha do script, se o executável existir; senão o nome do cadastro (`python` e `python3` servem um ao outro). Montagem do `argv` no §6.4. Quem não existe é pulado, com uma linha `[SSS]` no log do ticket (`interpretador informado nao encontrado`, `#! ignorado`, `python nao encontrado; usando python3`). A conferência é mínima e não restringe: o escolhido precisa existir e ser executável; nenhum dos três: `PRECHECK_FAILED` com `INTERPRETER_NOT_FOUND`, e o log do ticket traz as linhas das tentativas antes da linha de recusa. Não há conferência de pasta do SSS para o interpretador (risco abaixo).
   * A conferência é feita como o usuário do agente, não como o usuário de execução que roda o script fora do DEV.
   * O nome sem `/` é procurado no `PATH` herdado pelo processo do agente: o da unit do systemd (o padrão do systemd, ou `Environment=PATH=...`) ou o do shell que rodou o `bin/sss-scheduler.sh`, que não o altera. O `env` de um `#!/usr/bin/env python3` procura no `PATH` fixo do filho (§8.6).
   * O caminho é executado como foi escrito ou encontrado, sem resolver links (virtualenv funciona).
@@ -1820,7 +1820,7 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
 | `TMPDIR` | `tmp/` dentro dele |
 | `LANG`, `LC_ALL` | `child_locale` (padrão `C.UTF-8`) |
 | `TZ` | herdado do daemon (definido pelo launcher) |
-| `PYTHONDONTWRITEBYTECODE` | `1` (só tem efeito em scripts shell que chamem `python` sem `-I` nem `-E`; o `python3` do cadastro roda com `-I`, e os demais Python (o `python` do cadastro, o do `#!` e o digitado) com `-E`, que ignoram as variáveis `PYTHON*`; o UTF-8 deles vem do `LC_ALL`; CR-007, R-17; CR-026) |
+| `PYTHONDONTWRITEBYTECODE` | `1` (só tem efeito em scripts shell que chamem `python` sem `-I` nem `-E`; o `python3` achado pelo cadastro (inclusive na troca, CR-027) roda com `-I`, e os demais Python (o `python` achado pelo cadastro, o do `#!` e o digitado) com `-E`, que ignoram as variáveis `PYTHON*`; o UTF-8 deles vem do `LC_ALL`; CR-007, R-17; CR-026) |
 | `PYTHONIOENCODING` | `utf-8` (mesma observação) |
 | `SSS_TICKET_ID`, `SSS_PARENT_TICKET_ID` | id da execução e, na reexecução, o do ticket original (CR-010) |
 | `SSS_EXECUTION_TYPE` | `MANUAL` ou `AGENDADA` (ticket com `schedule_id`; CR-010) |
@@ -2337,7 +2337,7 @@ END;
   * `ck_tbsss_scr_ptype (param_type IN ('NAMED','POSITIONAL','NONE'))`
   * `ck_tbsss_scr_active`
   * `ck_tbsss_scr_paral (max_parallel_env BETWEEN 1 AND 999)`
-  * `ck_tbsss_scr_int (interpreter IN ('python','python3','sh','bash'))` (CR-026: só o nome, procurado no `PATH` do agente quando o script não tem `#!` válido nem interpretador informado no disparo)
+  * `ck_tbsss_scr_int (interpreter IN ('python','python3','sh','bash'))` (CR-026: só o nome, procurado no `PATH` do agente quando nem o informado no disparo nem o `#!` existem no servidor, CR-027)
   * `ck_tbsss_scr_path (INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\') = 0)` (formato do §8.5, CR-005; desde o CR-023 sem exigir a `/` inicial, porque o caminho pode ser relativo a `[agent] script_base_dir`)
   * `ck_tbsss_scr_tmout (timeout_s IS NULL OR timeout_s > 0)`
   * `ck_tbsss_scr_upd` (colunas de registro, CR-006)
@@ -2348,7 +2348,7 @@ END;
   * `script_group VARCHAR2(30 CHAR)`
   * `category VARCHAR2(30 CHAR)`
   * `stage VARCHAR2(30 CHAR)`
-  * `interpreter VARCHAR2(100 CHAR) NOT NULL` (CR-026: `python`, `python3`, `sh` ou `bash`; a ordem na execução é o `#!`, o informado no disparo e este, §8.5)
+  * `interpreter VARCHAR2(100 CHAR) NOT NULL` (CR-026: `python`, `python3`, `sh` ou `bash`; a ordem na execução é o informado no disparo, o `#!` e este, CR-027, §8.5)
   * `path_file VARCHAR2(500 CHAR) NOT NULL` (caminho do script, absoluto ou relativo a `[agent] script_base_dir` de cada agente, §8.5, CR-005, CR-023)
   * `param_type VARCHAR2(15 CHAR) DEFAULT 'NAMED' NOT NULL`
   * `max_parallel_env NUMBER(3) DEFAULT 1 NOT NULL`
@@ -2527,7 +2527,7 @@ END;
   * `process_start NUMBER(20)`
   * `script_path VARCHAR2(1000 CHAR)` (CR-023: caminho real executado, gravado pelo agente junto com o PID; acima de 1000 caracteres, só o final, com `...` na frente)
   * `interpreter_path VARCHAR2(1000 CHAR)` (CR-026: o interpretador digitado no disparo, caminho ou nome, gravado pelo nó web na criação; vazio quando não informado)
-  * `interpreter_used VARCHAR2(1000 CHAR)` (CR-026: o interpretador executado, o do `#!`, o digitado ou o do cadastro, gravado pelo agente junto com o PID, com a mesma regra de tamanho do `script_path`)
+  * `interpreter_used VARCHAR2(1000 CHAR)` (CR-026: o interpretador executado, o digitado, o do `#!` ou o do cadastro (CR-027), gravado pelo agente junto com o PID, com a mesma regra de tamanho do `script_path`)
   * `status VARCHAR2(15 CHAR) DEFAULT 'PENDING' NOT NULL`
   * `priority NUMBER(1) DEFAULT 2 NOT NULL`
   * `cancel_requested CHAR(1) DEFAULT 'N' NOT NULL`
@@ -3029,7 +3029,7 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
 | Argumentos visíveis em `ps`/lista de processos | Proibição de parâmetro de senha; parâmetros sensíveis apenas mascarados na UI e nos logs |
 | Script que faça `setsid`/double-fork escapa do `killpg` | Homologação do script no catálogo; política de revisão de código; o processo fugido fica limitado ao usuário de execução do ambiente (D1), e os netos que ficam no grupo são encerrados sempre (§8.7, R-02) |
 | Conteúdo e versão do script sob controle do ambiente (CR-011): sem hash nem conferência de dono, um arquivo alterado no disco, ou um link simbólico trocado por quem grava na pasta dele, executa o novo conteúdo sem aviso | O arquivo real não pode ser gravável por grupo nem por outros, nem ficar nas pastas do sistema ou do SSS (§8.5); o script roda com o usuário de execução do ambiente (D1); a gestão de versões e de permissões dos scripts é do ambiente |
-| Interpretador escolhido no disparo e `#!` (CR-025 e CR-026, aceitos em 2026-10-26): quem tem `EXEC_SCRIPT` escolhe o executável que roda o script (sem `#!` válido), inclusive um que não seja interpretador; o script pode rodar numa versão errada; quem edita a primeira linha troca o interpretador sem passar pelo cadastro; um servidor sem o interpretador pega o ticket e falha (§8.5) | O digitado no snapshot, em `interpreter_path` e na auditoria do disparo, o usado em `interpreter_used` e no log; conferência mínima (existe e é executável); Python isolado (`-I` ou `-E -s`); execução com o usuário de execução do ambiente, nunca como root; o perfil decide quem tem `EXEC_SCRIPT` |
+| Interpretador escolhido no disparo e `#!` (CR-025, CR-026 e CR-027, aceitos em 2026-10-26 e 2026-10-27): quem tem `EXEC_SCRIPT` escolhe o executável que roda o script (o digitado vence o `#!`, CR-027), inclusive um que não seja interpretador; o script pode rodar numa versão errada; quem edita a primeira linha troca o interpretador sem passar pelo cadastro; um servidor sem nenhum interpretador possível pega o ticket e falha; no cadastro, `python` e `python3` servem um ao outro, e um script feito para o Python 2 pode rodar no 3 (ou o contrário) (§8.5) | O digitado no snapshot, em `interpreter_path` e na auditoria do disparo, o usado em `interpreter_used` e no log; conferência mínima (existe e é executável); Python isolado (`-I` ou `-E -s`); execução com o usuário de execução do ambiente, nunca como root; o perfil decide quem tem `EXEC_SCRIPT` |
 | Interpretador numa pasta gravável pelo usuário de execução (CR-026f, aceito pelo responsável pelo produto em 2026-10-26): o agente não recusa um `#!` ou um interpretador digitado em `output_dir`, `input_dir`, `script_work_dir` ou outra pasta do SSS; um script poderia trocar esse executável para a execução seguinte (§8.5) | Os scripts continuam recusados nessas pastas (`SSS_DIR`); o interpretador usado fica em `interpreter_used` e no log do ticket; quem cadastra e quem dispara são perfis controlados; as pastas por ambiente são do usuário de execução daquele ambiente, `0700` |
 | Granularidade fina "perfil × script × ambiente" | Não suportada; a intersecção `profile_env ∩ script_env` atende ao escopo atual |
 | Semântica de horário de verão | Horário de parede do servidor Oracle (§7.1), com o pré-requisito de banco sem horário de verão (D3). Se ele não for cumprido: com `SKIP`, a ocorrência que cai no avanço do relógio é perdida; o recuo atrasa a regra pelo tamanho do recuo; a detecção de nó offline é suspensa pela trava de salto de relógio (§8.8) |

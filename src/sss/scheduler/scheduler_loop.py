@@ -1209,7 +1209,7 @@ class Agent(object):
                                                                        self._cfg_snapshot(), notes=notes)
         except params_compiler.SnapshotError as exc:
             code = exc.reason[len("PATH_GUARD_"):] if exc.reason.startswith("PATH_GUARD_") else exc.reason
-            return self._refuse(item, code)
+            return self._refuse(item, code, notes)
         item.notes = notes
         # Snapshot v5/v6 guarda a chave logica anterior ao CR-026: compara pelo nome equivalente.
         if script is None or snap["path_file"] != script["path_file"] \
@@ -1237,9 +1237,11 @@ class Agent(object):
             search_path = os.environ.get("PATH", os.defpath)
         return _Cfg()
 
-    def _refuse(self, item, code):
+    def _refuse(self, item, code, notes=()):
         item.log.warning("pre-validacao recusada: %s", code, extra={"action": "PRECHECK"})
-        self._finalize_without_spawn(item, _PRECHECK, "pre-validacao recusada: %s (agente %s)" % (code, self.agent_id))
+        # CR-027: as tentativas de interpretador puladas vem antes da recusa, cada uma na sua linha [SSS].
+        lines = list(notes) + ["pre-validacao recusada: %s (agente %s)" % (code, self.agent_id)]
+        self._finalize_without_spawn(item, _PRECHECK, "\n[SSS] ".join(lines))
         return None
 
     def _error_before_spawn(self, item, exc):
@@ -1304,7 +1306,7 @@ class Agent(object):
             item.log.error("falha antes do spawn: %s", exc, extra={"action": "SPAWN"})
             return self._finalize_without_spawn(item, _FINAL["SPAWN_ERROR"], "falha ao iniciar: %s (agente %s)" % (
                 exc.__class__.__name__, self.agent_id))
-        # CR-026: o #! ignorado (se houver) e o interpretador usado abrem o log do ticket.
+        # CR-026/CR-027: as tentativas puladas (digitado, #!, troca python <-> python3) e o usado abrem o log.
         for note in getattr(item, "notes", None) or []:
             executor.sss_line(fd, note)
         executor.sss_line(fd, "interpretador usado: %s" % item.interpreter_used)
@@ -1456,4 +1458,4 @@ class _Item(object):
         self.output = None  # CR-012: output_phase.Saida quando o agente tem output_dir
         self.script_path = None  # CR-023 (D6): caminho real executado, gravado junto com o PID
         self.interpreter_used = None  # CR-026: interpretador executado (argv[0]), gravado junto com o PID
-        self.notes = []  # CR-026: linhas [SSS] da pre-validacao (ex.: #! ignorado)
+        self.notes = []  # CR-026/CR-027: linhas [SSS] da pre-validacao (tentativas de interpretador puladas)

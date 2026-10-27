@@ -410,7 +410,7 @@ def compile_snapshot(script, links, answers, now, interpreter_override=None):
     """Compila o snapshot v7 (README §6.5) -> (json_str | None, resolvidos, erros por campo).
 
     Guarda o interpretador do cadastro, o path_file cadastrado e apenas os argumentos: o argv real e montado
-    pelo agente (#!, digitado ou cadastro, CR-026). Erros sao acumulados.
+    pelo agente (digitado, #! ou cadastro, CR-027). Erros sao acumulados.
     """
     resolved, errors = _resolve(links, answers)
     args = _build(script['param_type'], links, resolved, errors)
@@ -488,17 +488,17 @@ def validate_snapshot(json_str, cfg, notes=None):
     except path_guard.PathGuardError as e:
         raise SnapshotError('PATH_GUARD_' + e.code)
     try:
-        argv, found = _agent_argv(registered, override, real, args, getattr(cfg, 'search_path', None))
+        # CR-027: as notas entram em notes mesmo quando nenhum interpretador existe (o log mostra as tentativas).
+        argv = _agent_argv(registered, override, real, args, getattr(cfg, 'search_path', None),
+                           notes if notes is not None else [])
     except path_guard.PathGuardError as e:
         raise SnapshotError('PATH_GUARD_' + e.code)
-    if notes is not None:
-        notes.extend(found)
     return snap, argv, real
 
 
 def _shebang_argv(script_real, search_path):
-    """(cabeca do argv pelo #!, ou None, nota). #! ausente: None sem nota; #! cujo executavel nao existe
-    (ou invalido): None com a nota para o log do ticket (CR-026, D5; CR-027)."""
+    """(cabeca do argv pelo #!, ou None, nota). #! ausente, relativo ou invalido: None sem nota; #! cujo
+    executavel nao existe: None com a nota para o log do ticket (CR-026; CR-027)."""
     try:
         path, extra = path_guard.read_shebang(script_real)
     except path_guard.PathGuardError:
@@ -539,12 +539,11 @@ def _registered_argv(registered, search_path, notes):
     raise path_guard.PathGuardError(path_guard.Code.INTERPRETER_NOT_FOUND)
 
 
-def _agent_argv(registered, override, script_real, args, search_path):
-    """(argv do agente, notas para o log do ticket) na ordem do CR-027: o digitado no disparo, se existir
+def _agent_argv(registered, override, script_real, args, search_path, notes):
+    """argv do agente na ordem do CR-027, com as notas para o log do ticket acrescentadas em notes: o digitado no disparo, se existir
     no servidor; senao o #! do script, se o executavel existir; senao o nome do cadastro, procurado no PATH do
     agente (python e python3 servem um ao outro). Quem nao existe e pulado, com uma nota. O python3 roda com
-    -I; os demais Python com -E -s. Nenhum existe: INTERPRETER_NOT_FOUND."""
-    notes = []
+    -I; os demais Python com -E -s. Nenhum existe: INTERPRETER_NOT_FOUND (notes fica com as tentativas)."""
     head = None
     if override:
         try:
@@ -559,7 +558,7 @@ def _agent_argv(registered, override, script_real, args, search_path):
             notes.append(note)
     if head is None:
         head = _registered_argv(registered, search_path, notes)
-    return head + [script_real] + list(args), notes
+    return head + [script_real] + list(args)
 
 
 def _secrets(snapshot):

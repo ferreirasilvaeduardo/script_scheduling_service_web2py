@@ -478,6 +478,12 @@ class TestExecution(_Base):
             self.run_loop(self.finished(nome))
         self.assertEqual(self.final(nome)[:2], ("FAILED", "PRECHECK_FAILED"))
         self.assertIn("INTERPRETER_NOT_FOUND", "\n".join(logs.output))
+        # CR-027 (decisao A do 027b): as tentativas puladas vem antes da recusa, uma linha [SSS] cada.
+        log = self.db.tickets[nome]["log"]
+        first = log.index("[SSS] interpretador informado nao encontrado neste servidor: interpretador_que_nao_existe")
+        second = log.index("[SSS] #! ignorado: /nao/existe/sh nao encontrado")
+        self.assertLess(first, second)
+        self.assertLess(second, log.index("[SSS] pre-validacao recusada: INTERPRETER_NOT_FOUND"))
 
     def test_cr023_relativo_sem_base_e_precheck(self):
         sid = self.db.script("echo nunca\n")

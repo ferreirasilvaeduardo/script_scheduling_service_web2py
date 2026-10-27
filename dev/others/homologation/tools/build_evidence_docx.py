@@ -636,6 +636,30 @@ RODADAS["20261026_r4"] = dict(RODADAS["20261026"], **{
         u"script não tem #! válido, e o #! vence o digitado.",
     ],
 })
+RODADAS["20261027"] = dict(RODADAS["20261026_r4"], **{
+    "commit": u"a1c94fb (CR-027a: o interpretador digitado vence o #!) mais o roteiro do CR-027b, no mesmo commit "
+              u"deste documento",
+    "adaptacao": dict(RODADAS["20261026_r4"]["adaptacao"], **{
+        "CT-01": ADAPTACAO["CT-01"] + u" O banco não foi recriado desde o CR-026a: o admin já estava com a senha "
+                                      u"escolhida (SSS_ADMIN_START=new).",
+        "CT-32": (u"Ajustado no CR-027: ajudas do cadastro e do disparo com a ordem nova (disparo, #!, cadastro); o "
+                  u"nome digitado inexistente é pulado e vale o cadastro, com a linha [SSS] no log; o caminho do "
+                  u"Python 3.13 digitado vence o #! do Python 3.6. Os demais casos do CR-026 continuam (#! sem "
+                  u"digitado, só o nome, virtualenv, #!/usr/bin/env, #! inexistente, cadastro sh). A troca python "
+                  u"<-> python3 do cadastro não é reproduzível neste servidor (tem os dois) e fica coberta pelos "
+                  u"testes automatizados."),
+    }),
+    "observacoes": [
+        u"Rodada do CR-027b (o interpretador digitado vence o #!; quem não existe é pulado; python <-> python3 no "
+        u"cadastro). Marca %s." % STAMP,
+        u"Risco aceito pelo responsável pelo produto (README §8.5): quem dispara escolhe o executável, e o digitado "
+        u"vence o #!.",
+        u"Depois da rodada completa, a revisão independente do CR-027b pediu o caso \"digitado inexistente cai para o "
+        u"#!\" e o responsável decidiu gravar as tentativas também quando nenhum interpretador existe. O agente foi "
+        u"reiniciado com esse código e o CT-32 foi rodado de novo, já com o caso novo; os resultados do CT-32 são os "
+        u"dessa segunda passada.",
+    ],
+})
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]
