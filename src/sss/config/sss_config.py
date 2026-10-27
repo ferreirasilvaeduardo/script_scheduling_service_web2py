@@ -65,12 +65,18 @@ FIXED = {
 _FIXED_REASON = "valor fixo no codigo desde o CR-032"
 _REMOVED_REASON = "sem efeito, retirada no CR-032"
 IGNORED_KEYS.update(dict((key, "%s (%s)" % (_FIXED_REASON, value)) for key, value in FIXED.items()))
+# CR-032 (D4, D14): sempre do [app] name; o secrets.cfg e o unico da pasta de cima (instance/secrets.cfg).
+_DERIVED_REASON = "derivada do [app] name desde o CR-032"
+IGNORED_KEYS.update({("agent", "agent_id"): _DERIVED_REASON, ("agent", "work_dir"): _DERIVED_REASON,
+                     ("logging", "log_dir"): _DERIVED_REASON,
+                     ("secrets", "secrets_file"): "o secrets.cfg e o unico de instance/ desde o CR-032"})
 IGNORED_KEYS.update({("agent", "claim_batch_size"): _REMOVED_REASON,
                      ("agent", "max_parallel_hard_limit"): _REMOVED_REASON,
                      ("oracle", "oracle_client_lib_dir"): _REMOVED_REASON})
 
 # Secoes inteiras ignoradas com aviso (CR-030): o load() registra uma linha por chave.
-IGNORED_SECTIONS = {"retention": _NO_PURGE, "retencao": _NO_PURGE}
+IGNORED_SECTIONS = {"retention": _NO_PURGE, "retencao": _NO_PURGE,
+                    "secrets": "o secrets.cfg e o unico de instance/ desde o CR-032"}
 
 # Avisos do load() que esperam o log da aplicacao (CR-026f): o load() roda antes do sss_logging.configure().
 _PENDING_WARNINGS = []  # type: List[str]
@@ -171,7 +177,7 @@ SCHEMA = collections.OrderedDict([
         ("sss_env", FieldDef("enum", required=True, allowed_values=("DEV", "HML", "PROD"))),
         # CR-028 (D5, D6): nome do processo (web0001, agente0001...); as pastas saem de var/<nome>/ e, no
         # agente, e o agent_id.
-        ("name", FieldDef("str", required=False, default=None, regex=r"^[a-z][a-z0-9_-]{0,29}$")),
+        ("name", FieldDef("str", required=True, regex=r"^[a-z][a-z0-9_-]{0,29}$")),
     ])),
     ("oracle", collections.OrderedDict([
         ("user", FieldDef("str", required=True)),
@@ -182,15 +188,8 @@ SCHEMA = collections.OrderedDict([
         ("driver_mode", FieldDef("enum", required=False, allowed_values=("auto", "thin", "thick", "cx_oracle"), default="auto")),
         ("call_timeout_ms", FieldDef("int", required=False, min_val=1, max_val=3600000, default=30000)),
     ])),
-    ("secrets", collections.OrderedDict([
-        # CR-026 (D9): sem a linha, o secrets.cfg da pasta do config.ini.
-        ("secrets_file", FieldDef("path", required=False, default=None)),
-    ])),
     ("agent", collections.OrderedDict([
-        # init_db, seed e purge sao atores reservados do sistema (README §4.4 e §8.12).
-        ("agent_id", FieldDef("str", required=True, regex=r"^(?!(?:init_db|seed|purge)$)[A-Za-z0-9._-]{1,30}$")),
         ("environments", FieldDef("list_csv", required=True)),
-        ("work_dir", FieldDef("path", required=True)),
         # Usuario do SO por ambiente e pasta base dos diretorios de trabalho dos scripts (CR-007, D1):
         # obrigatorios fora de DEV (validacao cruzada em carregar()).
         ("exec_users", FieldDef("map_csv", required=False, default=())),
@@ -217,7 +216,6 @@ SCHEMA = collections.OrderedDict([
         ("env_passthrough", FieldDef("list_csv", required=False, default=())),
     ])),
     ("logging", collections.OrderedDict([
-        ("log_dir", FieldDef("path", required=True)),
         ("level", FieldDef("enum", required=False, allowed_values=("DEBUG", "INFO", "WARN", "ERROR"), default="INFO")),
         ("app_log_max_bytes", FieldDef("int", required=False, min_val=1024, max_val=1073741824, default=10485760)),
         ("max_log_size_bytes", FieldDef("int", required=False, min_val=1024, max_val=67108864, default=5242880)),
@@ -427,7 +425,7 @@ INSTALL_TYPE = os.path.basename(os.path.dirname(APP_DIR)).upper()
 # Helper de execucao (CR-028): fora da raiz, que e do usuario de servico; pasta do root ao lado dela.
 HELPER_DEFAULT = os.path.join(os.path.dirname(APP_DIR), "sss-root", "bin", "sss-helper")
 # Secoes que cada papel nao usa (CR-028, D4): o papel vem do proprio arquivo.
-_ROLE_SKIPPED = {"web": ("agent",), "agent": ("web",), "all": ()}
+_ROLE_SKIPPED = {"web": ("agent",), "agent": ("web",)}
 # Chaves de [agent] que o web tambem usa (painel de saude, agendamentos, fila) e que precisam ser iguais as dos
 # agentes (revisao do CR-028, A1): o config do web aceita um [agent] parcial so com elas, sem mudar o papel.
 # CR-032 (D2, D3): os tempos de saude e os ajustes do desdobro ficaram fixos; sobra so a politica de misfire.
@@ -443,8 +441,8 @@ def env_label(sss_env: str, install_type: Optional[str] = None) -> str:
 
 
 def role_of(sections):
-    """Papel do config.ini pelas secoes (CR-028, D4): [web] sem [agent] e o web; [agent] sem [web] e o agente;
-    com as duas (ou nenhuma), o formato unico anterior, validado inteiro."""
+    """Papel do config.ini pelas secoes (CR-028, D4): [web] sem [agent] e o web; [agent] sem [web] e o agente.
+    Com as duas, ou nenhuma, "all": o formato unico, recusado desde o CR-032 (D4) pelo load()."""
     present = set(sections)
     if "web" in present and "agent" not in present:
         return "web"
@@ -454,13 +452,12 @@ def role_of(sections):
 
 
 def _derived_paths(name, role, present):
-    """Pastas que saem do nome do processo quando a chave nao esta escrita (CR-028, D5)."""
+    """Pastas que saem do nome do processo quando a chave nao esta escrita (CR-028, D5). agent_id, work_dir e
+    log_dir saem sempre do nome (CR-032, D4): nao sao mais chaves do config."""
     base = os.path.join(VAR_DIR, name)
-    derived = {("logging", "log_dir"): os.path.join(base, "logs")}
+    derived = {}
     if role != "web":
         derived.update({
-            ("agent", "agent_id"): name,
-            ("agent", "work_dir"): os.path.join(base, "work"),
             ("agent", "exec_work_dir"): os.path.join(VAR_DIR, "exec"),
             ("agent", "output_dir"): os.path.join(base, "output"),
             ("agent", "input_dir"): os.path.join(base, "input"),
@@ -509,6 +506,10 @@ def load(ini_path: str) -> "Config":
             if k not in WEB_AGENT_KEYS and ("agent", k) not in IGNORED_KEYS:
                 raise ConfigError(section="agent", key=k,
                                   reason="No config do web, [agent] so aceita: %s" % ", ".join(WEB_AGENT_KEYS))
+    if role == "all":
+        # CR-032 (D4): sem formato unico; um config.ini por processo, em instance/<nome>/.
+        raise ConfigError(reason="O config.ini precisa ser de um processo: [web] (no web) ou [agent] (agente), "
+                                 "nao os dois nem nenhum (CR-032; modelos em instance/exemplos/)")
     raw_name = cp["app"].get("name", "").strip() if cp.has_section("app") else ""
     present = set((sec, k) for sec in cp.sections() for k in cp[sec])
     derived = _derived_paths(raw_name, role, present) if raw_name else {}
@@ -579,17 +580,27 @@ def load(ini_path: str) -> "Config":
         raise ConfigError(section="app", key="name",
                           reason="O name (%s) deve ser o nome da pasta instance/%s/ (CR-028)"
                                  % (app_name, os.path.basename(folder)))
-    agent_id = data_sections["agent"]["agent_id"]
-    if role != "web" and app_name and agent_id and agent_id != app_name:
-        raise ConfigError(section="agent", key="agent_id",
-                          reason="Com [app] name, o agent_id e o proprio nome (CR-028); apague a linha agent_id")
+    # CR-032 (D4): agent_id, work_dir e log_dir sempre do nome.
+    base = os.path.join(VAR_DIR, app_name)
+    data_sections["logging"]["log_dir"] = os.path.join(base, "logs")
+    data_sections["agent"]["agent_id"] = app_name if role == "agent" else None
+    data_sections["agent"]["work_dir"] = os.path.join(base, "work") if role == "agent" else None
+    if role == "agent" and app_name in RESERVED_AGENT_IDS:
+        raise ConfigError(section="app", key="name",
+                          reason="Nome reservado do sistema: %s (README §4.4 e §8.12)" % app_name)
     data_sections["app"]["role"] = role
     data_sections["app"]["config_path"] = os.path.abspath(ini_path)
     if role != "web" and data_sections["agent"]["helper_path"] is None:
         data_sections["agent"]["helper_path"] = HELPER_DEFAULT
 
-    if data_sections["secrets"]["secrets_file"] is None:
-        data_sections["secrets"]["secrets_file"] = os.path.join(os.path.dirname(os.path.abspath(ini_path)), "secrets.cfg")
+    # CR-032 (D14): um secrets.cfg por servidor, na pasta de cima da do config (instance/secrets.cfg). O antigo,
+    # na pasta do processo, ainda e lido, com aviso para mover.
+    shared = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(ini_path))), "secrets.cfg")
+    old = os.path.join(os.path.dirname(os.path.abspath(ini_path)), "secrets.cfg")
+    if not os.path.exists(shared) and os.path.exists(old):
+        _PENDING_WARNINGS.append("secrets.cfg: lido de %s; mova-o para %s, unico do servidor (CR-032)" % (old, shared))
+        shared = old
+    data_sections["secrets"] = {"secrets_file": shared}
 
     # 3. Validacao de env_passthrough contra a lista de bloqueio e as chaves fixas (README §8.6)
     agent_dict = data_sections["agent"]
@@ -904,22 +915,12 @@ class Secrets(object):
         return "<Segredos: ***redacted***>"
 
 
-def _other_role_section(role, section_name, env):
-    """Secao que pertence a outro papel (README §4.1, CR-007 D1b): erro em HML/PROD, WARN nos demais casos."""
-    reason = "Secao [%s] nao pertence ao papel '%s' (README §4.1)" % (section_name, role)
-    if env in ("HML", "PROD"):
-        raise ConfigError(section=section_name, key=None, reason=reason)
-    _log.warning("secrets.cfg: %s; ignorada fora de HML/PROD", reason)
-
-
 def _monitor_secrets(cp, env, cfg=None):
-    """Papel monitor (README §4.1; CR-008, E3; F9.1b): so [monitor]; [web] proibida; as demais secoes do arquivo
-    do servidor sao ignoradas, sem validar nem registrar no masking os segredos de outros papeis.
+    """Papel monitor (README §4.1; CR-008, E3; F9.1b): so [monitor]; as demais secoes do arquivo do servidor
+    (CR-032: um secrets.cfg compartilhado) sao ignoradas, sem validar nem registrar no masking.
 
     CR-030 (P1): com sss_env = DEV e sem [monitor], a monitoracao usa a conta do [oracle] (ambiente com um
     usuario de banco so)."""
-    if "web" in cp.sections():
-        _other_role_section("monitor", "web", env)
     if "monitor" not in cp.sections():
         user = getattr(getattr(cfg, "oracle", None), "user", None)
         password = (cp["oracle"].get("password") or "").strip() if "oracle" in cp.sections() else ""
@@ -1004,8 +1005,7 @@ def load_secrets(path, cfg=None, sss_env=None, data_backend=None, role="web"):
         cookie_key = cp["web"]["cookie_key"].strip()
         if not cookie_key:
             raise ConfigError(section="web", key="cookie_key", reason="cookie_key nao pode ser vazio")
-    elif "web" in cp.sections():
-        _other_role_section(role, "web", env)
+    # CR-032 (D14): um secrets.cfg por servidor; as secoes dos outros processos sao ignoradas sem aviso.
 
     # [oracle] password: em DEV e FAKE e opcional; obrigatorio para web e agente
     oracle_password = None
@@ -1027,10 +1027,6 @@ def load_secrets(path, cfg=None, sss_env=None, data_backend=None, role="web"):
     if "purge" in cp.sections():
         _log.warning("secrets.cfg: secao [purge] ignorada: %s; apague a secao", _NO_PURGE)
 
-    # [monitor]: so no papel monitor (CR-008, E3), tratado em _segredos_monitor
-    if "monitor" in cp.sections():
-        _other_role_section(role, "monitor", env)
-
     # [environment:<NOME>]: so no papel agente
     environments = {}
     for sec in cp.sections():
@@ -1038,9 +1034,7 @@ def load_secrets(path, cfg=None, sss_env=None, data_backend=None, role="web"):
             continue
         if sec.startswith("environment:"):
             if role != "agent":
-                _other_role_section(role, sec, env)
-                if env in ("HML", "PROD"):
-                    continue
+                continue
             name = sec.split(":", 1)[1].strip()
             if not name:
                 raise ConfigError(section=sec, key=None, reason="Nome de ambiente invalido na secao [%s]" % sec)
@@ -1120,13 +1114,14 @@ def config_path(config: "Optional[str]" = None, name: "Optional[str]" = None) ->
 
 
 def _raw_log_dir(ini_path):
-    """[logging] log_dir lido sem validacao, so para registrar o CRITICAL de uma configuracao invalida."""
+    """var/<name>/logs pelo [app] name lido sem validacao (CR-032, D4), so para registrar o CRITICAL de uma
+    configuracao invalida."""
     try:
         cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
         with open(ini_path, "r", encoding="utf-8") as f:
             cp.read_file(f)
-        value = cp.get("logging", "log_dir", fallback="").strip()
-        return value or None
+        name = cp.get("app", "name", fallback="").strip()
+        return os.path.join(VAR_DIR, name, "logs") if _RE_PROCESS_NAME.match(name) else None
     except (OSError, ValueError, configparser.Error):
         return None
 

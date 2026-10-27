@@ -25,14 +25,26 @@ import zipfile
 
 APP = _testenv.APP_DIR
 RUN_SCHEDULER = os.path.join(APP, "scripts", "run_scheduler.py")
+
+
+def _oracle_secrets():
+    """O secrets.cfg do DEV que a bateria Oracle usa (instance/secrets.cfg; CR-032, D14)."""
+    from tests.support._oracle_test_support import ORACLE_CONFIG
+    from sss.config import sss_config
+    return sss_config.load(ORACLE_CONFIG).secrets.secrets_file
+
+
 # CR-032 (D2, D3): os tempos sao fixos no codigo (sss_config.FIXED). Para nao esperar os valores reais, os
 # testes sobem o agente por este lancador, que so troca a tabela FIXED do processo antes do main().
+# CR-032 (D4): o var/ do agente (work, logs) sai do name; o lancador tambem aponta o VAR_DIR para a pasta
+# temporaria do teste, para nunca usar o var/ real do DEV.
 _LAUNCHER = ("import json, sys\n"
              "sys.path.insert(0, sys.argv[1])\n"
              "from sss.config import sss_config\n"
              "sss_config.FIXED.update(dict((tuple(k.split('.')), v) for k, v in json.loads(sys.argv[2]).items()))\n"
+             "sss_config.VAR_DIR = sys.argv[3]\n"
              "from sss.cli import run_scheduler\n"
-             "sys.exit(run_scheduler.main(sys.argv[3:]))\n")
+             "sys.exit(run_scheduler.main(sys.argv[4:]))\n")
 N_TICKETS = 10
 CAP = 2
 LONG_MARK = 3017  # sleep exclusivo do script longo, para achar orfaos pelo argv
@@ -143,9 +155,10 @@ class _TwoAgentsBase(unittest.TestCase):
             os.makedirs(p, 0o750, exist_ok=True)
         cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
         cp.read(os.path.join(APP, "instance", "agente0001", "config.ini"), encoding="utf-8")
-        # CR-029: o agente0001 tem [app] name; aqui cada agente tem o seu agent_id e as suas pastas.
-        cp["app"].pop("name", None)
-        cp["agent"].update({"agent_id": agent, "environments": self.amb["name"], "work_dir": dirs["work"],
+        # CR-032 (D4): o name e o agent_id; work e logs saem de <VAR_DIR>/<name>/ (o lancador aponta para
+        # self.root, onde estao as pastas de dirs).
+        cp["app"]["name"] = agent
+        cp["agent"].update({"environments": self.amb["name"],
                             "exec_users": "", "exec_work_dir": "",
                             "max_parallel_jobs": "4",
                             "output_dir": dirs["output"], "input_dir": dirs["input"],
@@ -154,12 +167,14 @@ class _TwoAgentsBase(unittest.TestCase):
             if not cp.has_section(section):
                 cp.add_section(section)
             cp[section].update(values)
-        cp["logging"]["log_dir"] = dirs["logs"]
-        # CR-026 (D9): sem secrets_file, o padrao e o secrets.cfg da pasta do config.ini (aqui, a temporaria).
-        if not cp.has_section("secrets"):
-            cp.add_section("secrets")
-        cp["secrets"]["secrets_file"] = os.path.join(APP, "instance", "agente0001", "secrets.cfg")
-        path = os.path.join(base, "config.ini")
+        # CR-032 (D14): o secrets.cfg compartilhado fica na pasta de cima da do config (<root>/instance/).
+        instance = os.path.join(self.root, "instance")
+        os.makedirs(os.path.join(instance, agent), exist_ok=True)
+        shared = os.path.join(instance, "secrets.cfg")
+        if not os.path.exists(shared):
+            shutil.copyfile(_oracle_secrets(), shared)
+            os.chmod(shared, 0o600)
+        path = os.path.join(instance, agent, "config.ini")
         with open(path, "w", encoding="utf-8") as f:
             cp.write(f)
         return path, dirs
@@ -169,7 +184,7 @@ class _TwoAgentsBase(unittest.TestCase):
         output = open(os.path.join(self.root, agent + ".out"), "w")
         self.addCleanup(output.close)
         argv = [sys.executable, "-c", _LAUNCHER, os.path.join(APP, "src"), json.dumps(self.FIXED_OVERRIDE),
-                "--config", path]
+                self.root, "--config", path]
         p = subprocess.Popen(argv, cwd=APP, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
         self.processes.append((agent, p, dirs))
         return p, dirs

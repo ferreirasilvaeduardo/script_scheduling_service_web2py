@@ -399,6 +399,17 @@ def validate_restricted_dir(path):
     return None
 
 
+def ensure_dir(path, mode):
+    """CR-032 (D12): cria a pasta que falta (e as de cima), com o modo dado mesmo sob a umask 077 do launcher.
+    So cria quando nada existe no caminho (nem link): uma pasta existente fica para validate_restricted_dir.
+    Devolve True quando criou."""
+    if os.path.lexists(path):
+        return False
+    os.makedirs(path, mode)
+    os.chmod(path, mode)
+    return True
+
+
 def _stat_code(path):
     try:
         return os.stat(path), None

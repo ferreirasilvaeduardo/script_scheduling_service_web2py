@@ -18,7 +18,7 @@ from sss.core import sql_ident
 
 # CR-029: sem config padrao; o init_db dos testes le o exemplo do formato unico.
 _EXAMPLE_CONFIG = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                               "support", "config.ini.example")
+                               "support", "agente0001", "config.ini.example")
 
 
 class TestDdlBuilder(unittest.TestCase):

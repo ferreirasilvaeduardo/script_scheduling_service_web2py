@@ -361,8 +361,7 @@ bin/
       check_env.py, generate_sql.py  # diagnóstico do ambiente e SQL de implantação (§12.2)
   scripts/                    # [CR-022b8] comandos de operação (systemd, cron, Nagios, DBA): um involucro por ferramenta de
                               # src/sss/cli/ (põe src/ no sys.path e chama main()); único código da aplicação que mexe no sys.path
-    init_db.py, health.py, probe_driver.py, run_scheduler.py, run_web.py, check_env.py, generate_sql.py,
-    prepare_dirs.py (CR-026e: pastas do config.ini com dono e modo)
+    init_db.py, health.py, probe_driver.py, run_scheduler.py, run_web.py, check_env.py, generate_sql.py
   tools/                      # [CR-022b2] ferramentas de build e desenvolvimento, fora do pacote
     package.py                # gera o pacote de implantação (§12.2)
   tests/                      # [CR-022b1] testes unittest por recurso usado (AGENTS.md §7; nunca implantados)
@@ -373,8 +372,9 @@ bin/
     architecture/             # regras lidas no código e nos documentos (Python 3.6, AST, pacote, contraste)
     support/                  # _testenv (sys.path com a raiz, src/ e tools/; APP_DIR e WEB_DIR), _oracle_test_support, _output_memory
   instance/                   # [CR-028] configuração por processo; preservada pela atualização
-    exemplos/web0001/, exemplos/agente0001/   # modelos config.ini.example e secrets.cfg.example (vêm no pacote)
-    <nome>/config.ini, <nome>/secrets.cfg     # um por processo (web0001, agente0001...); fora do git
+    exemplos/                                 # modelos (vêm no pacote): secrets.cfg.example e web0001/, agente0001/ com o config.ini.example
+    secrets.cfg                               # [CR-032] UM por servidor (0600), lido por todos os processos; fora do git
+    <nome>/config.ini                         # um por processo (web0001, agente0001...); fora do git
     <nome>/web.env                            # só DEV: variáveis do start_local.sh (fora do git)
   .flake8                     # [CR-022b9] lint: 99 colunas e a dívida anterior por arquivo (só diminui; AGENTS §1)
   pyproject.toml              # [CR-022b9] só configuração de ferramentas (mypy estrito com a dívida por módulo, isort, autopep8, pylint); sem [project], sem pip install
@@ -406,7 +406,7 @@ A raiz é `/portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service`, com `<TI
 ### 4.1 Gestão de segredos
 
 * **Nenhum segredo** reside no `config.ini`, no repositório ou no banco.
-* Os segredos ficam em `secrets_file` (por padrão, o `secrets.cfg` da pasta do `config.ini`: `instance/<nome>/secrets.cfg`, CR-028). Cada servidor tem o **seu** arquivo, só com os segredos do papel do processo que roda nele (CR-007, D1b). Na inicialização, web e daemon validam o arquivo pela camada de plataforma e **recusam a subida** caso ele:
+* Os segredos ficam num **único** `instance/secrets.cfg` por servidor (CR-032, D14), lido por todos os processos: cada um usa só o que precisa (o web, `[oracle]` e `[web]`; o agente, `[oracle]` e os `[environment:*]`), e as seções dos outros são ignoradas sem aviso. Um `secrets.cfg` antigo em `instance/<nome>/` ainda é lido, com aviso para mover. Na inicialização, web e daemon validam o arquivo pela camada de plataforma e **recusam a subida** caso ele:
   * não seja um arquivo regular;
   * tenha dono diferente de `os.geteuid()` ou `mode & 0o077 != 0`.
 
@@ -2048,7 +2048,7 @@ O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualqu
    **Codificação (CR-007, R-17):** `sys.getfilesystemencoding()` precisa ser UTF-8 (o launcher exporta `LANG`/`LC_ALL`, §12.2); `child_locale` precisa constar em `locale -a`. Falha: CRITICAL.
 3. **Segredos:** validar o `secrets.cfg` (§4.1).
 4. **Diretórios:**
-   * `log_dir` e `work_dir` existem, são graváveis pelo agente e não ficam dentro das pastas do sistema (§8.5). O SSS não cria as pastas configuradas (§12.1);
+   * `log_dir` e `work_dir` existem (a que falta é criada, CR-032, D12), são graváveis pelo agente e não ficam dentro das pastas do sistema (§8.5);
    * sem conferência de interpretador na subida (CR-026): ele é conferido a cada ticket (§8.5); uma linha `[agent] interpreters` antiga só gera aviso;
    * fora de DEV, `os_platform.validate_execution()` (§8.0): helper, regra de sudoers, usuários de execução e `exec_work_dir`;
    * com `output_dir` (CR-012): fora de DEV, `output_dir/<ambiente>/` de cada ambiente atendido existe, é diretório, pertence ao usuário de execução do ambiente e não tem escrita de grupo nem de outros; em DEV, `output_dir` existe e é gravável pelo agente.
@@ -2855,7 +2855,7 @@ find var/*/logs var/*/output var/*/script_work -mindepth 3 -type d -empty -delet
 
 ### 12.1 `instance/<nome>/config.ini` (sem segredos; unidades no nome da chave)
 
-**Sem config padrão (CR-029):** todo comando (`run_web`, `run_scheduler`, `health`, `prepare_dirs`, `init_db`, `check_env`, os launchers e o `sss-stop.sh`) recebe o processo (`--name <nome>`, ou o nome nos launchers) ou `--config <arquivo>`; sem nenhum dos dois, sai com código 2 e lista os processos de `instance/`. O `generate_sql` aceita os dois, mas também roda só com `--owner` e `--prefix`. O formato único (um arquivo com `[web]` e `[agent]`) continua aceito por `--config`; o modelo dele fica em `tests/support/`, só para os testes.
+**Sem config padrão (CR-029):** todo comando (`run_web`, `run_scheduler`, `health`, `init_db`, `check_env`, os launchers e o `sss-stop.sh`) recebe o processo (`--name <nome>`, ou o nome nos launchers) ou `--config <arquivo>`; sem nenhum dos dois, sai com código 2 e lista os processos de `instance/`. O `generate_sql` aceita os dois, mas também roda só com `--owner` e `--prefix`. O formato único (um arquivo com `[web]` e `[agent]`) continua aceito por `--config`; o modelo dele fica em `tests/support/`, só para os testes.
 
 **Config por processo (CR-028) e mínimo (CR-026):** um `config.ini` por processo, em `instance/<nome>/`, só com as chaves obrigatórias e as que dependem do servidor. As demais têm padrão (tabela abaixo) e só entram no arquivo quando o valor for outro. O papel vem do próprio arquivo (D4): com `[web]` e sem `[agent]`, é o web; com `[agent]` e sem `[web]`, o agente (que também roda o purge); com as duas, o formato único anterior, validado inteiro. Com `[app] name`, as pastas saem do nome (D5): `log_dir` = `var/<nome>/logs`; no agente, `work_dir` = `var/<nome>/work`, `output_dir`, `input_dir` e `script_work_dir` em `var/<nome>/`, `exec_work_dir` = `var/exec`, `script_base_dir` = `scripts_ambiente` e `agent_id` = o nome. Em `instance/<pasta>/config.ini`, o `name` precisa ser o nome da pasta: um `instance/agente0002/` copiado sem trocar o `name` é recusado na subida e pelo `sss-stop.sh`. Modelos em `instance/exemplos/`.
 
@@ -2905,17 +2905,14 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | Seção | Chave | Obrigatória | Padrão | Faixa / formato |
 |---|---|---|---|---|
 | `[app]` | `sss_env` | sim | — | `DEV`, `HML`, `PROD` |
-| `[app]` | `name` (CR-028) | não | vazio | nome do processo (`web0001`, `agente0001`...), `^[a-z][a-z0-9_-]{0,29}$`; com ele, as pastas não escritas saem de `var/<nome>/` e, no agente, o `agent_id` é o próprio nome |
+| `[app]` | `name` (CR-028, CR-032) | sim | — | nome do processo, igual ao da pasta `instance/<nome>/` (`web0001`, `agente0001`...), `^[a-z][a-z0-9_-]{0,29}$`, diferente de `init_db`, `seed` e `purge`. Dele saem o `agent_id` (o próprio nome), `log_dir` (`var/<nome>/logs`), `work_dir` (`var/<nome>/work`) e, quando não escritas, as demais pastas do agente |
 | `[oracle]` | `user` | sim | — | não vazio; fora de DEV, diferente de `owner`, sem diferenciar maiúsculas (CR-008, R-29: a conta dona do esquema só faz DDL, D1b) |
 | `[oracle]` | `dsn` | sim | — | não vazio |
 | `[oracle]` | `owner` | sim | — | `^[A-Za-z][A-Za-z0-9_]{0,29}$` |
 | `[oracle]` | `table_prefix` | sim | — | `^[a-z][a-z0-9_]{0,7}$`: começa com letra minúscula, até 8 caracteres (CR-007, R-31) |
 | `[oracle]` | `driver_mode` (F7.0) | não | `auto` | `auto` (Thin → Thick → cx_Oracle), `thin`, `thick`, `cx_oracle` (§2.3) |
 | `[oracle]` | `call_timeout_ms` | não | `30000` | 1 a 40.000 (CR-032: com os tempos de saúde fixos, as invariantes I3 e I4 do §8.9 limitam a 40 s) |
-| `[secrets]` | `secrets_file` | não | `secrets.cfg` da pasta do `config.ini` (CR-026, D9) | caminho |
-| `[agent]` | `agent_id` | sim | — | `^[A-Za-z0-9._-]{1,30}$`, diferente de `init_db`, `seed` e `purge` |
 | `[agent]` | `environments` | sim | — | lista CSV; o texto inteiro com até 1.000 caracteres (coluna `tbsss_agents.environments`) |
-| `[agent]` | `work_dir` | sim | — | caminho |
 | `[agent]` | `max_parallel_jobs` | sim | — | 1 a 999 |
 | `[agent]` | `exec_users` (CR-007) | fora de DEV | vazio | `AMBIENTE=usuario` cobrindo todos os `environments`; usuário `^[a-z_][a-z0-9_-]{0,31}$`, diferente de `root`. Vazio em DEV = execução com o próprio usuário, com WARN |
 | `[agent]` | `exec_work_dir` (CR-007) | fora de DEV | vazio | caminho fora das pastas do sistema; nem dentro nem contendo `work_dir` e `log_dir` |
@@ -2929,7 +2926,6 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[agent]` | `script_work_dir` (CR-019) | não | vazio (desligado) | como `input_dir`, e também sem sobreposição com ele |
 | `[agent]` | `script_base_dir` (CR-023) | não | vazio (só caminho absoluto) | caminho absoluto e normalizado, fora das pastas do sistema, das pastas do SSS e da pasta da aplicação (no DEV, só em `dev/`) |
 | `[agent]` | `env_passthrough` | não | vazio | lista CSV, sem as variáveis bloqueadas nem as chaves fixas do §8.6 |
-| `[logging]` | `log_dir` | sim | — | caminho |
 | `[logging]` | `level` | não | `INFO` | `DEBUG`, `INFO`, `WARN`, `ERROR` |
 | `[logging]` | `app_log_max_bytes` | não | `10485760` | 1.024 a 1.073.741.824 (troca de arquivo do log da aplicação, §13) |
 | `[logging]` | `max_log_size_bytes` | não | `5242880` | 1.024 a 67.108.864 (64 MiB, CR-007, R-29: teto do log de um ticket no banco) |
@@ -2941,11 +2937,13 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[web]` | `trusted_proxies` | não | vazio | lista CSV |
 | `[web]` | `input_upload_max_bytes` (CR-020d) | não | `52428800` | 1.048.576 a 209.715.200; o POST acima disso é recusado com 413 antes de ser lido (§5.10) |
 
+**Derivadas, não são mais chaves (CR-032, D4 e D14; uma linha antiga só gera aviso):** `[agent] agent_id` e `work_dir`, `[logging] log_dir` (do `name`) e `[secrets] secrets_file`: o arquivo de segredos é um só por servidor, `instance/secrets.cfg` (na pasta de cima da do `config.ini`); um `secrets.cfg` antigo dentro de `instance/<nome>/` ainda é lido, com aviso para mover. Não existe mais o formato único: um arquivo com `[web]` e `[agent]` (ou sem nenhum dos dois) é recusado.
+
 **Fixas no código desde o CR-032 (uma linha antiga só gera aviso):** `[oracle] pool_min = 1` e `pool_max = 4`; `[agent] schedule_batch_size = 50`, `orchestrator_interval_s = 10`, `cancel_poll_interval_s = 2`, `heartbeat_interval_s = 10`, `fence_timeout_s = 90`, `node_offline_timeout_s = 180`, `kill_grace_s = 5`, `shutdown_mode = TERMINATE`, `shutdown_grace_s = 30`, `misfire_tolerance_s = 300`, `cron_horizon_days = 1461`, `queue_aging_min = 60`, `child_locale = C.UTF-8`; `[web] log_poll_interval_s = 3`, `max_threads = 16` e `socket_timeout_s = 30`. **Retiradas no CR-032, sem efeito:** `[agent] claim_batch_size` e `max_parallel_hard_limit`, e `[oracle] oracle_client_lib_dir` (o Instant Client vem do `ldconfig`/`LD_LIBRARY_PATH`).
 
 **Retiradas no CR-030 (ignoradas com aviso):** a seção `[retention]` inteira (`purge_user`, `ticket_retention_days`, `audit_retention_days`, `purge_batch_size`, `input_retention_days`) e, em `[logging]`, `app_log_retention_days`, `local_log_retention_days`, `output_retention_days` e `script_work_retention_days`. A limpeza é manual (§11.3).
 
-**Pastas: o SSS não cria as pastas configuradas, exceto o `log_dir`.** O `log_dir` é criado com `0750` pela configuração do log, na subida do web e do agente, quando a pasta de cima permite (sem permissão, a subida falha). As demais o agente confere na subida (§8.12, passo 4) e recusa subir (código 13) se faltar `work_dir`, `exec_work_dir` (fora de DEV) ou, quando informadas, `output_dir`, `input_dir` e `script_work_dir`. Fora de DEV, também a subpasta de cada ambiente dessas três (`<pasta>/<ambiente>`, do usuário de execução, `0700`). A exceção é `script_base_dir`: inexistente, só gera aviso no log, e os scripts com caminho relativo terminam em `PRECHECK_FAILED` (`NOT_FOUND`). Quem cria as pastas é o root, na implantação, com o dono e as permissões certos: `scripts/prepare_dirs.py` (CR-026e) lê o `config.ini` e cria todas elas, inclusive `script_base_dir` e a pasta de cada ambiente, ou ajusta o dono e o modo das que já existem (DEPLOYMENT §8). Os níveis abaixo delas (ambiente, script, data, ticket) são criados pelo SSS a cada ticket.
+**Pastas: o processo cria na subida as que faltarem (CR-032, D12).** O `log_dir` é criado com `0750` pela configuração do log; o agente cria `work_dir` (`0700`) e, quando ligadas, `output_dir`, `input_dir`, `script_work_dir` e `script_base_dir` (`0755`), com uma linha `pasta criada` no log para cada uma. Uma pasta existente que não possa ser usada (arquivo no lugar, sem escrita, pasta do sistema) recusa a subida (código 13). Os níveis abaixo delas (ambiente, script, data, ticket) são criados a cada ticket. O `prepare_dirs.py` (CR-026e) saiu no CR-032.
 
 **Falha de configuração (web e daemon):**
 * A subida é abortada com um registro **CRITICAL** contendo a seção, a chave e o motivo, sem nunca o valor de um segredo.
@@ -2968,7 +2966,7 @@ Chaves que saíram ou mudaram de nome são recusadas na subida: uma chave removi
 * executar a partir da raiz do repositório, qualquer que seja o diretório corrente de quem o chama.
 * **atualizar no lugar (CR-028, D10):** `bin/sss-update.sh <pacote> [<SHA256SUMS>]`, com tudo parado, troca só o código (`bin/`, `docs/`, `scripts/`, `src/`, `AGENTS.md`, `README.md` e `instance/exemplos/`), preserva `instance/<nome>/`, `var/` e `scripts_ambiente/` e deixa um pacote de retorno em `var/update/<data>/`, aplicado pelo mesmo comando. A extração e o código anterior ficam numa pasta temporária da própria raiz (`.update-<data>/`, mesma partição, para a troca ser por renomeação), apagada no sucesso. Recusa root (1), pacote que não confere ou sem permissão em `var/update/` (2) e um `python` rodando um comando do SSS a partir da pasta (3, conferido pelo caminho físico); falha no meio da troca: código 4, com o código anterior em `.update-<data>/anterior/` (DEPLOYMENT §18).
 * **manter no ar sem root (CR-030, P2):** `bin/sss-keepalive.sh web0001:<porta> agente0001 ...`, pelo cron da conta que roda o SSS (`@reboot` e a cada 5 minutos), sobe o processo que não estiver rodando (um `python` com `scripts/run_*.py --name <nome>` na raiz), em segundo plano, e grava uma linha em `var/<nome>/logs/keepalive.log`; a saída do processo vai para `var/<nome>/logs/<nome>.out`. O web precisa da porta (`<nome>:<porta>`) e atende só em `127.0.0.1`. `--pause <nome>` (antes de parar de propósito) e `--resume <nome>`. Recusa root (1), uso inválido (2) e sai com 3 se algum processo não subiu (DEPLOYMENT §10.6).
-* **subir pelo nome do processo (CR-028, D7):** `bin/sss-web.sh [<python3[.x]>] web0001 [opções]`, `bin/sss-scheduler.sh agente0001` e `bin/sss-stop.sh agente0001` usam `instance/<nome>/config.ini` (a forma `--config <arquivo>` continua aceita). O nome segue `^[a-z][a-z0-9_-]{0,29}$`; outro texto é recusado com código 2. Os comandos `scripts/run_web.py`, `run_scheduler.py`, `health.py` e `prepare_dirs.py` aceitam `--name <nome>` (o `prepare_dirs.py` também o nome como primeiro argumento).
+* **subir pelo nome do processo (CR-028, D7):** `bin/sss-web.sh [<python3[.x]>] web0001 [opções]`, `bin/sss-scheduler.sh agente0001` e `bin/sss-stop.sh agente0001` usam `instance/<nome>/config.ini` (a forma `--config <arquivo>` continua aceita). O nome segue `^[a-z][a-z0-9_-]{0,29}$`; outro texto é recusado com código 2. Os comandos `scripts/run_web.py`, `run_scheduler.py`, `health.py`, `init_db.py`, `generate_sql.py` e `check_env.py` aceitam `--name <nome>`.
 
 O `sss-scheduler.sh` aceita só a linha do daemon: o nome do processo, `--config <arquivo>` ou nada, e faz `exec <python> scripts/run_scheduler.py [--name <nome> | --config <arquivo>]`. Qualquer outro argumento é recusado com código 2. O Python vem da variável `PYTHON` (padrão `python3`) nos dois launchers.
 

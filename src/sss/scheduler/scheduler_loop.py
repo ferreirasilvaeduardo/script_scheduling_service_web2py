@@ -230,9 +230,20 @@ class Agent(object):
         except sss_config.ConfigError as exc:
             self._fail(EXIT_SECRETS, "secrets.cfg invalido: %s", exc)
 
+    def _ensure_dir(self, key, path, mode):
+        """CR-032 (D12): cria a pasta que falta, fora das pastas do sistema (o prepare_dirs.py saiu)."""
+        if self.plat.validate_restricted_dir(path) != "NOT_FOUND":
+            return
+        try:
+            if self.plat.ensure_dir(path, mode):
+                self.log.info("pasta criada: %s %s (%04o)", key, path, mode, extra={"action": "INICIO"})
+        except OSError as exc:
+            self._fail(EXIT_DIRECTORIES, "%s %s nao pode ser criada: %s", key, path, exc.__class__.__name__)
+
     def _step4_directories(self):
         agent = self.cfg.agent
         for name, path in (("log_dir", self.cfg.logging.log_dir), ("work_dir", agent.work_dir)):
+            self._ensure_dir(name, path, 0o750 if name == "log_dir" else 0o700)
             code = self.plat.validate_restricted_dir(path)
             if code:
                 self._fail(EXIT_DIRECTORIES, "%s %s recusado: %s", name, path, code)
@@ -256,8 +267,16 @@ class Agent(object):
         self._check_script_base_dir()
 
     def _check_script_base_dir(self) -> None:
-        """CR-023 (D5): pasta base inexistente so e avisada; os tickets com caminho relativo dao NOT_FOUND."""
+        """CR-023 (D5): pasta base inexistente so e avisada; os tickets com caminho relativo dao NOT_FOUND.
+        CR-032 (D12): a pasta que falta e criada (vazia)."""
         base = getattr(self.cfg.agent, "script_base_dir", None)
+        if base and os.path.isabs(base) and not os.path.lexists(base):
+            try:
+                if self.plat.ensure_dir(base, 0o755):
+                    self.log.info("pasta criada: script_base_dir %s (0755)", base, extra={"action": "INICIO"})
+            except OSError as exc:
+                self.log.warning("pasta base dos scripts %s nao pode ser criada (%s)", base, exc.__class__.__name__,
+                                 extra={"action": "INICIO"})
         if not base:
             self.log.info("sem pasta base dos scripts ([agent] script_base_dir): so caminho absoluto",
                           extra={"action": "INICIO"})
@@ -274,6 +293,7 @@ class Agent(object):
         folder = getattr(agent, key, None)
         if not folder:
             return
+        self._ensure_dir(key, folder, 0o755)
         code = self.plat.validate_restricted_dir(folder)
         if code:
             self._fail(EXIT_DIRECTORIES, "%s %s recusado: %s", key, folder, code)

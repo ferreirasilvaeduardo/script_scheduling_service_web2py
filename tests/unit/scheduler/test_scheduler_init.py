@@ -14,6 +14,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import stat
 import tempfile
 import threading
 import time
@@ -248,7 +249,15 @@ class TestSteps(_Base):
     def test_diretorios(self):
         # CR-026: sem [agent] interpreters, nao ha executavel a conferir na subida.
         self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(log_dir="/usr/local/sss-logs")))
-        self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(work_dir=os.path.join(self.root, "nao"))))
+        # CR-032 (D12): a pasta que falta e criada na subida, com o modo certo.
+        created = os.path.join(self.root, "nao_work_dir")
+        agent_created = self.agent(cfg=self.cfg(work_dir=created))
+        agent_created.initialize()
+        agent_created.release_resources()
+        self.assertEqual(stat.S_IMODE(os.stat(created).st_mode), 0o700)
+        blocked = os.path.join(self.root, "arquivo")
+        open(blocked, "w").close()
+        self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(work_dir=blocked)))
 
     def test_validar_execucao_fora_de_dev(self):
         cfg = self.cfg(sss_env="PROD", exec_work_dir=self.root)
@@ -268,7 +277,12 @@ class TestSteps(_Base):
         # CR-014 (README §8.12 passo 4): input_dir fora das pastas do sistema e existente; fora de DEV, a pasta
         # de cada ambiente atendido do usuario de execucao dele.
         self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(input_dir="/usr/local/sss-entrada")))
-        self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(input_dir=os.path.join(self.root, "nao"))))
+        # CR-032 (D12): a pasta que falta e criada na subida, com o modo certo.
+        created = os.path.join(self.root, "nao_input_dir")
+        agent_created = self.agent(cfg=self.cfg(input_dir=created))
+        agent_created.initialize()
+        agent_created.release_resources()
+        self.assertEqual(stat.S_IMODE(os.stat(created).st_mode), 0o755)
         input_value = os.path.join(self.root, "entrada")
         os.mkdir(input_value, 0o755)
         self.agent(cfg=self.cfg(input_dir=input_value)).initialize()
@@ -287,7 +301,12 @@ class TestSteps(_Base):
     def test_cr019_pasta_de_trabalho_na_subida(self):
         # CR-019 (README §8.12 passo 4): script_work_dir como a de saida.
         self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(script_work_dir="/usr/local/sss-work")))
-        self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(script_work_dir=os.path.join(self.root, "nao"))))
+        # CR-032 (D12): a pasta que falta e criada na subida, com o modo certo.
+        created = os.path.join(self.root, "nao_script_work_dir")
+        agent_created = self.agent(cfg=self.cfg(script_work_dir=created))
+        agent_created.initialize()
+        agent_created.release_resources()
+        self.assertEqual(stat.S_IMODE(os.stat(created).st_mode), 0o755)
         work = os.path.join(self.root, "trabalho")
         os.mkdir(work, 0o755)
         self.agent(cfg=self.cfg(script_work_dir=work)).initialize()
@@ -307,7 +326,12 @@ class TestSteps(_Base):
     def test_pasta_de_saida_na_subida(self):
         # CR-012 (README §8.12 passo 4): output_dir fora das pastas do sistema e existente.
         self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(output_dir="/usr/local/sss-output")))
-        self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(output_dir=os.path.join(self.root, "nao"))))
+        # CR-032 (D12): a pasta que falta e criada na subida, com o modo certo.
+        created = os.path.join(self.root, "nao_output_dir")
+        agent_created = self.agent(cfg=self.cfg(output_dir=created))
+        agent_created.initialize()
+        agent_created.release_resources()
+        self.assertEqual(stat.S_IMODE(os.stat(created).st_mode), 0o755)
         output = os.path.join(self.root, "saida")
         os.mkdir(output, 0o755)
         self.agent(cfg=self.cfg(output_dir=output)).initialize()

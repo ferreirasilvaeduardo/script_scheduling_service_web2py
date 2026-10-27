@@ -98,13 +98,23 @@ O `config.ini` do agente ficaria com `sss_env`, `name`, `[oracle]` (`dsn`, `owne
 | D10 | A: o PROD continua com `sss_env = DEV` (D12 do CR-028): os usuários acessam por HTTP, sem proxy HTTPS (senha e cookie de sessão abertos na rede interna: risco aceito, DEPLOYMENT §4.0) |
 | D11 | A: retirar o `[app] sss_env` (passo 032c); DEV e PROD idênticos por construção. Comportamento único: cookie `Secure` só quando a requisição chega por HTTPS; origem das `allowed_origins` e do próprio `Host`; conta Oracle igual ao owner aceita; seção de outro papel nos segredos só gera aviso; ambiente atendido sem credencial no `secrets.cfg` do agente recusa a subida; `init_db` mantém a trava de esquema descartável (`--real-schema`); tela `/dev`, FAKE e scripts em `dev/` só onde existem (o repositório; o pacote não os leva); a faixa de ambiente vem da pasta `<TIPO>` |
 
-### 4.1 Decisões pendentes (apresentar uma por vez depois do 032a)
+### 4.1 Decisões D12 a D17 (2026-10-27, depois do 032a)
 
-| # | Tema | Proposta |
+| # | Decisão |
+|---|---|
+| D12 | A: o processo cria na subida as pastas que faltarem (modos de hoje, uma linha no log por pasta criada); o `prepare_dirs.py` sai; continua recusando pasta existente inutilizável (link, outro dono, modo errado) |
+| D13 | A: saída e entrada por chamadas diretas no agente (zip em segundo plano, sem travar o laço; mesmas validações de caminho); sai o `bin/sss-helper` |
+| D14 | A: um `instance/secrets.cfg` compartilhado (`[oracle]`, `[web]`, `[environment:*]`); configs continuam um por processo; `secrets.cfg` antigo em `instance/<nome>/` lido com aviso para mover |
+| D15 | A: DEPLOYMENT só com o caminho real (roteiro do §4.0); saem o cenário com administrador, `systemd`, apêndice B e a migração de `/opt/sss/app`; notas por versão só as da estrutura nova |
+| D16 | A: `critical_config` só com `call_timeout_ms` e `misfire_policy` (atualização com todos os agentes parados) |
+| D17 | B: o `check_env.py` fica |
+
+## 5. Passos
+
+| Passo | Conteúdo | Situação |
 |---|---|---|
-| D12 | Criação das pastas (S1) | O processo cria as pastas que faltam na subida, com a própria conta; o `prepare_dirs.py` deixa de ser passo obrigatório |
-| D13 | Helper como programa separado (S2) | Saída e entrada por chamadas diretas no agente; sai o `bin/sss-helper` (encaixa no 032c com a D7) |
-| D14 | Senha repetida (S3) | Um `instance/secrets.cfg` compartilhado pelos processos do servidor |
-| D15 | DEPLOYMENT enxuto (S4) | Só o caminho real (§4.0 como roteiro único); sem `systemd`, apêndices B e migração do formato antigo (032d) |
-| D16 | Conferência entre agentes (S5) | `critical_config` só com o que ainda é configurável (`call_timeout_ms`, `misfire_policy`) |
-| D17 | `check_env.py` (S6) | Juntar no `--check` do `run_web` e numa opção do `run_scheduler` |
+| 032a | D1, D2, D3, D9 | Concluído (cf886f3) |
+| 032b | D4 (`name` obrigatório, fim do formato único), D14 (`secrets.cfg` único), D12 (pastas criadas na subida, sem `prepare_dirs`) | Pendente |
+| 032c | D7 e D13 (sem `sudo`/helper; funções no agente), D8 (sem monitor), D11 (sem `sss_env`), D16 (`critical_config` enxuto); linha de subida com o ambiente da instalação (`<TIPO>` e caminho) no web e no agente; no DEV, título da aba com `[DEV]` e cabeçalho com outra cor (além da faixa que já existe) | Pendente |
+| 032e | Pastas do processo no plural: `inputs`, `outputs`, `works`, `script_works` (pedido de 2026-10-27; passo separado depois do 032d) | Pendente |
+| 032d | D15 (DEPLOYMENT enxuto), configs do DEV e modelos, homologação real, revisão independente, encerramento | Pendente |

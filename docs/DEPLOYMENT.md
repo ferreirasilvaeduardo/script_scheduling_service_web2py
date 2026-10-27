@@ -51,7 +51,7 @@ Fora de DEV, a conta da aplicação igual à dona do esquema é recusada (CR-008
 ```
 
 **Convenções:**
-* Comandos com `sudo` ou "como root" são do administrador do servidor. Os demais rodam como o usuário de serviço `sss` (`sudo -u sss -H bash`). Sem um usuário chamado `sss`, use a conta de serviço que existir e passe `--service-user <conta>` ao `prepare_dirs.py` (§8).
+* Comandos com `sudo` ou "como root" são do administrador do servidor. Os demais rodam como o usuário de serviço `sss` (`sudo -u sss -H bash`). Sem um usuário chamado `sss`, use a conta de serviço que existir.
 * **`<RAIZ>`** = `/portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service`, com `<TIPO>` = `DEV` ou `PROD` (não há HOM, CR-030). A estrutura dentro da raiz é **idêntica** nos dois (CR-028, D1): só o `<TIPO>` muda.
 * **Processos e nomes (CR-028):** cada processo tem um nome, o mesmo em todo lugar: `web0001`, `web0002`... para os nós web e `agente0001`, `agente0002`... para os agentes. O nome do agente é o `agent_id`, **único em toda a instalação** (não repita um número em outro servidor).
 
@@ -83,7 +83,7 @@ Fora de DEV, a conta da aplicação igual à dona do esquema é recusada (CR-008
 |---|---|---|---|---|
 | `<RAIZ>` | Pacote extraído (código) | `sss` | `0750` | — |
 | `<RAIZ>/instance/<nome>/config.ini` | Configuração do processo (sem segredos) | `sss` | `0640` | — |
-| `<RAIZ>/instance/<nome>/secrets.cfg` | Segredos do papel do processo | `sss` | `0600` | padrão de `[secrets] secrets_file` |
+| `<RAIZ>/instance/secrets.cfg` | Segredos do servidor, um arquivo só (CR-032, D14) | `sss` | `0600` | — |
 | `<RAIZ>/var/<nome>/logs` | Logs da aplicação e dos scripts | `sss` | `0750` | padrão de `[logging] log_dir` |
 | `<RAIZ>/var/<agente>/work` | Trabalho do agente (trava, `.stop`, pastas dos tickets) | `sss` | `0700` | padrão de `[agent] work_dir` |
 | `<RAIZ>/var/exec/<usuário>` | Diretório de trabalho dos scripts, um por usuário de execução | o usuário de execução | `0700` (pai `root`, `0755`) | padrão de `[agent] exec_work_dir` |
@@ -153,8 +153,8 @@ O pacote só tem o `bin/` e a aplicação (o código, os templates e os estátic
 1. **Pacote (§3)** extraído na `<RAIZ>` com a sua conta.
 2. **Pule** o usuário `sss` (§4.1; use a sua conta no lugar dele), os usuários de execução (§4.2), as pastas acima da raiz (§4.1), o helper e o `sudoers` (§8) e as units do `systemd` (§10.5).
 3. **Banco (§5):** a conta única é a **dona do esquema**. Não há GRANT a aplicar (pule o `03_grants`); o `init_db.py --name agente0001` precisa de `--real-schema`, porque o esquema não é descartável (§5.3).
-4. **Configuração (§7):** um `instance/<nome>/` por processo. Em todos, `[oracle] user` = a conta única, e o `secrets.cfg` de cada um repete a mesma senha em `[oracle]`. O do web tem `[web] cookie_key`; o de cada agente, os `[environment:<NOME>]` dos ambientes que atende (os bancos que os scripts usam têm usuários próprios). Não escreva `[monitor]`: o `health.py` usa a conta do `[oracle]` (CR-030).
-5. **Pastas:** `python3 scripts/prepare_dirs.py <nome>` com a sua conta, sem `--service-user` e sem `chown`.
+4. **Configuração (§7):** um `instance/<nome>/config.ini` por processo, com `[app] name` igual ao nome da pasta e `[oracle] user` = a conta única. Os segredos ficam num **único** `instance/secrets.cfg` (CR-032, D14): `[oracle] password`, `[web] cookie_key` e os `[environment:<NOME>]` dos ambientes atendidos (os bancos que os scripts usam têm usuários próprios). Não escreva `[monitor]`: o `health.py` usa a conta do `[oracle]` (CR-030).
+5. **Pastas:** nada a fazer. Na subida, o web e o agente criam as pastas que faltarem em `var/<nome>/` e `scripts_ambiente/` (CR-032, D12), com uma linha `pasta criada` no log.
 6. **Subida e permanência (§10.6):** `bin/sss-keepalive.sh` no `crontab` da sua conta, com `@reboot` e a cada 5 minutos.
 7. **Monitoração (§13)** e **limpeza manual (§12, README §11.3)** pelo mesmo `crontab`.
 
@@ -209,7 +209,7 @@ chmod go-w /portaloptrib /portaloptrib/TESHUVA        # ou tire a escrita de gru
 
 No DEV de referência (`/portaloptrib` e `/portaloptrib/TESHUVA` com `777`), o agente roda sem usuário de execução e sem helper, e essa conferência não acontece.
 
-As pastas de cada processo (`instance/<nome>/`, `var/<nome>/...`) são criadas no §7 e no §8, pelo `prepare_dirs.py`.
+As pastas `var/<nome>/...` são criadas pelo próprio processo na subida (CR-032, D12).
 
 ### 4.2 Usuários de execução (só nos agentes; CR-007, D1)
 
@@ -221,7 +221,7 @@ useradd --system --shell /sbin/nologin --no-create-home \
         --home-dir /portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service/var/exec/sssprd sssprd
 ```
 
-* A pasta `var/exec/<usuário>` (dono o usuário de execução, `0700`) é criada pelo `prepare_dirs.py` (§8).
+* A pasta `var/exec/<usuário>` (dono o usuário de execução, `0700`) é criada pelo root (§8).
 * **Cota e limites:** cota de disco na partição de `var/`, e `nproc` e `nofile` por usuário em `/etc/security/limits.d/sss.conf` (por exemplo, `sssprd hard nproc 256`), para que um script não esgote o servidor.
 * No `config.ini` do agente: `exec_users = PRODUCAO=sssprd,HOMOLOGACAO=ssshml`. O `exec_work_dir` sai de `var/exec` (CR-028).
 
@@ -332,7 +332,7 @@ O papel vem do próprio arquivo (CR-028, D4): o do web tem `[web]` e não tem `[
 | Web (`instance/web0001/`) | `[app] sss_env` e `name` (o nome da pasta); `[oracle]` (`user` = `sss_web`, `dsn`, `owner`, `table_prefix`); `[web] allowed_origins` e, atrás de proxy, `trusted_proxies` |
 | Agente (`instance/agente0001/`) | `[app] sss_env` e `name` (o nome da pasta, que é o `agent_id`); `[oracle]` (`user` = `sss_agente`...); `[agent] environments`, `max_parallel_jobs`, `exec_users` (vazio com `sss_env = DEV`, §4.0) |
 
-As pastas (`log_dir`, `work_dir`, `exec_work_dir`, `output_dir`, `input_dir`, `script_work_dir` e `script_base_dir`) saem do nome e não precisam ser escritas. A tabela completa, com o padrão e a faixa de cada chave, está no README §12.1. **O SSS não cria as pastas configuradas** (exceto o `log_dir`, criado na subida): crie-as com `scripts/prepare_dirs.py <nome>` (§8); sem elas, o agente recusa subir (código 13, §15). `[agent] interpreters` não existe mais (CR-026): uma linha antiga só gera aviso. O web usa sete valores de `[agent]` que precisam ser iguais aos dos agentes (`heartbeat_interval_s`, `fence_timeout_s`, `node_offline_timeout_s`, `misfire_policy`, `misfire_tolerance_s`, `cron_horizon_days` e `queue_aging_min`). Sem `[agent]` no config do web, valem os padrões. Se mudar algum nos agentes, escreva o mesmo valor num `[agent]` do config do web, que só aceita essas sete chaves e continua com o papel web (README §12.1). Em `instance/<nome>/`, o `[app] name` precisa ser o nome da pasta: ao copiar a pasta de um agente para criar outro, troque o `name`.
+As pastas (`log_dir`, `work_dir`, `exec_work_dir`, `output_dir`, `input_dir`, `script_work_dir` e `script_base_dir`) saem do nome e não precisam ser escritas. A tabela completa, com o padrão e a faixa de cada chave, está no README §12.1. **O próprio processo cria na subida as pastas que faltarem** (CR-032, D12): não há passo manual de pastas. `[agent] interpreters` não existe mais (CR-026): uma linha antiga só gera aviso. O web usa sete valores de `[agent]` que precisam ser iguais aos dos agentes (`heartbeat_interval_s`, `fence_timeout_s`, `node_offline_timeout_s`, `misfire_policy`, `misfire_tolerance_s`, `cron_horizon_days` e `queue_aging_min`). Sem `[agent]` no config do web, valem os padrões. Se mudar algum nos agentes, escreva o mesmo valor num `[agent]` do config do web, que só aceita essas sete chaves e continua com o papel web (README §12.1). Em `instance/<nome>/`, o `[app] name` precisa ser o nome da pasta: ao copiar a pasta de um agente para criar outro, troque o `name`.
 
 **Tempos que precisam ser idênticos em todos os agentes (README §8.9, D7):** desde o CR-032, os tempos de saúde e os ajustes do desdobro são fixos no código (`heartbeat_interval_s` 10, `fence_timeout_s` 90, `node_offline_timeout_s` 180, `kill_grace_s` 5, `misfire_tolerance_s` 300, `cron_horizon_days` 1461, `queue_aging_min` 60). Dos valores do `critical_config`, só `call_timeout_ms` e `misfire_policy` vêm do config: escreva-os iguais em todos os agentes (ou deixe o padrão). Cada agente registra na subida:
 
@@ -344,23 +344,22 @@ Confira que a linha é igual em todos. Se um agente subir com valores diferentes
 
 ### 7.2 `secrets.cfg` [ensaiado]
 
-Um arquivo **por processo**, em `<RAIZ>/instance/<nome>/secrets.cfg`, só com as seções do papel dele (README §4.1). Dono `sss`, modo `0600`. Nunca versione o arquivo real.
+Um arquivo **único por servidor**, em `<RAIZ>/instance/secrets.cfg` (CR-032, D14), lido por todos os processos; cada um usa só o que precisa. Dono a conta do SSS, modo `0600`. Nunca versione o arquivo real.
 
-| Processo | Seções |
+| Seção | Quem usa |
 |---|---|
-| Web (`web0001`) | `[oracle] password` (conta `sss_web`) e `[web] cookie_key` (igual em todos os nós web) |
-| Agente (`agente0001`) | `[oracle] password` (conta `sss_agente`), `[environment:<NOME>]` com `user` e `password` **só dos ambientes que esse agente atende** |
-| Quem roda o `health.py` | `[monitor] user` e `password` (conta `sss_monitor`). No agente, a seção `[monitor]` pode ficar no `secrets.cfg` dele: o papel monitor ignora as outras seções e só recusa `[web]` |
+| `[oracle] password` | todos (a senha da conta do `[oracle] user`) |
+| `[web] cookie_key` | o web (igual em todos os nós web) |
+| `[environment:<NOME>]` com `user` e `password` | os agentes, um bloco por ambiente atendido (bancos dos scripts) |
 
 ```bash
-# como sss, na <RAIZ>
-cp instance/exemplos/web0001/secrets.cfg.example instance/web0001/secrets.cfg && chmod 0600 instance/web0001/secrets.cfg
-cp instance/exemplos/agente0001/secrets.cfg.example instance/agente0001/secrets.cfg && chmod 0600 instance/agente0001/secrets.cfg
-vi instance/web0001/secrets.cfg instance/agente0001/secrets.cfg
+# na <RAIZ>
+cp instance/exemplos/secrets.cfg.example instance/secrets.cfg && chmod 0600 instance/secrets.cfg
+vi instance/secrets.cfg
 python3 -c "import secrets; print(secrets.token_urlsafe(48))"   # um cookie_key novo, para o [web]
 ```
 
-Fora de DEV, uma seção de outro papel recusa a subida com CRITICAL (seção e motivo, nunca o valor).
+Um `secrets.cfg` antigo dentro de `instance/<nome>/` ainda é lido, com um aviso no log para movê-lo para `instance/secrets.cfg`.
 
 ---
 
@@ -373,16 +372,7 @@ install -o root -g root -m 0755 <RAIZ>/bin/sss-helper /portaloptrib/TESHUVA/SSS/
 visudo -f /etc/sudoers.d/sss
 ```
 
-**Pastas de cada processo (CR-026e, CR-028):** depois de criar o usuário de serviço e os usuários de execução (§4) e o `config.ini` de cada processo (§7.1), rode como root, um por processo:
-
-```bash
-# como root, na <RAIZ>
-python3 scripts/prepare_dirs.py agente0001 --service-user sss --dry-run   # confere
-python3 scripts/prepare_dirs.py agente0001 --service-user sss             # cria
-python3 scripts/prepare_dirs.py web0001 --service-user sss                # o web só tem o log_dir
-```
-
-Antes de tudo, `var/`, `var/<nome>/` e `var/update/` (`sss`, `0755`; sem isso, o `makedirs` como root as deixaria do root e o `sss-update.sh` não conseguiria gravar). Para o agente, ele cria `var/<nome>/logs` (`sss`, `0750`), `var/<nome>/work` (`sss`, `0700`), `var/exec` (`root`, `0755`) com uma pasta `0700` por usuário de execução, `var/<nome>/output`, `input` e `script_work` (`sss`, `0755`) com a pasta `0700` de cada ambiente, do usuário de execução dele (nome em minúsculo, como no log), e `scripts_ambiente` (`sss`, `0755`). Para o web, só o `var/<nome>/logs`. A pasta que já existe tem o dono e o modo ajustados; o conteúdo nunca é mexido e nada é apagado. Usuário inexistente: para antes de criar qualquer pasta (código 2). Fora de DEV, sem root: código 3. `--service-user` troca o usuário do serviço (padrão `sss`). No DEV, roda com o próprio usuário, sem `chown`.
+**Pastas de cada processo (CR-032, D12):** o web e o agente criam na subida as pastas que faltarem (`var/<nome>/logs` `0750`, `var/<nome>/work` `0700`, `output`, `input`, `script_work` e `scripts_ambiente` `0755`). Uma pasta existente que não possa ser usada (arquivo no lugar, sem escrita, pasta do sistema) recusa a subida (código 13, §15).
 
 Conteúdo do `/etc/sudoers.d/sss`, com uma linha por usuário de execução:
 
@@ -697,7 +687,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | 11 | `configuracao invalida: [secao] chave: <motivo>` | Chave ausente, desconhecida ou fora da faixa | Compare com o modelo de `instance/exemplos/`; uma chave removida pede "apague a linha" |
 | 11 | `child_locale <x> nao consta em locale -a (CR-007, R-17)` | Locale do filho não instalado | Instale o locale `C.UTF-8` (fixo desde o CR-032) |
 | 12 | `secrets.cfg invalido: <reason>` (ex.: `Arquivo de segredos possui permissoes inseguras (mode 644, ...)`, `... deve pertencer ao usuario corrente`, `Secao [web] nao pertence ao papel 'agente'`) | Modo, dono ou seções do `secrets.cfg` | `chmod 0600`, `chown sss`, e só as seções do papel (§7.2) |
-| 13 | `work_dir <pasta> recusado: NOT_FOUND` (ou `output_dir`, `input_dir`, `script_work_dir`) | A pasta configurada não existe: o SSS não cria as pastas, exceto o `log_dir` (README §12.1) | `scripts/prepare_dirs.py` como root (§8) e suba de novo |
+| 13 | `work_dir <pasta> recusado: <motivo>` (ou `output_dir`, `input_dir`, `script_work_dir`) | A pasta existe mas não pode ser usada (arquivo no lugar, sem escrita, pasta do sistema); a que falta é criada na subida (CR-032, D12) | Corrija ou apague o que está no caminho e suba de novo |
 | 13 | Linhas `execucao fora de DEV: <falha>` e depois `N falha(s) na conferencia do helper e do sudoers` | Helper ou `sudoers` incompletos: `helper ... nao pertence ao root`, `... deve ter modo 0755`, `sudo -n -l sem a regra do helper para <usuário>`, `<pasta> deve pertencer a <usuário> com modo 0700`, `usuario de execucao <x> nao existe` | §8 e §4.2 |
 | 13 | `<nome> <caminho> recusado: <código>` (`log_dir`, `work_dir`...), `output_dir ... recusado` / `pasta de saida: <falha>` e `input_dir ... recusado` / `pasta de entrada: <falha>` e `script_work_dir ... recusado` / `pasta de trabalho: <falha>` | Pasta ausente, sem escrita ou nas pastas do sistema | §4 e §8 |
 | 14 | `Outra instancia do agente ja esta em execucao (<work_dir>/sss-<agent_id>.lock)` | Outro agente com o mesmo `work_dir` e `agent_id` | Pare o outro, ou use `config.ini` próprio (§7.1) |
@@ -833,7 +823,7 @@ Com a estrutura por processo, o código é trocado **no lugar** pelo `bin/sss-up
    O comando confere o pacote (`SHA256SUMS` externo e interno) e recusa root (código 1), pacote inválido ou sem permissão para criar `var/update/` (código 2, nada muda) e um `python` rodando um comando do SSS a partir da `<RAIZ>` (código 3, nada muda; um processo de outro usuário, que não dá para conferir, só gera aviso). Ele guarda o código atual num pacote de retorno, no mesmo formato, em `var/update/<data>/`, e troca só `bin/`, `docs/`, `scripts/`, `src/`, `AGENTS.md`, `README.md`, `SHA256SUMS` e `instance/exemplos/`. A extração e o código anterior ficam em `<RAIZ>/.update-<data>/` (mesma partição da raiz: a troca é por renomeação, mesmo com `var/` em partição própria), apagada no sucesso. Código 4: falha no meio da troca; o código anterior fica em `.update-<data>/anterior/` e o retorno é o pacote impresso.
    * **`bin/` é trocado inteiro:** um arquivo local que você tenha posto em `bin/` some (fica só no pacote de retorno). Guarde scripts próprios fora do código, por exemplo em `scripts_ambiente/`.
    * **Pacotes de retorno:** `var/update/<data>/` não é apagado sozinho. Depois de validar a versão nova, apague à mão os pacotes antigos que não quiser guardar.
-   * **Dono de `var/`:** o `sss-update.sh` roda com o usuário do serviço e grava em `var/update/`. O `prepare_dirs.py` deixa `var/`, `var/<nome>/` e `var/update/` com esse usuário (§8).
+   * **Dono de `var/`:** o `sss-update.sh` roda com o usuário do serviço e grava em `var/update/`. Na instalação com um usuário só (§4.0), `var/` é sempre dessa conta.
 4. Como root, em cada agente: copie o helper novo (`install -o root -g root -m 0755 <RAIZ>/bin/sss-helper <helper_path>`, §8).
 5. Compare cada `instance/<nome>/config.ini` com o modelo novo (`diff instance/exemplos/agente0001/config.ini.example instance/agente0001/config.ini`). Chave obrigatória nova ou removida aparece na subida como `configuracao invalida` (§15.1).
 6. Suba e valide (§11): `systemctl start sss-web@web0001 sss-agente@agente0001 ...`; sem `systemd`, `sss-keepalive.sh --resume` de cada nome e uma passada do `sss-keepalive.sh` (ou espere a do cron).
@@ -846,7 +836,7 @@ Uma instalação no formato anterior (`/opt/sss/app`, `/etc/sss/secrets.cfg`, `/
 
 1. Instale o pacote novo na `<RAIZ>` (§3), crie as pastas acima dela e o helper em `sss-root/bin` (§4.1, §8) e troque o `sudoers` para o caminho novo.
 2. Divida o `config.ini` antigo em um por processo (`instance/web0001/`, `instance/agente0001/`, §7.1), a partir dos modelos: copie só as chaves que fogem do padrão, e apague as de pastas (elas saem do nome). Divida o `secrets.cfg` da mesma forma (§7.2).
-3. Crie as pastas com o `prepare_dirs.py <nome>` (§8) e **mova** os dados de cada agente: `log_dir` → `var/<nome>/logs`, `output_dir` → `var/<nome>/output`, `input_dir` → `var/<nome>/input`, `script_work_dir` → `var/<nome>/script_work`. O `work_dir` não precisa ir: pare os agentes sem tickets `RUNNING` e ele é recriado vazio. Depois de mover, rode o `prepare_dirs.py` de novo para acertar donos e modos.
+3. **Mova** os dados de cada agente: `log_dir` → `var/<nome>/logs`, `output_dir` → `var/<nome>/output`, `input_dir` → `var/<nome>/input`, `script_work_dir` → `var/<nome>/script_work`. O `work_dir` não precisa ir: pare os agentes sem tickets `RUNNING` e ele é recriado vazio. Depois de mover, rode o `prepare_dirs.py` de novo para acertar donos e modos.
 4. Troque as units do `systemd` pelas novas, por nome (§10.5), e o monitoramento (`--name`, §13); a limpeza passa a ser manual (§12).
 5. Suba, valide (§11) e só depois apague as pastas antigas. Retorno: as pastas antigas continuam intactas até esse passo.
 
