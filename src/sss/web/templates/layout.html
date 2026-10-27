@@ -14,10 +14,10 @@
 {{icons = URL('static', 'img/icons.svg')}}
 <a class="sss-skip-link" href="#content">Pular para o conteúdo</a>
 
-{{if response.sss_env != 'PROD':}}
+{{if response.env_label != 'PROD':}}
 <div class="sss-env-banner" role="note">
   <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#icon-alert"></use></svg>
-  <span>Ambiente {{=response.sss_env}} — dados e execuções não produtivos</span>
+  <span>Ambiente {{=response.env_label}} — dados e execuções não produtivos</span>
 </div>
 {{pass}}
 
@@ -86,7 +86,7 @@
 
 <footer class="sss-footer">
   <span>Script Scheduling Service</span>
-  <span>Ambiente <strong>{{=response.sss_env}}</strong> · Versão {{=response.sss_version}}</span>
+  <span>Ambiente <strong>{{=response.env_label}}</strong> · Versão {{=response.sss_version}}</span>
 </footer>
 
 <script defer src="{{=URL('static', 'js/app/dom.js')}}"></script>

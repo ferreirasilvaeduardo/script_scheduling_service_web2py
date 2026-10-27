@@ -593,6 +593,7 @@ class TestValidateExecution(unittest.TestCase):
         self.stats = {
             self.HELPER: _Stat(0, 0o100755),
             "/opt/sss/bin": _Stat(0, 0o040755),
+            "/opt/sss": _Stat(0, 0o040755), "/opt": _Stat(0, 0o040755), "/": _Stat(0, 0o040755),
             os.path.join(self.EXEC, "exec1"): _Stat(self.UID_EXEC, 0o040700),
         }
         self.users = {"exec1": _Pw("exec1", self.UID_EXEC), "root": _Pw("root", 0),
@@ -633,6 +634,31 @@ class TestValidateExecution(unittest.TestCase):
         del self.stats[self.HELPER]
         self.assertIn("nao encontrado", " ".join(self.validate()))
 
+    def test_pastas_acima_do_helper_cr028(self):
+        """CR-028: toda pasta acima do helper e do root e sem escrita de outros; 1777 (sticky) vale."""
+        self.stats["/opt"] = _Stat(0, 0o040777)
+        self.assertEqual(self.validate(),
+                         ["pasta /opt acima do helper deve ser do root e sem escrita de outros"])
+        self.stats["/opt"] = _Stat(0, 0o041777)
+        self.assertEqual(self.validate(), [])
+        self.stats["/opt/sss"] = _Stat(1000, 0o040755)
+        self.assertEqual(self.validate(),
+                         ["pasta /opt/sss acima do helper deve ser do root e sem escrita de outros"])
+        del self.stats["/opt/sss"]
+        self.assertEqual(self.validate(), ["pasta /opt/sss acima do helper nao encontrada"])
+
+    def test_caminho_do_helper_configurado_cr028(self):
+        """CR-028: sem helper explicito, vale o de set_helper ([agent] helper_path)."""
+        self.addCleanup(os_platform.set_helper, posix.HELPER)
+        os_platform.set_helper("/srv/root/bin/sss-helper")
+        with mock.patch.object(posix.os, "stat", side_effect=self._stat), \
+                mock.patch.object(posix.pwd, "getpwnam", side_effect=self._getpwnam):
+            failures = os_platform.validate_execution([("PROD", "exec1")], self.EXEC,
+                                                      run=self._executar, agent_user="agente")
+        self.assertIn("helper /srv/root/bin/sss-helper nao encontrado", failures)
+        self.assertEqual(posix._helper_argv("pack", ["a"], "exec1")[:6],
+                         ["/usr/bin/sudo", "-n", "-u", "exec1", "--", "/srv/root/bin/sss-helper"])
+
     def test_usuarios_invalidos(self):
         self.assertIn("nao existe", " ".join(self.validate(users=("fantasma",))))
         self.assertIn("nao pode ser root", " ".join(self.validate(users=("root",))))
@@ -657,7 +683,7 @@ class TestInterface(unittest.TestCase):
                      "is_privileged_user", "validate_restricted_file", "validate_restricted_dir",
                      "validate_script_path", "final_path", "create_work_dir", "install_stop_handler",
                      "create_output_dir", "start_pack", "clean_output", "purge_output",
-                     "validate_output_dirs"):
+                     "validate_output_dirs", "set_helper"):
             self.assertTrue(hasattr(os_platform, name), name)
         self.assertIn(os_platform.NAME, ("LINUX", "UNIX"))
         self.assertFalse(hasattr(os_platform, "encerrar_grupo"), "encerramento escalonado e do executor (F8.1)")

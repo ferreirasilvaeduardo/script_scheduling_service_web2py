@@ -23,6 +23,8 @@
 | D8 | Web numerado como os agentes: `web0001`, `web0002`... |
 | D9 | DEV migrado movendo os dados atuais para `var/agente0001/` e `var/web0001/`; o agente passa a se chamar `agente0001`; nada é apagado antes da conferência |
 | D10 | `bin/sss-update.sh <pacote>`: atualização no lugar, com tudo parado, preservando `instance/`, `var/` e `scripts_ambiente/`, com pacote de retorno |
+| D11 | Helper de execução numa pasta do root **ao lado** da raiz, `/portaloptrib/TESHUVA/SSS/<TIPO>/sss-root/bin/sss-helper`, com o caminho em `[agent] helper_path` (opção B, 2026-10-27). Como a raiz é do usuário de serviço, o helper nunca fica dentro dela. Na subida, o agente confere a pasta do helper e todas as pastas acima dela, até `/`, no caminho escrito e no real: do root e sem escrita de grupo e outros, ou com sticky bit. No DEV, `/portaloptrib` e `/portaloptrib/TESHUVA` têm `777`, e fora de DEV o administrador aplica o sticky bit ou tira a escrita (DEPLOYMENT §4.1) |
+| D12 | Nos servidores da empresa não é possível criar usuários nem mudar permissões de pastas: HOM e PROD sobem com `sss_env = DEV` (opção B, 2026-10-27), e a separação entre os ambientes é física, pela pasta `<TIPO>`. Os scripts rodam com a conta do agente (risco aceito), e as proteções que o DEV desliga passam a ser seguidas à mão (DEPLOYMENT §4.0). A D11 continua no código para uma instalação com administrador. A opção A (modo `own_user` explícito, sem afrouxar o resto) foi recusada. A faixa de ambiente e o rodapé da tela mostram o `<TIPO>` da pasta (`sss_config.env_label`), e não o `sss_env` (opção A, 2026-10-27) |
 
 ## 2. Passos
 
@@ -30,5 +32,5 @@
 |---|---|---|
 | 028a | Config e subida: papel pelo arquivo, `[app] name` e pastas derivadas, `agent_id` = nome, `config_path`/`--name` nos comandos, launchers pelo nome, `scripts_ambiente/` na regra `APP_DIR`, `prepare_dirs` por papel, exemplos em `instance/exemplos/web0001/` e `instance/exemplos/agente0001/`, testes. Suíte de 1538 testes em 3.6.0, 3.6.8 e 3.13.2; bateria Oracle (1536); `make lint` e `make type-check` com zero achados | Concluído |
 | 028b | `bin/sss-update.sh` (conferência do pacote pelos dois `SHA256SUMS`, recusa com processo do SSS rodando na pasta, pacote de retorno no mesmo formato, troca só do código); empacotador com `sss-update.sh` e, de `instance/`, só os `.example` e `instance/exemplos/` (o `instance/secrets.cfg` do formato anterior continua recusando o pacote); `.gitignore` de `var/`, `instance/<nome>/` e `scripts_ambiente/`; testes de ponta a ponta (`test_update.py`) | Concluído |
-| 028c | DEV migrado, documentação reescrita para a estrutura nova (README, DEPLOYMENT, DEV_ENVIRONMENT, AGENTS), roteiro da homologação, homologação real | Pendente |
+| 028c | D11 e D12 (faixa pelo `<TIPO>`); (`[agent] helper_path`, `set_helper`, conferência das pastas acima do helper); DEV migrado, documentação reescrita para a estrutura nova (README, DEPLOYMENT, DEV_ENVIRONMENT, AGENTS), roteiro da homologação, homologação real | Concluído (homologação r2 de 2026-10-27, 332/332) |
 | 028d | Revisão independente e encerramento | Pendente |

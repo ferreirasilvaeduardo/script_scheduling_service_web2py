@@ -238,7 +238,12 @@ class Agent(object):
                 self._fail(EXIT_DIRECTORIES, "%s %s recusado: %s", name, path, code)
         # CR-026: sem [agent] interpreters; o interpretador e conferido a cada ticket (#!, digitado, cadastro).
         if self.cfg.app.sss_env != "DEV":
-            failures = self.plat.validate_execution(agent.exec_users, agent.exec_work_dir)
+            # CR-028: [agent] helper_path vale para todas as chamadas do helper pelo sudo.
+            set_helper = getattr(self.plat, "set_helper", None)
+            if set_helper:
+                set_helper(agent.helper_path)
+            failures = self.plat.validate_execution(agent.exec_users, agent.exec_work_dir,
+                                                    helper=agent.helper_path)
             for failure in failures:
                 self.log.critical("execucao fora de DEV: %s", failure)
             if failures:

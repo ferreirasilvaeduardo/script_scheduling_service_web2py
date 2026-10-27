@@ -2,8 +2,9 @@
 # -*- coding: utf-8 -*-
 """sss-helper: unica forma de o agente do SSS agir como o usuario de execucao (README §8.0; CR-007, D1).
 
-Instalado pelo root em /opt/sss/bin/sss-helper (dono root, 0755, pasta so do root) e chamado so por
-"sudo -n -u <usuario de execucao> -- /opt/sss/bin/sss-helper <subcomando>". Python 3.6, so biblioteca
+Instalado pelo root no [agent] helper_path (CR-028; padrao /portaloptrib/TESHUVA/SSS/<TIPO>/sss-root/bin/
+sss-helper, fora da raiz; dono root, 0755, pasta so do root) e chamado so por
+"sudo -n -u <usuario de execucao> -- <helper_path> <subcomando>". Python 3.6, so biblioteca
 padrao, sem importar a aplicacao nem ler o config.ini. Valida os proprios argumentos.
 
 Subcomandos:

@@ -32,8 +32,9 @@ _Agent = collections.namedtuple("_Agent", (
     "agent_id", "environments", "work_dir", "exec_users",
     "exec_work_dir", "heartbeat_interval_s", "fence_timeout_s", "node_offline_timeout_s", "kill_grace_s",
     "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "queue_aging_min", "child_locale",
-    "output_dir", "input_dir", "script_work_dir"))
-_Agent.__new__.__defaults__ = (None, None, None)  # CR-012, CR-014 e CR-019: pastas opcionais desligadas
+    "output_dir", "input_dir", "script_work_dir", "helper_path"))
+# CR-012, CR-014 e CR-019: pastas opcionais desligadas; CR-028: helper no caminho padrao.
+_Agent.__new__.__defaults__ = (None, None, None, "/srv/sss-root/bin/sss-helper")
 _Cfg = collections.namedtuple("_Cfg", "agent logging app oracle secrets")
 _NS = collections.namedtuple("_NS", "log_dir")
 _App = collections.namedtuple("_App", "sss_env")

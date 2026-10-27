@@ -171,6 +171,8 @@ SCHEMA = collections.OrderedDict([
         # obrigatorios fora de DEV (validacao cruzada em carregar()).
         ("exec_users", FieldDef("map_csv", required=False, default=())),
         ("exec_work_dir", FieldDef("path", required=False, default=None)),
+        # CR-028: helper de execucao, numa pasta so do root ao lado da raiz (padrao HELPER_DEFAULT).
+        ("helper_path", FieldDef("path", required=False, default=None)),
         ("max_parallel_jobs", FieldDef("int", required=True, min_val=1, max_val=999)),
         ("max_parallel_hard_limit", FieldDef("int", required=False, min_val=1, max_val=999, default=32)),
         ("claim_batch_size", FieldDef("int", required=False, min_val=1, max_val=1000, default=20)),
@@ -286,7 +288,7 @@ class AgentConfig(_ItemAccessMixin, collections.namedtuple("AgentConfig", [
     "misfire_tolerance_s", "cron_horizon_days", "child_locale",
     "env_passthrough", "exec_users", "exec_work_dir", "queue_aging_min",
     "log_dir_min_free_mb", "output_dir", "output_max_bytes", "output_max_files", "input_dir",
-    "script_work_dir", "script_base_dir"
+    "script_work_dir", "script_base_dir", "helper_path"
 ])):
     __slots__ = ()
 
@@ -435,8 +437,19 @@ def _convert_value(section_name, key_name, cdef, raw_val):
 APP_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
 VAR_DIR = os.path.join(APP_DIR, "var")
 SCRIPTS_DIR = os.path.join(APP_DIR, "scripts_ambiente")
+# Pasta <TIPO> acima da raiz (CR-028, D1): DEV, HOM ou PROD. Com D12, HOM e PROD sobem com sss_env = DEV.
+INSTALL_TYPES = ("DEV", "HOM", "HML", "PROD")
+INSTALL_TYPE = os.path.basename(os.path.dirname(APP_DIR)).upper()
+# Helper de execucao (CR-028): fora da raiz, que e do usuario de servico; pasta do root ao lado dela.
+HELPER_DEFAULT = os.path.join(os.path.dirname(APP_DIR), "sss-root", "bin", "sss-helper")
 # Secoes que cada papel nao usa (CR-028, D4): o papel vem do proprio arquivo.
 _ROLE_SKIPPED = {"web": ("agent",), "agent": ("web",), "all": ()}
+
+
+def env_label(sss_env: str, install_type: Optional[str] = None) -> str:
+    """Ambiente mostrado na tela (CR-028, D12): o <TIPO> da pasta quando ele e conhecido; senao, o sss_env."""
+    tipo = INSTALL_TYPE if install_type is None else install_type
+    return tipo if tipo in INSTALL_TYPES else sss_env
 
 
 def role_of(sections):
@@ -550,6 +563,8 @@ def load(ini_path: str) -> "Config":
         raise ConfigError(section="agent", key="agent_id",
                           reason="Com [app] name, o agent_id e o proprio nome (CR-028); apague a linha agent_id")
     data_sections["app"]["role"] = role
+    if role != "web" and data_sections["agent"]["helper_path"] is None:
+        data_sections["agent"]["helper_path"] = HELPER_DEFAULT
 
     if data_sections["secrets"]["secrets_file"] is None:
         data_sections["secrets"]["secrets_file"] = os.path.join(os.path.dirname(os.path.abspath(ini_path)), "secrets.cfg")
@@ -718,6 +733,16 @@ def _validate_agent_paths(app, agent, logging_dict):
             if _inside(agent["exec_work_dir"], other) or _inside(other, agent["exec_work_dir"]):
                 raise ConfigError(section="agent", key="exec_work_dir",
                                  reason="Nao pode ficar dentro de %s nem conte-lo" % name)
+    helper = agent["helper_path"]
+    if helper:
+        # CR-028: o helper roda pelo sudo como o usuario de execucao; nunca numa pasta do usuario de servico.
+        if not os.path.isabs(helper):
+            raise ConfigError(section="agent", key="helper_path", reason="Deve ser um caminho absoluto")
+        for name, other in (("a pasta da aplicacao", APP_DIR), ("work_dir", agent["work_dir"]),
+                            ("log_dir", logging_dict["log_dir"]), ("exec_work_dir", agent["exec_work_dir"])):
+            if other and _inside(helper, other):
+                raise ConfigError(section="agent", key="helper_path",
+                                 reason="Nao pode ficar dentro de %s (pasta so do root, CR-028)" % name)
     if agent["output_dir"]:
         # CR-012: a pasta de saida nao se sobrepoe as pastas do SSS (README §8.13).
         if not os.path.isabs(agent["output_dir"]):

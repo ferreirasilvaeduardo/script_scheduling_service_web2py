@@ -326,6 +326,10 @@ def main(argv=None, connect=None, plat=os_platform, output=None):
         logger.critical("segredos invalidos: %s", exc, extra=_EXTRA)
         return EXIT_CONFIG
 
+    # CR-028: o purge-output fora de DEV chama o helper do [agent] helper_path.
+    set_helper = getattr(plat, "set_helper", None)
+    if set_helper:
+        set_helper(cfg.agent.helper_path)
     lock = None
     if not args.dry_run:
         try:

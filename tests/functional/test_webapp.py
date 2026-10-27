@@ -160,6 +160,7 @@ class SecurityHooksTest(unittest.TestCase):
         self.assertTrue(ctx.session.csrf_token, "token CSRF criado na primeira visita")
         from sss.config import sss_config  # pylint: disable=import-outside-toplevel
         self.assertEqual(ctx.response.sss_version, sss_config.SSS_VERSION, "rodape com a versao do pacote")
+        self.assertEqual(ctx.response.env_label, sss_config.env_label("HML"), "CR-028 (D12): faixa e rodape")
 
     def test_post_size_origin_and_csrf(self):
         """POST acima do limite: 413; Origin de fora: 403; token errado ou ausente: 403; certo passa."""

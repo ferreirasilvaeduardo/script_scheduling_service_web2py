@@ -23,6 +23,8 @@ _log = logging.getLogger("sss_scheduler")
 
 NAME = "UNIX" if not sys.platform.startswith("linux") else "LINUX"
 
+# Caminho do helper: [agent] helper_path (CR-028), aplicado por set_helper na subida do agente e do purge.
+# O valor abaixo so vale ate essa chamada.
 HELPER = "/opt/sss/bin/sss-helper"
 SUDO = "/usr/bin/sudo"
 # Copia do helper no pacote (bin/sss-helper): em DEV sem usuario de execucao, os subcomandos da saida
@@ -109,7 +111,7 @@ def _child_limits(limits):
 def start_process(spec, log_fd, exec_user=None):
     """Inicia o script num grupo proprio (start_new_session) com stdout/stderr no arquivo de log.
 
-    Com exec_user: sudo -n -u <usuario> -- /opt/sss/bin/sss-helper run, com a especificacao JSON
+    Com exec_user: sudo -n -u <usuario> -- <helper_path> run, com a especificacao JSON
     (ticket_id, argv, env, rlimits, base_dir) pela entrada padrao. Sem ele (so DEV): Popen direto com
     argv, cwd, env e os limites. Nunca usa shell nem PIPE de saida (AGENTS §3.2).
     """
@@ -434,13 +436,44 @@ def _run_short(argv):
     return p.returncode, p.stdout or ""
 
 
-def validate_execution(exec_users, exec_work_dir, helper=HELPER, run=_run_short,
+def set_helper(path):
+    """Caminho do helper do [agent] helper_path (CR-028), usado por todas as chamadas pelo sudo."""
+    global HELPER  # pylint: disable=global-statement
+    HELPER = path
+
+
+def _chain_failures(folder):
+    """Pastas acima da pasta do helper ate a raiz (CR-028): do root e sem escrita de grupo e outros (ou com
+    sticky bit); senao, quem escreve nelas troca a pasta do helper por outra. Confere o caminho escrito e o
+    real (links simbolicos)."""
+    failures = []
+    for start in (os.path.abspath(folder), os.path.realpath(folder)):
+        current = os.path.dirname(start)
+        while True:
+            failure = None
+            try:
+                st = os.stat(current)
+                if st.st_uid != 0 or (st.st_mode & 0o022 and not st.st_mode & stat.S_ISVTX):
+                    failure = "pasta %s acima do helper deve ser do root e sem escrita de outros" % current
+            except OSError:
+                failure = "pasta %s acima do helper nao encontrada" % current
+            if failure and failure not in failures:
+                failures.append(failure)
+            parent = os.path.dirname(current)
+            if parent == current:
+                break
+            current = parent
+    return failures
+
+
+def validate_execution(exec_users, exec_work_dir, helper=None, run=_run_short,
                      agent_user=None):
-    """Confere o helper, o sudoers e os usuarios de execucao (README §8.0). Devolve a lista de falhas
-    (vazia = OK); o agente registra cada uma em CRITICAL e recusa subir.
+    """Confere o helper, as pastas acima dele, o sudoers e os usuarios de execucao (README §8.0). Devolve a
+    lista de falhas (vazia = OK); o agente registra cada uma em CRITICAL e recusa subir.
 
     exec_users: pares (ambiente, usuario) do [agent] exec_users.
     """
+    helper = helper or HELPER
     failures = []
     try:
         st = os.stat(helper)
@@ -451,6 +484,7 @@ def validate_execution(exec_users, exec_work_dir, helper=HELPER, run=_run_short,
         dst = os.stat(os.path.dirname(helper))
         if dst.st_uid != 0 or dst.st_mode & 0o022:
             failures.append("pasta do helper %s deve ser so do root" % os.path.dirname(helper))
+        failures.extend(_chain_failures(os.path.dirname(helper)))
     except OSError:
         failures.append("helper %s nao encontrado" % helper)
 

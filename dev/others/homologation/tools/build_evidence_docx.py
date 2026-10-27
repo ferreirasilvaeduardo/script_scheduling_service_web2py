@@ -660,6 +660,17 @@ RODADAS["20261027"] = dict(RODADAS["20261026_r4"], **{
         u"dessa segunda passada.",
     ],
 })
+RODADAS["20261027_r2"] = dict(RODADAS["20261027"], **{
+    "commit": u"a659169 (CR-028b) mais o CR-028c (estrutura por processo, helper_path, faixa pelo <TIPO>), no "
+              u"mesmo commit deste documento",
+    "observacoes": [
+        u"Rodada do CR-028c: DEV na estrutura por processo (instance/web0001 e instance/agente0001, dados em "
+        u"var/web0001 e var/agente0001), web e agente subidos pelo nome. Marca %s." % STAMP,
+        u"A faixa de ambiente e o rodapé mostram o <TIPO> da pasta acima da raiz (DEV), e não o sss_env "
+        u"(CR-028, D12).",
+        u"O banco não foi recriado: o admin já estava com a senha escolhida (SSS_ADMIN_START=new).",
+    ],
+})
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]

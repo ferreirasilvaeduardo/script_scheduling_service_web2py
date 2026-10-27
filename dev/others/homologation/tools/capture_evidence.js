@@ -43,7 +43,8 @@ const OUT_DIR = process.env.SSS_EVIDENCE_DIR ||
     path.join(__dirname, '..', `evidence_${RUN_DATE}${ROUND ? '_r' + ROUND : ''}`);  // dev/others/homologation
 const CHROME = process.env.SSS_CHROME ||
     path.join(os.homedir(), '.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome');
-// Agente e pastas lidos do instance/config.ini do DEV (o roteiro nao fixa agent_id nem pastas; CR-026d).
+// Agente e pastas lidos do config do agente do DEV (CR-028: instance/<nome>/config.ini, por padrao agente0001;
+// SSS_AGENT_NAME troca o nome). Sem a chave no arquivo, a pasta sai de var/<nome>/, como no sss_config.
 function readAgentConfig(file) {
     const values = {};
     let section = '';
@@ -52,17 +53,20 @@ function readAgentConfig(file) {
         const sec = line.match(/^\[(.+)\]$/);
         if (sec) { section = sec[1]; continue; }
         const kv = line.match(/^([A-Za-z_]+)\s*=\s*(.*)$/);
-        if (kv && section === 'agent') values[kv[1]] = kv[2].trim();
+        if (kv && (section === 'agent' || (section === 'app' && kv[1] === 'name'))) values[kv[1]] = kv[2].trim();
     }
     return values;
 }
-const AGENT_CFG = readAgentConfig(path.join(APP, 'instance', 'config.ini'));
-const AGENT_ID = AGENT_CFG.agent_id;
-if (!AGENT_CFG.input_dir || !AGENT_CFG.script_work_dir) {
-    throw new Error('instance/config.ini sem [agent] input_dir ou script_work_dir: a homologacao precisa dos dois');
+const AGENT_NAME = process.env.SSS_AGENT_NAME || 'agente0001';
+const AGENT_CFG = readAgentConfig(path.join(APP, 'instance', AGENT_NAME, 'config.ini'));
+const AGENT_VAR = path.join(APP, 'var', AGENT_CFG.name || AGENT_NAME);
+const AGENT_ID = AGENT_CFG.agent_id || AGENT_CFG.name;
+const INPUT = AGENT_CFG.input_dir !== undefined ? AGENT_CFG.input_dir : path.join(AGENT_VAR, 'input');
+const SCRIPT_WORK = AGENT_CFG.script_work_dir !== undefined ? AGENT_CFG.script_work_dir
+    : path.join(AGENT_VAR, 'script_work');
+if (!AGENT_ID || !INPUT || !SCRIPT_WORK) {
+    throw new Error(`instance/${AGENT_NAME}/config.ini sem name (ou agent_id), input_dir ou script_work_dir`);
 }
-const INPUT = AGENT_CFG.input_dir;
-const SCRIPT_WORK = AGENT_CFG.script_work_dir;
 const STAMP = `HOMOLOG_${RUN_DATE}${ROUND ? 'R' + ROUND : ''}`;
 const ADMIN_STARTS_NEW = process.env.SSS_ADMIN_START === 'new';
 

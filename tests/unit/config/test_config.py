@@ -765,6 +765,30 @@ class TestConfigCR007(unittest.TestCase):
                                            "[web]\nallowed_origins = https://x\n"))
         self.assertEqual(ctx.exception.section, "logging")
 
+    def test_cr028_env_label(self):
+        """CR-028 (D12): a tela mostra o <TIPO> da pasta acima da raiz; fora do padrao, o sss_env."""
+        for tipo, shown in (("PROD", "PROD"), ("hom", "HOM"), ("DEV", "DEV"), ("OUTRA", "DEV"), ("", "DEV")):
+            self.assertEqual(sss_config.env_label("DEV", tipo.upper()), shown, tipo)
+        self.assertEqual(sss_config.INSTALL_TYPE,
+                         os.path.basename(os.path.dirname(sss_config.APP_DIR)).upper())
+
+    def test_cr028_helper_path(self):
+        """CR-028: helper ao lado da raiz por padrao, configuravel, nunca numa pasta do usuario de servico."""
+        agent_ini = ("[app]\nsss_env = DEV\nname = agente0001\n" + self._ORACLE +
+                     "[agent]\nenvironments = A\nmax_parallel_jobs = 1\n")
+        self.assertEqual(sss_config.load(self._ini_text(agent_ini)).agent.helper_path,
+                         os.path.join(os.path.dirname(sss_config.APP_DIR), "sss-root", "bin", "sss-helper"))
+        self.assertEqual(sss_config.load(self._ini_text(agent_ini + "helper_path = /opt/sss/bin/sss-helper\n"))
+                         .agent.helper_path, "/opt/sss/bin/sss-helper")
+        web = sss_config.load(self._ini_text("[app]\nsss_env = DEV\nname = web0001\n" + self._ORACLE +
+                                             "[web]\nallowed_origins = https://x\n"))
+        self.assertIsNone(web.agent.helper_path)
+        for value in ("bin/sss-helper", os.path.join(sss_config.APP_DIR, "bin", "sss-helper"),
+                      os.path.join(sss_config.VAR_DIR, "exec", "sss-helper")):
+            with self.assertRaises(sss_config.ConfigError) as ctx:
+                sss_config.load(self._ini_text(agent_ini + "helper_path = %s\n" % value))
+            self.assertEqual(ctx.exception.key, "helper_path", value)
+
     def test_cr028_caminho_pelo_nome_e_exemplos(self):
         self.assertEqual(sss_config.config_path(None, "agente0001"),
                          os.path.join(sss_config.APP_DIR, "instance", "agente0001", "config.ini"))

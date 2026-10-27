@@ -27,8 +27,10 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${REPO_ROOT}"
 
 APP_DIR="${REPO_ROOT}"
-WORK_DIR="${APP_DIR}/work"
-LOG_DIR="${APP_DIR}/logs"
+# CR-028: o web do DEV e o processo web0001 (instance/web0001/, var/web0001/); SSS_WEB_NAME troca o nome.
+NAME="${SSS_WEB_NAME:-web0001}"
+WORK_DIR="${APP_DIR}/var/${NAME}"
+LOG_DIR="${APP_DIR}/var/${NAME}/logs"
 PID_FILE="${WORK_DIR}/sss_web.pid"
 DATE_TIME="$(date +%F_%H-%M-%S)"
 LOG_FILE_DATED="${LOG_DIR}/server-${DATE_TIME}.log"
@@ -102,7 +104,7 @@ fi
 # 7. Validacao rapida da configuracao (diagnostico antes de subir): run_web.py --check confere
 #    config.ini e segredos sem abrir a porta; aqui ainda se exige DEV e o driver Oracle neste Python.
 SERVER="${APP_DIR}/scripts/run_web.py"
-DIAG_ERRORS="$("${PYTHON}" "${SERVER}" --check 2>&1 || true)"
+DIAG_ERRORS="$("${PYTHON}" "${SERVER}" --name "${NAME}" --check 2>&1 || true)"
 if echo "${DIAG_ERRORS}" | grep -q "^CONFIG_OK"; then
     if ! echo "${DIAG_ERRORS}" | grep -q "^CONFIG_OK sss_env=DEV$"; then
         DIAG_ERRORS="ERRO: sss_env deve ser DEV para ambiente local."
@@ -148,11 +150,11 @@ if [ "${FOREGROUND}" -eq 1 ]; then
     echo "Iniciando SSS em primeiro plano na porta ${PORT}..."
     echo "Acesse: http://127.0.0.1:${PORT}/script_scheduling_service"
     echo "Pressione Ctrl+C para parar."
-    exec "${LAUNCHER}" "${PYTHON}" --host 127.0.0.1 --port "${PORT}"
+    exec "${LAUNCHER}" "${PYTHON}" "${NAME}" --host 127.0.0.1 --port "${PORT}"
 else
     echo "Iniciando SSS em segundo plano na porta ${PORT}..."
     echo "=== Servidor iniciado em $(date '+%Y-%m-%d %H:%M:%S') (Porta: ${PORT}) ===" >> "${SERVER_OUT}"
-    nohup "${LAUNCHER}" "${PYTHON}" --host 127.0.0.1 --port "${PORT}" >> "${SERVER_OUT}" 2>&1 < /dev/null &
+    nohup "${LAUNCHER}" "${PYTHON}" "${NAME}" --host 127.0.0.1 --port "${PORT}" >> "${SERVER_OUT}" 2>&1 < /dev/null &
     SRV_PID=$!
     echo "${SRV_PID}" > "${PID_FILE}"
     chmod 600 "${PID_FILE}"

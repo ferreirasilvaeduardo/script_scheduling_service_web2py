@@ -20,7 +20,9 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${REPO_ROOT}"
 
 APP_DIR="${REPO_ROOT}"
-WORK_DIR="${APP_DIR}/work"
+# CR-028: o web do DEV e o processo web0001 (var/web0001/); SSS_WEB_NAME troca o nome.
+NAME="${SSS_WEB_NAME:-web0001}"
+WORK_DIR="${APP_DIR}/var/${NAME}"
 PID_FILE="${WORK_DIR}/sss_web.pid"
 
 PID=""
@@ -89,8 +91,8 @@ fi
 rm -f "${PID_FILE}"
 
 if ! kill -0 "${PID}" 2>/dev/null; then
-    if [ -f "${APP_DIR}/logs/server.out" ]; then
-        echo "=== Servidor parado em $(date '+%Y-%m-%d %H:%M:%S') (PID: ${PID}) ===" >> "${APP_DIR}/logs/server.out" 2>/dev/null || true
+    if [ -f "${WORK_DIR}/logs/server.out" ]; then
+        echo "=== Servidor parado em $(date '+%Y-%m-%d %H:%M:%S') (PID: ${PID}) ===" >> "${WORK_DIR}/logs/server.out" 2>/dev/null || true
     fi
     echo "SSS parado com sucesso."
 else

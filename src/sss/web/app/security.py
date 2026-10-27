@@ -86,6 +86,7 @@ def before_request(ctx: Context) -> None:
     context.bind(ctx)
     cfg = app_context.require_config()
     response.sss_env = cfg.app.sss_env
+    response.env_label = sss_config.env_label(cfg.app.sss_env)
     # Mesma versao do pacote e do log do agente (CR-022a; antes, um 0.1.0 fixo herdado do web2py).
     response.sss_version = sss_config.SSS_VERSION
     response.sss_menu = []

@@ -218,7 +218,7 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
 * **Trava de ambiente:**
   * `[app] sss_env` aceita `DEV`, `HML` ou `PROD`.
   * O FAKE (só de teste) pedido fora de `sss_env = DEV` é recusado pela factory.
-  * `sss_env` continua como trava de segurança da aplicação. Fora de DEV, o código recusa segredos de outro papel, a conta da aplicação igual ao owner, falta de usuário de execução ou de `exec_work_dir`, a galeria `/dev` e o hash não homologado, e exige `purge_user`.
+  * `sss_env` continua como trava de segurança da aplicação. Fora de DEV, o código recusa segredos de outro papel, a conta da aplicação igual ao owner, falta de usuário de execução ou de `exec_work_dir`, a galeria `/dev` e o hash não homologado, e exige `purge_user`. **Servidores sem administrador (CR-028, D12):** HOM e PROD podem subir com `sss_env = DEV`, com a separação física pela pasta `<TIPO>`. As proteções acima passam a ser seguidas à mão (DEPLOYMENT §4.0). A faixa de ambiente e o rodapé da tela mostram o `<TIPO>` da pasta acima da raiz quando ele é `DEV`, `HOM`, `HML` ou `PROD` (`sss_config.env_label`); fora disso, o `sss_env`. Em `PROD` a faixa não aparece.
   * **DEV e PROD se separam pelo owner e pelo prefixo** do config: basta apontar para outro owner, ou outro prefixo no mesmo owner.
 * O daemon (`run_scheduler.py`) **exige** `ORACLE`. Com `FAKE`, ele aborta.
 
@@ -295,10 +295,11 @@ Regras de topologia:
 ```text
 bin/
   sss-web.sh                  # ambiente do Instant Client/TZ e subida do servidor web: só run_web.py (§12.2)
-  sss-scheduler.sh            # ambiente e subida do daemon: só run_scheduler.py [--config] (§12.2)
-  sss-stop.sh                 # [F9.1] parada controlada do daemon pelo arquivo .stop (§8.11, §12.2)
+  sss-scheduler.sh            # ambiente e subida do daemon: só run_scheduler.py <nome> | --config (§12.2)
+  sss-stop.sh                 # [F9.1] parada controlada do daemon pelo arquivo .stop: <nome> | --config (§8.11, §12.2)
+  sss-update.sh               # [CR-028b] atualização no lugar; preserva instance/<nome>/, var/ e scripts_ambiente/ (§12.2)
   start_local.sh, stop_local.sh  # somente DEV, pelo sss-web.sh; fora do pacote
-  sss-helper                  # [F8.0] helper de execução com o usuário de execução (run/term/kill/clean/stop-ticket/pack/clean-output/purge-output), instalado pelo root em /opt/sss/bin (§8.0, CR-007)
+  sss-helper                  # [F8.0] helper de execução com o usuário de execução (run/term/kill/clean/stop-ticket/pack/clean-output/purge-output), instalado pelo root em sss-root/bin, ao lado da raiz (§8.0, CR-007, CR-028)
 ./                            # raiz do repositório = a própria aplicação (CR-022a; antes ficava em web2py/applications/script_scheduling_service/)
   src/sss/                    # [CR-022b] pacote da aplicação, importado pelo nome qualificado (from sss.core import masking)
     config/                   # [CR-022b3] configuração, contexto do processo e caminhos de log
@@ -371,7 +372,10 @@ bin/
     functional/               # aplicação inteira por requisição ou com o servidor real
     architecture/             # regras lidas no código e nos documentos (Python 3.6, AST, pacote, contraste)
     support/                  # _testenv (sys.path com a raiz, src/ e tools/; APP_DIR e WEB_DIR), _oracle_test_support, _output_memory
-  instance/config.ini         # configuração sem segredos (§12)
+  instance/                   # [CR-028] configuração por processo; preservada pela atualização
+    exemplos/web0001/, exemplos/agente0001/   # modelos config.ini.example e secrets.cfg.example (vêm no pacote)
+    <nome>/config.ini, <nome>/secrets.cfg     # um por processo (web0001, agente0001...); fora do git
+    config.ini, config.ini.example            # formato único anterior; no DEV, usado pelos testes e pelas ferramentas de banco
   .flake8                     # [CR-022b9] lint: 99 colunas e a dívida anterior por arquivo (só diminui; AGENTS §1)
   pyproject.toml              # [CR-022b9] só configuração de ferramentas (mypy estrito com a dívida por módulo, isort, autopep8, pylint); sem [project], sem pip install
   Makefile                    # alvos de teste (test-*), lint (portão flake8), type-check (mypy) e pacote; só DEV
@@ -384,9 +388,17 @@ bin/
 docs/
   prompts/                    # histórico: prompts com que as fases F0 a F9 foram construídas (caminhos de antes do CR-022a)
   homologation/               # manual de homologação (UI Freeze, histórico) e evidências reais no DEV (2026-10-22)
-instance/secrets.cfg          # segredos do DEV, fora do git (.gitignore), modo 0600; nos servidores, um arquivo por papel (§4.1)
-/opt/sss/bin/sss-helper       # cópia do bin/sss-helper, dono root, 0755 (§8.0)
+instance/secrets.cfg          # segredos do formato único no DEV, fora do git (.gitignore), modo 0600; por processo, instance/<nome>/secrets.cfg (§4.1)
+var/                          # [CR-028] dados, fora do git e preservados pela atualização:
+  <nome>/logs/                #   log_dir de cada processo (web e agentes)
+  <agente>/work/ output/ input/ script_work/   # pastas de cada agente
+  exec/<usuário>/             #   exec_work_dir (fora de DEV)
+  update/<data>/retorno/      #   pacotes de retorno do sss-update.sh
+scripts_ambiente/             # [CR-028] scripts dos ambientes (script_base_dir padrão); fora do git e preservada
+../sss-root/bin/sss-helper    # FORA da raiz: cópia do bin/sss-helper, dono root, 0755; [agent] helper_path (§8.0, CR-028)
 ```
+
+A raiz é `/portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service`, com `<TIPO>` = `DEV`, `HOM` ou `PROD` e a mesma estrutura nos três (CR-028, D1). As pastas de cada processo saem do `[app] name` (§12.1); a instalação está no `docs/DEPLOYMENT.md` §1.
 
 ---
 
@@ -1541,8 +1553,8 @@ O daemon chama apenas a interface abaixo, implementada em `posix.py` (Linux e de
 
 | Operação | Implementação POSIX |
 |---|---|
-| `start_process` (§8.4) | Fora de DEV: `Popen` do `sudo -n -u <usuário de execução> -- /opt/sss/bin/sss-helper run`, com `start_new_session=True`, a especificação da execução pela entrada padrão e o log como stdout/stderr. Em DEV sem usuário de execução: `Popen(argv, start_new_session=True, preexec_fn=_child_limits)`, com `umask(0o077)` e `setrlimit` |
-| `signal_group(execution, signal_value)` (não bloqueante) | Fora de DEV: `sudo -n -u <usuário> -- /opt/sss/bin/sss-helper term|kill <pgid> <process_start>`. Em DEV: `os.killpg`. **Nunca espera:** a escalada SIGTERM → `kill_grace_s` → SIGKILL → coleta é uma máquina de estados do laço (§8.1, §8.9) |
+| `start_process` (§8.4) | Fora de DEV: `Popen` do `sudo -n -u <usuário de execução> -- <helper_path> run`, com `start_new_session=True`, a especificação da execução pela entrada padrão e o log como stdout/stderr. Em DEV sem usuário de execução: `Popen(argv, start_new_session=True, preexec_fn=_child_limits)`, com `umask(0o077)` e `setrlimit` |
+| `signal_group(execution, signal_value)` (não bloqueante) | Fora de DEV: `sudo -n -u <usuário> -- <helper_path> term|kill <pgid> <process_start>`. Em DEV: `os.killpg`. **Nunca espera:** a escalada SIGTERM → `kill_grace_s` → SIGKILL → coleta é uma máquina de estados do laço (§8.1, §8.9) |
 | `collect(execution)` | `Popen.poll()` para o filho direto. Grupo que **não** é filho do daemon (startup check) é acompanhado por `process_exists` + identidade, sem `wait()` |
 | `process_identity(pid)` (contra PID reciclado) | Linux: `starttime` de `/proc/<pid>/stat` (campo 22, após o último `)`). Outros Unix: `/proc/<pid>/psinfo` ou `sysctl KERN_PROC`, sempre sem `ctypes` (AGENTS §3.2). Onde a leitura não for possível assim, devolve `None` (identidade desconhecida) |
 | `process_exists(pid)` | `os.kill(pid, 0)`; `EPERM` (processo de outro usuário) conta como existente |
@@ -1550,7 +1562,7 @@ O daemon chama apenas a interface abaixo, implementada em `posix.py` (Linux e de
 | `is_privileged_user()` | `os.geteuid() == 0` |
 | `validate_restricted_file(path)` (segredos, §4.1) | Dono = euid e `mode & 0o077 == 0` |
 | `validate_script_path` (§8.5, CR-011) | Arquivo real (o caminho pode ter link simbólico): existe, é regular e não é gravável por grupo nem por outros |
-| `validate_execution()` (CR-007, D1) | Na subida, fora de DEV: o helper existe, tem dono root, modo `0755` e pasta só gravável pelo root; `sudo -n -l` do usuário do agente mostra a regra do helper para cada usuário de execução; cada usuário de execução existe, não é root e não é o usuário do agente; `exec_work_dir/<usuário>` existe, pertence ao usuário de execução e tem modo `0700` |
+| `validate_execution()` (CR-007, D1) | Na subida, fora de DEV: o helper (`[agent] helper_path`) existe, tem dono root, modo `0755` e pasta só gravável pelo root; toda pasta acima dela, até `/` (no caminho escrito e no real), é do root e sem escrita de grupo e outros, ou tem o sticky bit (CR-028); `sudo -n -l` do usuário do agente mostra a regra do helper para cada usuário de execução; cada usuário de execução existe, não é root e não é o usuário do agente; `exec_work_dir/<usuário>` existe, pertence ao usuário de execução e tem modo `0700` |
 | `create_work_dir` (§8.4) | `work_dir/ticket_<id>/` do agente com `0700` (estado local). O diretório de trabalho do script é criado pelo helper |
 | `start_pack`, `clean_output`, `purge_output` (CR-012, §8.13) | Subcomandos `pack`, `clean-output` e `purge-output` do helper: fora de DEV, pelo `sudo` com o usuário de execução; em DEV, a cópia do pacote (`bin/sss-helper`) com o próprio usuário, pela mesma implementação. `start_pack` não espera: devolve o processo para o laço acompanhar |
 | `create_output_dir` (CR-012) | Só em DEV sem usuário de execução: cria a pasta de saída do ticket nível a nível com `0700`, recusando link |
@@ -1560,8 +1572,8 @@ O daemon chama apenas a interface abaixo, implementada em `posix.py` (Linux e de
 
 **Helper `sss-helper` (CR-007, D1).** É a única forma de o agente agir como o usuário de execução:
 
-* Instalado pelo root em `/opt/sss/bin/sss-helper` (cópia de `bin/sss-helper` do pacote; Python 3.6 só com a biblioteca padrão, sem importar a aplicação), dono root, modo `0755`, numa pasta que só o root grava.
-* Regra de sudoers, uma por usuário de execução, sem senha e sem outro comando: `sssagente ALL=(sssprd) NOPASSWD: /opt/sss/bin/sss-helper` (o modelo completo está no `DEPLOYMENT.md`). O helper valida os próprios argumentos e recusa qualquer outro uso com código 2.
+* Instalado pelo root no `[agent] helper_path` (CR-028; padrão `/portaloptrib/TESHUVA/SSS/<TIPO>/sss-root/bin/sss-helper`, ao lado da raiz e fora dela, porque a raiz é do usuário de serviço; cópia de `bin/sss-helper` do pacote; Python 3.6 só com a biblioteca padrão, sem importar a aplicação), dono root, modo `0755`, numa pasta que só o root grava, com todas as pastas acima dela do root e sem escrita de outros (o agente confere na subida).
+* Regra de sudoers, uma por usuário de execução, sem senha e sem outro comando: `sssagente ALL=(sssprd) NOPASSWD: /portaloptrib/TESHUVA/SSS/<TIPO>/sss-root/bin/sss-helper` (o caminho do `helper_path`) (o modelo completo está no `DEPLOYMENT.md`). O helper valida os próprios argumentos e recusa qualquer outro uso com código 2.
 * **`run`:** lê da entrada padrão uma especificação JSON (até 1 MiB) com `ticket_id`, `argv`, `env`, `rlimits`, `base_dir` (`exec_work_dir/<usuário>`) e, opcionalmente, `output` (CR-012: `base` e `relativo`; o helper cria a pasta de saída do ticket antes do `execve`, §8.13) e `input` (CR-014: `base` = `input_dir/<ambiente>` e `relativo` = a pasta do script, um nível só; o helper cria a pasta se não existir, sem seguir link, e mantém a existente, §8.14) e `work` (CR-019: `base` = `script_work_dir/<ambiente>` e `relativo` no formato de `output`; o helper cria a pasta de trabalho do ticket antes do `execve` e não a remove, §8.15). Confere que `argv[0]` é absoluto e que a pasta base pertence ao próprio usuário. Reabre a entrada padrão em `/dev/null`, cria `<base_dir>/ticket_<id>/` e `tmp/` com `0700`, usa a pasta como `cwd`, aplica `umask(0o077)` e os `setrlimit` e faz `execve(argv[0], argv, env)`. O script herda o PID do helper e o grupo do `sudo`. O stdout e o stderr são o arquivo de log aberto pelo agente: o usuário de execução escreve no descritor, mas não consegue abrir o arquivo pelo caminho.
 * **`term <pgid> <process_start>`** e **`kill <pgid> <process_start>`:** se o líder do grupo existe, a identidade dele precisa ser igual a `process_start` (lida de `/proc/<pid>/stat` só pela função `_identity` do helper, exceção estreita do AGENTS §3.2; divergente ou ilegível: código 3); se não existe mais, só os membros do grupo que pertencem ao usuário de execução recebem o sinal (um PGID não é reutilizado enquanto o grupo tem membros). `ESRCH` (grupo vazio) é sucesso.
 * **`clean <base_dir> <ticket_id>` (CR-008, R-36):** a `base_dir` vem como argumento e precisa ser exatamente `exec_work_dir/<usuário>` (absoluta, normalizada, dona = o próprio usuário de execução, sem link simbólico); o helper não importa a aplicação nem lê o `config.ini`. Remove `<base_dir>/ticket_<id>/` sem seguir links simbólicos.
@@ -1708,7 +1720,7 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
 
    ```python
    p = subprocess.Popen(
-       ['/usr/bin/sudo', '-n', '-u', usuario_execucao, '--', '/opt/sss/bin/sss-helper', 'run'],
+       ['/usr/bin/sudo', '-n', '-u', usuario_execucao, '--', helper_path, 'run'],
        stdin=subprocess.PIPE,          # a especificação (argv, env, limites) vai por aqui, e o pipe é fechado
        stdout=log_fd,
        stderr=subprocess.STDOUT,
@@ -1786,7 +1798,7 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
   * absoluto (começa com `/`) ou relativo (não começa com `/`), e normalizado (`os.path.normpath(p) == p`): sem `//`, sem `./`, sem `/./` e sem barra no fim; o relativo também não pode ser só `.`;
   * sem `..` em nenhum ponto, sem `\` e sem caractere de controle;
   * até 500 caracteres.
-* **Pastas proibidas**, no caminho cadastrado e no real: dentro de `/bin`, `/sbin`, `/usr`, `/lib`, `/lib32`, `/lib64`, `/libx32`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev` ou `/root` é `SYSTEM_DIR`; dentro de `log_dir`, `work_dir`, `exec_work_dir`, `output_dir`, `input_dir` ou `script_work_dir` é `SSS_DIR` (CR-014 e CR-019: o usuário de execução grava nas três últimas, e um script guardado ali poderia ser trocado por outro script); dentro da pasta da aplicação (`/opt/sss/app`, que a atualização troca inteira, DEPLOYMENT §18) é `APP_DIR` (CR-023), salvo a subpasta `dev/` com `sss_env = DEV`. No cadastro, o caminho relativo não é conferido aqui: a conferência é no agente, depois de juntar a pasta base.
+* **Pastas proibidas**, no caminho cadastrado e no real: dentro de `/bin`, `/sbin`, `/usr`, `/lib`, `/lib32`, `/lib64`, `/libx32`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev` ou `/root` é `SYSTEM_DIR`; dentro de `log_dir`, `work_dir`, `exec_work_dir`, `output_dir`, `input_dir` ou `script_work_dir` é `SSS_DIR` (CR-014 e CR-019: o usuário de execução grava nas três últimas, e um script guardado ali poderia ser trocado por outro script); dentro da pasta da aplicação (a raiz, cujo código a atualização troca, DEPLOYMENT §18) é `APP_DIR` (CR-023), salvo a subpasta `scripts_ambiente/` (CR-028, preservada pela atualização) e, com `sss_env = DEV`, a subpasta `dev/`. No cadastro, o caminho relativo não é conferido aqui: a conferência é no agente, depois de juntar a pasta base.
 * **O arquivo real** (`os_platform.validate_script_path`):
   * existe (`NOT_FOUND`; um ciclo de links também dá `NOT_FOUND`);
   * as pastas do caminho deixam o agente passar (`EACCES` é `NO_ACCESS`, diferente de `NOT_FOUND`);
@@ -2816,32 +2828,42 @@ END;
 
 ### 12.1 `instance/config.ini` (sem segredos; unidades no nome da chave)
 
-**Config mínimo (CR-026):** só as chaves obrigatórias e as que dependem do servidor. As demais têm padrão (tabela abaixo) e só entram no arquivo quando o valor for outro. O mesmo `config.ini` serve ao nó web, ao agente e ao purge.
+**Config por processo (CR-028) e mínimo (CR-026):** um `config.ini` por processo, em `instance/<nome>/`, só com as chaves obrigatórias e as que dependem do servidor. As demais têm padrão (tabela abaixo) e só entram no arquivo quando o valor for outro. O papel vem do próprio arquivo (D4): com `[web]` e sem `[agent]`, é o web; com `[agent]` e sem `[web]`, o agente (que também roda o purge); com as duas, o formato único anterior, validado inteiro. Com `[app] name`, as pastas saem do nome (D5): `log_dir` = `var/<nome>/logs`; no agente, `work_dir` = `var/<nome>/work`, `output_dir`, `input_dir` e `script_work_dir` em `var/<nome>/`, `exec_work_dir` = `var/exec`, `script_base_dir` = `scripts_ambiente` e `agent_id` = o nome. Modelos em `instance/exemplos/`.
+
+`instance/web0001/config.ini`:
 
 ```ini
 [app]
 sss_env = PROD                    ; DEV | HML | PROD
+name = web0001
 
 [oracle]
-user = sss_web                    ; conta do papel deste nó: sss_web no web, sss_agente no agente (§4.1, D1b)
+user = sss_web                    ; conta do papel (§4.1, D1b)
+dsn = servidor-banco:1521/servico
+owner = openrisow
+table_prefix = tbsss_
+
+[web]
+allowed_origins = https://sss.empresa.local
+```
+
+`instance/agente0001/config.ini`:
+
+```ini
+[app]
+sss_env = PROD
+name = agente0001                 ; também o agent_id, único em toda a instalação
+
+[oracle]
+user = sss_agente
 dsn = servidor-banco:1521/servico
 owner = openrisow
 table_prefix = tbsss_
 
 [agent]
-agent_id = srv-linux-prod-01
 environments = PRODUCAO,HOMOLOGACAO
-work_dir = /opt/sss/work
 max_parallel_jobs = 4
 exec_users = PRODUCAO=sssprd,HOMOLOGACAO=ssshml   ; obrigatório fora de DEV (§8.0, D1)
-exec_work_dir = /opt/sss/exec                     ; obrigatório fora de DEV
-script_base_dir = /opt/automacoes/scripts         ; opcional: scripts cadastrados com caminho relativo (§8.5)
-
-[logging]
-log_dir = /opt/sss/logs
-
-[web]
-allowed_origins = https://sss.empresa.local
 
 [retention]
 purge_user = sss_purge            ; obrigatório fora de DEV (§11.3, D1b)
@@ -2870,6 +2892,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[agent]` | `max_parallel_jobs` | sim | — | 1 a 999, e `<= max_parallel_hard_limit` |
 | `[agent]` | `exec_users` (CR-007) | fora de DEV | vazio | `AMBIENTE=usuario` cobrindo todos os `environments`; usuário `^[a-z_][a-z0-9_-]{0,31}$`, diferente de `root`. Vazio em DEV = execução com o próprio usuário, com WARN |
 | `[agent]` | `exec_work_dir` (CR-007) | fora de DEV | vazio | caminho fora das pastas do sistema; nem dentro nem contendo `work_dir` e `log_dir` |
+| `[agent]` | `helper_path` (CR-028) | não | `<RAIZ>/../sss-root/bin/sss-helper` | caminho absoluto do helper de execução, fora da pasta da aplicação, de `work_dir`, `log_dir` e `exec_work_dir`; usado só fora de DEV. A pasta dele e todas as acima são do root (conferido na subida, §8.0). Instalação anterior ao CR-028: escreva `/opt/sss/bin/sss-helper` |
 | `[agent]` | `max_parallel_hard_limit` | não | `32` | 1 a 999 |
 | `[agent]` | `claim_batch_size`, `schedule_batch_size` | não | `20`, `50` | 1 a 1.000 |
 | `[agent]` | `orchestrator_interval_s`, `cancel_poll_interval_s`, `heartbeat_interval_s` | não | `10`, `2`, `10` | 1 a 3.600 |
@@ -2933,15 +2956,15 @@ Chaves que saíram ou mudaram de nome são recusadas na subida: uma chave removi
 * **atualizar no lugar (CR-028, D10):** `bin/sss-update.sh <pacote> [<SHA256SUMS>]`, com tudo parado, troca só o código (`bin/`, `docs/`, `scripts/`, `src/`, `AGENTS.md`, `README.md` e os exemplos de `instance/`), preserva `instance/<nome>/`, `var/` e `scripts_ambiente/` e deixa um pacote de retorno em `var/update/<data>/retorno/`, aplicado pelo mesmo comando. Recusa root (1), pacote que não confere (2) e processo do SSS rodando a partir da pasta (3); falha no meio da troca: código 4, com o código anterior em `var/update/<data>/anterior/` (DEPLOYMENT §18).
 * **subir pelo nome do processo (CR-028, D7):** `bin/sss-web.sh [<python3[.x]>] web0001 [opções]`, `bin/sss-scheduler.sh agente0001` e `bin/sss-stop.sh agente0001` usam `instance/<nome>/config.ini` (a forma `--config <arquivo>` continua aceita). O nome segue `^[a-z][a-z0-9_-]{0,29}$`; outro texto é recusado com código 2. Os comandos `scripts/run_web.py`, `run_scheduler.py`, `purge.py`, `health.py` e `prepare_dirs.py` aceitam `--name <nome>` (o `prepare_dirs.py` também o nome como primeiro argumento).
 
-O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <arquivo>`, e faz `exec <python> scripts/run_scheduler.py [--config <arquivo>]`. Qualquer outro argumento é recusado com código 2. O Python vem da variável `PYTHON` (padrão `python3`) nos dois launchers.
+O `sss-scheduler.sh` aceita só a linha do daemon: o nome do processo, `--config <arquivo>` ou nada, e faz `exec <python> scripts/run_scheduler.py [--name <nome> | --config <arquivo>]`. Qualquer outro argumento é recusado com código 2. O Python vem da variável `PYTHON` (padrão `python3`) nos dois launchers.
 
-`bin/sss-stop.sh [--config <config.ini>]` (padrão: `instance/config.ini` da aplicação) cria o arquivo `work_dir/sss-<agent_id>.stop` com `0600`, para a parada controlada sem sinal (§8.11), e imprime o caminho. Recusa root. Lê só `[agent] agent_id` e `work_dir` com a biblioteca padrão (sem importar a aplicação), com a mesma regra de `agent_id` do §12.1 e o `work_dir` absoluto e existente; senão, sai com código 2. O daemon remove o arquivo ao parar.
+`bin/sss-stop.sh [<nome> | --config <config.ini>]` (com o nome, `instance/<nome>/config.ini`; sem nada, `instance/config.ini`) cria o arquivo `work_dir/sss-<agent_id>.stop` com `0600`, para a parada controlada sem sinal (§8.11), e imprime o caminho. Recusa root. Lê só `[agent] agent_id` e `work_dir` (ou, com `[app] name`, o nome e `var/<nome>/work`, CR-028) com a biblioteca padrão (sem importar a aplicação), com a mesma regra de `agent_id` do §12.1 e o `work_dir` absoluto e existente; senão, sai com código 2. O daemon remove o arquivo ao parar.
 
-**Servidor web:** `python scripts/run_web.py [--config <config.ini>] [--host 127.0.0.1] [--port 8000] [--check]` (CR-021e). Atende em `127.0.0.1` (os usuários chegam pelo proxy reverso HTTPS ou por túnel), com até `[web] max_threads` requisições ao mesmo tempo e `[web] socket_timeout_s` por conexão. `SIGTERM` ou `SIGINT` param de aceitar conexões e esperam as requisições em andamento até `socket_timeout_s`. O endereço `/` responde 303 para `/script_scheduling_service/`, que é a tela inicial (sem sessão, o login), como no web2py. `--check` só confere configuração, segredos e montagem da aplicação, sem abrir a porta, e imprime `CONFIG_OK sss_env=<ambiente>`. Saída: 0 na parada normal ou no `--check` bem-sucedido, 2 configuração ou segredos inválidos, 3 endereço indisponível.
+**Servidor web:** `python scripts/run_web.py [--name <nome> | --config <config.ini>] [--host 127.0.0.1] [--port 8000] [--check]` (CR-021e). Atende em `127.0.0.1` (os usuários chegam pelo proxy reverso HTTPS ou por túnel), com até `[web] max_threads` requisições ao mesmo tempo e `[web] socket_timeout_s` por conexão. `SIGTERM` ou `SIGINT` param de aceitar conexões e esperam as requisições em andamento até `socket_timeout_s`. O endereço `/` responde 303 para `/script_scheduling_service/`, que é a tela inicial (sem sessão, o login), como no web2py. `--check` só confere configuração, segredos e montagem da aplicação, sem abrir a porta, e imprime `CONFIG_OK sss_env=<ambiente>`. Saída: 0 na parada normal ou no `--check` bem-sucedido, 2 configuração ou segredos inválidos, 3 endereço indisponível.
 
-**Daemon do agente:** `python scripts/run_scheduler.py [--config <config.ini>]` (F8.3). Sem `--config`, lê `instance/config.ini`, como a aplicação; com ele, o arquivo informado, o que permite **mais de um agente no mesmo servidor**, cada um com o seu `config.ini` (`agent_id`, `work_dir`, `log_dir` e `output_dir` próprios; a trava de instância é `work_dir/sss-<agent_id>.lock`). Os tempos do `critical_config` precisam ser iguais em todos os agentes (§8.12). Saída: 0 na parada normal, 10 a 19 na falha de um passo da subida, 20 em `REGISTRO_PERDIDO`. O teste com dois agentes reais contra o Oracle (`tests/integration/oracle/test_agents_concurrency.py`, F8.3d) usa essa forma.
+**Daemon do agente:** `python scripts/run_scheduler.py [--name <nome> | --config <config.ini>]` (F8.3, CR-028). Com `--name`, lê `instance/<nome>/config.ini`; com `--config`, o arquivo informado; sem nada, `instance/config.ini`. Assim cabe **mais de um agente no mesmo servidor**, cada um com o seu `instance/<nome>/` e, pelo nome, `agent_id`, `work_dir`, `log_dir` e pastas próprios (a trava de instância é `work_dir/sss-<agent_id>.lock`). Os tempos do `critical_config` precisam ser iguais em todos os agentes (§8.12). Saída: 0 na parada normal, 10 a 19 na falha de um passo da subida, 20 em `REGISTRO_PERDIDO`. O teste com dois agentes reais contra o Oracle (`tests/integration/oracle/test_agents_concurrency.py`, F8.3d) usa essa forma.
 
-`bin/sss-helper` (CR-007, D1) é o helper de execução do §8.0. O pacote o leva, mas ele só vale depois de copiado pelo root para `/opt/sss/bin/sss-helper` (dono root, `0755`), com a regra de sudoers do `DEPLOYMENT.md`.
+`bin/sss-helper` (CR-007, D1) é o helper de execução do §8.0. O pacote o leva, mas ele só vale depois de copiado pelo root para o `[agent] helper_path` (padrão `<RAIZ>/../sss-root/bin/sss-helper`, CR-028; dono root, `0755`), com a regra de sudoers do `DEPLOYMENT.md`.
 
 **Pacote de implantação (F9.1; sem web2py desde o CR-021f3):** `python tools/package.py [--source <raiz do repositório>] [--out-dir <pasta>]`, só com a biblioteca padrão. Fica em `tools/` (CR-022b2), fora do pacote que gera.
 * Gera `<saida>/sss-<version>.tar.gz` (padrão `<origem>/dist/`; versão `sss_config.SSS_VERSION`), com tudo sob `sss-<versao>/` e um `SHA256SUMS` de cada arquivo dentro do pacote, e `<saida>/SHA256SUMS` com o hash do `tar.gz` (`sha256sum -c SHA256SUMS`). O tar é reprodutível: ordem, dono (0), data e modos fixos (`0755` no `bin/`, `0644` nos demais arquivos).

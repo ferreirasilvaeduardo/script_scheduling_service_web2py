@@ -55,6 +55,7 @@ from sss.platform.os_platform.posix import (  # noqa: E402,F401
                                             validate_script_path,
                                             validate_restricted_dir,
                                             validate_execution,
+                                            set_helper,
                                             validate_output_dirs,
                                             )
 

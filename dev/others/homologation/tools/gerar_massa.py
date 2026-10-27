@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Massa de teste da homologacao real (capture_evidence.js), no input_dir do instance/config.ini.
+"""Massa de teste da homologacao real (capture_evidence.js), no input_dir do agente do DEV.
 
 Uso: python3 gerar_massa.py [--config <config.ini>] [--lote-mb 4608]
+(padrao: instance/agente0001/config.ini, CR-028; sem input_dir no arquivo, var/<nome>/input)
 
 Cria (o conteudo nao e conferido pelo roteiro, so o resultado da execucao):
   gfpreprod/contar_linhas_arquivo/clientes_20261022.txt   texto, 5.000 linhas
@@ -29,7 +30,12 @@ BLOCK_LINES = 20000
 def input_dir(config):
     cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
     cp.read(config, encoding="utf-8")
-    value = cp.get("agent", "input_dir", fallback="").strip()
+    value = cp.get("agent", "input_dir", fallback=None)
+    name = cp.get("app", "name", fallback="").strip()
+    if value is None and name:
+        # CR-028: sem a chave, a pasta sai do nome do processo (var/<nome>/input).
+        value = os.path.join(APP, "var", name, "input")
+    value = (value or "").strip()
     if not value:
         raise SystemExit("input_dir vazio no %s: a homologacao precisa da pasta de entrada"
                          % config)
@@ -85,7 +91,8 @@ def _lote(folder, total_mb):
 
 def main():
     parser = argparse.ArgumentParser(description="Massa de teste da homologacao real")
-    parser.add_argument("--config", default=os.path.join(APP, "instance", "config.ini"))
+    parser.add_argument("--config",
+                        default=os.path.join(APP, "instance", "agente0001", "config.ini"))
     parser.add_argument("--lote-mb", type=int, default=4608,
                         help="tamanho do lote do zipar_arquivos (MB)")
     args = parser.parse_args()
