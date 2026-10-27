@@ -57,3 +57,6 @@ dev/others/notas/sss-web-*_v*.sh
 /instance/*/
 !/instance/exemplos/
 /scripts_ambiente/
+
+# Notas pessoais de desenvolvimento: nunca versionadas (as antigas ja commitadas ficam como estao)
+/dev/others/notas/*
