@@ -32,7 +32,8 @@ class TestPack(unittest.TestCase):
         self.saida = os.path.join(self.root, "dist")
         files = {
             "bin/sss-web.sh": "#!/bin/bash\n", "bin/sss-scheduler.sh": "#!/bin/bash\n",
-            "bin/sss-stop.sh": "#!/bin/bash\n", "bin/sss-helper": "#!/usr/bin/env python3\n",
+            "bin/sss-stop.sh": "#!/bin/bash\n", "bin/sss-update.sh": "#!/bin/bash\n",
+            "bin/sss-helper": "#!/usr/bin/env python3\n",
             "bin/start_local.sh": "#!/bin/bash\n", "CLAUDE.md": "x", "parameters_8000.py": "x",
             "src/sss/web/controllers/default.py": "# default\n", "src/sss/web/controllers/dev.py": "# dev\n",
             "scripts/run_web.py": "# servidor\n", "src/sss/web/app/bootstrap.py": "# web\n",
@@ -100,7 +101,7 @@ class TestPack(unittest.TestCase):
         self.assertEqual(members["bin/sss-helper"].mode, 0o755, "helper executavel")
         self.assertEqual((members["bin/sss-helper"].uid, members["scripts/run_web.py"].mode),
                          (0, 0o644))
-        for rel in ("bin/sss-web.sh", "bin/sss-scheduler.sh", "bin/sss-stop.sh",
+        for rel in ("bin/sss-web.sh", "bin/sss-scheduler.sh", "bin/sss-stop.sh", "bin/sss-update.sh",
                     "src/sss/web/controllers/default.py", "scripts/run_web.py",
                     "src/sss/web/app/bootstrap.py", "src/sss/web/templates/layout.html",
                     "src/sss/web/static/css/sss.css", "scripts/purge.py",
@@ -120,6 +121,23 @@ class TestPack(unittest.TestCase):
                               ".gitignore")) & files)
         self.assertFalse([n for n in members if n.split("/", maxsplit=1)[0] in (".git", "input", "output", "script_work")])
         self.assertIn("AGENTS.md", files)
+
+    def test_cr028_instance_so_com_os_exemplos(self):
+        # CR-028: instance/<nome>/ (config e segredos reais) nunca vai no pacote; os exemplos vao.
+        self._write("instance/agente0001/config.ini", "[app]\nname = agente0001\n")
+        self._write("instance/agente0001/secrets.cfg", "[oracle]\npassword = %s\n" % SECRET)
+        self._write("instance/exemplos/agente0001/config.ini.example", "[app]\nname = agente0001\n")
+        self._write("instance/exemplos/agente0001/secrets.cfg.example", "[oracle]\npassword = CHANGE_ME\n")
+        self._write("var/agente0001/logs/a.log", "x")
+        self._write("scripts_ambiente/carga.py", "x")
+        code, text = self._main()
+        self.assertEqual(code, 0, text)
+        top = "sss-%s/" % empacotar.sss_config.SSS_VERSION
+        with tarfile.open(self._package()) as tar:
+            names = set(m.name[len(top):] for m in tar.getmembers() if m.isfile())
+        self.assertIn("instance/exemplos/agente0001/config.ini.example", names)
+        self.assertIn("instance/exemplos/agente0001/secrets.cfg.example", names)
+        self.assertFalse([n for n in names if n.startswith(("instance/agente0001", "var/", "scripts_ambiente/"))])
 
     def test_tar_reprodutivel(self):
         self.assertEqual(self._main()[0], 0)

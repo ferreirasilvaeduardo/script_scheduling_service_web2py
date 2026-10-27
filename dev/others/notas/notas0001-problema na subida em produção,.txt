@@ -1,0 +1,83 @@
+Sim. Separei o que mais costuma dar problema na subida em produção, pela ordem em que acontece. O detalhe de cada item está no DEPLOYMENT, e o checklist completo no §19.
+
+### Antes de subir qualquer coisa
+1. **Banco na versão do pacote.** Banco novo: `01_deploy_sss_<owner>_<prefixo>.sql` e depois o `99_validate`. Banco que já existia: os `ALTER` do DEPLOYMENT §18, inclusive os do CR-026. Se o esquema não bater, o processo sai com código 15.
+2. **Ordem de atualização:** banco, depois **todos os agentes**, e só por último a web. O snapshot agora é a versão 7, e um agente antigo recusa esses tickets (`UNSUPPORTED_VERSION`).
+3. **Não rode como root.** Os dois recusam (código 10). Rode como `sss`, pelos launchers `bin/sss-web.sh` e `bin/sss-scheduler.sh`.
+4. **`config.ini`:** `sss_env = PROD` (ou `HML`), e `[oracle] user` com a conta do papel (`sss_web` na web, a do agente no agente), **nunca** a dona do esquema, ou a subida é recusada.
+5. **`secrets.cfg`:** permissão `0600`, dono `sss`, e só as seções do papel daquele servidor. A web recusa as seções `[environment:*]`, como você viu hoje.
+6. **Driver Oracle:** no modo `thick`, as bibliotecas do Oracle Client precisam estar acessíveis (`LD_LIBRARY_PATH` ou `ldconfig`). Para testar antes, use `scripts/probe_driver.py`.
+
+### Na web
+- **`cookie_key`:** gerado uma vez e **igual em todos os nós web**.
+- **`allowed_origins`** com a URL pública exata que o usuário digita. Senão, os formulários são recusados por origem.
+- **`trusted_proxies`**, se houver proxy ou balanceador na frente, e TLS no proxy.
+- **Saída padrão** redirecionada para o journald ou um arquivo.
+- **Troque a senha inicial do admin** do seed no primeiro acesso.
+
+### No agente
+1. **Pastas:** o SSS não cria. Rode `scripts/prepare_dirs.py` como root, primeiro com `--dry-run`. Sem elas, o agente sai com código 13.
+2. **Usuários de execução e helper:** `exec_users` e `exec_work_dir` preenchidos, `/opt/sss/bin/sss-helper` do root com permissão `0755` e a regra no `sudoers` (DEPLOYMENT §8). Falha aqui também dá código 13.
+3. **`PATH` do serviço:** agora o agente procura `python3`, `bash` etc. no `PATH` com que ele sobe. Num systemd, o `PATH` padrão é curto; se os interpretadores estiverem fora dele, use `Environment=PATH=...` na unit. Senão, o ticket termina em `PRECHECK_FAILED` (`INTERPRETER_NOT_FOUND`).
+4. **Tempos iguais em todos os agentes:** confira que a linha `tempos do fencing: ...` do log de subida é a mesma em todos. Um agente com tempos diferentes é recusado (código 16). O mais simples é não mexer nesses valores e deixar os padrões.
+5. **`agent_id` único**, e `environments` com ambientes que existem e estão ativos no banco (senão, código 17).
+6. **Espaço em disco:** com menos de 1 GB livre em `log_dir`, o agente sobe mas não pega tickets (linha `DISCO_LOG`).
+7. **Purge e monitoramento:** o `cron` do `purge.py`, com `purge_user` preenchido num dos agentes, e o `health.py` no monitoramento.
+
+### Se não subir
+O código de saída indica onde olhar (tabela no DEPLOYMENT §15):
+
+| Código | Onde está o problema |
+|---|---|
+| 10 | Rodando como root |
+| 11 | `config.ini` |
+| 12 | `secrets.cfg` |
+| 13 | Pastas, helper ou `sudoers` |
+| 14 | Já há uma instância com o mesmo `agent_id` |
+| 15 | Banco: driver, conexão ou versão do esquema |
+| 16 | Registro: `agent_id` duplicado ou tempos divergentes |
+| 17 | Ambientes inexistentes |
+
+A linha CRITICAL com o motivo vai para o log da aplicação, em `log_dir/internal/app/AAAA/MM/DD/HH/MI/`.
+
+**Situação da homologação:** ainda está rodando.
+
+
+
+Não precisa ter um usuário chamado `sss`. O nome é só a convenção da documentação. O que o SSS exige é **um usuário de serviço que não seja root**, e é com ele que o web e o agente rodam.
+
+**Duas opções:**
+
+**A. Criar o `sss`** (recomendado), como no DEPLOYMENT §4.1. É uma conta de sistema, sem senha e sem login:
+```bash
+# como root
+useradd --system --home-dir /var/lib/sss --shell /sbin/nologin sss
+```
+
+**B. Usar uma conta que já existe**, por exemplo a que hoje roda os seus serviços. Aí:
+- o `prepare_dirs.py` roda com `--service-user <sua_conta>`;
+- o `secrets.cfg` fica com dono `<sua_conta>` e permissão `0600`, porque o SSS recusa um arquivo de outro dono;
+- no `/etc/sudoers.d/sss`, troque `sss` pela sua conta nas linhas do helper;
+- web e agente sobem com essa conta.
+
+Só evite uma conta usada por pessoas ou com outros privilégios: ela vai ler a senha do Oracle no `secrets.cfg`.
+
+**O que é obrigatório fora do DEV**, porque o agente confere na subida e recusa subir (código 13):
+- **Um usuário de execução por ambiente** (`exec_users`, ex.: `PRODUCAO=sssprd`). Ele precisa:
+  - existir;
+  - não ser root;
+  - **ser diferente do usuário do serviço**. O agente recusa com "usuario de execucao X e o proprio usuario do agente".
+
+  É ele que roda os scripts, isolado da senha do Oracle e dos logs do agente (CR-007). Os comandos estão no DEPLOYMENT §4.2.
+- **O helper e a regra do `sudoers`** para cada usuário de execução (DEPLOYMENT §8).
+
+**No servidor que só roda a web**, não há usuários de execução nem helper: basta o usuário do serviço.
+
+**Ordem sugerida em cada servidor de agente:**
+1. Usuário do serviço (`sss` ou o existente).
+2. Usuários de execução de cada ambiente.
+3. Helper e `sudoers`.
+4. `python3 scripts/prepare_dirs.py --service-user <conta> --dry-run`, conferir, e rodar sem `--dry-run`.
+5. Subir o agente com a conta do serviço.
+
+Se você me disser qual conta quer usar e quais ambientes esse agente atende, monto os comandos exatos dos passos 1 a 4.

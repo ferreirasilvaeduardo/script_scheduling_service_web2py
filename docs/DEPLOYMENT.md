@@ -736,6 +736,17 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 
 ## 18. Atualização de versão e retorno [não ensaiado nesta versão]
 
+**Estrutura por processo (CR-028):** com `instance/<nome>/`, `var/` e `scripts_ambiente/` dentro da pasta da aplicação, a atualização é feita **no lugar**, com o web e todos os agentes parados:
+
+```bash
+# como o usuário dono da aplicação, na pasta onde estão o pacote e o SHA256SUMS
+<pasta da aplicação>/bin/sss-update.sh sss-<versao>.tar.gz
+# retorno: o comando imprime o caminho do pacote de retorno (var/update/<data>/retorno/...)
+<pasta da aplicação>/bin/sss-update.sh <pacote de retorno>.tar.gz
+```
+
+O `sss-update.sh` confere o pacote (`SHA256SUMS` externo e interno), recusa se houver processo do SSS rodando a partir da pasta (código 3), guarda o código atual num pacote de retorno no mesmo formato e troca só `bin/`, `docs/`, `scripts/`, `src/`, `AGENTS.md`, `README.md` e os exemplos de `instance/`. `instance/<nome>/`, `var/` e `scripts_ambiente/` não são tocados. Os passos abaixo continuam valendo para a instalação no formato anterior, com a aplicação em pasta própria.
+
 1. Gere e confira o pacote novo (§3) e extraia **ao lado** do atual: `/opt/sss/app-<versao>`.
 2. Copie o `instance/config.ini` atual para a pasta nova e compare com o `config.ini.example` novo (`diff`). Chave nova obrigatória ou removida aparece na subida como `configuracao invalida` (§15.1).
    * **Chaves renomeadas (CR-015a):** `[agent] saida_dir` → `output_dir`, `saida_max_bytes` → `output_max_bytes`, `saida_max_arquivos` → `output_max_files`, `entrada_dir` → `input_dir` e `[logging] saida_retention_days` → `output_retention_days`. Com o nome antigo, a subida para com `Chave renomeada: <antiga> passou a se chamar <nova>`.

@@ -34,7 +34,7 @@ sys.dont_write_bytecode = True
 from sss.config import sss_config  # noqa: E402
 
 DEFAULT_ROOT = _APP_DIR  # CR-022a: a aplicacao e a raiz do repositorio
-BIN = ("sss-web.sh", "sss-scheduler.sh", "sss-stop.sh", "sss-helper")
+BIN = ("sss-web.sh", "sss-scheduler.sh", "sss-stop.sh", "sss-update.sh", "sss-helper")
 # Da raiz so entram estas pastas e arquivos da aplicacao (lista de permissao, CR-022a): o resto da raiz
 # (.git, Makefile, CLAUDE.md, input/, output/, logs/...) e da maquina de desenvolvimento.
 APP_DIRS = ("docs", "instance", "scripts", "src")
@@ -68,6 +68,12 @@ class PackageError(Exception):
 def _excluded_from_app(rel):
     if _RE_TEST.match(rel):
         return True
+    if rel.startswith("instance/"):
+        # CR-028: de instance/ so vao os exemplos; instance/<nome>/ (config e segredos reais) fica no servidor.
+        # O instance/secrets.cfg do formato unico anterior continua entrando, para o pacote ser recusado.
+        if rel == "instance/secrets.cfg":
+            return False
+        return not (rel == "instance/exemplos" or rel.startswith("instance/exemplos/") or rel.endswith(".example"))
     return any(rel == p or rel.startswith(p + "/") for p in EXCLUDE_APP)
 
 

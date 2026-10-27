@@ -29,6 +29,6 @@
 | Passo | Conteúdo | Situação |
 |---|---|---|
 | 028a | Config e subida: papel pelo arquivo, `[app] name` e pastas derivadas, `agent_id` = nome, `config_path`/`--name` nos comandos, launchers pelo nome, `scripts_ambiente/` na regra `APP_DIR`, `prepare_dirs` por papel, exemplos em `instance/exemplos/web0001/` e `instance/exemplos/agente0001/`, testes. Suíte de 1538 testes em 3.6.0, 3.6.8 e 3.13.2; bateria Oracle (1536); `make lint` e `make type-check` com zero achados | Concluído |
-| 028b | `bin/sss-update.sh`, empacotador sem `instance/<nome>/`, `var/` e `scripts_ambiente/`, `.gitignore`, testes | Pendente |
+| 028b | `bin/sss-update.sh` (conferência do pacote pelos dois `SHA256SUMS`, recusa com processo do SSS rodando na pasta, pacote de retorno no mesmo formato, troca só do código); empacotador com `sss-update.sh` e, de `instance/`, só os `.example` e `instance/exemplos/` (o `instance/secrets.cfg` do formato anterior continua recusando o pacote); `.gitignore` de `var/`, `instance/<nome>/` e `scripts_ambiente/`; testes de ponta a ponta (`test_update.py`) | Concluído |
 | 028c | DEV migrado, documentação reescrita para a estrutura nova (README, DEPLOYMENT, DEV_ENVIRONMENT, AGENTS), roteiro da homologação, homologação real | Pendente |
 | 028d | Revisão independente e encerramento | Pendente |
