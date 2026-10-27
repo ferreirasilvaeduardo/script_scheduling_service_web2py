@@ -113,6 +113,55 @@ class TestUpdate(unittest.TestCase):
         self.assertIn("v1", _read(os.path.join(self.app, "src", "sss", "versao.txt")))
         self.assertEqual(self._run("/nao/existe.tar.gz")[0], 2)
 
+    def test_retorno_absoluto_e_sem_pasta_temporaria(self):
+        """Revisao do CR-028 (M3, B5): retorno absoluto em var/update; .update-<data> removida."""
+        code, out, err = self._run(self._package("v2"))
+        self.assertEqual(code, 0, err)
+        line = out.strip().splitlines()[-1]
+        self.assertTrue(line.startswith("Retorno: %s/bin/sss-update.sh " % self.app), line)
+        self.assertEqual([n for n in os.listdir(self.app) if n.startswith(".update-")], [])
+
+    def test_sha256sums_interno_divergente_e_pasta_inexistente(self):
+        """SHA256SUMS interno divergente: codigo 2, nada muda; pasta do pacote inexistente: 2."""
+        tar = self._package("v2")
+        work = os.path.join(self.tmp, "mexido")
+        with tarfile.open(tar) as t:
+            t.extractall(work)
+        _write(os.path.join(work, "sss-v2", "README.md"), "alterado\n")
+        with tarfile.open(tar, "w:gz") as t:
+            t.add(os.path.join(work, "sss-v2"), arcname="sss-v2")
+        _write(os.path.join(os.path.dirname(tar), "SHA256SUMS"),
+               "%s  %s\n" % (_sha(tar), os.path.basename(tar)))
+        code, _out, err = self._run(tar)
+        self.assertEqual(code, 2, err)
+        self.assertIn("SHA256SUMS interno", err)
+        self.assertIn("v1", _read(os.path.join(self.app, "README.md")))
+        self.assertEqual(self._run("/nao/existe/pacote.tar.gz")[0], 2)
+
+    def test_raiz_por_link_simbolico_ainda_detecta_processo(self):
+        """Revisao do CR-028 (M1): chamado por um link para a raiz, o processo e detectado."""
+        link = os.path.join(self.tmp, "atalho")
+        os.symlink(self.app, link)
+        _write(os.path.join(self.app, "scripts", "run_web.py"), "import time\ntime.sleep(30)\n")
+        proc = subprocess.Popen([sys.executable, "scripts/run_web.py"], cwd=self.app)
+        self.addCleanup(proc.wait)
+        self.addCleanup(proc.kill)
+        time.sleep(0.5)
+        p = subprocess.run([os.path.join(link, "bin", "sss-update.sh"), self._package("v2")],
+                           cwd="/",
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
+        self.assertEqual(p.returncode, 3, p.stderr)
+
+    def test_outro_programa_com_o_nome_do_script_nao_bloqueia(self):
+        """Revisao do CR-028 (B6): so um python rodando o comando conta ('tail' do arquivo nao)."""
+        proc = subprocess.Popen(["tail", "-f", "scripts/run_web.py"], cwd=self.app,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.addCleanup(proc.wait)
+        self.addCleanup(proc.kill)
+        time.sleep(0.3)
+        code, _out, err = self._run(self._package("v2"))
+        self.assertEqual(code, 0, err)
+
     def test_recusa_com_processo_do_sss_rodando_na_pasta(self):
         _write(os.path.join(self.app, "scripts", "run_web.py"), "import time\ntime.sleep(30)\n")
         proc = subprocess.Popen([sys.executable, "scripts/run_web.py"], cwd=self.app)

@@ -148,6 +148,18 @@ class TestLaunchers(unittest.TestCase):
         self.assertEqual(code, 0, error)
         self.assertTrue(os.path.exists(os.path.join(self.root, "var", "agente0001", "work", "sss-agente0001.stop")))
 
+    def test_cr028_stop_recusa_name_diferente_da_pasta(self):
+        """Revisao do CR-028 (A2): instance/agente0002/ copiada sem trocar o name nao para o agente0001."""
+        folder = os.path.join(self.root, "instance", "agente0002")
+        os.makedirs(folder)
+        os.makedirs(os.path.join(self.root, "var", "agente0001", "work"))
+        with open(os.path.join(folder, "config.ini"), "w") as f:
+            f.write("[app]\nname = agente0001\n[agent]\nenvironments = PRODUCAO\n")
+        code, _r, error = self._run_loop("sss-stop.sh", "agente0002", PYTHON=sys.executable)
+        self.assertEqual(code, 2, error)
+        self.assertIn("diferente da pasta", error)
+        self.assertFalse(os.path.exists(os.path.join(self.root, "var", "agente0001", "work", "sss-agente0001.stop")))
+
     def test_instant_client_so_sem_ldconfig(self):
         self._executable("ldconfig", "#!/bin/sh\necho '\tlibclntsh.so.19.1 (libc6,x86-64) => /opt/ic/libclntsh.so'\n")
         for name in ("sss-web.sh", "sss-scheduler.sh"):

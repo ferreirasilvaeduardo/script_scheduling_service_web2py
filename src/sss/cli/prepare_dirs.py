@@ -13,6 +13,8 @@ O SSS nao cria as pastas configuradas na subida (README §12.1): este comando as
   output_dir, input_dir, script_work_dir  sss          0755
   <essas tres>/<ambiente>                 o usuario de execucao do ambiente  0700
   script_base_dir                         sss          0755
+  var/, var/<nome>/ e var/update/         sss          0755 (CR-028: pastas de cima das de var/,
+                                          e a dos pacotes de retorno do sss-update.sh)
 A pasta que ja existe tem o dono e o modo ajustados (nunca o conteudo); nada e apagado. Antes de
 criar qualquer coisa, confere que os usuarios existem. Fora de DEV exige root; no DEV, sem root,
 cria com o usuario atual (sem chown) e pula as pastas dos usuarios de execucao.
@@ -33,11 +35,41 @@ EXIT_OK, EXIT_FAILURE, EXIT_INVALID, EXIT_NOT_ROOT = 0, 1, 2, 3
 Folder = NamedTuple("Folder", [("path", str), ("owner", str), ("mode", int), ("key", str)])
 
 
-def plan(cfg: "sss_config.Config", service_user: str, as_root: bool) -> List[Folder]:
+def plan(cfg: "sss_config.Config", service_user: str, as_root: bool,
+         var_dir: Optional[str] = None) -> List[Folder]:
     """Pastas na ordem de criacao (a de cima antes das de baixo). Sem root (so no DEV), o dono e o
     usuario atual e as pastas dos usuarios de execucao ficam de fora."""
-    agent = cfg.agent
     me = service_user if as_root else pwd.getpwuid(os.getuid()).pw_name
+    folders = _plan(cfg, me, as_root)
+    return _var_parents(folders, me, var_dir or sss_config.VAR_DIR) + folders
+
+
+def _var_parents(folders: List[Folder], me: str, var_dir: str) -> List[Folder]:
+    """Revisao do CR-028 (M2): var/ e as pastas entre ela e as do config sao do usuario do
+    servico (o makedirs como root as deixaria do root), e var/update/ recebe os pacotes de
+    retorno do sss-update.sh, que roda com esse usuario."""
+    var_dir = os.path.normpath(var_dir)
+    parents = set()
+    for f in folders:
+        path = os.path.normpath(f.path)
+        if os.path.commonpath([path, var_dir]) != var_dir or path == var_dir:
+            continue
+        parent = os.path.dirname(path)
+        while os.path.commonpath([parent, var_dir]) == var_dir:
+            parents.add(parent)
+            if parent == var_dir:
+                break
+            parent = os.path.dirname(parent)
+    if not parents:
+        return []
+    parents.add(os.path.join(var_dir, "update"))
+    own = set(os.path.normpath(f.path) for f in folders)
+    ordered = sorted(parents, key=lambda x: (x.count(os.sep), x))
+    return [Folder(p, me, 0o755, "var") for p in ordered if p not in own]
+
+
+def _plan(cfg: "sss_config.Config", me: str, as_root: bool) -> List[Folder]:
+    agent = cfg.agent
     if getattr(cfg.app, "role", "all") == "web":
         # CR-028 (D4): o web so usa o log_dir.
         return [Folder(cfg.logging.log_dir, me, 0o750, "log_dir")]

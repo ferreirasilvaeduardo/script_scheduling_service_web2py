@@ -647,6 +647,23 @@ class TestValidateExecution(unittest.TestCase):
         del self.stats["/opt/sss"]
         self.assertEqual(self.validate(), ["pasta /opt/sss acima do helper nao encontrada"])
 
+    def test_link_simbolico_cr028(self):
+        """Revisao do CR-028 (B1, B4): helper que e link e recusado; a cadeia do caminho real tambem conta."""
+        tmp = tempfile.mkdtemp(prefix="sss_helper_link_")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        real = os.path.join(tmp, "real")
+        os.makedirs(real)
+        open(os.path.join(real, "sss-helper"), "w").close()
+        link = os.path.join(tmp, "atalho")
+        os.symlink(real, link)
+        helper_link = os.path.join(tmp, "helper-link")
+        os.symlink(os.path.join(real, "sss-helper"), helper_link)
+        failures = os_platform.validate_execution([], self.EXEC, helper=helper_link, run=self._executar,
+                                                  agent_user="agente")
+        self.assertIn("helper %s nao pode ser link simbolico" % helper_link, failures)
+        chain = posix._chain_failures(os.path.join(link, "bin"))
+        self.assertTrue(any(os.path.realpath(tmp) in f for f in chain), chain)
+
     def test_caminho_do_helper_configurado_cr028(self):
         """CR-028: sem helper explicito, vale o de set_helper ([agent] helper_path)."""
         self.addCleanup(os_platform.set_helper, posix.HELPER)

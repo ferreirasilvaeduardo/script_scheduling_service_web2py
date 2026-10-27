@@ -444,6 +444,12 @@ INSTALL_TYPE = os.path.basename(os.path.dirname(APP_DIR)).upper()
 HELPER_DEFAULT = os.path.join(os.path.dirname(APP_DIR), "sss-root", "bin", "sss-helper")
 # Secoes que cada papel nao usa (CR-028, D4): o papel vem do proprio arquivo.
 _ROLE_SKIPPED = {"web": ("agent",), "agent": ("web",), "all": ()}
+# Chaves de [agent] que o web tambem usa (painel de saude, agendamentos, fila) e que precisam ser iguais as dos
+# agentes (revisao do CR-028, A1): o config do web aceita um [agent] parcial so com elas, sem mudar o papel.
+WEB_AGENT_KEYS = ("heartbeat_interval_s", "fence_timeout_s", "node_offline_timeout_s", "misfire_policy",
+                  "misfire_tolerance_s", "cron_horizon_days", "queue_aging_min")
+# Chaves que so o agente tem: um [agent] com qualquer delas e o do formato unico, e nao o parcial do web.
+_AGENT_ONLY_REQUIRED = ("environments", "max_parallel_jobs")
 
 
 def env_label(sss_env: str, install_type: Optional[str] = None) -> str:
@@ -506,6 +512,13 @@ def load(ini_path: str) -> "Config":
 
     # 2. Validar presenca e chaves de cada secao
     role = role_of(cp.sections())
+    if role == "all" and "web" in cp and "agent" in cp and not any(k in cp["agent"] for k in _AGENT_ONLY_REQUIRED):
+        # CR-028 (A1): [web] com um [agent] parcial e o web; o [agent] so leva as chaves de WEB_AGENT_KEYS.
+        role = "web"
+        for k in cp["agent"]:
+            if k not in WEB_AGENT_KEYS:
+                raise ConfigError(section="agent", key=k,
+                                  reason="No config do web, [agent] so aceita: %s" % ", ".join(WEB_AGENT_KEYS))
     raw_name = cp["app"].get("name", "").strip() if cp.has_section("app") else ""
     present = set((sec, k) for sec in cp.sections() for k in cp[sec])
     derived = _derived_paths(raw_name, role, present) if raw_name else {}
@@ -514,6 +527,9 @@ def load(ini_path: str) -> "Config":
         if sec_name in _ROLE_SKIPPED[role]:
             # CR-028 (D4): secao que o papel nao usa fica com os padroes (obrigatorias sem valor).
             data_sections[sec_name] = dict((k, cdef.default) for k, cdef in sec_fields.items())
+            if sec_name in cp:
+                for k in cp[sec_name]:
+                    data_sections[sec_name][k] = _convert_value(sec_name, k, sec_fields[k], cp[sec_name][k])
             continue
         if sec_name not in cp.sections():
             # CR-026: secao sem chave obrigatoria (ex.: [secrets]) pode faltar; vale o padrao de cada chave.
@@ -558,6 +574,13 @@ def load(ini_path: str) -> "Config":
         data_sections[sec_name] = data_sec
 
     app_name = data_sections["app"]["name"]
+    folder = os.path.dirname(os.path.realpath(ini_path))
+    if (app_name and os.path.dirname(folder) == os.path.realpath(os.path.join(APP_DIR, "instance"))
+            and os.path.basename(folder) != app_name):
+        # Revisao do CR-028 (A2): pasta copiada sem trocar o name subiria (e pararia) outro processo.
+        raise ConfigError(section="app", key="name",
+                          reason="O name (%s) deve ser o nome da pasta instance/%s/ (CR-028)"
+                                 % (app_name, os.path.basename(folder)))
     agent_id = data_sections["agent"]["agent_id"]
     if role != "web" and app_name and agent_id and agent_id != app_name:
         raise ConfigError(section="agent", key="agent_id",
@@ -739,8 +762,11 @@ def _validate_agent_paths(app, agent, logging_dict):
         if not os.path.isabs(helper):
             raise ConfigError(section="agent", key="helper_path", reason="Deve ser um caminho absoluto")
         for name, other in (("a pasta da aplicacao", APP_DIR), ("work_dir", agent["work_dir"]),
-                            ("log_dir", logging_dict["log_dir"]), ("exec_work_dir", agent["exec_work_dir"])):
-            if other and _inside(helper, other):
+                            ("log_dir", logging_dict["log_dir"]), ("exec_work_dir", agent["exec_work_dir"]),
+                            ("output_dir", agent["output_dir"]), ("input_dir", agent["input_dir"]),
+                            ("script_work_dir", agent["script_work_dir"]),
+                            ("script_base_dir", agent["script_base_dir"])):
+            if other and os.path.isabs(other) and _inside(helper, other):
                 raise ConfigError(section="agent", key="helper_path",
                                  reason="Nao pode ficar dentro de %s (pasta so do root, CR-028)" % name)
     if agent["output_dir"]:

@@ -37,6 +37,12 @@ try:
         cp.read_file(f)
     # CR-028 (D5, D6): com [app] name, agent_id e o nome e work_dir sai de var/<nome>/work quando nao escritos.
     nome = cp["app"].get("name", "").strip() if cp.has_section("app") else ""
+    pasta = os.path.dirname(os.path.realpath(caminho))
+    if (nome and os.path.dirname(pasta) == os.path.realpath(os.path.join(os.getcwd(), "instance"))
+            and os.path.basename(pasta) != nome):
+        # Revisao do CR-028 (A2): pasta copiada sem trocar o name pararia outro agente.
+        sys.stderr.write("Erro: [app] name (%s) diferente da pasta instance/%s/\n" % (nome, os.path.basename(pasta)))
+        sys.exit(2)
     agente = cp["agent"].get("agent_id", "").strip() or nome
     work = cp["agent"].get("work_dir", "").strip() or (
         os.path.join(os.getcwd(), "var", nome, "work") if nome else "")

@@ -314,6 +314,10 @@ def main(argv=None, connect=None, plat=os_platform, output=None):
         for handler in logger.handlers:
             other.addHandler(handler)
     masking.install_filter_on_handlers()
+    if getattr(cfg.app, "role", "all") == "web":
+        # Revisao do CR-028 (B2): o purge usa as pastas e a trava do agente.
+        logger.critical("purge roda com o config do agente (--name agente0001), nao com o do web", extra=_EXTRA)
+        return EXIT_CONFIG
     if not cfg.retention.purge_user:
         logger.critical("purge desligado: [retention] purge_user vazio (README §12.1)", extra=_EXTRA)
         return EXIT_CONFIG

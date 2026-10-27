@@ -555,6 +555,19 @@ class TestMain(_Base):
         self.assertEqual(self._main([], secrets_error_flag=True)[0], purge_cli.EXIT_CONFIG)
         self.assertEqual(self.connections, [])
 
+    def test_cr028_config_do_web_recusado_e_helper_do_agente(self):
+        """Revisao do CR-028 (B2): com o config do web, codigo 2 sem traceback; com o do agente, o
+        helper_path vai para a plataforma (set_helper)."""
+        web = _cfg(self.root)
+        web.app.role = "web"
+        self.assertEqual(self._main([], cfg=web)[0], purge_cli.EXIT_CONFIG)
+        self.assertEqual(self.connections, [])
+        cfg = _cfg(self.root, agent={"helper_path": "/srv/root/bin/sss-helper"})
+        plat = _Plat()
+        plat.set_helper = mock.Mock()
+        self.assertEqual(self._main(["--dry-run", "--target", "audit"], cfg=cfg, plat=plat)[0], 0)
+        plat.set_helper.assert_called_once_with("/srv/root/bin/sss-helper")
+
     def test_falha_ao_conectar(self):
         with mock.patch.object(purge_cli.sss_config, "get_config", return_value=self.cfg), \
                 mock.patch.object(purge_cli.sss_config, "load_secrets", return_value=object()), \

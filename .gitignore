@@ -54,6 +54,7 @@ dev/others/notas/sss-web-*_v*.sh
 # CR-028: estrutura por processo. Config e segredos reais (instance/<nome>/), dados (var/) e scripts dos
 # ambientes (scripts_ambiente/) sao de cada servidor; os exemplos (instance/exemplos/) vao para o git.
 /var/
+/.update-*/
 /instance/*/
 !/instance/exemplos/
 /scripts_ambiente/

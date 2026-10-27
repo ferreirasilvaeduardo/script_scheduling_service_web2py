@@ -765,6 +765,36 @@ class TestConfigCR007(unittest.TestCase):
                                            "[web]\nallowed_origins = https://x\n"))
         self.assertEqual(ctx.exception.section, "logging")
 
+    def test_cr028_web_com_agent_parcial(self):
+        """Revisao do CR-028 (A1): o web aceita [agent] so com as chaves que usa, sem virar formato unico."""
+        base = ("[app]\nsss_env = PROD\nname = web0001\n" + self._ORACLE +
+                "[web]\nallowed_origins = https://x\n[agent]\n")
+        web = sss_config.load(self._ini_text(base + "misfire_policy = SKIP\nqueue_aging_min = 15\n"))
+        self.assertEqual((web.app.role, web.agent.misfire_policy, web.agent.queue_aging_min,
+                          web.agent.heartbeat_interval_s), ("web", "SKIP", 15, 10))
+        with self.assertRaises(sss_config.ConfigError) as ctx:
+            sss_config.load(self._ini_text(base + "misfire_policy = SKIP\nwork_dir = /tmp/x\n"))
+        self.assertEqual(ctx.exception.key, "work_dir")
+        with self.assertRaises(sss_config.ConfigError):
+            sss_config.load(self._ini_text(base + "misfire_policy = TALVEZ\n"))
+
+    def test_cr028_name_igual_a_pasta(self):
+        """Revisao do CR-028 (A2): em instance/<pasta>/, o name diferente da pasta e recusado."""
+        folder = os.path.join(sss_config.APP_DIR, "instance", "teste_a2")
+        os.makedirs(folder)
+        self.addCleanup(shutil.rmtree, folder, True)
+        text = ("[app]\nsss_env = DEV\nname = %s\n" + self._ORACLE +
+                "[agent]\nenvironments = A\nmax_parallel_jobs = 1\n")
+        path = os.path.join(folder, "config.ini")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text % "agente0001")
+        with self.assertRaises(sss_config.ConfigError) as ctx:
+            sss_config.load(path)
+        self.assertEqual(ctx.exception.key, "name")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text % "teste_a2")
+        self.assertEqual(sss_config.load(path).agent.agent_id, "teste_a2")
+
     def test_cr028_env_label(self):
         """CR-028 (D12): a tela mostra o <TIPO> da pasta acima da raiz; fora do padrao, o sss_env."""
         for tipo, shown in (("PROD", "PROD"), ("hom", "HOM"), ("DEV", "DEV"), ("OUTRA", "DEV"), ("", "DEV")):

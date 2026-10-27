@@ -104,6 +104,26 @@ class TestPrepareDirs(unittest.TestCase):
             ("out/homologacao", "ssshml", "0o700"),
             ("base/scripts", "sss", "0o755")])
 
+    def test_cr028_pastas_de_var_do_usuario_do_servico(self):
+        """Revisao do CR-028 (M2): var/, var/<nome>/ e var/update/ primeiro, do servico."""
+        var = self._p("var")
+        ini = self._ini("PROD", self._exec())
+        with open(ini, encoding="utf-8") as f:
+            text = f.read()
+        for key, sub in (("log_dir", "logs"), ("work_dir", "work"), ("output_dir", "out"),
+                         ("exec_work_dir", "exec")):
+            new = os.path.join(var, "a1" if sub != "exec" else "", sub)
+            text = text.replace("%s = %s" % (key, self._p(sub)), "%s = %s" % (key, new))
+        with open(ini, "w", encoding="utf-8") as f:
+            f.write(text)
+        plan = prepare_dirs.plan(sss_config.load(ini), "sss", as_root=True, var_dir=var)
+        got = [(os.path.relpath(f.path, self.root), f.owner, oct(f.mode)) for f in plan[:3]]
+        self.assertEqual(got, [("var", "sss", "0o755"), ("var/a1", "sss", "0o755"),
+                               ("var/update", "sss", "0o755")])
+        self.assertEqual(plan[3].key, "log_dir")
+        self.assertNotIn("var/exec", [os.path.relpath(f.path, self.root) for f in plan[:3]],
+                         "var/exec continua do root, na lista do config")
+
     def test_usuario_inexistente_nao_cria_nada(self):
         users = "exec_users = PRODUCAO=%s,Homologação=usuario_que_nao_existe\n" % ME
         ini = self._ini("PROD", users + "exec_work_dir = %s\n" % self._p("exec"))

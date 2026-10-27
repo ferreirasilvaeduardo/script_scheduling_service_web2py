@@ -475,6 +475,9 @@ def validate_execution(exec_users, exec_work_dir, helper=None, run=_run_short,
     """
     helper = helper or HELPER
     failures = []
+    if os.path.islink(helper):
+        # Revisao do CR-028 (B1): o alvo de um link poderia estar numa pasta de outro usuario.
+        failures.append("helper %s nao pode ser link simbolico" % helper)
     try:
         st = os.stat(helper)
         if st.st_uid != 0:

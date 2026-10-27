@@ -150,6 +150,9 @@ def _alive(pid):
 class _Base(unittest.TestCase):
 
     def setUp(self):
+        # A subida aplica o [agent] helper_path na plataforma real (set_helper): volta ao valor anterior.
+        from sss.platform.os_platform import posix  # pylint: disable=import-outside-toplevel
+        self.addCleanup(os_platform.set_helper, posix.HELPER)
         self.root = os.path.realpath(tempfile.mkdtemp(prefix="sss_init_"))
         self.work = os.path.join(self.root, "work")
         self.logs = os.path.join(self.root, "logs")
@@ -252,6 +255,14 @@ class TestSteps(_Base):
         plat = _Plat(validate_execution=lambda *a, **k: ["helper /opt/sss/bin/sss-helper nao encontrado"])
         output = self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=cfg, plat=plat))
         self.assertTrue(any("helper /opt/sss/bin/sss-helper nao encontrado" in x for x in output))
+
+    def test_cr028_helper_path_aplicado_tambem_no_dev(self):
+        """Revisao do CR-028 (M4): no DEV (com exec_users, D12) o helper_path tambem vale; sem conferencia."""
+        seen = []
+        plat = _Plat(set_helper=seen.append,
+                     validate_execution=lambda *a, **k: self.fail("conferencia so fora de DEV"))
+        self.agent(cfg=self.cfg(), plat=plat).initialize()
+        self.assertEqual(seen, ["/srv/sss-root/bin/sss-helper"])
 
     def test_cr014_pasta_de_entrada_na_subida(self):
         # CR-014 (README §8.12 passo 4): input_dir fora das pastas do sistema e existente; fora de DEV, a pasta
