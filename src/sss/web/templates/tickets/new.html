@@ -116,7 +116,7 @@ _steps = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
       <div class="sss-form-field mb-3">
         <label class="form-label" for="field-interpreter">Interpretador (opcional)</label>
         <input class="form-control sss-mono{{=' is-invalid' if errors.get('interpreter') else ''}}" type="text" id="field-interpreter" name="interpreter" maxlength="500" value="{{=interpreter}}" autocomplete="off" spellcheck="false" aria-describedby="field-interpreter-help{{=' field-interpreter-error' if errors.get('interpreter') else ''}}"{{if errors.get('interpreter'):}} aria-invalid="true"{{pass}}{{if focus_field == 'interpreter':}} autofocus{{pass}}>
-        <div class="form-text" id="field-interpreter-help">Na execução vale primeiro o #! da primeira linha do script, se existir no servidor. Sem ele, vale o informado aqui: o caminho completo (ex.: /opt/py311/bin/python3) ou só o nome (ex.: python3.13), procurado no servidor do ambiente. Em branco, vale o cadastrado ({{=form['script']['interpreter_label']}}).</div>
+        <div class="form-text" id="field-interpreter-help">Para usar outro só nesta execução, informe o caminho completo (ex.: /opt/py311/bin/python3) ou só o nome (ex.: python3.13), procurado no servidor do ambiente: ele vence o #! do script. Em branco, ou se não existir no servidor, vale o #! da primeira linha do script e, sem ele, o cadastrado ({{=form['script']['interpreter_label']}}).</div>
         {{if errors.get('interpreter'):}}<div class="invalid-feedback" id="field-interpreter-error">{{=errors['interpreter']}}</div>{{pass}}
       </div>
     </div>

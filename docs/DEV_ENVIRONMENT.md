@@ -214,7 +214,7 @@ A pasta `dev/scripts/` contém scripts de exemplo **sem lógica perigosa**, usad
 | `diagnostico/pasta_trabalho.sh` | Diagnóstico do CR-019: confere `SSS_WORK_DIR`, grava `diagnostico.txt` e `sub/arquivo.txt` na pasta de trabalho e lista o que gravou. Sai com 1 sem a variável e com 2 se a pasta não existir |
 | `diagnostico/gerar_saida.sh` | Diagnóstico do CR-020a: grava `resumo.txt` e `detalhes/relatório de testes.csv` em `SSS_OUTPUT_DIR`, para gerar uma saída real e testar a tela de Saídas. Sai com 1 sem a variável |
 | `diagnostico/interp_info.py` | Diagnóstico do CR-025: imprime o interpretador que rodou o script (`sys.executable`, versão e `sys.prefix`), para o interpretador digitado no disparo e o virtualenv |
-| `diagnostico/interp_py36.py`, `diagnostico/interp_env.py` | Diagnóstico do CR-025 e do CR-026: `#!` com o Python 3.6 do pyenv e `#!/usr/bin/env python3`, que vencem o cadastro e o digitado |
+| `diagnostico/interp_py36.py`, `diagnostico/interp_env.py` | Diagnóstico do CR-025 e do CR-026: `#!` com o Python 3.6 do pyenv e `#!/usr/bin/env python3`, que valem sem digitado e vencem o cadastro (CR-027: o digitado vence o `#!`) |
 | `diagnostico/interp_sem_shebang.sh` | Diagnóstico do CR-026: sem `#!`, roda pelo digitado no disparo ou pelo cadastro (`sh`) |
 
 ### 6.1 O que o `path_guard` confere (CR-005, CR-011, CR-023)

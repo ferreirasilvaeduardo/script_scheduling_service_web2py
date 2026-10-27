@@ -21,7 +21,7 @@ _help_path = (u'Caminho completo, começando por / (ex.: /opt/automacoes/scripts
               u'aplicação. ' + _s['validation_note'])
 _fields_c = [
     {'name': 'interpreter', 'label': 'Interpretador', 'kind': 'select', 'value': _s.get('interpreter'), 'error': errors.get('interpreter'), 'required': True, 'options': list(interpreters),
-     'help': u'Na execução vale, nesta ordem: o #! da primeira linha do script (ex.: #!/opt/py311/bin/python3), se existir no servidor; o interpretador informado no disparo; e este, procurado no PATH do servidor.'},
+     'help': u'Na execução vale, nesta ordem: o interpretador informado no disparo; o #! da primeira linha do script (ex.: #!/opt/py311/bin/python3); e este, procurado no PATH do servidor. Quem não existir no servidor é pulado. python e python3 servem um ao outro quando só um deles existir.'},
     {'name': 'path_file', 'label': 'Arquivo do script', 'value': _s.get('path_file'), 'error': errors.get('path_file'), 'required': True, 'maxlength': 500, 'help': _help_path},
     {'name': 'param_type', 'label': u'Montagem dos argumentos', 'kind': 'select', 'value': _s.get('param_type'), 'error': errors.get('param_type'), 'required': True, 'options': list(param_types),
      'help': u'Trocar a montagem revalida os parâmetros já vinculados.'},

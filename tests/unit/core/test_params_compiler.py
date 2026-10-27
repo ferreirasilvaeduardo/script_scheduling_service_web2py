@@ -562,7 +562,8 @@ class TestSeedFake(unittest.TestCase):
 
 
 class TestInterpreterOrderCr026(unittest.TestCase):
-    """CR-026 (D5, D7): #! existente, depois o digitado no disparo, depois o cadastro (no PATH do agente)."""
+    """CR-027: o digitado no disparo (se existir), depois o #! existente, depois o cadastro (no PATH do
+    agente; python e python3 servem um ao outro). Quem nao existe e pulado, com nota."""
 
     def setUp(self):
         self.root = tempfile.mkdtemp(prefix="sss_pc_int_")
@@ -602,11 +603,46 @@ class TestInterpreterOrderCr026(unittest.TestCase):
         self.assertEqual(self._run(scr, "python3.99"), [self.exe, "-E", "-s", scr["path_file"]])
         self.assertEqual(self._run(scr, self.exe), [self.exe, "-E", "-s", scr["path_file"]])
         self.assertEqual(self._run(scr, "bash"), [self._p("bash"), scr["path_file"]])
-        self.assertEqual(self._reason(scr, "python9.99"), "PATH_GUARD_INTERPRETER_NOT_FOUND")
 
-    def test_shebang_existente_vence_o_digitado(self):
+    def test_digitado_vence_o_shebang(self):
+        # CR-027: volta a regra do CR-025; o #! so vale sem digitado.
         sh = self._script("bash", b"#!/bin/sh -e")
-        self.assertEqual(self._run(sh, "python3.99"), ["/bin/sh", "-e", sh["path_file"]])
+        notes = []
+        self.assertEqual(self._run(sh, "python3.99", notes=notes), [self.exe, "-E", "-s", sh["path_file"]])
+        self.assertEqual(notes, [])
+        self.assertEqual(self._run(sh), ["/bin/sh", "-e", sh["path_file"]])
+
+    def test_digitado_inexistente_cai_para_o_shebang_e_o_cadastro(self):
+        notes = []
+        sh = self._script("bash", b"#!/bin/sh -e")
+        self.assertEqual(self._run(sh, "python9.99", notes=notes), ["/bin/sh", "-e", sh["path_file"]])
+        self.assertEqual(notes, ["interpretador informado nao encontrado neste servidor: python9.99"])
+        notes = []
+        scr = self._script("sh", b"#!/nao/existe/python3")
+        self.assertEqual(self._run(scr, "/nao/existe/py", notes=notes), [self._p("sh"), scr["path_file"]])
+        self.assertEqual(notes, ["interpretador informado nao encontrado neste servidor: /nao/existe/py",
+                                 "#! ignorado: /nao/existe/python3 nao encontrado ou nao executavel neste servidor"])
+
+    def test_cadastro_python_e_python3_servem_um_ao_outro(self):
+        # CR-027: as opcoes seguem o executavel usado (python3 com -I, python com -E -s).
+        for missing, registered, used, fixed in (("python", "python", "python3", ["-I"]),
+                                                 ("python3", "python3", "python", ["-E", "-s"])):
+            os.remove(self._p(missing))
+            try:
+                notes = []
+                scr = self._script(registered, name="troca")
+                self.assertEqual(self._run(scr, notes=notes), [self._p(used)] + fixed + [scr["path_file"]])
+                self.assertEqual(notes, ["%s nao encontrado neste servidor; usando %s" % (registered, used)])
+            finally:
+                fake_bin(self.root, missing)
+        for name in ("python", "python3"):
+            os.remove(self._p(name))
+        self.assertEqual(self._reason(self._script("python3", name="nenhum")), "PATH_GUARD_INTERPRETER_NOT_FOUND")
+        os.remove(self._p("bash"))
+        self.assertEqual(self._reason(self._script("bash", name="semtroca")), "PATH_GUARD_INTERPRETER_NOT_FOUND",
+                         "sh e bash nao tem troca")
+
+    def test_shebang_quando_nada_e_digitado(self):
         py = self._script("sh", ("#!%s -u" % self.exe).encode())
         # Python do #!: -E -s depois do argumento do #!
         self.assertEqual(self._run(py), [self.exe, "-u", "-E", "-s", py["path_file"]])
@@ -618,11 +654,8 @@ class TestInterpreterOrderCr026(unittest.TestCase):
     def test_shebang_inexistente_e_ignorado_com_nota(self):
         scr = self._script("sh", b"#!/nao/existe/python3")
         notes = []
-        self.assertEqual(self._run(scr, "bash", notes=notes), [self._p("bash"), scr["path_file"]])
-        self.assertEqual(notes, ["#! ignorado: /nao/existe/python3 nao encontrado ou nao executavel neste servidor"])
-        notes = []
         self.assertEqual(self._run(scr, notes=notes), [self._p("sh"), scr["path_file"]])
-        self.assertEqual(len(notes), 1)
+        self.assertEqual(notes, ["#! ignorado: /nao/existe/python3 nao encontrado ou nao executavel neste servidor"])
         # #! relativo ou ausente: nao e #! valido; sem nota
         for first in (b"#!python3", b"echo sem"):
             notes = []

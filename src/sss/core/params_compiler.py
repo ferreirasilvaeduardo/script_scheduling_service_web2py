@@ -488,17 +488,17 @@ def validate_snapshot(json_str, cfg, notes=None):
     except path_guard.PathGuardError as e:
         raise SnapshotError('PATH_GUARD_' + e.code)
     try:
-        argv, note = _agent_argv(registered, override, real, args, getattr(cfg, 'search_path', None))
+        argv, found = _agent_argv(registered, override, real, args, getattr(cfg, 'search_path', None))
     except path_guard.PathGuardError as e:
         raise SnapshotError('PATH_GUARD_' + e.code)
-    if note and notes is not None:
-        notes.append(note)
+    if notes is not None:
+        notes.extend(found)
     return snap, argv, real
 
 
 def _shebang_argv(script_real, search_path):
     """(cabeca do argv pelo #!, ou None, nota). #! ausente: None sem nota; #! cujo executavel nao existe
-    (ou invalido): None com a nota para o log do ticket (CR-026, D5)."""
+    (ou invalido): None com a nota para o log do ticket (CR-026, D5; CR-027)."""
     try:
         path, extra = path_guard.read_shebang(script_real)
     except path_guard.PathGuardError:
@@ -515,23 +515,51 @@ def _shebang_argv(script_real, search_path):
     return head + (list(path_guard.PYTHON_PORTABLE_ARGS) if python else []), None
 
 
+# CR-027: no cadastro, python e python3 servem um ao outro quando so um existe no servidor.
+_REGISTERED_ALTERNATIVE = {'python': 'python3', 'python3': 'python'}
+
+
+def _registered_argv(registered, search_path, notes):
+    """Cabeca do argv pelo nome do cadastro (CR-027): python sem python no servidor tenta python3, e
+    vice-versa; as opcoes seguem o executavel usado (python3 com -I, python com -E -s). Nenhum:
+    INTERPRETER_NOT_FOUND."""
+    names = [registered] + ([_REGISTERED_ALTERNATIVE[registered]] if registered in _REGISTERED_ALTERNATIVE else [])
+    for name in names:
+        try:
+            executable = path_guard.find_executable(name, search_path)
+        except path_guard.PathGuardError:
+            continue
+        if name != registered:
+            notes.append(u'%s nao encontrado neste servidor; usando %s' % (registered, name))
+        if name == 'python3':
+            fixed = path_guard.PYTHON3_ARGS
+        else:
+            fixed = path_guard.PYTHON_PORTABLE_ARGS if path_guard.is_python(name) else ()
+        return [executable] + list(fixed)
+    raise path_guard.PathGuardError(path_guard.Code.INTERPRETER_NOT_FOUND)
+
+
 def _agent_argv(registered, override, script_real, args, search_path):
-    """(argv do agente, nota) na ordem do CR-026 (D5): o #! do script, se o executavel existir; senao o
-    digitado no disparo; senao o nome do cadastro, procurado no PATH do agente. O python3 do cadastro roda
-    com -I; os demais Python com -E -s (D7). Nenhum existe: INTERPRETER_NOT_FOUND."""
-    head, note = _shebang_argv(script_real, search_path)
-    if head is None:
-        if override:
+    """(argv do agente, notas para o log do ticket) na ordem do CR-027: o digitado no disparo, se existir
+    no servidor; senao o #! do script, se o executavel existir; senao o nome do cadastro, procurado no PATH do
+    agente (python e python3 servem um ao outro). Quem nao existe e pulado, com uma nota. O python3 roda com
+    -I; os demais Python com -E -s. Nenhum existe: INTERPRETER_NOT_FOUND."""
+    notes = []
+    head = None
+    if override:
+        try:
             executable = path_guard.find_executable(override, search_path)
             fixed = path_guard.PYTHON_PORTABLE_ARGS if path_guard.is_python(override) else ()
-        else:
-            executable = path_guard.find_executable(registered, search_path)
-            if registered == 'python3':
-                fixed = path_guard.PYTHON3_ARGS
-            else:
-                fixed = path_guard.PYTHON_PORTABLE_ARGS if path_guard.is_python(registered) else ()
-        head = [executable] + list(fixed)
-    return head + [script_real] + list(args), note
+            head = [executable] + list(fixed)
+        except path_guard.PathGuardError:
+            notes.append(u'interpretador informado nao encontrado neste servidor: %s' % override)
+    if head is None:
+        head, note = _shebang_argv(script_real, search_path)
+        if note:
+            notes.append(note)
+    if head is None:
+        head = _registered_argv(registered, search_path, notes)
+    return head + [script_real] + list(args), notes
 
 
 def _secrets(snapshot):

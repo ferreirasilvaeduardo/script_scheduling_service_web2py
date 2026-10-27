@@ -442,31 +442,39 @@ class TestExecution(_Base):
         self.assertIn("%s|\n" % real, self.db.tickets[tid]["log"])
         self.assertEqual(self.db.tickets[tid]["script_path"], real)
 
-    def test_cr026_ordem_shebang_digitado_cadastro(self):
-        # CR-026 (D5): #! existente vence o digitado; sem #!, o digitado; sem os dois, o cadastro (qualquer
-        # interpretador: o agente nao filtra). O usado vai com o PID (interpreter_used) e abre o log.
+    def test_cr027_ordem_digitado_shebang_cadastro(self):
+        # CR-027: o digitado vence o #!; sem digitado, o #!; sem os dois, o cadastro (qualquer interpretador:
+        # o agente nao filtra). Quem nao existe e pulado, com linha [SSS]. O usado vai com o PID.
         sh = os.path.abspath(shutil.which("sh"))
         bash = os.path.abspath(shutil.which("bash"))
-        by_shebang = self.db.ticket(self.db.script("#!/bin/sh\necho shebang\n", interpreter="bash"),
-                                    override="bash")
+        typed_over_shebang = self.db.ticket(self.db.script("#!/bin/sh\necho shebang\n", interpreter="bash"),
+                                            override="bash")
+        by_shebang = self.db.ticket(self.db.script("#!/bin/sh\necho shebang\n", interpreter="bash"))
         typed = self.db.ticket(self.db.script("echo digitado\n", interpreter="bash"), override="sh")
         registered = self.db.ticket(self.db.script("echo cadastro\n", interpreter="bash"))
         ignored = self.db.ticket(self.db.script("#!/nao/existe/sh\necho ignorado\n"))
+        missing_typed = self.db.ticket(self.db.script("echo x\n"), override="interpretador_que_nao_existe")
         legacy = self.db.ticket(self.db.script("echo legado\n"), version=5, interpreter="SH")
-        tids = (by_shebang, typed, registered, ignored, legacy)
+        tids = (typed_over_shebang, by_shebang, typed, registered, ignored, missing_typed, legacy)
         self.start_agent()
         self.run_loop(lambda: all(self.finished(t)() for t in tids))
         for tid in tids:
             self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0), tid)
         used = dict((tid, self.db.tickets[tid]["interpreter_used"]) for tid in tids)
-        self.assertEqual(used, {by_shebang: "/bin/sh", typed: sh, registered: bash, ignored: sh, legacy: sh})
+        self.assertEqual(used, {typed_over_shebang: bash, by_shebang: "/bin/sh", typed: sh, registered: bash,
+                                ignored: sh, missing_typed: sh, legacy: sh})
         self.assertIn("[SSS] interpretador usado: /bin/sh", self.db.tickets[by_shebang]["log"])
         self.assertIn("[SSS] #! ignorado: /nao/existe/sh nao encontrado", self.db.tickets[ignored]["log"])
+        self.assertIn("[SSS] interpretador informado nao encontrado neste servidor: interpretador_que_nao_existe",
+                      self.db.tickets[missing_typed]["log"])
 
-    def test_cr026_nenhum_interpretador_existe(self):
-        nome = self.db.ticket(self.db.script("echo x\n"), override="interpretador_que_nao_existe")
+    def test_cr027_nenhum_interpretador_existe(self):
+        # Digitado, #! e cadastro inexistentes (o PATH do agente nao tem bash): INTERPRETER_NOT_FOUND.
+        nome = self.db.ticket(self.db.script("#!/nao/existe/sh\necho x\n", interpreter="bash"),
+                              override="interpretador_que_nao_existe")
         self.start_agent()
-        with self.assertLogs("sss_scheduler", "WARNING") as logs:
+        with mock.patch.dict(os.environ, {"PATH": self.db.base}), \
+                self.assertLogs("sss_scheduler", "WARNING") as logs:
             self.run_loop(self.finished(nome))
         self.assertEqual(self.final(nome)[:2], ("FAILED", "PRECHECK_FAILED"))
         self.assertIn("INTERPRETER_NOT_FOUND", "\n".join(logs.output))
