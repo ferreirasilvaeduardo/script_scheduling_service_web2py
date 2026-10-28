@@ -66,7 +66,8 @@ class TestKeepalive(unittest.TestCase):
         self.assertEqual(code, 0, err)
         self.assertEqual(len(self._log("agente0001")), 1)
         self.assertIn("subiu: pid", self._log("agente0001")[0])
-        self.assertIn("--port 18999", self._log("web0001")[0])
+        self.assertIn("--host 127.0.0.1 --port 18999", self._log("web0001")[0],
+                      "sem endereco: so local")
         code, _out, err = self._run("agente0001", "web0001:18999")
         self.assertEqual(code, 0, err)
         self.assertEqual((len(self._log("agente0001")), len(self._log("web0001"))), (1, 1),
@@ -89,6 +90,19 @@ class TestKeepalive(unittest.TestCase):
         code, _out, err = self._run("agente0009")
         self.assertEqual(code, 3)
         self.assertIn("nao existe", err)
+
+    def test_cr032_endereco_do_web(self):
+        """CR-032 (D19): <nome>:<endereco>:<porta> sobe o web nesse endereco; endereco que nao
+        e IPv4 e recusado."""
+        code, _out, err = self._run("web0001:0.0.0.0:18998")
+        self.assertEqual(code, 0, err)
+        self.assertIn("--host 0.0.0.0 --port 18998", self._log("web0001")[-1])
+        self._kill_all()
+        for bad in ("web0001:999.1.1.1:18000", "web0001:abc:18000", "web0001:1.2.3:18000",
+                    "web0001::18000"):
+            code, _out, err = self._run(bad)
+            self.assertEqual(code, 3, bad)
+            self.assertIn("endereco invalido", err, bad)
 
     def test_processo_que_nao_sobe(self):
         _write(os.path.join(self.root, "scripts", "run_scheduler.py"), "import sys\nsys.exit(2)\n")

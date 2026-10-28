@@ -108,6 +108,7 @@ O `config.ini` do agente ficaria com `sss_env`, `name`, `[oracle]` (`dsn`, `owne
 | D15 | A: DEPLOYMENT só com o caminho real (roteiro do §4.0); saem o cenário com administrador, `systemd`, apêndice B e a migração de `/opt/sss/app`; notas por versão só as da estrutura nova |
 | D16 | A: `critical_config` só com `call_timeout_ms` e `misfire_policy` (atualização com todos os agentes parados) |
 | D17 | B: o `check_env.py` fica |
+| D19 | A (2026-10-28): o keepalive aceita `<nome>:<endereço IPv4>:<porta>` para o web (ex.: `web0001:0.0.0.0:18000`), para os usuários entrarem direto por HTTP; sem endereço, continua `127.0.0.1`. Risco aceito no README §14 |
 | D18 | A (2026-10-28): `instance/common.ini` por servidor, na pasta de cima da do config (como o `secrets.cfg`), com o `[oracle]` comum ao web e aos agentes; uma chave repetida no `config.ini` do processo vale no lugar da comum. Passo 032d |
 
 ## 5. Passos
@@ -141,3 +142,4 @@ O `config.ini` do agente ficaria com `sss_env`, `name`, `[oracle]` (`dsn`, `owne
 * **Raiz compartilhada (pedido de 2026-10-28):** novo §4.1, com as sete regras e a nota do `flock` em NFS; citado no §7.1, §10.6, §13, §15.1, §18.1 e no checklist.
 * **Opção B do apêndice B:** o Apêndice B, a migração de `/opt/sss/app` e as notas por versão anteriores ao CR-028 foram para `docs/architecture/DEPLOYMENT-history.md` (registro, não vigente). O §18.2 novo tem só as notas da estrutura por processo (CR-030 e CR-032).
 * **Achado:** pelo keepalive, o web atende só em `127.0.0.1`; sem um proxy ou balanceador na frente, os usuários só chegam por túnel. O §10.4 diz isso; a decisão fica com o responsável.
+* **D19 (2026-10-28, depois do achado):** `bin/sss-keepalive.sh` aceita `<nome>:<endereço IPv4>:<porta>` para o web (cada parte de 0 a 255; senão, `recusado: endereco invalido`, código 3); sem endereço, `127.0.0.1`. Teste novo em `test_keepalive.py`; README §12.2 e §14 (risco aceito), DEPLOYMENT §2, §10.1, §10.4 e §10.6.

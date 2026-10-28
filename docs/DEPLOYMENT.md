@@ -102,7 +102,7 @@ Tudo pertence à conta do SSS. As pastas saem do nome do processo, sem precisar 
 | Driver Oracle | `python-oracledb` (`< 2.0` no Python 3.6; `2.x` no 3.7+) e `cx_Oracle 8.3` como contingência, **pré-instalados** pela infraestrutura (AGENTS §2.2), com o **Oracle Instant Client 19.x**. A biblioteca `cryptography` não é usada (o modo Thin fica fora de uso; `driver_mode = thick`) |
 | Oracle Instant Client 19 | **Obrigatório se algum banco for 11g** (o modo Thin não conecta ao 11g: `DPY-3010`); recomendado sempre, como contingência da cadeia de driver (§6). Registrado no `ldconfig` |
 | Banco | Oracle 11gR2 (11.2.0.4) ou superior, charset AL32UTF8, servidor **sem horário de verão** (UTC recomendado) e NTP em modo *slew* em todas as instâncias (README §7.1) |
-| Rede | Dos nós web e agentes até o listener Oracle. O nó web escuta só em `127.0.0.1`; os usuários chegam pelo proxy ou balanceador da empresa, ou por túnel SSH (§10.4) |
+| Rede | Dos nós web e agentes até o listener Oracle. Dos usuários até a porta do web, quando ele atende num endereço da rede (§10.4) |
 | Relógio dos servidores | NTP ativo. O fuso vem de `SSS_TZ` no launcher (§10) |
 | Ferramentas | `tar`, `sha256sum`, `curl` e o `cron` da conta |
 
@@ -151,14 +151,14 @@ O pacote só tem o `bin/` e a aplicação (o código, os templates e os estátic
 5. **Subida e permanência (§10.6):** `bin/sss-keepalive.sh` no `crontab` da conta, com `@reboot` e a cada 5 minutos.
 6. **Monitoração (§13)** e **limpeza manual (§12, README §11.3)** pelo mesmo `crontab`.
 
-Exemplo de `crontab -e` da conta (troque `<TIPO>`, a porta e o Python):
+Exemplo de `crontab -e` da conta, com os usuários entrando direto por HTTP na porta 18000 (§10.4; troque `<TIPO>`, a porta e o Python):
 
 ```text
 PYTHON=/usr/bin/python3
 SSS_TZ=America/Sao_Paulo
 R=/portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service
-@reboot      cd $R && bin/sss-keepalive.sh web0001:18000 agente0001
-*/5 * * * *  cd $R && bin/sss-keepalive.sh web0001:18000 agente0001
+@reboot      cd $R && bin/sss-keepalive.sh web0001:0.0.0.0:18000 agente0001
+*/5 * * * *  cd $R && bin/sss-keepalive.sh web0001:0.0.0.0:18000 agente0001
 */5 * * * *  cd $R && $PYTHON scripts/health.py --name agente0001 > var/agente0001/logs/health.txt 2>&1
 15 2 * * *   cd $R && find var/*/logs var/*/output var/*/script_work -mindepth 7 -maxdepth 7 -type d -mtime +30 -exec rm -rf {} + ; find var/*/logs var/*/output var/*/script_work -mindepth 3 -type d -empty -delete
 ```
@@ -198,7 +198,7 @@ Regras:
 4. **Atualização com tudo parado em todos os servidores.** O `bin/sss-update.sh` troca o código de todos de uma vez, e a conferência de "processo do SSS rodando" que ele faz é local. Antes de atualizar (§18.1), pause e pare os processos de **todos** os servidores, não só os do servidor em que você roda o comando.
 5. **`secrets.cfg` com todos os ambientes.** Ele precisa ter o `[environment:<NOME>]` de todos os ambientes atendidos por qualquer agente da raiz: o agente sem a credencial do seu ambiente não sobe (CR-032, D11).
 6. **A mesma conta, com o mesmo UID, em todos os servidores.** O `secrets.cfg` exige dono igual ao usuário do processo e modo `0600`, e as pastas são `0700`/`0750`: com UIDs diferentes, a subida é recusada (código 12 ou 13, §15.1).
-7. **Webs com nome e porta próprios.** Dois webs no mesmo servidor precisam de portas diferentes (`web0001:18000`, `web0002:18001` no keepalive); o `[web] allowed_origins` de cada um traz a URL pela qual os usuários chegam a ele.
+7. **Webs com nome e porta próprios.** Dois webs no mesmo servidor precisam de portas diferentes (`web0001:0.0.0.0:18000`, `web0002:0.0.0.0:18001` no keepalive); o `[web] allowed_origins` de cada um traz a URL pela qual os usuários chegam a ele.
 
 * **Trava de instância em pasta de rede:** a trava (`flock` em `var/<nome>/work/sss-<nome>.lock`) pode não valer entre máquinas num NFS. Com nomes únicos e a regra 2, isso não importa: o banco barra o `agent_id` duplicado.
 * **Desempenho:** os logs dos tickets e o log da aplicação são gravados em `var/`; numa pasta de rede lenta, prefira um `var/` com boa latência (§4.3).
@@ -382,7 +382,7 @@ bin/sss-web.sh "$PYTHON" web0001 --host 127.0.0.1 --port 8000  # instance/web000
 ```
 
 * O servidor é o próprio do SSS (`scripts/run_web.py`, CR-021e), sem web2py: até 16 requisições ao mesmo tempo e 30 s de espera por conexão (fixos no código desde o CR-032). O `sss-web.sh` só inicia o `run_web.py`; `web2py.py` e `anyserver.py` são recusados (código 2).
-* `--host 127.0.0.1`: só local, atrás do proxy ou do túnel (§10.4). **Nunca** use `0.0.0.0`.
+* `--host 127.0.0.1`: só local, atrás do proxy ou do túnel. Para os usuários entrarem direto por HTTP, `--host 0.0.0.0` (ou o IP do servidor); na operação, pelo keepalive (§10.4).
 * Não cria arquivos na raiz (`httpserver.log`, `httpserver.pid`, `parameters_<porta>.py`, `cron.master` e afins eram do web2py). Requisições, erros e a subida vão para o log da aplicação (`sss_web_<PID>.log`, §14.1); a saída padrão só recebe o que acontecer antes de o log abrir.
 * Saída: 2 com configuração ou segredos inválidos (o motivo vai para o log), 3 com a porta em uso ou sem permissão.
 * Para parar: `SIGTERM` ou `SIGINT` (Ctrl+C) ao processo Python. O servidor para de aceitar conexões, espera as requisições em andamento por até 30 s e sai com código 0.
@@ -416,8 +416,8 @@ bin/sss-scheduler.sh agente0001            # instance/agente0001/config.ini (CR-
 
 ### 10.4 Acesso dos usuários
 
-* **Endereço:** pelo keepalive (§10.6), o web atende **só em `127.0.0.1`**, na porta da linha do cron. Os usuários chegam por um proxy ou balanceador HTTP(S) da empresa que repasse para `http://127.0.0.1:<porta>`, ou por túnel SSH. Ponha em `[web] allowed_origins` a URL exata que os usuários digitam. Por HTTP, o cookie de sessão vai sem `Secure` (CR-032, D11). O `bin/sss-web.sh` aceita `--host` (§10.1), mas um web subido assim fica fora do keepalive.
-* **Túnel SSH** (suporte): `ssh -N -L 18000:127.0.0.1:18000 <usuário>@<servidor>` e, no navegador, `http://localhost:18000/`. O próprio `Host` da requisição já vale como origem (CR-032, D11).
+* **Direto por HTTP (CR-032, D19):** na linha do keepalive, `web0001:0.0.0.0:18000` sobe o web em todas as interfaces (ou `web0001:<IP do servidor>:18000`, só nesse endereço). Os usuários abrem `http://<servidor>:18000/`. Ponha essa URL exata em `[web] allowed_origins`. Sem HTTPS, o cookie de sessão vai sem `Secure` (CR-032, D11) e a senha trafega sem criptografia na rede interna: risco aceito (README §14). Confira com a equipe de rede que a porta só é alcançável pela rede interna.
+* **Só local (padrão):** `web0001:18000` atende só em `127.0.0.1`. Os usuários chegam por um proxy ou balanceador da empresa que repasse para `http://127.0.0.1:<porta>`, ou por túnel SSH: `ssh -N -L 18000:127.0.0.1:18000 <usuário>@<servidor>` e, no navegador, `http://localhost:18000/` (o próprio `Host` da requisição já vale como origem, CR-032 D11).
 * **Proxy** [não ensaiado]: o limite de corpo dele precisa ser pelo menos `[web] input_upload_max_bytes` mais 64 KiB (tela de Entrada, CR-020d); o endereço dele vai em `[web] trusted_proxies`.
 
 ### 10.5 Variáveis dos launchers
@@ -436,8 +436,8 @@ No cron, defina-as no topo do `crontab` (§4.0). O agente procura os interpretad
 O `bin/sss-keepalive.sh` mantém os processos no ar pelo cron da conta do SSS (§4.0):
 
 ```bash
-# na <RAIZ>; o web precisa da porta (<nome>:<porta>), o agente so do nome
-PYTHON=/usr/bin/python3 SSS_TZ=America/Sao_Paulo bin/sss-keepalive.sh web0001:18000 agente0001
+# na <RAIZ>; o web precisa da porta (<nome>:<porta>, so local, ou <nome>:<endereco>:<porta>), o agente so do nome
+PYTHON=/usr/bin/python3 SSS_TZ=America/Sao_Paulo bin/sss-keepalive.sh web0001:0.0.0.0:18000 agente0001
 bin/sss-keepalive.sh --pause agente0001     # antes de parar de proposito: o keepalive nao sobe mais
 bin/sss-stop.sh agente0001                  # para o agente
 # para o web: SIGTERM no PID do python dele ([p] evita achar o proprio grep)
@@ -446,7 +446,7 @@ bin/sss-keepalive.sh --resume agente0001    # volta a subir na proxima passada
 ```
 
 * Para cada nome, confere se há um `python` rodando `scripts/run_web.py` ou `scripts/run_scheduler.py` com `--name <nome>` a partir da `<RAIZ>`. Se não houver, sobe pelo launcher, em segundo plano (`nohup`), e grava em `var/<nome>/logs/keepalive.log` uma linha por subida, recusa ou falha. A saída do processo vai para `var/<nome>/logs/<nome>.out`.
-* O papel vem do `config.ini` (`[web]` sem `[agent]`: web). O web atende só em `127.0.0.1`, na porta informada (§10.4).
+* O papel vem do `config.ini` (`[web]` sem `[agent]`: web). O web atende em `127.0.0.1` ou no endereço da linha, na porta informada (§10.4); um endereço que não é IPv4 é recusado (`recusado: endereco invalido`, código 3).
 * As linhas do `crontab` estão no §4.0 (`@reboot` e a cada 5 minutos). Recusa root (código 1) e uso inválido (2); sai com 3 se algum processo não subiu (veja o `.out`).
 * Na atualização (§18.1), pause os processos antes de parar e retome depois de subir.
 * Com a raiz compartilhada (§4.1), o keepalive de cada servidor só lista os nomes daquele servidor.

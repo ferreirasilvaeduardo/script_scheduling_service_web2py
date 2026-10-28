@@ -3,11 +3,14 @@
 # que roda o SSS, com @reboot e a cada 5 minutos. Para cada nome, confere se o processo esta no ar e, se nao
 # estiver, sobe pelo launcher em segundo plano.
 #
-# Uso: sss-keepalive.sh <processo>...             web: <nome>:<porta> (ex.: web0001:18000); agente: <nome>
+# Uso: sss-keepalive.sh <processo>...             web: <nome>:<porta> (ex.: web0001:18000, em 127.0.0.1) ou
+#                                                 <nome>:<endereco IPv4>:<porta> (ex.: web0001:0.0.0.0:18000,
+#                                                 todas as interfaces; CR-032); agente: <nome>
 #      sss-keepalive.sh --pause <nome>            nao sobe mais o processo (parada de proposito)
 #      sss-keepalive.sh --resume <nome>           volta a subir
 #
-# O papel vem do config (instance/<nome>/config.ini com [web] e sem [agent]: web). O web atende so em 127.0.0.1.
+# O papel vem do config (instance/<nome>/config.ini com [web] e sem [agent]: web). Sem endereco, o web atende so em
+# 127.0.0.1; com outro endereco, a tela fica exposta na rede (sem HTTPS, a senha trafega aberta: README §14).
 # Log: var/<nome>/logs/keepalive.log (uma linha por subida, recusa ou falha); a saida do processo vai para
 # var/<nome>/logs/<nome>.out. Variaveis: PYTHON (padrao python3), SSS_TZ, SSS_IC_DIR (as dos launchers).
 # Codigos: 0 ok (inclusive "ja no ar" e "em pausa"); 1 root; 2 uso invalido; 3 algum processo nao subiu.
@@ -25,7 +28,7 @@ cd "${REPO_ROOT}" || exit 2
 RE_NAME='^[a-z][a-z0-9_-]{0,29}$'
 
 _usage() {
-    echo "Erro: uso: sss-keepalive.sh <nome>[:<porta>]... | --pause <nome> | --resume <nome>" >&2
+    echo "Erro: uso: sss-keepalive.sh <nome>[:[<endereco>:]<porta>]... | --pause <nome> | --resume <nome>" >&2
     exit 2
 }
 
@@ -33,6 +36,15 @@ _log() {
     # _log <nome> <mensagem>
     mkdir -p "var/$1/logs" 2>/dev/null
     printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$2" >> "var/$1/logs/keepalive.log"
+}
+
+_valid_ipv4() {
+    local part
+    [[ "$1" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || return 1
+    for part in ${1//./ }; do
+        [ "$((10#${part}))" -le 255 ] || return 1
+    done
+    return 0
 }
 
 # Algum python rodando scripts/<comando>.py --name <nome> a partir desta raiz?
@@ -77,7 +89,13 @@ status=0
 for item in "$@"; do
     name="${item%%:*}"
     port=""
+    host="127.0.0.1"
     [ "${item}" != "${name}" ] && port="${item#*:}"
+    if [[ "${port}" == *:* ]]; then
+        # CR-032: <nome>:<endereco>:<porta>; so IPv4 com cada parte de 0 a 255.
+        host="${port%:*}"
+        port="${port##*:}"
+    fi
     [[ "${name}" =~ ${RE_NAME} ]] || _usage
     config="instance/${name}/config.ini"
     if [ ! -f "${config}" ]; then
@@ -94,7 +112,13 @@ for item in "$@"; do
             status=3
             continue
         fi
-        command=(bin/sss-web.sh "${name}" --host 127.0.0.1 --port "${port}")
+        if ! _valid_ipv4 "${host}"; then
+            _log "${name}" "recusado: endereco invalido ${host} (use IPv4, ex.: ${name}:0.0.0.0:${port})"
+            echo "Erro: endereco invalido: ${host} (use IPv4, ex.: ${name}:0.0.0.0:${port})." >&2
+            status=3
+            continue
+        fi
+        command=(bin/sss-web.sh "${name}" --host "${host}" --port "${port}")
     else
         script="scripts/run_scheduler.py"
         command=(bin/sss-scheduler.sh "${name}")
