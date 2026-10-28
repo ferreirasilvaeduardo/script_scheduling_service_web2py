@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Coerencia do docs/DEPLOYMENT.md (F9.1d): todo bin/... e scripts/....py citado existe, e toda referencia
-interna (§n ou §n.m) do corpo do guia aponta para uma secao que existe. O Apendice B (registros historicos) fica
-de fora: as referencias dele sao da versao anterior do guia.
+interna (§n ou §n.m) do guia aponta para uma secao que existe. CR-032 (D15): o guia so tem o caminho real (um
+usuario de SO e um de banco, sem root); os registros antigos foram para docs/architecture/DEPLOYMENT-history.md.
 """
 from tests.support import _testenv  # noqa: F401
 
@@ -18,7 +18,7 @@ GUIDE = os.path.join(APP, "docs", "DEPLOYMENT.md")
 def _body():
     with io.open(GUIDE, encoding="utf-8") as f:
         text = f.read()
-    return text.split("## Apêndice B.", 1)[0]
+    return text
 
 
 class TestDeploymentGuide(unittest.TestCase):
@@ -58,6 +58,24 @@ class TestDeploymentGuide(unittest.TestCase):
         body = _body()
         for term in ("SSS_DEV_SEED_PASSWORD", "data_backend = FAKE", "skipped=23"):
             self.assertNotIn(term, body)
+
+    def test_cr032_guia_enxuto_e_raiz_compartilhada(self):
+        """CR-032 (D15): sem systemd, sudo, helper nem o Apendice B; roteiro da raiz compartilhada com as regras."""
+        body = _body()
+        guide = body.split("### 18.2", 1)[0]
+        for term in ("systemctl", "/etc/sudoers.d", "useradd", "sss-helper", "## Apêndice B"):
+            self.assertFalse(term in guide, term)
+        shared = body.split("### 4.1 Raiz compartilhada por vários servidores", 1)[1].split("### 4.2", 1)[0]
+        for rule in ("Nome único por processo", "Cada agente roda sempre no mesmo servidor",
+                     "Não mude um agente de servidor com ticket rodando", "Atualização com tudo parado em todos",
+                     "`secrets.cfg` com todos os ambientes", "A mesma conta, com o mesmo UID",
+                     "Webs com nome e porta próprios", "flock"):
+            self.assertIn(rule, shared)
+        history = os.path.join(APP, "docs", "architecture", "DEPLOYMENT-history.md")
+        with io.open(history, encoding="utf-8") as f:
+            text = f.read()
+        self.assertIn("## Parte 2. Apêndice B.", text)
+        self.assertIn("Notas por versão (formato anterior ao CR-028)", text)
 
 
 if __name__ == "__main__":
