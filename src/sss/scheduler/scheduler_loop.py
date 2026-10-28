@@ -173,7 +173,8 @@ class Agent(object):
         self.log.info("agente inicializado (versao %s, %d grupo(s) em encerramento, %d pasta(s) preservada(s))",
                       sss_config.SSS_VERSION, len(self.stopping), len(self.preserved))
         # CR-032: a instalacao (pasta <TIPO>) e o caminho, ja que o config nao diz mais o ambiente.
-        self.log.info("ambiente da instalacao: %s (%s)", sss_config.env_label(), sss_config.APP_DIR)
+        self.log.info("ambiente da instalacao: %s (%s); [oracle] de %s", sss_config.env_label(), sss_config.APP_DIR,
+                      getattr(self.cfg.app, "common_path", None) or "config.ini do processo")
         return self
 
     def release_resources(self):

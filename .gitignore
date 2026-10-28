@@ -57,6 +57,8 @@ dev/others/notas/sss-web-*_v*.sh
 /.update-*/
 /instance/*/
 !/instance/exemplos/
+# CR-032 (D18): o [oracle] comum do servidor, como o secrets.cfg
+/instance/common.ini
 /scripts_ambiente/
 
 # Notas pessoais de desenvolvimento: nunca versionadas (as antigas ja commitadas ficam como estao)

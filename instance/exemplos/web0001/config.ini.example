@@ -1,21 +1,15 @@
 ; config.ini do NO WEB (CR-028): copie para instance/web0001/config.ini (o nome da pasta e o do processo).
-; So [app], [oracle] e [web]: o web nao tem [agent] (README §12.1). As pastas saem de var/web0001/.
+; So [app] e [web]: o web nao tem [agent] (README §12.1). As pastas saem de var/web0001/.
+; O banco ([oracle]) fica no instance/common.ini do servidor (modelo: instance/exemplos/common.ini.example).
 ; Os segredos ficam no instance/secrets.cfg unico do servidor (modelo: instance/exemplos/secrets.cfg.example).
 ; Suba com: bin/sss-web.sh web0001 --host 127.0.0.1 --port 8000
 ;
 ; DEV e PROD sao iguais (CR-032): o ambiente mostrado vem da pasta acima da raiz (DEV ou PROD).
-; UM USUARIO SO (sem root; DEPLOYMENT §4.0): [oracle] user = a conta unica (dona do esquema);
+; UM USUARIO SO (sem root; DEPLOYMENT §4.0): no common.ini, [oracle] user = a conta unica (dona do esquema);
 ; suba pelo bin/sss-keepalive.sh web0001:<porta> no cron (§10.6).
 
 [app]
 name = web0001                    ; nome do processo: o mesmo da pasta instance/web0001/
-
-[oracle]
-user = sss_web                    ; conta do web (README §4.1); pode ser a dona do esquema (um usuario so)
-dsn = servidor-banco:1521/servico
-owner = openrisow
-table_prefix = tbsss_
-driver_mode = thick               ; thick (recomendado) | cx_oracle | auto | thin (README §2.3)
 
 [web]
 allowed_origins = http://sss.empresa.local:8000   ; a URL que o usuario digita (http ou https)

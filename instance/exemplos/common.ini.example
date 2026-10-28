@@ -1,0 +1,11 @@
+; common.ini do SERVIDOR (CR-032, D18): copie para instance/common.ini (ao lado do secrets.cfg).
+; Lido pelo web e por todos os agentes deste servidor. So aceita [oracle]: o banco do SSS comum a todos.
+; Uma chave escrita no config.ini de um processo vale no lugar desta (caso raro: outro banco ou outra conta).
+; A senha fica no instance/secrets.cfg ([oracle] password), nunca aqui.
+
+[oracle]
+user = sss_app                    ; conta da aplicacao; com um usuario de banco so, a dona do esquema
+dsn = servidor-banco:1521/servico
+owner = openrisow
+table_prefix = tbsss_
+driver_mode = thick               ; thick (recomendado) | cx_oracle | auto | thin (README §2.3)

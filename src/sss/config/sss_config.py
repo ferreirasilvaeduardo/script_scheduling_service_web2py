@@ -82,6 +82,9 @@ IGNORED_KEYS.update(dict((("agent", key), _NO_EXEC_USER)
                          for key in ("exec_users", "usuarios_execucao", "exec_work_dir", "helper_path")))
 
 _NO_MONITOR = "sem papel monitor desde o CR-032; o health.py usa a conta do proprio processo"
+# CR-032 (D18): arquivo comum do servidor, ao lado do secrets.cfg, com o banco comum ao web e aos agentes.
+COMMON_FILE = "common.ini"
+COMMON_SECTIONS = ("oracle",)
 # Secoes inteiras ignoradas com aviso (CR-030): o load() registra uma linha por chave.
 IGNORED_SECTIONS = {"retention": _NO_PURGE, "retencao": _NO_PURGE,
                     "secrets": "o secrets.cfg e o unico de instance/ desde o CR-032"}
@@ -247,13 +250,14 @@ class _ItemAccessMixin(object):
 
 
 class AppConfig(_ItemAccessMixin, collections.namedtuple("AppConfig",
-                                                         ["name", "role", "config_path"])):
+                                                         ["name", "role", "config_path", "common_path"])):
     __slots__ = ()
 
 
-# name, role e config_path sao opcionais na construcao direta (testes); o load() sempre os preenche (CR-028,
-# CR-029: config_path e o arquivo lido, repassado a sondagem do driver).
-AppConfig.__new__.__defaults__ = ("all", None)
+# role, config_path e common_path sao opcionais na construcao direta (testes); o load() sempre os preenche
+# (CR-028; CR-029: config_path e o arquivo lido, repassado a sondagem do driver; CR-032, D18: common_path e o
+# instance/common.ini lido, ou None).
+AppConfig.__new__.__defaults__ = ("all", None, None)
 
 
 class OracleConfig(_ItemAccessMixin, collections.namedtuple("OracleConfig", [
@@ -471,6 +475,36 @@ def _derived_paths(name, role, present):
     return dict((key, value) for key, value in derived.items() if key not in present)
 
 
+def common_path_for(ini_path: str) -> str:
+    """CR-032 (D18): o instance/common.ini do servidor, na pasta de cima da do config (como o secrets.cfg)."""
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(ini_path))), COMMON_FILE)
+
+
+def _merge_common(cp: configparser.ConfigParser, ini_path: str) -> Optional[str]:
+    """CR-032 (D18): junta ao config do processo o [oracle] do common.ini, se existir. Uma chave escrita no
+    config.ini do processo vale no lugar da comum. O common.ini so aceita [oracle]. Devolve o caminho lido."""
+    path = common_path_for(ini_path)
+    if not os.path.exists(path):
+        return None
+    common = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            common.read_file(f)
+    except Exception as e:
+        raise ConfigError(reason="Erro ao ler %s: %s" % (path, e))
+    for sec in common.sections():
+        if sec not in COMMON_SECTIONS:
+            raise ConfigError(section=sec, key=None,
+                              reason="O %s so aceita %s (CR-032, D18)"
+                                     % (COMMON_FILE, ", ".join("[%s]" % x for x in COMMON_SECTIONS)))
+        if not cp.has_section(sec):
+            cp.add_section(sec)
+        for k, v in common[sec].items():
+            if k not in cp[sec]:
+                cp[sec][k] = v
+    return path
+
+
 def load(ini_path: str) -> "Config":
     """Carrega e valida o config.ini de forma declarativa e fail-fast.
 
@@ -486,6 +520,7 @@ def load(ini_path: str) -> "Config":
             cp.read_file(f)
     except Exception as e:
         raise ConfigError(reason="Erro ao ler arquivo de configuracao %s: %s" % (ini_path, e))
+    common_path = _merge_common(cp, ini_path)
 
     # 1. Validar secoes desconhecidas
     for sec in cp.sections():
@@ -594,6 +629,7 @@ def load(ini_path: str) -> "Config":
                           reason="Nome reservado do sistema: %s (README §4.4 e §8.12)" % app_name)
     data_sections["app"]["role"] = role
     data_sections["app"]["config_path"] = os.path.abspath(ini_path)
+    data_sections["app"]["common_path"] = common_path
 
     # CR-032 (D14): um secrets.cfg por servidor, na pasta de cima da do config (instance/secrets.cfg). O antigo,
     # na pasta do processo, ainda e lido, com aviso para mover.

@@ -2,21 +2,15 @@
 ; Sem [web] (README §12.1). O agent_id e o proprio nome, unico em toda a instalacao. As pastas saem de
 ; var/agente0001/ (logs, work, output, input, script_work) e scripts_ambiente/, criadas na subida.
 ; Os segredos ficam no instance/secrets.cfg unico do servidor (modelo: instance/exemplos/secrets.cfg.example).
+; O banco ([oracle]) fica no instance/common.ini do servidor (modelo: instance/exemplos/common.ini.example).
 ; Suba com: bin/sss-scheduler.sh agente0001
 ;
 ; DEV e PROD sao iguais (CR-032): o ambiente mostrado vem da pasta acima da raiz (DEV ou PROD).
-; UM USUARIO SO (sem root; DEPLOYMENT §4.0): [oracle] user = a conta unica (dona do esquema);
+; UM USUARIO SO (sem root; DEPLOYMENT §4.0): no common.ini, [oracle] user = a conta unica (dona do esquema);
 ; suba pelo bin/sss-keepalive.sh agente0001 no cron (§10.6).
 
 [app]
 name = agente0001                 ; nome do processo e agent_id
-
-[oracle]
-user = sss_agente                 ; conta do agente (README §4.1); pode ser a dona do esquema (um usuario so)
-dsn = servidor-banco:1521/servico
-owner = openrisow
-table_prefix = tbsss_
-driver_mode = thick
 
 [agent]
 environments = PRODUCAO           ; ambientes que este agente atende

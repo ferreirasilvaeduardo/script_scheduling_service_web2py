@@ -129,6 +129,9 @@ class TestPack(unittest.TestCase):
         self._write("instance/agente0001/secrets.cfg", "[oracle]\npassword = %s\n" % SECRET)
         self._write("instance/exemplos/agente0001/config.ini.example", "[app]\nname = agente0001\n")
         self._write("instance/exemplos/agente0001/secrets.cfg.example", "[oracle]\npassword = CHANGE_ME\n")
+        # CR-032 (D18): o common.ini do servidor fica; o modelo vai.
+        self._write("instance/common.ini", "[oracle]\nuser = conta\n")
+        self._write("instance/exemplos/common.ini.example", "[oracle]\nuser = sss_app\n")
         self._write("var/agente0001/logs/a.log", "x")
         self._write("scripts_ambiente/carga.py", "x")
         code, text = self._main()
@@ -138,6 +141,8 @@ class TestPack(unittest.TestCase):
             names = set(m.name[len(top):] for m in tar.getmembers() if m.isfile())
         self.assertIn("instance/exemplos/agente0001/config.ini.example", names)
         self.assertIn("instance/exemplos/agente0001/secrets.cfg.example", names)
+        self.assertIn("instance/exemplos/common.ini.example", names)
+        self.assertNotIn("instance/common.ini", names)
         self.assertFalse([n for n in names if n.startswith(("instance/agente0001", "var/", "scripts_ambiente/"))])
 
     def test_tar_reprodutivel(self):

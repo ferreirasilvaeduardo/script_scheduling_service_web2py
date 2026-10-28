@@ -64,7 +64,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     log.info("servidor web no ar em %s:%d (max_threads=%d socket_timeout_s=%d)", args.host,
              args.port, cfg.web.max_threads, cfg.web.socket_timeout_s, extra={"action": "INICIO"})
     # CR-032: a instalacao (pasta <TIPO>) e o caminho, ja que o config nao diz mais o ambiente.
-    log.info("ambiente da instalacao: %s (%s)", sss_config.env_label(), sss_config.APP_DIR,
+    log.info("ambiente da instalacao: %s (%s); [oracle] de %s", sss_config.env_label(),
+             sss_config.APP_DIR, cfg.app.common_path or "config.ini do processo",
              extra={"action": "INICIO"})
     if not serve(server, stop, grace_s=cfg.web.socket_timeout_s):
         log.warning("parada com requisicoes ainda em andamento apos %d s",

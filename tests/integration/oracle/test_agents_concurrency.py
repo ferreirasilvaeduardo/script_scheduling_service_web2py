@@ -179,6 +179,12 @@ class _TwoAgentsBase(unittest.TestCase):
             with open(shared, "a", encoding="utf-8") as f:
                 f.write("\n[environment:%s]\nuser = tst_app\npassword = %s\n"
                         % (self.amb["name"], secrets.token_hex(16)))
+            # CR-032 (D18): o [oracle] do DEV pode estar no instance/common.ini; vai junto, ao lado do secrets.cfg.
+            from tests.support._oracle_test_support import ORACLE_CONFIG
+            from sss.config import sss_config
+            common = sss_config.common_path_for(ORACLE_CONFIG)
+            if os.path.exists(common):
+                shutil.copyfile(common, os.path.join(instance, sss_config.COMMON_FILE))
         path = os.path.join(instance, agent, "config.ini")
         with open(path, "w", encoding="utf-8") as f:
             cp.write(f)

@@ -288,10 +288,11 @@ O seed cria os usuários de homologação `admin`, `op.prod`, `op.hml` e `consul
 
 ### 7.1 `config.ini` [ensaiado]
 
-Um `config.ini` **por processo**, em `<RAIZ>/instance/<nome>/`, a partir dos modelos do pacote (CR-028):
+Um `instance/common.ini` **por servidor**, com o `[oracle]` comum (CR-032, D18), e um `config.ini` **por processo**, em `<RAIZ>/instance/<nome>/`, a partir dos modelos do pacote (CR-028):
 
 ```bash
-# como sss, na <RAIZ>; um bloco por processo do servidor
+# como sss, na <RAIZ>; o common.ini uma vez, depois um bloco por processo do servidor
+cp instance/exemplos/common.ini.example instance/common.ini && chmod 0640 instance/common.ini
 mkdir -m 0750 instance/web0001
 cp instance/exemplos/web0001/config.ini.example instance/web0001/config.ini && chmod 0640 instance/web0001/config.ini
 mkdir -m 0750 instance/agente0001
@@ -302,8 +303,9 @@ O papel vem do próprio arquivo (CR-028, D4): o do web tem `[web]` e não tem `[
 
 | Processo | Chaves a preencher |
 |---|---|
-| Web (`instance/web0001/`) | `[app] name` (o nome da pasta); `[oracle]` (`user` = `sss_web`, `dsn`, `owner`, `table_prefix`); `[web] allowed_origins` e, atrás de proxy, `trusted_proxies` |
-| Agente (`instance/agente0001/`) | `[app] name` (o nome da pasta, que é o `agent_id`); `[oracle]` (`user` = `sss_agente`...); `[agent] environments`, `max_parallel_jobs` |
+| Servidor (`instance/common.ini`) | `[oracle]` (`user`, `dsn`, `owner`, `table_prefix`, `driver_mode`): o banco do SSS, comum ao web e aos agentes. Uma chave escrita no `[oracle]` do `config.ini` de um processo vale no lugar da comum |
+| Web (`instance/web0001/`) | `[app] name` (o nome da pasta); `[web] allowed_origins` e, atrás de proxy, `trusted_proxies` |
+| Agente (`instance/agente0001/`) | `[app] name` (o nome da pasta, que é o `agent_id`); `[agent] environments`, `max_parallel_jobs` |
 
 As pastas (`log_dir`, `work_dir`, `output_dir`, `input_dir`, `script_work_dir` e `script_base_dir`) saem do nome e não precisam ser escritas. A tabela completa, com o padrão e a faixa de cada chave, está no README §12.1. **O próprio processo cria na subida as pastas que faltarem** (CR-032, D12): não há passo manual de pastas. `[agent] interpreters` não existe mais (CR-026): uma linha antiga só gera aviso. Dos valores de `[agent]`, o web usa só a `misfire_policy` (os demais são fixos desde o CR-032). Sem `[agent]` no config do web, vale o padrão. Se mudar a `misfire_policy` nos agentes, escreva o mesmo valor num `[agent]` do config do web, que só aceita essa chave e continua com o papel web (README §12.1). Em `instance/<nome>/`, o `[app] name` precisa ser o nome da pasta: ao copiar a pasta de um agente para criar outro, troque o `name`.
 

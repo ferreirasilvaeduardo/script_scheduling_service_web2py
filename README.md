@@ -2822,21 +2822,27 @@ find var/*/logs var/*/output var/*/script_work -mindepth 3 -type d -empty -delet
 
 **Sem config padrão (CR-029):** todo comando (`run_web`, `run_scheduler`, `health`, `init_db`, `check_env`, os launchers e o `sss-stop.sh`) recebe o processo (`--name <nome>`, ou o nome nos launchers) ou `--config <arquivo>`; sem nenhum dos dois, sai com código 2 e lista os processos de `instance/`. O `generate_sql` aceita os dois, mas também roda só com `--owner` e `--prefix`. O formato único (um arquivo com `[web]` e `[agent]`) continua aceito por `--config`; o modelo dele fica em `tests/support/`, só para os testes.
 
-**Config por processo (CR-028) e mínimo (CR-026):** um `config.ini` por processo, em `instance/<nome>/`, só com as chaves obrigatórias e as que dependem do servidor. As demais têm padrão (tabela abaixo) e só entram no arquivo quando o valor for outro. O papel vem do próprio arquivo (D4): com `[web]` e sem `[agent]`, é o web; com `[agent]` e sem `[web]`, o agente (que também roda o purge); com as duas, o formato único anterior, validado inteiro. Com `[app] name`, as pastas saem do nome (D5): `log_dir` = `var/<nome>/logs`; no agente, `work_dir` = `var/<nome>/work`, `output_dir`, `input_dir` e `script_work_dir` em `var/<nome>/`, `script_base_dir` = `scripts_ambiente` e `agent_id` = o nome. Em `instance/<pasta>/config.ini`, o `name` precisa ser o nome da pasta: um `instance/agente0002/` copiado sem trocar o `name` é recusado na subida e pelo `sss-stop.sh`. Modelos em `instance/exemplos/`.
+**Config por processo (CR-028) e mínimo (CR-026):** um `config.ini` por processo, em `instance/<nome>/`, só com as chaves obrigatórias e as que dependem do servidor. As demais têm padrão (tabela abaixo) e só entram no arquivo quando o valor for outro. O papel vem do próprio arquivo (D4): com `[web]` e sem `[agent]`, é o web; com `[agent]` e sem `[web]`, o agente; com as duas, ou nenhuma, o arquivo é recusado (CR-032, D4). Com `[app] name`, as pastas saem do nome (D5): `log_dir` = `var/<nome>/logs`; no agente, `work_dir` = `var/<nome>/work`, `output_dir`, `input_dir` e `script_work_dir` em `var/<nome>/`, `script_base_dir` = `scripts_ambiente` e `agent_id` = o nome. Em `instance/<pasta>/config.ini`, o `name` precisa ser o nome da pasta: um `instance/agente0002/` copiado sem trocar o `name` é recusado na subida e pelo `sss-stop.sh`. Modelos em `instance/exemplos/`.
 
 **`[agent]` parcial no web (revisão do CR-028, A1; CR-032):** dos valores de `[agent]` que o web usa, só `misfire_policy` (aviso de ocorrência perdida na tela de agendamentos) continua configurável; os tempos de saúde e os ajustes do desdobro ficaram fixos no código (CR-032). Quem muda o `misfire_policy` nos agentes (por exemplo, `SKIP` na restauração do banco, DEPLOYMENT §17) escreve o mesmo valor num `[agent]` do config do web, que só aceita essa chave (as fixas geram aviso) e continua com o papel web.
+
+**Banco comum do servidor (CR-032, D18):** o `[oracle]` fica num `instance/common.ini` por servidor, na pasta de cima da do `config.ini` (ao lado do `secrets.cfg`), lido pelo web e por todos os agentes do servidor. O arquivo é opcional e só aceita `[oracle]` (outra seção recusa a subida). Uma chave escrita no `[oracle]` do `config.ini` de um processo vale no lugar da comum; sem o `common.ini`, o `[oracle]` inteiro vai no `config.ini` do processo. O web e o agente registram na subida de onde veio o `[oracle]` (`ambiente da instalação: <TIPO> (<raiz>); [oracle] de <arquivo>`). O pacote leva só o modelo `instance/exemplos/common.ini.example`.
+
+`instance/common.ini`:
+
+```ini
+[oracle]
+user = sss_app                    ; conta da aplicação (§4.1); com um usuário de banco só, a dona do esquema
+dsn = servidor-banco:1521/servico
+owner = openrisow
+table_prefix = tbsss_
+```
 
 `instance/web0001/config.ini`:
 
 ```ini
 [app]
 name = web0001
-
-[oracle]
-user = sss_web                    ; conta do papel (§4.1, D1b); com um usuário de banco só, a dona do esquema
-dsn = servidor-banco:1521/servico
-owner = openrisow
-table_prefix = tbsss_
 
 [web]
 allowed_origins = http://sss.empresa.local:8000   ; a URL que o usuário digita (http ou https)
@@ -2847,12 +2853,6 @@ allowed_origins = http://sss.empresa.local:8000   ; a URL que o usuário digita 
 ```ini
 [app]
 name = agente0001                 ; também o agent_id, único em toda a instalação
-
-[oracle]
-user = sss_agente
-dsn = servidor-banco:1521/servico
-owner = openrisow
-table_prefix = tbsss_
 
 [agent]
 environments = PRODUCAO,HOMOLOGACAO

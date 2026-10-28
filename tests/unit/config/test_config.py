@@ -833,11 +833,46 @@ class TestConfigCR007(unittest.TestCase):
             if bad:
                 with self.assertRaises(sss_config.ConfigError):
                     sss_config.config_path(None, bad)
+        # CR-032 (D18): os modelos de processo nao tem [oracle]; ele vem do common.ini.example.
+        common = os.path.join(self.tmp_dir, "common.ini")
+        shutil.copyfile(os.path.join(self.app_dir, "instance", "exemplos", "common.ini.example"), common)
         for name, role in (("web0001", "web"), ("agente0001", "agent")):
             example = os.path.join(self.app_dir, "instance", "exemplos", name, "config.ini.example")
             with open(example, encoding="utf-8") as handle:
-                cfg = sss_config.load(self._ini_text(handle.read()))
-            self.assertEqual((cfg.app.role, cfg.app.name), (role, name), example)
+                text = handle.read()
+            self.assertNotIn("\n[oracle]", text, example)
+            cfg = sss_config.load(self._ini_text(text))
+            self.assertEqual((cfg.app.role, cfg.app.name, cfg.app.common_path), (role, name, common), example)
+
+    def test_cr032_common_ini(self):
+        """CR-032 (D18): o [oracle] do instance/common.ini vale para web e agente; o processo sobrepoe chave a
+        chave; o common.ini so aceita [oracle]; sem ele, o [oracle] inteiro no config do processo."""
+        common = os.path.join(self.tmp_dir, "common.ini")
+        agent = "[app]\nname = agente0001\n[agent]\nenvironments = A\nmax_parallel_jobs = 1\n"
+        web = "[app]\nname = web0001\n[web]\nallowed_origins = http://x\n"
+        with self.assertRaises(sss_config.ConfigError) as ctx:
+            sss_config.load(self._ini_text(agent))
+        self.assertEqual(ctx.exception.section, "oracle", "sem common.ini nem [oracle]")
+        with open(common, "w", encoding="utf-8") as f:
+            f.write("[oracle]\nuser = conta_unica\ndsn = banco:1521/svc\nowner = own\ntable_prefix = tbsss_\n")
+        for text, role in ((agent, "agent"), (web, "web")):
+            cfg = sss_config.load(self._ini_text(text))
+            self.assertEqual((cfg.app.role, cfg.oracle.user, cfg.oracle.dsn, cfg.app.common_path),
+                             (role, "conta_unica", "banco:1521/svc", common))
+        cfg = sss_config.load(self._ini_text(agent + "[oracle]\nuser = outra_conta\n"))
+        self.assertEqual((cfg.oracle.user, cfg.oracle.dsn), ("outra_conta", "banco:1521/svc"), "chave do processo vence")
+        with open(common, "a", encoding="utf-8") as f:
+            f.write("chave_estranha = 1\n")
+        with self.assertRaises(sss_config.ConfigError) as ctx:
+            sss_config.load(self._ini_text(agent))
+        self.assertEqual(ctx.exception.key, "chave_estranha")
+        with open(common, "w", encoding="utf-8") as f:
+            f.write("[web]\nallowed_origins = http://y\n")
+        with self.assertRaises(sss_config.ConfigError) as ctx:
+            sss_config.load(self._ini_text(agent))
+        self.assertIn("common.ini so aceita [oracle]", str(ctx.exception))
+        os.remove(common)
+        self.assertIsNone(sss_config.load(self._ini_text(agent + self._ORACLE)).app.common_path)
 
     def test_cr026_readme_tabela_igual_ao_schema(self):
         """CR-026: a tabela do README §12.1 lista toda chave do SCHEMA, com a obrigatoriedade e o padrao do codigo."""

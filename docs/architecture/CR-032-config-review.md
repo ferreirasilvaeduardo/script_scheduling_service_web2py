@@ -118,7 +118,7 @@ O `config.ini` do agente ficaria com `sss_env`, `name`, `[oracle]` (`dsn`, `owne
 | 032b | D4 (`name` obrigatório, fim do formato único), D14 (`secrets.cfg` único), D12 (pastas criadas na subida, sem `prepare_dirs`) | Concluído (f57a921) |
 | 032c | D7 e D13 (sem `sudo`/helper; funções no agente), D8 (sem monitor), D11 (sem `sss_env`), D16 (`critical_config` enxuto); linha de subida com o ambiente da instalação (`<TIPO>` e caminho) no web e no agente; no DEV, título da aba com `[DEV]` e cabeçalho com outra cor (além da faixa que já existe) | Concluído (§6) |
 | 032e | Pastas do processo no plural: `inputs`, `outputs`, `works`, `script_works` (pedido de 2026-10-27; passo separado depois do 032d) | Pendente |
-| 032d | D15 (DEPLOYMENT enxuto), D18 (`instance/common.ini` com o `[oracle]`), configs do DEV e modelos, homologação real, revisão independente, encerramento | Pendente |
+| 032d | 032d1 feito (D18, configs do DEV e modelos, §7); 032d2: D15 (DEPLOYMENT enxuto; apêndice B movido para `docs/architecture/`, opção B; roteiro próprio "raiz compartilhada por vários servidores", pedido de 2026-10-28: nome único por processo, cada agente sempre no mesmo servidor e só no cron dele, sem trocar de servidor com ticket rodando, atualização com tudo parado em todos os servidores, `secrets.cfg` com o `[environment:*]` de todos os ambientes, mesma conta e UID, `flock` em NFS coberto pelo `agent_id` único no banco, webs com nome e porta próprios); 032d3: homologação real, revisão independente, encerramento | Pendente |
 
 ## 6. O que o 032c fez (2026-10-28)
 
@@ -128,3 +128,9 @@ O `config.ini` do agente ficaria com `sss_env`, `name`, `[oracle]` (`dsn`, `owne
 * **D16:** `critical_config` = `call=<s>;misfire=<política>`; a troca exige parar todos os agentes.
 * **Ambiente visível:** `sss_config.env_label()` dá o nome da pasta `<TIPO>`; web e agente registram `ambiente da instalação: <TIPO> (<raiz>)` na subida; com `DEV`, o título da aba começa com `[DEV]` e o cabeçalho usa `--sss-header-dev-bg`. O `run_web.py --check` imprime `CONFIG_OK ambiente=<TIPO>`.
 * **DEV:** as linhas `sss_env = DEV` saíram de `instance/web0001/config.ini` e `instance/agente0001/config.ini` (fora do git; cópia em scratchpad).
+
+## 7. O que o 032d1 fez (2026-10-28)
+
+* **D18:** `sss_config._merge_common` lê o `instance/common.ini` (pasta de cima da do config, `common_path_for`) antes da validação e junta o `[oracle]` dele ao do processo, sem sobrescrever chave escrita no `config.ini`; outra seção é recusada; o caminho lido fica em `app.common_path` e aparece na linha `ambiente da instalação` do web e do agente. Novo modelo `instance/exemplos/common.ini.example`; os modelos de web e agente perderam o `[oracle]`. `/instance/common.ini` no `.gitignore`; o pacote já o deixava de fora (teste novo). Os testes com agentes reais copiam o `common.ini` junto com o `secrets.cfg`.
+* **DEV:** `instance/common.ini` criado com o `[oracle]` dos dois processos (iguais), retirado de `instance/web0001/config.ini` e `instance/agente0001/config.ini` (cópia antes em scratchpad, `antes_032d1`).
+* `tests/support/*/config.ini.example` continuam com o `[oracle]` inteiro: cobrem o caso sem `common.ini`.
