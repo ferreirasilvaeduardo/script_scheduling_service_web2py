@@ -108,6 +108,7 @@ O `config.ini` do agente ficaria com `sss_env`, `name`, `[oracle]` (`dsn`, `owne
 | D15 | A: DEPLOYMENT só com o caminho real (roteiro do §4.0); saem o cenário com administrador, `systemd`, apêndice B e a migração de `/opt/sss/app`; notas por versão só as da estrutura nova |
 | D16 | A: `critical_config` só com `call_timeout_ms` e `misfire_policy` (atualização com todos os agentes parados) |
 | D17 | B: o `check_env.py` fica |
+| D21 | B (2026-10-28, 032e): pastas do agente no plural (`works`, `inputs`, `outputs`, `script_works`); a subida do agente renomeia as de nome anterior quando a chave não foi escrita, a anterior existe e a nova não |
 | D20 | A (2026-10-28, achado 4 da revisão): uma senha `[oracle]` por servidor no `secrets.cfg` único; web e agentes do mesmo servidor usam a mesma conta Oracle, ou contas com a mesma senha; sem mudança de código |
 | D19 | A (2026-10-28): o keepalive aceita `<nome>:<endereço IPv4>:<porta>` para o web (ex.: `web0001:0.0.0.0:18000`), para os usuários entrarem direto por HTTP; sem endereço, continua `127.0.0.1`. Risco aceito no README §14 |
 | D18 | A (2026-10-28): `instance/common.ini` por servidor, na pasta de cima da do config (como o `secrets.cfg`), com o `[oracle]` comum ao web e aos agentes; uma chave repetida no `config.ini` do processo vale no lugar da comum. Passo 032d |
@@ -119,7 +120,7 @@ O `config.ini` do agente ficaria com `sss_env`, `name`, `[oracle]` (`dsn`, `owne
 | 032a | D1, D2, D3, D9 | Concluído (cf886f3) |
 | 032b | D4 (`name` obrigatório, fim do formato único), D14 (`secrets.cfg` único), D12 (pastas criadas na subida, sem `prepare_dirs`) | Concluído (f57a921) |
 | 032c | D7 e D13 (sem `sudo`/helper; funções no agente), D8 (sem monitor), D11 (sem `sss_env`), D16 (`critical_config` enxuto); linha de subida com o ambiente da instalação (`<TIPO>` e caminho) no web e no agente; no DEV, título da aba com `[DEV]` e cabeçalho com outra cor (além da faixa que já existe) | Concluído (§6) |
-| 032e | Pastas do processo no plural: `inputs`, `outputs`, `works`, `script_works` (pedido de 2026-10-27; passo separado depois do 032d) | Pendente |
+| 032e | Pastas do processo no plural: `inputs`, `outputs`, `works`, `script_works` (pedido de 2026-10-27; passo separado depois do 032d) | Concluído (§11) |
 | 032d | 032d1 feito (D18, configs do DEV e modelos, §7); 032d2 feito (§8): D15 (DEPLOYMENT enxuto; apêndice B movido para `docs/architecture/`, opção B; roteiro próprio "raiz compartilhada por vários servidores", pedido de 2026-10-28: nome único por processo, cada agente sempre no mesmo servidor e só no cron dele, sem trocar de servidor com ticket rodando, atualização com tudo parado em todos os servidores, `secrets.cfg` com o `[environment:*]` de todos os ambientes, mesma conta e UID, `flock` em NFS coberto pelo `agent_id` único no banco, webs com nome e porta próprios); 032d3: homologação real, revisão independente, encerramento | Concluído (032d1 8b03ced, 032d2 01b7f25, D19 5205959, 032d3 no commit de encerramento) |
 
 ## 6. O que o 032c fez (2026-10-28)
@@ -165,3 +166,11 @@ Feita por um subagente, só em leitura, sobre `cf886f3^..5205959`: nenhum achado
 * **Homologação real no DEV** (`capture_evidence.js`, `SSS_ADMIN_START=new`, `SSS_EVIDENCE_DATE=20261028`): 34 casos, 332/332 verificações, 102 figuras; `docs/homologation/SSS_Homologation_Evidence_2026-10-28.docx`. Uma primeira passada saiu com a data padrão fixa do roteiro (20261023), sobrescreveu o `results.json` daquela evidência (restaurado pelo git) e as figuras locais dela; o padrão passou a ser a data do dia.
 * **Validação final:** suíte em 3.6.0, 3.6.15 e 3.13.2 (1492 testes), bateria Oracle com o DEV parado, `make lint` e `make type-check`.
 * **Fica para o 032e:** pastas do processo no plural (`inputs`, `outputs`, `works`, `script_works`).
+
+## 11. O que o 032e fez (2026-10-28)
+
+* **D21 (opção B):** `sss_config._derived_paths` e o `work_dir` passam a `works`, `inputs`, `outputs` e `script_works` (`sss_config.LEGACY_DIR_NAMES`). `scheduler_loop._rename_legacy_dirs`, no passo 4 da subida, renomeia a pasta de nome anterior quando a pasta é a derivada (`var/<nome>/`), a anterior existe (sem link) e a nova não; falha no `rename` recusa a subida (código 13). O `sss-stop.sh` usa `var/<nome>/works`.
+* Testes (`test_config`, `test_launchers`, `test_scheduler_init` com o caso novo, `test_agents_concurrency`), roteiro de homologação e `gerar_massa.py`, README §3.2/§11.3/§12.1, DEPLOYMENT (§1, §4.0, §4.1, §8, §10.3, §18.2), DEV_ENVIRONMENT, AGENTS e o modelo do agente.
+* **DEV:** as pastas de `var/agente0001/` foram renomeadas pela própria subida do agente (linha `pasta renomeada` no log), inclusive os 9 GB da massa de entrada.
+* **Achado na validação:** o `test_scheduler_init_oracle` usava a config real do DEV e só trocava `work_dir` e `log_dir`; saída, entrada e trabalho dos scripts ficavam no `var/agente0001` real. Com os nomes novos, a bateria Oracle criou ali `inputs`, `outputs` e `script_works` vazias, e a subida deixou de renomear as antigas (a nova já existia). O teste passou a pôr as três na pasta temporária; as pastas vazias foram removidas e a subida seguinte renomeou as anteriores. Conferido: o teste roda sem alterar o `var/`.
+* `var/exec` (vazia, do helper) e `var/agente0001/scheduler.out` (sobra de uma subida manual de 2026-10-27) foram apagados no DEV, com autorização do responsável.

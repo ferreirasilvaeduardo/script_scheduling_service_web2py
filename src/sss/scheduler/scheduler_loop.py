@@ -240,8 +240,32 @@ class Agent(object):
         except OSError as exc:
             self._fail(EXIT_DIRECTORIES, "%s %s nao pode ser criada: %s", key, path, exc.__class__.__name__)
 
+    def _rename_legacy_dirs(self):
+        """CR-032 (032e, D21): as pastas que saem do nome passaram ao plural (inputs, outputs, works,
+        script_works). Na subida, a pasta com o nome anterior vira a nova por rename (mesma particao, sem copia),
+        so quando a chave nao foi escrita no config (a pasta e a derivada), a anterior existe e a nova nao."""
+        agent = self.cfg.agent
+        base = os.path.join(sss_config.VAR_DIR, str(agent.agent_id))
+        for key in ("work_dir", "output_dir", "input_dir", "script_work_dir"):
+            path = getattr(agent, key, None)
+            if not path or os.path.dirname(path) != base:
+                continue
+            legacy = sss_config.LEGACY_DIR_NAMES.get(os.path.basename(path))
+            if not legacy:
+                continue
+            old = os.path.join(base, legacy)
+            if not os.path.isdir(old) or os.path.islink(old) or os.path.lexists(path):
+                continue
+            try:
+                os.rename(old, path)
+            except OSError as exc:
+                self._fail(EXIT_DIRECTORIES, "%s %s nao pode ser renomeada para %s: %s", key, old, path,
+                           exc.__class__.__name__)
+            self.log.info("pasta renomeada: %s %s -> %s (CR-032)", key, old, path, extra={"action": "INICIO"})
+
     def _step4_directories(self):
         agent = self.cfg.agent
+        self._rename_legacy_dirs()
         for name, path in (("log_dir", self.cfg.logging.log_dir), ("work_dir", agent.work_dir)):
             self._ensure_dir(name, path, 0o750 if name == "log_dir" else 0o700)
             code = self.plat.validate_restricted_dir(path)

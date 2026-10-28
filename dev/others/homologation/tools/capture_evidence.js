@@ -64,9 +64,9 @@ const AGENT_NAME = process.env.SSS_AGENT_NAME || 'agente0001';
 const AGENT_CFG = readAgentConfig(path.join(APP, 'instance', AGENT_NAME, 'config.ini'));
 const AGENT_VAR = path.join(APP, 'var', AGENT_CFG.name || AGENT_NAME);
 const AGENT_ID = AGENT_CFG.agent_id || AGENT_CFG.name;
-const INPUT = AGENT_CFG.input_dir !== undefined ? AGENT_CFG.input_dir : path.join(AGENT_VAR, 'input');
+const INPUT = AGENT_CFG.input_dir !== undefined ? AGENT_CFG.input_dir : path.join(AGENT_VAR, 'inputs');
 const SCRIPT_WORK = AGENT_CFG.script_work_dir !== undefined ? AGENT_CFG.script_work_dir
-    : path.join(AGENT_VAR, 'script_work');
+    : path.join(AGENT_VAR, 'script_works');
 if (!AGENT_ID || !INPUT || !SCRIPT_WORK) {
     throw new Error(`instance/${AGENT_NAME}/config.ini sem name (ou agent_id), input_dir ou script_work_dir`);
 }
@@ -1887,7 +1887,7 @@ CTS['CT-30'] = async () => {
         (fs.statSync(found[0]).mode & 0o777) === 0o700 && fs.existsSync(path.join(found[0], 'diagnostico.txt')),
         found[0] ? found[0].replace(APP, '') : 'nao encontrada');
     check('Script de diagnóstico desativado ao final', await deactivateScript(sid));
-    note('A pasta de trabalho dos scripts sai do nome do agente (var/<nome>/script_work) e é criada pelo próprio agente, em DEV e PROD (CR-032, D12).');
+    note('A pasta de trabalho dos scripts sai do nome do agente (var/<nome>/script_works) e é criada pelo próprio agente, em DEV e PROD (CR-032, D12).');
 };
 
 CTS['CT-31'] = async () => {

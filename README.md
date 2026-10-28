@@ -389,7 +389,7 @@ docs/
   homologation/               # manual de homologação (UI Freeze, histórico) e evidências reais no DEV (2026-10-22)
 var/                          # [CR-028] dados, fora do git e preservados pela atualização:
   <nome>/logs/                #   log_dir de cada processo (web e agentes)
-  <agente>/work/ output/ input/ script_work/   # pastas de cada agente
+  <agente>/works/ outputs/ inputs/ script_works/   # pastas de cada agente (CR-032: no plural)
   update/<data>/retorno/      #   pacotes de retorno do sss-update.sh
 scripts_ambiente/             # [CR-028] scripts dos ambientes (script_base_dir padrão); fora do git e preservada
 ```
@@ -2796,18 +2796,18 @@ COMMIT;
 cd /portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service
 D=30    # dias a guardar
 # 1. conferir: so lista as pastas de minuto com mais de D dias
-find var/*/logs var/*/output var/*/script_work -mindepth 7 -maxdepth 7 -type d -mtime +$D -print
+find var/*/logs var/*/outputs var/*/script_works -mindepth 7 -maxdepth 7 -type d -mtime +$D -print
 # 2. apagar essas pastas
-find var/*/logs var/*/output var/*/script_work -mindepth 7 -maxdepth 7 -type d -mtime +$D -exec rm -rf {} +
+find var/*/logs var/*/outputs var/*/script_works -mindepth 7 -maxdepth 7 -type d -mtime +$D -exec rm -rf {} +
 # 3. apagar as pastas de ano, mes, dia e hora que ficaram vazias (as de ambiente e de script ficam)
-find var/*/logs var/*/output var/*/script_work -mindepth 3 -type d -empty -delete
+find var/*/logs var/*/outputs var/*/script_works -mindepth 3 -type d -empty -delete
 ```
 
 * Uma pasta de minuto só é criada quando o processo começa a gravar nela, e um ticket nunca roda mais que o tempo máximo (`timeout_s` do script ou `script_timeout_s`, 168 h no padrão). Use `D` maior que esse tempo (com o padrão, mais de 7 dias) para nunca atingir um ticket em andamento.
 * **Saída padrão dos processos:** `var/<nome>/logs/<nome>.out` (`sss-keepalive.sh`) e `var/web0001/logs/server.out` (`start_local.sh`, só DEV) crescem sem limite. Esvazie com `: > var/<nome>/logs/<nome>.out` quando quiser (o processo continua gravando no mesmo arquivo).
-* **Pasta de entrada** (`var/<agente>/input/<ambiente>/<script>/`): é permanente e o script decide o que fazer com os arquivos (CR-014). Se quiser limpar, só arquivos antigos: `find var/*/input -type f -mtime +$D -print` para conferir e `-delete` para apagar.
+* **Pasta de entrada** (`var/<agente>/inputs/<ambiente>/<script>/`): é permanente e o script decide o que fazer com os arquivos (CR-014). Se quiser limpar, só arquivos antigos: `find var/*/inputs -type f -mtime +$D -print` para conferir e `-delete` para apagar.
 * **Pacotes de retorno** do `sss-update.sh` (`var/update/<data>/`): apague à mão os que não quiser guardar.
-* **Pelo cron**, as mesmas linhas num script da sua conta, por exemplo diário às 02:15: `15 2 * * * cd <RAIZ> && find var/*/logs var/*/output var/*/script_work -mindepth 7 -maxdepth 7 -type d -mtime +30 -exec rm -rf {} + ; find var/*/logs var/*/output var/*/script_work -mindepth 3 -type d -empty -delete`.
+* **Pelo cron**, as mesmas linhas num script da sua conta, por exemplo diário às 02:15: `15 2 * * * cd <RAIZ> && find var/*/logs var/*/outputs var/*/script_works -mindepth 7 -maxdepth 7 -type d -mtime +30 -exec rm -rf {} + ; find var/*/logs var/*/outputs var/*/script_works -mindepth 3 -type d -empty -delete`.
 
 ---
 
@@ -2817,7 +2817,7 @@ find var/*/logs var/*/output var/*/script_work -mindepth 3 -type d -empty -delet
 
 **Sem config padrão (CR-029):** todo comando (`run_web`, `run_scheduler`, `health`, `init_db`, `check_env`, os launchers e o `sss-stop.sh`) recebe o processo (`--name <nome>`, ou o nome nos launchers) ou `--config <arquivo>`; sem nenhum dos dois, sai com código 2 e lista os processos de `instance/`. O `generate_sql` aceita os dois, mas também roda só com `--owner` e `--prefix`. O formato único (um arquivo com `[web]` e `[agent]`) é recusado desde o CR-032 (D4).
 
-**Config por processo (CR-028) e mínimo (CR-026):** um `config.ini` por processo, em `instance/<nome>/`, só com as chaves obrigatórias e as que dependem do servidor. As demais têm padrão (tabela abaixo) e só entram no arquivo quando o valor for outro. O papel vem do próprio arquivo (D4): com `[web]` e sem `[agent]`, é o web; com `[agent]` e sem `[web]`, o agente; com as duas, ou nenhuma, o arquivo é recusado (CR-032, D4). Com `[app] name`, as pastas saem do nome (D5): `log_dir` = `var/<nome>/logs`; no agente, `work_dir` = `var/<nome>/work`, `output_dir`, `input_dir` e `script_work_dir` em `var/<nome>/`, `script_base_dir` = `scripts_ambiente` e `agent_id` = o nome. Em `instance/<pasta>/config.ini`, o `name` precisa ser o nome da pasta: um `instance/agente0002/` copiado sem trocar o `name` é recusado na subida e pelo `sss-stop.sh`. Modelos em `instance/exemplos/`.
+**Config por processo (CR-028) e mínimo (CR-026):** um `config.ini` por processo, em `instance/<nome>/`, só com as chaves obrigatórias e as que dependem do servidor. As demais têm padrão (tabela abaixo) e só entram no arquivo quando o valor for outro. O papel vem do próprio arquivo (D4): com `[web]` e sem `[agent]`, é o web; com `[agent]` e sem `[web]`, o agente; com as duas, ou nenhuma, o arquivo é recusado (CR-032, D4). Com `[app] name`, as pastas saem do nome (D5): `log_dir` = `var/<nome>/logs`; no agente, `work_dir` = `var/<nome>/works`, `output_dir`, `input_dir` e `script_work_dir` em `var/<nome>/`, `script_base_dir` = `scripts_ambiente` e `agent_id` = o nome. Em `instance/<pasta>/config.ini`, o `name` precisa ser o nome da pasta: um `instance/agente0002/` copiado sem trocar o `name` é recusado na subida e pelo `sss-stop.sh`. Modelos em `instance/exemplos/`.
 
 **`[agent]` parcial no web (revisão do CR-028, A1; CR-032):** dos valores de `[agent]` que o web usa, só `misfire_policy` (aviso de ocorrência perdida na tela de agendamentos) continua configurável; os tempos de saúde e os ajustes do desdobro ficaram fixos no código (CR-032). Quem muda o `misfire_policy` nos agentes (por exemplo, `SKIP` na restauração do banco, DEPLOYMENT §17) escreve o mesmo valor num `[agent]` do config do web, que só aceita essa chave (as fixas geram aviso) e continua com o papel web.
 
@@ -2860,7 +2860,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 
 | Seção | Chave | Obrigatória | Padrão | Faixa / formato |
 |---|---|---|---|---|
-| `[app]` | `name` (CR-028, CR-032) | sim | — | nome do processo, igual ao da pasta `instance/<nome>/` (`web0001`, `agente0001`...), `^[a-z][a-z0-9_-]{0,29}$`, diferente de `init_db`, `seed` e `purge`. Dele saem o `agent_id` (o próprio nome), `log_dir` (`var/<nome>/logs`), `work_dir` (`var/<nome>/work`) e, quando não escritas, as demais pastas do agente |
+| `[app]` | `name` (CR-028, CR-032) | sim | — | nome do processo, igual ao da pasta `instance/<nome>/` (`web0001`, `agente0001`...), `^[a-z][a-z0-9_-]{0,29}$`, diferente de `init_db`, `seed` e `purge`. Dele saem o `agent_id` (o próprio nome), `log_dir` (`var/<nome>/logs`), `work_dir` (`var/<nome>/works`) e, quando não escritas, as demais pastas do agente |
 | `[oracle]` | `user` | sim | — | não vazio; pode ser o `owner` (CR-032, D11: ambiente com um usuário de banco só) |
 | `[oracle]` | `dsn` | sim | — | não vazio |
 | `[oracle]` | `owner` | sim | — | `^[A-Za-z][A-Za-z0-9_]{0,29}$` |
@@ -2899,6 +2899,8 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 
 **Pastas: o processo cria na subida as que faltarem (CR-032, D12).** O `log_dir` é criado com `0750` pela configuração do log; o agente cria `work_dir` (`0700`) e, quando ligadas, `output_dir`, `input_dir`, `script_work_dir` e `script_base_dir` (`0755`), com uma linha `pasta criada` no log para cada uma. Uma pasta existente que não possa ser usada (arquivo no lugar, sem escrita, pasta do sistema) recusa a subida (código 13). Os níveis abaixo delas (ambiente, script, data, ticket) são criados a cada ticket. O `prepare_dirs.py` (CR-026e) saiu no CR-032.
 
+**Pastas no plural (CR-032, 032e, D21):** as pastas que saem do nome do agente são `var/<nome>/works`, `inputs`, `outputs` e `script_works` (antes `work`, `input`, `output` e `script_work`; `logs` não muda). Na subida, o agente renomeia a pasta com o nome anterior para o novo (`rename`, na mesma partição, sem cópia), só quando a chave não foi escrita no `config.ini`, a anterior existe e a nova não; cada uma gera a linha `pasta renomeada: <chave> <anterior> -> <nova>`. Uma pasta escrita no `config.ini` nunca é renomeada.
+
 **Falha de configuração (web e daemon):**
 * A subida é abortada com um registro **CRITICAL** contendo a seção, a chave e o motivo, sem nunca o valor de um segredo.
 * O CRITICAL vai para o log da aplicação do minuto atual (§13, `<log_name>` `sss_web` ou `sss_scheduler`) sempre que o `log_dir` do processo (`var/<nome>/logs`, tirado do `[app] name` mesmo que outras chaves estejam inválidas) existe e aceita escrita. Falhas repetidas no mesmo minuto e no mesmo processo vão para o mesmo arquivo (sem sufixo `_<n>`). Sem `log_dir` utilizável, vai para o stderr do processo, no mesmo formato do §13.
@@ -2924,7 +2926,7 @@ Chaves que saíram ou mudaram de nome são recusadas na subida: uma chave removi
 
 O `sss-scheduler.sh` aceita só a linha do daemon: o nome do processo, `--config <arquivo>` ou nada, e faz `exec <python> scripts/run_scheduler.py [--name <nome> | --config <arquivo>]`. Qualquer outro argumento é recusado com código 2. O Python vem da variável `PYTHON` (padrão `python3`) nos dois launchers.
 
-`bin/sss-stop.sh <nome> | --config <config.ini>` (com o nome, `instance/<nome>/config.ini`; sem nada, código 2 com a lista dos processos, CR-029) cria o arquivo `work_dir/sss-<agent_id>.stop` com `0600`, para a parada controlada sem sinal (§8.11), e imprime o caminho. Recusa root. Lê só o `[app] name` (CR-032, D4: o `agent_id` é o nome e o `work_dir` é `var/<nome>/work`; linhas antigas `[agent] agent_id`/`work_dir` são ignoradas, como no agente) com a biblioteca padrão (sem importar a aplicação), com a mesma regra de nome do §12.1 e o `work_dir` existente; senão, sai com código 2. O daemon remove o arquivo ao parar.
+`bin/sss-stop.sh <nome> | --config <config.ini>` (com o nome, `instance/<nome>/config.ini`; sem nada, código 2 com a lista dos processos, CR-029) cria o arquivo `work_dir/sss-<agent_id>.stop` com `0600`, para a parada controlada sem sinal (§8.11), e imprime o caminho. Recusa root. Lê só o `[app] name` (CR-032, D4: o `agent_id` é o nome e o `work_dir` é `var/<nome>/works`; linhas antigas `[agent] agent_id`/`work_dir` são ignoradas, como no agente) com a biblioteca padrão (sem importar a aplicação), com a mesma regra de nome do §12.1 e o `work_dir` existente; senão, sai com código 2. O daemon remove o arquivo ao parar.
 
 **Servidor web:** `python scripts/run_web.py [--name <nome> | --config <config.ini>] [--host 127.0.0.1] [--port 8000] [--check]` (CR-021e). Atende em `127.0.0.1` por padrão (os usuários chegam pelo proxy ou por túnel) ou no endereço do `--host` (pelo keepalive, `<nome>:<endereço>:<porta>`, CR-032 D19), com até `[web] max_threads` requisições ao mesmo tempo e `[web] socket_timeout_s` por conexão. `SIGTERM` ou `SIGINT` param de aceitar conexões e esperam as requisições em andamento até `socket_timeout_s`. O endereço `/` responde 303 para `/script_scheduling_service/`, que é a tela inicial (sem sessão, o login), como no web2py. `--check` só confere configuração, segredos e montagem da aplicação, sem abrir a porta, e imprime `CONFIG_OK ambiente=<TIPO>` (CR-032: o nome da pasta acima da raiz). Saída: 0 na parada normal ou no `--check` bem-sucedido, 2 configuração ou segredos inválidos, 3 endereço indisponível.
 

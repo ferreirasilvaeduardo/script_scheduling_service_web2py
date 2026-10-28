@@ -149,7 +149,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual((cfg.app.name, cfg.app.role, cfg.agent.agent_id), ("agente0001", "agent", "agente0001"))
         self.assertEqual(cfg.agent.environments, ("PRODUCAO", "HOMOLOGACAO"))
         self.assertFalse(hasattr(cfg.agent, "base_script_dirs"))
-        self.assertEqual(cfg.agent.work_dir, os.path.join(sss_config.VAR_DIR, "agente0001", "work"))
+        self.assertEqual(cfg.agent.work_dir, os.path.join(sss_config.VAR_DIR, "agente0001", "works"))
         self.assertFalse(hasattr(cfg.agent, "script_owner_uids"), "CR-011")
         self.assertEqual(cfg.agent.max_parallel_jobs, 4)
         self.assertFalse(hasattr(cfg.agent, "max_parallel_hard_limit"), "CR-032 (D1)")
@@ -734,9 +734,9 @@ class TestConfigCR007(unittest.TestCase):
         self.assertEqual((agent.app.role, agent.agent.agent_id, agent.agent.work_dir, agent.logging.log_dir,
                           agent.agent.input_dir, agent.agent.script_work_dir,
                           agent.agent.script_base_dir, agent.agent.output_dir),
-                         ("agent", "agente0001", os.path.join(base, "work"), os.path.join(base, "logs"),
-                          os.path.join(base, "input"),
-                          os.path.join(base, "script_work"), sss_config.SCRIPTS_DIR, None),
+                         ("agent", "agente0001", os.path.join(base, "works"), os.path.join(base, "logs"),
+                          os.path.join(base, "inputs"),
+                          os.path.join(base, "script_works"), sss_config.SCRIPTS_DIR, None),
                          "output_dir escrito vazio desliga a funcao")
         self.assertEqual(agent.secrets.secrets_file, os.path.join(self.tmp_dir, "secrets.cfg"))
 

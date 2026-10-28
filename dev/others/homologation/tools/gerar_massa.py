@@ -2,7 +2,7 @@
 """Massa de teste da homologacao real (capture_evidence.js), no input_dir do agente do DEV.
 
 Uso: python3 gerar_massa.py [--config <config.ini>] [--lote-mb 4608]
-(padrao: instance/agente0001/config.ini, CR-028; sem input_dir no arquivo, var/<nome>/input)
+(padrao: instance/agente0001/config.ini, CR-028; sem input_dir no arquivo, var/<nome>/inputs)
 
 Cria (o conteudo nao e conferido pelo roteiro, so o resultado da execucao):
   gfpreprod/contar_linhas_arquivo/clientes_20261022.txt   texto, 5.000 linhas
@@ -33,8 +33,8 @@ def input_dir(config):
     value = cp.get("agent", "input_dir", fallback=None)
     name = cp.get("app", "name", fallback="").strip()
     if value is None and name:
-        # CR-028: sem a chave, a pasta sai do nome do processo (var/<nome>/input).
-        value = os.path.join(APP, "var", name, "input")
+        # CR-028, CR-032 (032e): sem a chave, a pasta sai do nome do processo (var/<nome>/inputs).
+        value = os.path.join(APP, "var", name, "inputs")
     value = (value or "").strip()
     if not value:
         raise SystemExit("input_dir vazio no %s: a homologacao precisa da pasta de entrada"

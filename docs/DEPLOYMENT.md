@@ -70,8 +70,8 @@ O `health.py` usa a conta do processo do `--name` (CR-032, D8: não há papel mo
 │   └── agente0002/   config.ini
 ├── var/                                # PRESERVADO; de preferência numa partição própria (§4.3)
 │   ├── web0001/      logs/
-│   ├── agente0001/   logs/  work/  output/  input/  script_work/
-│   ├── agente0002/   logs/  work/  output/  input/  script_work/
+│   ├── agente0001/   logs/  works/  outputs/  inputs/  script_works/
+│   ├── agente0002/   logs/  works/  outputs/  inputs/  script_works/
 │   └── update/<data>/retorno/          # pacotes de retorno do sss-update.sh
 └── scripts_ambiente/                   # PRESERVADO: scripts dos ambientes (script_base_dir padrão)
 ```
@@ -83,10 +83,10 @@ O `health.py` usa a conta do processo do `--name` (CR-032, D8: não há papel mo
 | `<RAIZ>/instance/secrets.cfg` | Segredos do servidor, um arquivo só (CR-032, D14) | `0600` | — |
 | `<RAIZ>/instance/<nome>/config.ini` | Configuração do processo (sem segredos) | `0640` | — |
 | `<RAIZ>/var/<nome>/logs` | Logs da aplicação e dos scripts | `0750` | do nome |
-| `<RAIZ>/var/<agente>/work` | Trabalho do agente (trava, `.stop`, pastas dos tickets) | `0700` | do nome |
-| `<RAIZ>/var/<agente>/output` | Saída dos scripts (CR-012) | `0755`; abaixo, `0700` | padrão de `[agent] output_dir` |
-| `<RAIZ>/var/<agente>/input` | Entrada dos scripts, uma subpasta permanente por script (CR-014) | `0755`; abaixo, `0700` | padrão de `[agent] input_dir` |
-| `<RAIZ>/var/<agente>/script_work` | Pasta de trabalho dos scripts, uma por ticket (CR-019) | `0755`; abaixo, `0700` | padrão de `[agent] script_work_dir` |
+| `<RAIZ>/var/<agente>/works` | Trabalho do agente (trava, `.stop`, pastas dos tickets) | `0700` | do nome |
+| `<RAIZ>/var/<agente>/outputs` | Saída dos scripts (CR-012) | `0755`; abaixo, `0700` | padrão de `[agent] output_dir` |
+| `<RAIZ>/var/<agente>/inputs` | Entrada dos scripts, uma subpasta permanente por script (CR-014) | `0755`; abaixo, `0700` | padrão de `[agent] input_dir` |
+| `<RAIZ>/var/<agente>/script_works` | Pasta de trabalho dos scripts, uma por ticket (CR-019) | `0755`; abaixo, `0700` | padrão de `[agent] script_work_dir` |
 | `<RAIZ>/scripts_ambiente` | Scripts dos ambientes | `0755` | padrão de `[agent] script_base_dir` |
 
 Tudo pertence à conta do SSS. As pastas saem do nome do processo, sem precisar escrevê-las, e são criadas na subida (CR-028, D5; CR-032, D12; README §12.1). Uma chave escrita no `config.ini` vale no lugar do padrão; escrita vazia (ex.: `output_dir =`) desliga a função.
@@ -160,7 +160,7 @@ R=/portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service
 @reboot      cd $R && bin/sss-keepalive.sh web0001:0.0.0.0:18000 agente0001
 */5 * * * *  cd $R && bin/sss-keepalive.sh web0001:0.0.0.0:18000 agente0001
 */5 * * * *  cd $R && $PYTHON scripts/health.py --name agente0001 > var/agente0001/logs/health.txt 2>&1
-15 2 * * *   cd $R && find var/*/logs var/*/output var/*/script_work -mindepth 7 -maxdepth 7 -type d -mtime +30 -exec rm -rf {} + ; find var/*/logs var/*/output var/*/script_work -mindepth 3 -type d -empty -delete
+15 2 * * *   cd $R && find var/*/logs var/*/outputs var/*/script_works -mindepth 7 -maxdepth 7 -type d -mtime +30 -exec rm -rf {} + ; find var/*/logs var/*/outputs var/*/script_works -mindepth 3 -type d -empty -delete
 ```
 
 * **Risco aceito (README §14):** os scripts rodam com a mesma conta do agente e podem ler o `secrets.cfg`, o `common.ini`, os `config.ini` e os logs do SSS, além de alterar o código. Quem cadastra um script tem o poder dessa conta. E a conta do banco, sendo a dona do esquema, pode alterar qualquer objeto dele.
@@ -200,7 +200,7 @@ Regras:
 6. **A mesma conta, com o mesmo UID, em todos os servidores.** O `secrets.cfg` exige dono igual ao usuário do processo e modo `0600`, e as pastas são `0700`/`0750`: com UIDs diferentes, a subida é recusada (código 12 ou 13, §15.1).
 7. **Webs com nome e porta próprios.** Dois webs no mesmo servidor precisam de portas diferentes (`web0001:0.0.0.0:18000`, `web0002:0.0.0.0:18001` no keepalive); o `[web] allowed_origins` de cada um traz a URL pela qual os usuários chegam a ele.
 
-* **Trava de instância em pasta de rede:** a trava (`flock` em `var/<nome>/work/sss-<nome>.lock`) pode não valer entre máquinas num NFS. Com nomes únicos e a regra 2, isso não acontece; se acontecer (o mesmo nome em dois servidores), o banco barra o `agent_id` duplicado, mas a instância recusada já terá apagado um `.stop` pendente do agente legítimo e regravado o PID na trava: confira a regra 2 antes de pedir uma parada.
+* **Trava de instância em pasta de rede:** a trava (`flock` em `var/<nome>/works/sss-<nome>.lock`) pode não valer entre máquinas num NFS. Com nomes únicos e a regra 2, isso não acontece; se acontecer (o mesmo nome em dois servidores), o banco barra o `agent_id` duplicado, mas a instância recusada já terá apagado um `.stop` pendente do agente legítimo e regravado o PID na trava: confira a regra 2 antes de pedir uma parada.
 * **Desempenho:** os logs dos tickets e o log da aplicação são gravados em `var/`; numa pasta de rede lenta, prefira um `var/` com boa latência (§4.3).
 
 ### 4.2 Conta do sistema operacional
@@ -349,7 +349,7 @@ Um `secrets.cfg` antigo dentro de `instance/<nome>/` ainda é lido, com um aviso
 
 ## 8. Pastas dos processos
 
-O web e o agente criam na subida as pastas que faltarem (CR-032, D12): `var/<nome>/logs` (`0750`), `var/<nome>/work` (`0700`), `output`, `input`, `script_work` e `scripts_ambiente` (`0755`). Uma pasta existente que não possa ser usada (arquivo no lugar, sem escrita, pasta do sistema) recusa a subida (código 13, §15). Não há helper de execução, `sudoers` nem usuário de execução (CR-032, D7): os scripts rodam com a conta do agente, em `var/<agente>/work/ticket_<id>/exec`, apagada no fim do ticket.
+O web e o agente criam na subida as pastas que faltarem (CR-032, D12): `var/<nome>/logs` (`0750`), `var/<nome>/works` (`0700`), `outputs`, `inputs`, `script_works` e `scripts_ambiente` (`0755`). Uma pasta existente que não possa ser usada (arquivo no lugar, sem escrita, pasta do sistema) recusa a subida (código 13, §15). Não há helper de execução, `sudoers` nem usuário de execução (CR-032, D7): os scripts rodam com a conta do agente, em `var/<agente>/works/ticket_<id>/exec`, apagada no fim do ticket.
 
 ---
 
@@ -357,7 +357,7 @@ O web e o agente criam na subida as pastas que faltarem (CR-032, D12): `var/<nom
 
 * O caminho cadastrado (`path_file`) é **absoluto** ou **relativo à pasta base** do agente (CR-023), em qualquer pasta fora das pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`), fora das pastas do SSS (`log_dir`, `work_dir`, `output_dir`, `input_dir` e `script_work_dir`) e fora da pasta da aplicação (a `<RAIZ>`, cujo código é trocado a cada atualização), **exceto** `<RAIZ>/scripts_ambiente/`, que a atualização preserva (CR-028, D3).
 * **Pasta base (CR-023, CR-028):** `[agent] script_base_dir`, por padrão `<RAIZ>/scripts_ambiente/`. O agente junta o caminho relativo cadastrado (ex.: `faturamento/carga.py`) a ela e confere o resultado como um caminho absoluto; o arquivo real pode ficar fora da pasta base (link). A pasta pode ser diferente em cada servidor, mas **todo agente de um ambiente que tem script com caminho relativo precisa dela**: o ticket vai para qualquer agente do ambiente, e o agente sem pasta base termina o ticket em `PRECHECK_FAILED` (`NO_BASE_DIR`). Na subida, o log mostra a pasta base (INFO) ou avisa que ela não existe (WARNING); o painel de agentes mostra a de cada um. Os 14 scripts de demonstração do seed são cadastrados como `utilitarios/<arquivo>`.
-* **Pasta de entrada (CR-014):** com `[agent] input_dir`, cada script recebe `SSS_INPUT_DIR` = `input_dir/<ambiente>/<nome do script em minúsculo, sem acento nem espaço>/` (ex.: "Carga Diária" em `PRODUCAO`, no `agente0001` → `<RAIZ>/var/agente0001/input/producao/carga_diaria/`). A pasta é criada na primeira execução e **nunca** é limpa pelo SSS: quem deposita os arquivos e o próprio script cuidam do conteúdo. Para depositar arquivos de fora, use a conta do agente (ou a tela de Entrada, CR-020).
+* **Pasta de entrada (CR-014):** com `[agent] input_dir`, cada script recebe `SSS_INPUT_DIR` = `input_dir/<ambiente>/<nome do script em minúsculo, sem acento nem espaço>/` (ex.: "Carga Diária" em `PRODUCAO`, no `agente0001` → `<RAIZ>/var/agente0001/inputs/producao/carga_diaria/`). A pasta é criada na primeira execução e **nunca** é limpa pelo SSS: quem deposita os arquivos e o próprio script cuidam do conteúdo. Para depositar arquivos de fora, use a conta do agente (ou a tela de Entrada, CR-020).
 * **Pasta de trabalho (CR-019):** com `[agent] script_work_dir`, cada ticket recebe `SSS_WORK_DIR` = `script_work_dir/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, criada antes da execução e mantida depois dela, para consulta no servidor do agente. O `HOME` e a pasta corrente do script continuam na pasta descartável `work_dir/ticket_<id>/exec`.
 * Pode ser um link simbólico. O arquivo **real** precisa existir no servidor do agente, ser arquivo regular, ser legível pela conta do agente e **não** ter escrita de grupo nem de outros (`chmod go-w`).
 * O conteúdo e a versão do script são controlados pelo ambiente: o SSS não confere hash nem dono (CR-011). Quem grava na pasta do script muda o que vai rodar.
@@ -410,7 +410,7 @@ bin/sss-scheduler.sh agente0001            # instance/agente0001/config.ini (CR-
 * **Por sinal:** `SIGTERM` para o agente. Desde o CR-032 a parada é sempre `TERMINATE`, com 30 s de espera: o agente encerra os scripts em andamento e finaliza os tickets (`SHUTDOWN`). Antes de parar para uma atualização, confira na tela se não há script longo rodando.
 * **Sem sinal:** `bin/sss-stop.sh <nome>` (ou `--config <config.ini>`) cria `work_dir/sss-<agent_id>.stop`:
   ```text
-  parada solicitada: <RAIZ>/var/agente0001/work/sss-agente0001.stop
+  parada solicitada: <RAIZ>/var/agente0001/works/sss-agente0001.stop
   ```
   O agente para na próxima iteração (no ensaio, em menos de 2 s; `WARNING ... [action=PARADA] encerramento TERMINATE: 0 execucao(oes) local(is)`) e remove o arquivo. O `sss-stop.sh` sai com código 2 se o `config.ini` for inválido.
 
@@ -725,6 +725,7 @@ O código é trocado **no lugar** pelo `bin/sss-update.sh`. `instance/`, `var/` 
 
 Do mais novo para o mais antigo. Quem vem de uma versão anterior aplica na ordem cronológica. As notas da instalação anterior ao CR-028 (`/opt/sss/app`) estão em `docs/architecture/DEPLOYMENT-history.md`.
 
+* **Pastas no plural (CR-032, 032e, D21).** As pastas que saem do nome do agente passam a `var/<nome>/works`, `inputs`, `outputs` e `script_works`. Na primeira subida da versão nova, o agente renomeia sozinho as anteriores (`work`, `input`, `output`, `script_work`), com a linha `pasta renomeada` no log; nada a fazer à mão. Ajuste os `find` da limpeza manual no `crontab` (§4.0 e §12). Com uma pasta escrita no `config.ini`, nada muda. A pasta `var/exec/` do helper (CR-028) não é mais usada e pode ser apagada.
 * **CR-032: com tudo parado em todos os servidores.**
   * **`critical_config`:** passa a ser `call=<s>;misfire=<política>` (D16). Um agente novo convivendo com um antigo seria recusado (código 16); por isso, nenhum agente antigo pode estar ativo quando o primeiro novo sobe.
   * **Chaves retiradas, que só geram aviso** (apague as linhas):

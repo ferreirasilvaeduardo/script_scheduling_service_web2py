@@ -252,6 +252,35 @@ class TestSteps(_Base):
         open(blocked, "w").close()
         self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(work_dir=blocked)))
 
+    def test_cr032_pastas_no_plural_renomeadas_na_subida(self):
+        """CR-032 (032e, D21): var/<nome>/work, input, output e script_work viram works, inputs, outputs e
+        script_works por rename, so quando a anterior existe e a nova nao; pasta escrita fora de var/<nome>/ fica."""
+        var = os.path.join(self.root, "var")
+        base = os.path.join(var, "srv-t")
+        for old in ("work", "input", "output"):
+            os.makedirs(os.path.join(base, old), 0o700)
+        with open(os.path.join(base, "input", "lote.txt"), "w") as f:
+            f.write("dados")
+        os.makedirs(os.path.join(base, "script_work"))
+        os.makedirs(os.path.join(base, "script_works"))   # a nova ja existe: nada e renomeado
+        other = os.path.join(self.root, "fora", "work")
+        os.makedirs(other)
+        cfg = self.cfg(work_dir=os.path.join(base, "works"), input_dir=os.path.join(base, "inputs"),
+                       output_dir=os.path.join(base, "outputs"), script_work_dir=os.path.join(base, "script_works"))
+        with mock.patch.object(sss_config, "VAR_DIR", var), self.assertLogs("sss_scheduler", "INFO") as logs:
+            agent = self.agent(cfg=cfg)
+            agent.initialize()
+            agent.release_resources()
+        for old, new in (("work", "works"), ("input", "inputs"), ("output", "outputs")):
+            self.assertFalse(os.path.exists(os.path.join(base, old)), old)
+            self.assertTrue(os.path.isdir(os.path.join(base, new)), new)
+        with open(os.path.join(base, "inputs", "lote.txt")) as f:
+            self.assertEqual(f.read(), "dados", "o conteudo vai junto")
+        self.assertTrue(os.path.isdir(os.path.join(base, "script_work")), "com a nova presente, a anterior fica")
+        self.assertTrue(os.path.isdir(other), "pasta fora de var/<nome>/ nao e tocada")
+        renamed = [line for line in logs.output if "pasta renomeada" in line]
+        self.assertEqual(len(renamed), 3, renamed)
+
     def test_cr014_pasta_de_entrada_na_subida(self):
         # CR-014 (README §8.12 passo 4): input_dir fora das pastas do sistema e existente.
         self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(input_dir="/usr/local/sss-entrada")))

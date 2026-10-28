@@ -460,6 +460,13 @@ def role_of(sections):
     return "all"
 
 
+# CR-032 (032e, D21): pastas do agente no plural. Nome novo -> nome anterior, renomeado na subida do agente quando a
+# pasta derivada do nome ainda tem o nome anterior (scheduler_loop._rename_legacy_dirs).
+LEGACY_DIR_NAMES = collections.OrderedDict([
+    ("works", "work"), ("outputs", "output"), ("inputs", "input"), ("script_works", "script_work"),
+])
+
+
 def _derived_paths(name, role, present):
     """Pastas que saem do nome do processo quando a chave nao esta escrita (CR-028, D5). agent_id, work_dir e
     log_dir saem sempre do nome (CR-032, D4): nao sao mais chaves do config."""
@@ -467,9 +474,9 @@ def _derived_paths(name, role, present):
     derived = {}
     if role != "web":
         derived.update({
-            ("agent", "output_dir"): os.path.join(base, "output"),
-            ("agent", "input_dir"): os.path.join(base, "input"),
-            ("agent", "script_work_dir"): os.path.join(base, "script_work"),
+            ("agent", "output_dir"): os.path.join(base, "outputs"),
+            ("agent", "input_dir"): os.path.join(base, "inputs"),
+            ("agent", "script_work_dir"): os.path.join(base, "script_works"),
             ("agent", "script_base_dir"): SCRIPTS_DIR,
         })
     return dict((key, value) for key, value in derived.items() if key not in present)
@@ -630,7 +637,7 @@ def load(ini_path: str) -> "Config":
     base = os.path.join(VAR_DIR, app_name)
     data_sections["logging"]["log_dir"] = os.path.join(base, "logs")
     data_sections["agent"]["agent_id"] = app_name if role == "agent" else None
-    data_sections["agent"]["work_dir"] = os.path.join(base, "work") if role == "agent" else None
+    data_sections["agent"]["work_dir"] = os.path.join(base, "works") if role == "agent" else None
     if role == "agent" and app_name in RESERVED_AGENT_IDS:
         raise ConfigError(section="app", key="name",
                           reason="Nome reservado do sistema: %s (README §4.4 e §8.12)" % app_name)

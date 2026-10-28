@@ -38,7 +38,7 @@ cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";",
 try:
     with open(caminho, encoding="utf-8") as f:
         cp.read_file(f)
-    # CR-032 (D4): o agent_id e o nome, e o work_dir e var/<nome>/work.
+    # CR-032 (D4, 032e): o agent_id e o nome, e o work_dir e var/<nome>/works.
     nome = cp["app"].get("name", "").strip() if cp.has_section("app") else ""
     pasta = os.path.dirname(os.path.realpath(caminho))
     if (nome and os.path.dirname(pasta) == os.path.realpath(os.path.join(os.getcwd(), "instance"))
@@ -51,7 +51,7 @@ try:
     if not nome:
         raise KeyError("name")
     agente = nome
-    work = os.path.join(os.getcwd(), "var", nome, "work")
+    work = os.path.join(os.getcwd(), "var", nome, "works")
 except (OSError, KeyError, configparser.Error) as exc:
     sys.stderr.write("Erro: config.ini invalido (%s): %s\n" % (caminho, exc.__class__.__name__))
     sys.exit(2)

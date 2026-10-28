@@ -151,7 +151,9 @@ class _TwoAgentsBase(unittest.TestCase):
 
     def _config(self, agent):
         base = os.path.join(self.root, agent)
-        dirs = dict((n, os.path.join(base, n)) for n in ("work", "logs", "output", "input"))
+        # CR-032 (032e): os nomes que o agente deriva de <VAR_DIR>/<name>/ (works e logs); saida e entrada escritas.
+        dirs = dict((n, os.path.join(base, d)) for n, d in (("work", "works"), ("logs", "logs"),
+                                                             ("output", "outputs"), ("input", "inputs")))
         for p in dirs.values():
             os.makedirs(p, 0o750, exist_ok=True)
         cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))

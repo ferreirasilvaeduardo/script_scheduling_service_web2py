@@ -53,7 +53,12 @@ class TestStartupOracle(_Base):
         finally:
             conn.close()
         self.assertTrue(active, "o seed precisa de um ambiente ativo")
-        agent = cfg.agent._replace(agent_id=self.code, environments=tuple(active[:1]), work_dir=self.work)
+        # Revisao do CR-032 (032e): todas as pastas do agente na pasta temporaria; o teste nunca grava no var/ real
+        # (antes, saida, entrada e trabalho dos scripts ficavam no var/agente0001 do DEV).
+        agent = cfg.agent._replace(agent_id=self.code, environments=tuple(active[:1]), work_dir=self.work,
+                                   output_dir=os.path.join(self.root, "outputs"),
+                                   input_dir=os.path.join(self.root, "inputs"),
+                                   script_work_dir=os.path.join(self.root, "script_works"))
         cfg = cfg._replace(agent=agent, logging=cfg.logging._replace(log_dir=self.logs))
         ag = sl.Agent(cfg=cfg, secrets=seg, hostname="host-tst", pid=os.getpid())
         self.agents.append(ag)

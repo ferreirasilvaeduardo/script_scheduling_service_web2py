@@ -141,24 +141,24 @@ class TestLaunchers(unittest.TestCase):
     def test_cr028_stop_pelo_nome_com_pastas_derivadas(self):
         folder = os.path.join(self.root, "instance", "agente0001")
         os.makedirs(folder)
-        os.makedirs(os.path.join(self.root, "var", "agente0001", "work"))
+        os.makedirs(os.path.join(self.root, "var", "agente0001", "works"))
         with open(os.path.join(folder, "config.ini"), "w") as f:
             f.write("[app]\nname = agente0001\n[agent]\nenvironments = PRODUCAO\n")
         code, _r, error = self._run_loop("sss-stop.sh", "agente0001", PYTHON=sys.executable)
         self.assertEqual(code, 0, error)
-        self.assertTrue(os.path.exists(os.path.join(self.root, "var", "agente0001", "work", "sss-agente0001.stop")))
+        self.assertTrue(os.path.exists(os.path.join(self.root, "var", "agente0001", "works", "sss-agente0001.stop")))
 
     def test_cr028_stop_recusa_name_diferente_da_pasta(self):
         """Revisao do CR-028 (A2): instance/agente0002/ copiada sem trocar o name nao para o agente0001."""
         folder = os.path.join(self.root, "instance", "agente0002")
         os.makedirs(folder)
-        os.makedirs(os.path.join(self.root, "var", "agente0001", "work"))
+        os.makedirs(os.path.join(self.root, "var", "agente0001", "works"))
         with open(os.path.join(folder, "config.ini"), "w") as f:
             f.write("[app]\nname = agente0001\n[agent]\nenvironments = PRODUCAO\n")
         code, _r, error = self._run_loop("sss-stop.sh", "agente0002", PYTHON=sys.executable)
         self.assertEqual(code, 2, error)
         self.assertIn("diferente da pasta", error)
-        self.assertFalse(os.path.exists(os.path.join(self.root, "var", "agente0001", "work", "sss-agente0001.stop")))
+        self.assertFalse(os.path.exists(os.path.join(self.root, "var", "agente0001", "works", "sss-agente0001.stop")))
 
     def test_instant_client_so_sem_ldconfig(self):
         self._executable("ldconfig", "#!/bin/sh\necho '\tlibclntsh.so.19.1 (libc6,x86-64) => /opt/ic/libclntsh.so'\n")
@@ -176,7 +176,7 @@ class TestLaunchers(unittest.TestCase):
     def _config(self, name="srv-a", stale=False, work=True):
         """CR-032 (D4): o sss-stop.sh usa so o [app] name; linhas antigas agent_id/work_dir sao ignoradas."""
         if work:
-            os.makedirs(os.path.join(self.root, "var", name, "work"), exist_ok=True)
+            os.makedirs(os.path.join(self.root, "var", name, "works"), exist_ok=True)
         path = os.path.join(self.root, "agente.ini")
         with open(path, "w") as f:
             f.write("[app]\nname = %s   ; comentario\n[agent]\n" % name)
@@ -187,7 +187,7 @@ class TestLaunchers(unittest.TestCase):
     def test_stop_cria_o_arquivo_no_work_dir(self):
         code, _r, error = self._run_loop("sss-stop.sh", "--config", self._config(), PYTHON=sys.executable)
         self.assertEqual(code, 0, error)
-        stop = os.path.join(self.root, "var", "srv-a", "work", "sss-srv-a.stop")
+        stop = os.path.join(self.root, "var", "srv-a", "works", "sss-srv-a.stop")
         self.assertEqual(os.stat(stop).st_mode & 0o777, 0o600)
         self.assertEqual(self._run_loop("sss-stop.sh", "--config", self._config(), PYTHON=sys.executable)[0], 0,
                          "idempotente")
