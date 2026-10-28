@@ -9,7 +9,7 @@
 #      sss-keepalive.sh --pause <nome>            nao sobe mais o processo (parada de proposito)
 #      sss-keepalive.sh --resume <nome>           volta a subir
 #
-# O papel vem do config (instance/<nome>/config.ini com [web] e sem [agent]: web). Sem endereco, o web atende so em
+# O papel vem do config (instance/<nome>/config.ini com [web] e sem o [agent] de um agente: web). Sem endereco, o web atende so em
 # 127.0.0.1; com outro endereco, a tela fica exposta na rede (sem HTTPS, a senha trafega aberta: README §14).
 # Log: var/<nome>/logs/keepalive.log (uma linha por subida, recusa ou falha); a saida do processo vai para
 # var/<nome>/logs/<nome>.out. Variaveis: PYTHON (padrao python3), SSS_TZ, SSS_IC_DIR (as dos launchers).
@@ -36,6 +36,14 @@ _log() {
     # _log <nome> <mensagem>
     mkdir -p "var/$1/logs" 2>/dev/null
     printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$2" >> "var/$1/logs/keepalive.log"
+}
+
+# Papel como o sss_config.load decide (README §12.1): [web] presente e, se houver [agent], sem environments nem
+# max_parallel_jobs (o [agent] parcial do web so tem misfire_policy) e o web.
+_is_web() {
+    grep -q '^\[web\]' "$1" || return 1
+    ! awk '/^\[/{sec=$0; next} sec=="[agent]" && /^[[:space:]]*(environments|max_parallel_jobs)[[:space:]]*=/{found=1}
+           END{exit !found}' "$1"
 }
 
 _valid_ipv4() {
@@ -104,7 +112,7 @@ for item in "$@"; do
         status=3
         continue
     fi
-    if grep -q '^\[web\]' "${config}" && ! grep -q '^\[agent\]' "${config}"; then
+    if _is_web "${config}"; then
         script="scripts/run_web.py"
         if ! [[ "${port}" =~ ^[0-9]{2,5}$ ]]; then
             _log "${name}" "recusado: o web precisa da porta (${name}:<porta>)"

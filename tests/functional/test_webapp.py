@@ -110,6 +110,23 @@ class RegistryTest(unittest.TestCase):
         with mock.patch.object(bootstrap, "DEV_CONTROLLER", os.path.join(APP_DIR, "nao_existe.py")):
             self.assertNotIn("dev", bootstrap.controllers(self._cfg()))
 
+    def test_cr032_dev_screen_and_dev_marks(self):
+        """CR-032 (D11): a tela /dev responde 404 sem a pasta dev/; o layout marca o DEV pelo <TIPO>
+        (titulo [DEV] e cabecalho sss-header-dev), sem depender de sss_env (revisao do CR-032, achado 14)."""
+        from sss.web.controllers import dev  # pylint: disable=import-outside-toplevel
+        from sss.config import sss_config  # pylint: disable=import-outside-toplevel
+        with mock.patch.object(sss_config, "has_dev_dir", return_value=False):
+            with self.assertRaises(HTTP) as raised:
+                dev._require_dev()
+        self.assertEqual(raised.exception.status, 404)
+        with mock.patch.object(sss_config, "has_dev_dir", return_value=True):
+            self.assertIsNone(dev._require_dev())
+        with open(os.path.join(_testenv.WEB_DIR, "templates", "layout.html"), encoding="utf-8") as f:
+            layout = f.read()
+        self.assertIn("{{if response.env_label == 'DEV':}}[DEV] {{pass}}", layout)
+        self.assertIn("sss-header{{if response.env_label == 'DEV':}} sss-header-dev{{pass}}", layout)
+        self.assertNotIn("sss_env", layout)
+
     def test_only_module_functions_are_actions(self):
         """Nome importado (redirect, URL, HTTP, guardas) nunca vira rota; privada e com parametro tambem nao."""
         registry = bootstrap.controllers(self._cfg())

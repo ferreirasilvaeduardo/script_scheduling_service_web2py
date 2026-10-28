@@ -25,7 +25,8 @@ else
     exit 2
 fi
 
-# Biblioteca padrao, sem importar a aplicacao: so [agent] agent_id e work_dir (mesmas regras do sss_config).
+# Biblioteca padrao, sem importar a aplicacao: so o [app] name (mesmas regras do sss_config; CR-032, D4: agent_id e
+# work_dir saem sempre do nome, e as linhas antigas [agent] agent_id/work_dir sao ignoradas, como no agente).
 exec "${PYTHON}" -I - "${CONFIG}" <<'PY'
 import configparser
 import os
@@ -37,7 +38,7 @@ cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";",
 try:
     with open(caminho, encoding="utf-8") as f:
         cp.read_file(f)
-    # CR-028 (D5, D6): com [app] name, agent_id e o nome e work_dir sai de var/<nome>/work quando nao escritos.
+    # CR-032 (D4): o agent_id e o nome, e o work_dir e var/<nome>/work.
     nome = cp["app"].get("name", "").strip() if cp.has_section("app") else ""
     pasta = os.path.dirname(os.path.realpath(caminho))
     if (nome and os.path.dirname(pasta) == os.path.realpath(os.path.join(os.getcwd(), "instance"))
@@ -45,19 +46,20 @@ try:
         # Revisao do CR-028 (A2): pasta copiada sem trocar o name pararia outro agente.
         sys.stderr.write("Erro: [app] name (%s) diferente da pasta instance/%s/\n" % (nome, os.path.basename(pasta)))
         sys.exit(2)
-    agente = cp["agent"].get("agent_id", "").strip() or nome
-    work = cp["agent"].get("work_dir", "").strip() or (
-        os.path.join(os.getcwd(), "var", nome, "work") if nome else "")
-    if not agente:
-        raise KeyError("agent_id")
+    if not cp.has_section("agent"):
+        raise KeyError("agent")
+    if not nome:
+        raise KeyError("name")
+    agente = nome
+    work = os.path.join(os.getcwd(), "var", nome, "work")
 except (OSError, KeyError, configparser.Error) as exc:
     sys.stderr.write("Erro: config.ini invalido (%s): %s\n" % (caminho, exc.__class__.__name__))
     sys.exit(2)
 if not re.match(r"^(?!(?:init_db|seed|purge)$)[A-Za-z0-9._-]{1,30}$", agente):
-    sys.stderr.write("Erro: [agent] agent_id invalido\n")
+    sys.stderr.write("Erro: [app] name invalido\n")
     sys.exit(2)
 if not os.path.isabs(work) or not os.path.isdir(work):
-    sys.stderr.write("Erro: [agent] work_dir deve ser um diretorio absoluto existente\n")
+    sys.stderr.write("Erro: %s nao existe (o agente nunca subiu com este nome?)\n" % work)
     sys.exit(2)
 stop = os.path.join(work, "sss-%s.stop" % agente)
 fd = os.open(stop, os.O_WRONLY | os.O_CREAT, 0o600)

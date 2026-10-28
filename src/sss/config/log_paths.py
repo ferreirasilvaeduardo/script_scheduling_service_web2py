@@ -87,7 +87,7 @@ def run_log_dir(log_dir, environment, script_name, started_at, script_id=None):
 def output_dir(output_dir, environment, script_name, started_at, ticket_id, script_id=None):
     """Pasta de saida do ticket (CR-012, README §8.13), com as mesmas partes do log de execucao.
 
-    Devolve (base, relativo): base = output_dir/<ambiente> (do usuario de execucao fora de DEV) e
+    Devolve (base, relativo): base = output_dir/<ambiente> (da conta do agente, CR-032) e
     relativo = <pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>, o formato que o ticket_files confere.
     """
     base = os.path.join(output_dir, environment_dir(environment))
@@ -108,7 +108,7 @@ def script_work_dir(script_work_dir, environment, script_name, started_at, ticke
 def input_dir(input_dir, environment, script_name, script_id=None):
     """Pasta de entrada do script (CR-014, README §8.14): permanente, uma por ambiente e script, sem data nem ticket.
 
-    Devolve (base, relativo): base = input_dir/<ambiente> (do usuario de execucao fora de DEV) e relativo =
+    Devolve (base, relativo): base = input_dir/<ambiente> (da conta do agente, CR-032) e relativo =
     <pasta do script>, com a mesma regra da pasta do log (minusculo, sem acento e sem espaco).
     """
     return os.path.join(input_dir, environment_dir(environment)), script_dir(script_name, script_id)

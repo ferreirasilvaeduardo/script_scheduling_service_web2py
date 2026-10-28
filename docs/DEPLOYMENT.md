@@ -36,7 +36,7 @@ O README.md é a especificação. Quando este guia e o README divergirem, vale o
 | Conta de banco (uma só) | Dona do esquema e conta da aplicação: web e agentes (CR-032, D11: a conta igual ao owner é aceita) | `[oracle] password` do `instance/secrets.cfg` |
 | Contas dos bancos dos scripts | Cada ambiente tem a sua; os scripts as recebem pelas variáveis do README §8.6 | `[environment:<NOME>]` do `instance/secrets.cfg` |
 
-O `health.py` usa a conta do processo do `--name` (CR-032, D8: não há papel monitor). Com contas separadas por papel (web e agente), os privilégios estão no README §11.1 e saem do gerador de scripts SQL (§5.2).
+O `health.py` usa a conta do processo do `--name` (CR-032, D8: não há papel monitor). Contas separadas por papel (web e agente) no mesmo servidor precisam ter a mesma senha, porque o `secrets.cfg` tem um só `[oracle] password` (CR-032, D20); os privilégios delas estão no README §11.1 e saem do gerador de scripts SQL (§5.2).
 
 ### 1.3 Ordem do procedimento
 
@@ -147,7 +147,7 @@ O pacote só tem o `bin/` e a aplicação (o código, os templates e os estátic
 1. **Pacote (§3)** extraído na `<RAIZ>` com a conta do SSS.
 2. **Banco (§5):** a conta única é a **dona do esquema**. Não há GRANT a aplicar (pule o `03_grants`); o `init_db.py --name agente0001` precisa de `--real-schema`, porque o esquema não é descartável (§5.3).
 3. **Configuração (§7):** um `instance/common.ini` com o `[oracle]` (conta única, DSN, owner e prefixo), um `instance/secrets.cfg` com `[oracle] password`, `[web] cookie_key` e os `[environment:<NOME>]` dos ambientes atendidos (os bancos que os scripts usam têm usuários próprios), e um `instance/<nome>/config.ini` por processo, com `[app] name` igual ao nome da pasta.
-4. **Pastas:** nada a fazer. Na subida, o web e o agente criam as que faltarem em `var/<nome>/` e `scripts_ambiente/` (CR-032, D12), com uma linha `pasta criada` no log.
+4. **Pastas:** nada a fazer. Na subida, o web e o agente criam as que faltarem em `var/<nome>/` e `scripts_ambiente/` (CR-032, D12), com uma linha `pasta criada` no log para cada pasta do agente (o `log_dir` é criado sem essa linha).
 5. **Subida e permanência (§10.6):** `bin/sss-keepalive.sh` no `crontab` da conta, com `@reboot` e a cada 5 minutos.
 6. **Monitoração (§13)** e **limpeza manual (§12, README §11.3)** pelo mesmo `crontab`.
 
@@ -200,7 +200,7 @@ Regras:
 6. **A mesma conta, com o mesmo UID, em todos os servidores.** O `secrets.cfg` exige dono igual ao usuário do processo e modo `0600`, e as pastas são `0700`/`0750`: com UIDs diferentes, a subida é recusada (código 12 ou 13, §15.1).
 7. **Webs com nome e porta próprios.** Dois webs no mesmo servidor precisam de portas diferentes (`web0001:0.0.0.0:18000`, `web0002:0.0.0.0:18001` no keepalive); o `[web] allowed_origins` de cada um traz a URL pela qual os usuários chegam a ele.
 
-* **Trava de instância em pasta de rede:** a trava (`flock` em `var/<nome>/work/sss-<nome>.lock`) pode não valer entre máquinas num NFS. Com nomes únicos e a regra 2, isso não importa: o banco barra o `agent_id` duplicado.
+* **Trava de instância em pasta de rede:** a trava (`flock` em `var/<nome>/work/sss-<nome>.lock`) pode não valer entre máquinas num NFS. Com nomes únicos e a regra 2, isso não acontece; se acontecer (o mesmo nome em dois servidores), o banco barra o `agent_id` duplicado, mas a instância recusada já terá apagado um `.stop` pendente do agente legítimo e regravado o PID na trava: confira a regra 2 antes de pedir uma parada.
 * **Desempenho:** os logs dos tickets e o log da aplicação são gravados em `var/`; numa pasta de rede lenta, prefira um `var/` com boa latência (§4.3).
 
 ### 4.2 Conta do sistema operacional
@@ -418,7 +418,8 @@ bin/sss-scheduler.sh agente0001            # instance/agente0001/config.ini (CR-
 
 * **Direto por HTTP (CR-032, D19):** na linha do keepalive, `web0001:0.0.0.0:18000` sobe o web em todas as interfaces (ou `web0001:<IP do servidor>:18000`, só nesse endereço). Os usuários abrem `http://<servidor>:18000/`. Ponha essa URL exata em `[web] allowed_origins`. Sem HTTPS, o cookie de sessão vai sem `Secure` (CR-032, D11) e a senha trafega sem criptografia na rede interna: risco aceito (README §14). Confira com a equipe de rede que a porta só é alcançável pela rede interna.
 * **Só local (padrão):** `web0001:18000` atende só em `127.0.0.1`. Os usuários chegam por um proxy ou balanceador da empresa que repasse para `http://127.0.0.1:<porta>`, ou por túnel SSH: `ssh -N -L 18000:127.0.0.1:18000 <usuário>@<servidor>` e, no navegador, `http://localhost:18000/` (o próprio `Host` da requisição já vale como origem, CR-032 D11).
-* **Proxy** [não ensaiado]: o limite de corpo dele precisa ser pelo menos `[web] input_upload_max_bytes` mais 64 KiB (tela de Entrada, CR-020d); o endereço dele vai em `[web] trusted_proxies`.
+* **Proxy** [não ensaiado]: o limite de corpo dele precisa ser pelo menos `[web] input_upload_max_bytes` mais 64 KiB (tela de Entrada, CR-020d); o endereço dele vai em `[web] trusted_proxies`. Um proxy HTTPS precisa mandar `X-Forwarded-Proto: https`: sem isso, o web acha que a requisição chegou por HTTP e o cookie de sessão sai sem `Secure` (CR-032, D11).
+* **Trocar o endereço de um web que já está no ar:** o keepalive confere só o nome, não o endereço. Depois de mudar a linha do cron (ex.: de `web0001:18000` para `web0001:0.0.0.0:18000`), pare o web (`--pause`, `SIGTERM` e `--resume`, §10.6) para ele subir de novo no endereço novo.
 
 ### 10.5 Variáveis dos launchers
 
@@ -457,15 +458,15 @@ bin/sss-keepalive.sh --resume agente0001    # volta a subir na proxima passada
 
 ```bash
 # no próprio servidor do web
-curl -s -o /dev/null -w "raiz: HTTP %{http_code} -> %{redirect_url}\n" http://127.0.0.1:8000/
-# esperado: raiz: HTTP 303 -> http://127.0.0.1:8000/script_scheduling_service/default/login
-curl -s -o /dev/null -w "login: HTTP %{http_code}\n" http://127.0.0.1:8000/script_scheduling_service/default/login
+curl -s -o /dev/null -w "raiz: HTTP %{http_code} -> %{redirect_url}\n" http://127.0.0.1:18000/
+# esperado: raiz: HTTP 303 -> http://127.0.0.1:18000/script_scheduling_service/default/login
+curl -s -o /dev/null -w "login: HTTP %{http_code}\n" http://127.0.0.1:18000/script_scheduling_service/default/login
 # esperado: login: HTTP 200
-curl -s -D - -o /dev/null http://127.0.0.1:8000/script_scheduling_service/default/login | grep -icE "content-security|x-frame|x-content|referrer"
+curl -s -D - -o /dev/null http://127.0.0.1:18000/script_scheduling_service/default/login | grep -icE "content-security|x-frame|x-content|referrer"
 # esperado: 4
-curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origin: http://evil.example" -d "x=1" http://127.0.0.1:8000/script_scheduling_service/default/login
+curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origin: http://evil.example" -d "x=1" http://127.0.0.1:18000/script_scheduling_service/default/login
 # esperado: origem estranha: HTTP 403
-curl -s -o /dev/null -w "admin: HTTP %{http_code}\n" http://127.0.0.1:8000/admin/default/index
+curl -s -o /dev/null -w "admin: HTTP %{http_code}\n" http://127.0.0.1:18000/admin/default/index
 # esperado: admin: HTTP 404
 ```
 
@@ -579,7 +580,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | 11 | `configuracao invalida: Arquivo de configuracao nao encontrado: <caminho>` | `config.ini` ausente ou `--config` errado | §7.1 |
 | 11 | `configuracao invalida: [secao] chave: <motivo>` | Chave ausente, desconhecida ou fora da faixa | Compare com o modelo de `instance/exemplos/`; uma chave removida pede "apague a linha" |
 | 11 | `child_locale <x> nao consta em locale -a (CR-007, R-17)` | Locale do filho não instalado | Instale o locale `C.UTF-8` (fixo desde o CR-032) |
-| 12 | `secrets.cfg invalido: <reason>` (ex.: `Arquivo de segredos possui permissoes inseguras (mode 644, ...)`, `... deve pertencer ao usuario corrente`, `Secao [web] nao pertence ao papel 'agente'`) | Modo, dono ou seções do `secrets.cfg` | `chmod 0600` e dono a conta do SSS (§7.2); com a raiz compartilhada, o mesmo UID em todos os servidores (§4.1) |
+| 12 | `secrets.cfg invalido: <reason>` (ex.: `Arquivo de segredos possui permissoes inseguras (mode 644, ...)`, `... deve pertencer ao usuario corrente`, `Ambientes atendidos sem credencial em secrets.cfg: X`) | Modo, dono ou seções do `secrets.cfg` | `chmod 0600` e dono a conta do SSS (§7.2); com a raiz compartilhada, o mesmo UID em todos os servidores (§4.1) |
 | 13 | `work_dir <pasta> recusado: <motivo>` (ou `output_dir`, `input_dir`, `script_work_dir`) | A pasta existe mas não pode ser usada (arquivo no lugar, sem escrita, pasta do sistema); a que falta é criada na subida (CR-032, D12) | Corrija ou apague o que está no caminho e suba de novo |
 | 13 | `<nome> <caminho> recusado: <código>` (`log_dir`, `work_dir`...), `output_dir ... recusado`, `input_dir ... recusado` e `script_work_dir ... recusado` | Pasta sem escrita ou nas pastas do sistema | §4 e §8 |
 | 14 | `Outra instancia do agente ja esta em execucao (<work_dir>/sss-<agent_id>.lock)` | Outro agente com o mesmo `work_dir` e `agent_id` | Pare o outro, ou use `config.ini` próprio (§7.1) |
@@ -662,7 +663,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | Idem | `reason=csrf` | Página aberta há muito tempo | Recarregue e repita |
 | Ninguém entra por HTTP atrás de um proxy HTTPS | — | O proxy manda `X-Forwarded-Proto: https` e o cookie sai `Secure`, mas o navegador chega por HTTP | Acesse pela mesma URL do proxy, ou direto pela porta do `run_web.py` (§10.4) |
 | Um usuário não entra: "Houve muitas tentativas com a senha errada..." | — | Bloqueio após `login_max_attempts` | Aguarde `login_lockout_s` ou desbloqueie em Gestão de Usuários |
-| `Socket 127.0.0.1:8000 in use by other process` | Terminal | Porta ocupada | `ss -ltnp \| grep :8000` |
+| `Socket 127.0.0.1:18000 in use by other process` | `var/web0001/logs/web0001.out` | Porta ocupada | `ss -ltnp \| grep :18000` |
 
 ### 15.7 Keepalive, saúde e pacote
 
@@ -763,6 +764,7 @@ Do mais novo para o mais antigo. Quem vem de uma versão anterior aplica na orde
 - [ ] Com script de caminho relativo (CR-023): a pasta base existente e a linha `pasta base dos scripts` no log de subida e no painel de agentes (§9)
 - [ ] Interpretador (CR-025, CR-026): o `PATH` do cron acha `python3`, `bash` e os demais interpretadores dos scripts (§9, §10.5)
 - [ ] `<RAIZ>/var` em partição própria, com alerta de uso (§4.3)
+- [ ] As pastas acima da `<RAIZ>` sem escrita de outros, ou com sticky bit (`stat -c '%a %U %n' /portaloptrib /portaloptrib/TESHUVA ...`): quem renomeia uma delas troca o código que a conta do SSS executa (revisão do CR-032). Sem root para corrigir, registre o risco com a infraestrutura
 - [ ] Senha inicial do seed trocada (§5.3)
 - [ ] `crontab` com o keepalive (`@reboot` e a cada 5 minutos), o `health.py` e a limpeza (§4.0); com a raiz compartilhada, cada servidor só com os seus nomes (§4.1)
 - [ ] Backup do esquema e de `instance/` (§17)

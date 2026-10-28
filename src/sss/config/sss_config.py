@@ -500,6 +500,13 @@ def _merge_common(cp: configparser.ConfigParser, ini_path: str) -> Optional[str]
         if not cp.has_section(sec):
             cp.add_section(sec)
         for k, v in common[sec].items():
+            # Revisao do CR-032 (achado 12): aviso e recusa citam o common.ini, nao o config.ini do processo.
+            if (sec, k) in IGNORED_KEYS:
+                _PENDING_WARNINGS.append("%s: chave [%s] %s ignorada: %s; apague a linha"
+                                         % (COMMON_FILE, sec, k, IGNORED_KEYS[(sec, k)]))
+                continue
+            if k not in SCHEMA[sec]:
+                raise ConfigError(section=sec, key=k, reason="Chave desconhecida no %s: %s" % (COMMON_FILE, k))
             if k not in cp[sec]:
                 cp[sec][k] = v
     return path
@@ -896,7 +903,8 @@ class Secrets(object):
 def load_secrets(path, cfg=None, data_backend=None, role="web"):
     """Valida e carrega segredos de arquivo com modo 0600 e ownership restrito.
 
-    papel ('web' ou 'agent', CR-007 D1b) define as secoes obrigatorias e as proibidas (README §4.1).
+    papel ('web' ou 'agent', CR-007 D1b) define as secoes lidas e exigidas; as do outro papel sao ignoradas, mas
+    mascaradas (README §4.1; CR-032, D14).
     A aplicacao usa sempre o Oracle, entao [oracle] password e obrigatoria para web e agente.
     data_backend='FAKE' so pode vir como parametro explicito de teste (DEV), nunca do config.ini.
     """
@@ -937,7 +945,7 @@ def load_secrets(path, cfg=None, data_backend=None, role="web"):
     except Exception as e:
         raise ConfigError(reason="Erro ao ler arquivo de segredos %s: %s" % (path, e))
 
-    # [web] cookie_key: obrigatorio no papel web e proibido no agente (README §4.1)
+    # [web] cookie_key: obrigatorio no papel web; o agente nao o le (README §4.1)
     cookie_key = None
     if role == "web":
         if "web" not in cp.sections():
@@ -947,7 +955,12 @@ def load_secrets(path, cfg=None, data_backend=None, role="web"):
         cookie_key = cp["web"]["cookie_key"].strip()
         if not cookie_key:
             raise ConfigError(section="web", key="cookie_key", reason="cookie_key nao pode ser vazio")
-    # CR-032 (D14): um secrets.cfg por servidor; as secoes dos outros processos sao ignoradas sem aviso.
+    # CR-032 (D14): um secrets.cfg por servidor; as secoes dos outros processos sao ignoradas sem aviso (nao
+    # validadas), mas os valores delas entram no masking (revisao do CR-032, achado 3): o script roda com a conta
+    # do agente e pode ler o arquivo, e o cookie_key ou a senha de um ambiente nunca podem sair num log.
+    other_values = []
+    if role != "web" and "web" in cp.sections():
+        other_values.append(cp["web"].get("cookie_key", "").strip())
 
     # [oracle] password: em DEV e FAKE e opcional; obrigatorio para web e agente
     oracle_password = None
@@ -979,6 +992,7 @@ def load_secrets(path, cfg=None, data_backend=None, role="web"):
             continue
         if sec.startswith("environment:"):
             if role != "agent":
+                other_values.append(cp[sec].get("password", "").strip())
                 continue
             name = sec.split(":", 1)[1].strip()
             if not name:
@@ -1018,6 +1032,9 @@ def load_secrets(path, cfg=None, data_backend=None, role="web"):
         register_secret(cookie_key)
     for env_name in environments.values():
         register_secret(env_name.password)
+    for value in other_values:
+        if value:
+            register_secret(value)
 
     return secrets_value
 

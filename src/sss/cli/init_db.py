@@ -866,7 +866,7 @@ def main(argv=None):
         # Protecao do esquema (CR-032, D11): sem --real-schema, so o esquema descartavel de teste.
         if not args.schema_real:
             _validate_disposable_schema_dev(cfg, user_owner, conn)
-        elif args.schema_real:
+        else:
             cursor = conn.cursor()
             try:
                 cursor.execute("SELECT USER FROM DUAL")

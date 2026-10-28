@@ -15,7 +15,7 @@
  *   - senha nova do admin (troca valida do CT-01): arquivo SSS_ADMIN_NEW_PASSWORD_FILE (padrao ~/.sss_homolog_pw, 0600).
  *   - SSS_ADMIN_START=new: o admin ja esta com a senha nova (rodada repetida no mesmo banco); o CT-01 troca
  *     a senha nova por ela mesma.
- * Data da rodada: SSS_EVIDENCE_DATE (AAAAMMDD, padrao 20261023): carimbo HOMOLOG_<data> dos registros criados.
+ * Data da rodada: SSS_EVIDENCE_DATE (AAAAMMDD, padrao a data do dia): carimbo HOMOLOG_<data> dos registros criados.
  * Rodada no mesmo dia: SSS_EVIDENCE_ROUND (ex.: 2): carimbo HOMOLOG_<data>R<n> e pasta evidence_<data>_r<n>.
  * Saida: SSS_EVIDENCE_DIR (padrao dev/others/homologation/evidence_<data>[_r<n>]): <CT>_<n>.png, results.json, state.json.
  */
@@ -36,7 +36,10 @@ const puppeteer = loadPuppeteer();
 
 const APP = path.resolve(__dirname, '..', '..', '..', '..');
 const BASE_URL = process.env.SSS_BASE_URL || 'http://127.0.0.1:18000/script_scheduling_service';
-const RUN_DATE = process.env.SSS_EVIDENCE_DATE || '20261023';
+// Padrao: a data local do dia (revisao do CR-032: o padrao fixo antigo, 20261023, sobrescrevia aquela evidencia).
+const TODAY = new Date();
+const RUN_DATE = process.env.SSS_EVIDENCE_DATE || `${TODAY.getFullYear()}${String(TODAY.getMonth() + 1).padStart(2, '0')}`
+    + String(TODAY.getDate()).padStart(2, '0');
 const RUN_DATE_BR = `${RUN_DATE.slice(6, 8)}/${RUN_DATE.slice(4, 6)}/${RUN_DATE.slice(0, 4)}`;
 const ROUND = process.env.SSS_EVIDENCE_ROUND || '';
 const OUT_DIR = process.env.SSS_EVIDENCE_DIR ||
@@ -1884,7 +1887,7 @@ CTS['CT-30'] = async () => {
         (fs.statSync(found[0]).mode & 0o777) === 0o700 && fs.existsSync(path.join(found[0], 'diagnostico.txt')),
         found[0] ? found[0].replace(APP, '') : 'nao encontrada');
     check('Script de diagnóstico desativado ao final', await deactivateScript(sid));
-    note('O DEV tem [agent] script_work_dir ligado (CR-019c); fora do DEV a pasta de cada ambiente é criada pelo root (DEPLOYMENT).');
+    note('A pasta de trabalho dos scripts sai do nome do agente (var/<nome>/script_work) e é criada pelo próprio agente, em DEV e PROD (CR-032, D12).');
 };
 
 CTS['CT-31'] = async () => {

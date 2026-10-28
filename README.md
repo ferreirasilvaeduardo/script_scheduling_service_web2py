@@ -408,20 +408,14 @@ A raiz é `/portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service`, com `<TI
   * tenha dono diferente de `os.geteuid()` ou `mode & 0o077 != 0`.
 
 ```ini
-; Nó web
+; instance/secrets.cfg, um por servidor (CR-032, D14)
 [oracle]
-password = ...                 ; conta Oracle do papel web ([oracle] user deste nó)
+password = ...                 ; senha do [oracle] user (do instance/common.ini ou do config.ini do processo)
 
 [web]
 cookie_key = ...               ; chave que assina o cookie da sessão (HMAC-SHA256; o conteúdo é legível, não alterável), igual em todos os nós web
-```
 
-```ini
-; Agente
-[oracle]
-password = ...                 ; conta Oracle do papel agente ([oracle] user deste nó)
-
-[environment:PRODUCAO]            ; somente os ambientes de [agent] environments
+[environment:PRODUCAO]         ; um bloco por ambiente atendido pelos agentes do servidor
 user = app_prod
 password = ...
 
@@ -430,14 +424,15 @@ user = app_hml
 password = ...
 ```
 
-* **Seções por papel** (validadas por `sss_config.load_secrets(path, role)`):
+* **O que cada papel lê** (`sss_config.load_secrets(path, role)`):
 
-  | Papel | Obrigatórias | Proibidas |
+  | Papel | Lê e exige | Ignora (sem validar) |
   |---|---|---|
-  | `web` | `[web] cookie_key`; `[oracle] password` fora de DEV/FAKE | `[environment:*]` |
+  | `web` | `[web] cookie_key`; `[oracle] password` (salvo no FAKE dos testes) | `[environment:*]` |
   | `agente` | `[oracle] password`; `[environment:X]` de cada ambiente atendido | `[web]` |
 
-  Com o `secrets.cfg` único do servidor (CR-032, D14), a seção do outro papel é ignorada sem validar nem registrar no `masking` (CR-032, D11: igual em DEV e PROD). `[purge]` e `[monitor]` (CR-032, D8) só geram aviso, e o valor nunca é lido. Ambiente atendido sem `[environment:X]` recusa a subida do agente.
+  A seção do outro papel não é validada, mas os valores dela entram no `masking` (revisão do CR-032): o script roda com a conta do agente e pode ler o arquivo, e o `cookie_key` ou a senha de outro ambiente nunca podem sair num log. `[purge]` e `[monitor]` (CR-032, D8) só geram aviso, e o valor nunca é lido. Ambiente atendido sem `[environment:X]` recusa a subida do agente (CR-032, D11: igual em DEV e PROD).
+* **Uma senha de `[oracle]` por servidor:** o `secrets.cfg` único tem um `[oracle] password`, usado por todos os processos do servidor. Web e agentes do mesmo servidor usam a mesma conta Oracle, ou contas com a mesma senha.
 * **Contas Oracle por papel (D1b):** dono do esquema (só DDL, usado pelo `init_db.py` com senha digitada, §11.1), **web** e **agente** (o monitor saiu no CR-032, D8: o `health.py` usa a conta do processo do `--name`). Os GRANTs de cada papel estão no §11.1. Nenhuma conta de aplicação (web, agente) altera ou apaga `tbsss_audit`; só a limpeza manual apaga (§11.3). Com uma conta só (CR-030), ela é a dona do esquema, faz os dois papéis e não precisa de GRANT; a conta igual ao owner é aceita (CR-032, D11). A seção `[purge]` antiga é ignorada com aviso.
 * **Conta do agente (CR-032, D7):** o script roda com a mesma conta do agente, que é a dona do `secrets.cfg` (`0600`). A credencial do ambiente chega ao script só pelas variáveis `SSS_ENVIRONMENT_CONNECTION` e `PADRAO_VALOR_RUN_CONEXAO_BD` (§8.6, CR-010); o ambiente do filho não leva nenhuma variável do agente além das da lista (§8.6). Risco aceito: um script que leia arquivos do disco consegue ler o `secrets.cfg`, porque a conta é a mesma.
 
@@ -2820,7 +2815,7 @@ find var/*/logs var/*/output var/*/script_work -mindepth 3 -type d -empty -delet
 
 ### 12.1 `instance/<nome>/config.ini` (sem segredos; unidades no nome da chave)
 
-**Sem config padrão (CR-029):** todo comando (`run_web`, `run_scheduler`, `health`, `init_db`, `check_env`, os launchers e o `sss-stop.sh`) recebe o processo (`--name <nome>`, ou o nome nos launchers) ou `--config <arquivo>`; sem nenhum dos dois, sai com código 2 e lista os processos de `instance/`. O `generate_sql` aceita os dois, mas também roda só com `--owner` e `--prefix`. O formato único (um arquivo com `[web]` e `[agent]`) continua aceito por `--config`; o modelo dele fica em `tests/support/`, só para os testes.
+**Sem config padrão (CR-029):** todo comando (`run_web`, `run_scheduler`, `health`, `init_db`, `check_env`, os launchers e o `sss-stop.sh`) recebe o processo (`--name <nome>`, ou o nome nos launchers) ou `--config <arquivo>`; sem nenhum dos dois, sai com código 2 e lista os processos de `instance/`. O `generate_sql` aceita os dois, mas também roda só com `--owner` e `--prefix`. O formato único (um arquivo com `[web]` e `[agent]`) é recusado desde o CR-032 (D4).
 
 **Config por processo (CR-028) e mínimo (CR-026):** um `config.ini` por processo, em `instance/<nome>/`, só com as chaves obrigatórias e as que dependem do servidor. As demais têm padrão (tabela abaixo) e só entram no arquivo quando o valor for outro. O papel vem do próprio arquivo (D4): com `[web]` e sem `[agent]`, é o web; com `[agent]` e sem `[web]`, o agente; com as duas, ou nenhuma, o arquivo é recusado (CR-032, D4). Com `[app] name`, as pastas saem do nome (D5): `log_dir` = `var/<nome>/logs`; no agente, `work_dir` = `var/<nome>/work`, `output_dir`, `input_dir` e `script_work_dir` em `var/<nome>/`, `script_base_dir` = `scripts_ambiente` e `agent_id` = o nome. Em `instance/<pasta>/config.ini`, o `name` precisa ser o nome da pasta: um `instance/agente0002/` copiado sem trocar o `name` é recusado na subida e pelo `sss-stop.sh`. Modelos em `instance/exemplos/`.
 
@@ -2859,7 +2854,7 @@ environments = PRODUCAO,HOMOLOGACAO
 max_parallel_jobs = 4
 ```
 
-Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Chave desconhecida, obrigatória ausente ou fora da faixa interrompe a subida com a chave e o motivo no log. Uma seção sem chave obrigatória (`[secrets]`) pode faltar inteira.
+Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Chave desconhecida, obrigatória ausente ou fora da faixa interrompe a subida com a chave e o motivo no log. Uma seção sem chave obrigatória (`[logging]`) pode faltar inteira; a seção `[secrets]` antiga só gera aviso (CR-032, D14).
 
 **Todas as chaves** (limites inclusivos). "Sim" na coluna Obrigatória quer dizer que a subida é recusada sem ela; as regras são as mesmas em DEV e PROD (CR-032, D11). Sem a chave, vale o Padrão:
 
@@ -2906,10 +2901,10 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 
 **Falha de configuração (web e daemon):**
 * A subida é abortada com um registro **CRITICAL** contendo a seção, a chave e o motivo, sem nunca o valor de um segredo.
-* O CRITICAL vai para o log da aplicação do minuto atual (§13, `<log_name>` `sss_web` ou `sss_scheduler`) sempre que o `[logging] log_dir` do `config.ini`, lido mesmo que outras chaves estejam inválidas, existe e aceita escrita. Falhas repetidas no mesmo minuto e no mesmo processo vão para o mesmo arquivo (sem sufixo `_<n>`). Sem `log_dir` utilizável, vai para o stderr do processo, no mesmo formato do §13.
+* O CRITICAL vai para o log da aplicação do minuto atual (§13, `<log_name>` `sss_web` ou `sss_scheduler`) sempre que o `log_dir` do processo (`var/<nome>/logs`, tirado do `[app] name` mesmo que outras chaves estejam inválidas) existe e aceita escrita. Falhas repetidas no mesmo minuto e no mesmo processo vão para o mesmo arquivo (sem sufixo `_<n>`). Sem `log_dir` utilizável, vai para o stderr do processo, no mesmo formato do §13.
 * No nó web, a requisição recebe a página de erro genérica (500), sem o detalhe.
 
-Chaves que saíram ou mudaram de nome são recusadas na subida: uma chave removida (`[app] data_backend`, `[agent] script_owner_uids` e `[agent] ambientes_exigem_hash`) é recusada com a mensagem "apague a linha"; uma chave renomeada (§2.8, `sss_config.RENAMED_KEYS`), com o nome novo; e qualquer outra chave desconhecida, como chave desconhecida da seção. A exceção são as chaves retiradas sem substituta: `[agent] interpreters` (e o nome antigo `interpretadores`), no CR-026, e as de retenção e a seção `[retention]`, no CR-030. Elas são **ignoradas** com um aviso, para que a atualização não derrube um processo com a linha antiga (`sss_config.IGNORED_KEYS` e `IGNORED_SECTIONS`). O aviso (`WARNING ... [action=INICIO] config.ini: chave [agent] interpreters ignorada ...`) vai para o log da aplicação do web e do agente (CR-026f: guardado pelo `load()` e gravado quando o log é configurado); no `health.py` e no `prepare_dirs.py`, para o stderr. O histórico das chaves por CR fica nos documentos de `docs/architecture/`.
+Chaves que saíram ou mudaram de nome são recusadas na subida: uma chave removida (`[app] data_backend`, `[agent] script_owner_uids` e `[agent] ambientes_exigem_hash`) é recusada com a mensagem "apague a linha"; uma chave renomeada (§2.8, `sss_config.RENAMED_KEYS`), com o nome novo; e qualquer outra chave desconhecida, como chave desconhecida da seção. A exceção são as chaves retiradas sem substituta: `[agent] interpreters` (e o nome antigo `interpretadores`), no CR-026, e as de retenção e a seção `[retention]`, no CR-030. Elas são **ignoradas** com um aviso, para que a atualização não derrube um processo com a linha antiga (`sss_config.IGNORED_KEYS` e `IGNORED_SECTIONS`). O aviso (`WARNING ... [action=INICIO] config.ini: chave [agent] interpreters ignorada ...`) vai para o log da aplicação do web e do agente (CR-026f: guardado pelo `load()` e gravado quando o log é configurado); no `health.py`, para o stderr. O histórico das chaves por CR fica nos documentos de `docs/architecture/`.
 
 ### 12.2 Launchers
 
@@ -2929,7 +2924,7 @@ Chaves que saíram ou mudaram de nome são recusadas na subida: uma chave removi
 
 O `sss-scheduler.sh` aceita só a linha do daemon: o nome do processo, `--config <arquivo>` ou nada, e faz `exec <python> scripts/run_scheduler.py [--name <nome> | --config <arquivo>]`. Qualquer outro argumento é recusado com código 2. O Python vem da variável `PYTHON` (padrão `python3`) nos dois launchers.
 
-`bin/sss-stop.sh <nome> | --config <config.ini>` (com o nome, `instance/<nome>/config.ini`; sem nada, código 2 com a lista dos processos, CR-029) cria o arquivo `work_dir/sss-<agent_id>.stop` com `0600`, para a parada controlada sem sinal (§8.11), e imprime o caminho. Recusa root. Lê só `[agent] agent_id` e `work_dir` (ou, com `[app] name`, o nome e `var/<nome>/work`, CR-028) com a biblioteca padrão (sem importar a aplicação), com a mesma regra de `agent_id` do §12.1 e o `work_dir` absoluto e existente; senão, sai com código 2. O daemon remove o arquivo ao parar.
+`bin/sss-stop.sh <nome> | --config <config.ini>` (com o nome, `instance/<nome>/config.ini`; sem nada, código 2 com a lista dos processos, CR-029) cria o arquivo `work_dir/sss-<agent_id>.stop` com `0600`, para a parada controlada sem sinal (§8.11), e imprime o caminho. Recusa root. Lê só o `[app] name` (CR-032, D4: o `agent_id` é o nome e o `work_dir` é `var/<nome>/work`; linhas antigas `[agent] agent_id`/`work_dir` são ignoradas, como no agente) com a biblioteca padrão (sem importar a aplicação), com a mesma regra de nome do §12.1 e o `work_dir` existente; senão, sai com código 2. O daemon remove o arquivo ao parar.
 
 **Servidor web:** `python scripts/run_web.py [--name <nome> | --config <config.ini>] [--host 127.0.0.1] [--port 8000] [--check]` (CR-021e). Atende em `127.0.0.1` por padrão (os usuários chegam pelo proxy ou por túnel) ou no endereço do `--host` (pelo keepalive, `<nome>:<endereço>:<porta>`, CR-032 D19), com até `[web] max_threads` requisições ao mesmo tempo e `[web] socket_timeout_s` por conexão. `SIGTERM` ou `SIGINT` param de aceitar conexões e esperam as requisições em andamento até `socket_timeout_s`. O endereço `/` responde 303 para `/script_scheduling_service/`, que é a tela inicial (sem sessão, o login), como no web2py. `--check` só confere configuração, segredos e montagem da aplicação, sem abrir a porta, e imprime `CONFIG_OK ambiente=<TIPO>` (CR-032: o nome da pasta acima da raiz). Saída: 0 na parada normal ou no `--check` bem-sucedido, 2 configuração ou segredos inválidos, 3 endereço indisponível.
 
@@ -2991,7 +2986,7 @@ O `sss-scheduler.sh` aceita só a linha do daemon: o nome do processo, `--config
   * **Rodando sem PID:** tickets `RUNNING` com `process_id` nulo há mais de 2 minutos (o agente reservou e não iniciou). A consulta usa a expressão de `ix_tbsss_tck_run` e devolve só `id`, `script_id`, `environment`, `agent_id` e `started_at`, sem LOB (CR-008, R-15).
   * **Configuração divergente:** agentes ativos com `critical_config` diferente entre si ou dos valores do nó web (§8.12).
   * Os quadros só aparecem quando há algo a mostrar e ficam no topo da tela.
-  * Backend FAKE (DEV): o seed mostra os três quadros. O `agt-host02` tem `kill=10` (configuração divergente); o ticket 16 está `RUNNING` sem PID desde a carga; o ticket 4 (`sh` em `HOMOLOGACAO`, vencido 3 min antes da carga) só é atendido pelo `agt-host02` (o `agt-host01` atende só `PRODUCAO`) e entra na fila sem atendente quando ele passa a `AT_RISK`, cerca de 1 min depois da carga.
+  * Backend FAKE (DEV): o seed mostra os três quadros. O `agt-host02` tem `misfire=SKIP` (configuração divergente, CR-032 D16); o ticket 16 está `RUNNING` sem PID desde a carga; o ticket 4 (`sh` em `HOMOLOGACAO`, vencido 3 min antes da carga) só é atendido pelo `agt-host02` (o `agt-host01` atende só `PRODUCAO`) e entra na fila sem atendente quando ele passa a `AT_RISK`, cerca de 1 min depois da carga.
   * `critical_config` do nó web: `sss_config.critical_config(cfg)`, com `call` em segundos (`call_timeout_s`, arredondado para cima), igual ao texto do agente (§8.12).
 * **Monitoração externa (CR-007, R-18):** `scripts/health.py` (F9.1) roda, com a conta e os segredos do processo do `--name` (web ou agente; CR-032, D8: sem papel monitor; só leituras, nas tabelas que essas contas já leem, §11.1), as consultas de saúde e devolve o código no padrão Nagios (0 OK, 1 WARN, 2 CRITICAL, 3 desconhecido), com uma linha por problema. Verifica: agente `ACTIVE` sem heartbeat além de `node_offline_timeout_s`; ambiente ativo sem nenhum agente saudável; os três quadros acima; fila `PENDING` vencida acima de um limite; versão do esquema (§11.1). Os limites são argumentos com padrão, e o `DEPLOYMENT.md` traz o exemplo de agendamento no monitoramento corporativo.
   * **Uso (F9.1):** `python scripts/health.py --name <nome> | --config <config.ini> [--no-pid-min 2] [--queue-warn 500] [--queue-crit 5000] [--wait-warn-min 30] [--wait-crit-min 120]`. Todas as verificações usam um único `db_now()`. As consultas ficam em `src/sss/persistence/oracle/health.py` (fora da camada web), que também fornece à tela de agentes o SQL da fila sem atendente e do rodando sem PID: a tela e o monitoramento não divergem. Nenhum LOB é lido, e o plano não varre `tbsss_tickets` nem `tbsss_audit` (`ix_tbsss_tck_queue`, `ix_tbsss_tck_run`, `ix_tbsss_aud_actor`).
@@ -3024,7 +3019,7 @@ O `sss-scheduler.sh` aceita só a linha do daemon: o nome do processo, `--config
 | Argumentos visíveis em `ps`/lista de processos | Proibição de parâmetro de senha; parâmetros sensíveis apenas mascarados na UI e nos logs |
 | Script que faça `setsid`/double-fork escapa do `killpg` | Homologação do script no catálogo; política de revisão de código; o processo fugido fica com a conta do agente (CR-032), e os netos que ficam no grupo são encerrados sempre (§8.7, R-02) |
 | Conteúdo e versão do script sob controle do ambiente (CR-011): sem hash nem conferência de dono, um arquivo alterado no disco, ou um link simbólico trocado por quem grava na pasta dele, executa o novo conteúdo sem aviso | O arquivo real não pode ser gravável por grupo nem por outros, nem ficar nas pastas do sistema ou do SSS (§8.5); o script roda com a conta do agente, nunca como root (CR-032); a gestão de versões e de permissões dos scripts é do ambiente |
-| Interpretador escolhido no disparo e `#!` (CR-025, CR-026 e CR-027, aceitos em 2026-10-26 e 2026-10-27): quem tem `EXEC_SCRIPT` escolhe o executável que roda o script (o digitado vence o `#!`, CR-027), inclusive um que não seja interpretador; o script pode rodar numa versão errada; quem edita a primeira linha troca o interpretador sem passar pelo cadastro; um servidor sem nenhum interpretador possível pega o ticket e falha; no cadastro, `python` e `python3` servem um ao outro, e um script feito para o Python 2 pode rodar no 3 (ou o contrário) (§8.5) | O digitado no snapshot, em `interpreter_path` e na auditoria do disparo, o usado em `interpreter_used` e no log; conferência mínima (existe e é executável); Python isolado (`-I` ou `-E -s`); execução com o usuário de execução do ambiente, nunca como root; o perfil decide quem tem `EXEC_SCRIPT` |
+| Interpretador escolhido no disparo e `#!` (CR-025, CR-026 e CR-027, aceitos em 2026-10-26 e 2026-10-27): quem tem `EXEC_SCRIPT` escolhe o executável que roda o script (o digitado vence o `#!`, CR-027), inclusive um que não seja interpretador; o script pode rodar numa versão errada; quem edita a primeira linha troca o interpretador sem passar pelo cadastro; um servidor sem nenhum interpretador possível pega o ticket e falha; no cadastro, `python` e `python3` servem um ao outro, e um script feito para o Python 2 pode rodar no 3 (ou o contrário) (§8.5) | O digitado no snapshot, em `interpreter_path` e na auditoria do disparo, o usado em `interpreter_used` e no log; conferência mínima (existe e é executável); Python isolado (`-I` ou `-E -s`); execução com a conta do agente, nunca como root (CR-032, D7); o perfil decide quem tem `EXEC_SCRIPT` |
 | Interpretador numa pasta gravável pelos scripts (CR-026f, aceito pelo responsável pelo produto em 2026-10-26): o agente não recusa um `#!` ou um interpretador digitado em `output_dir`, `input_dir`, `script_work_dir` ou outra pasta do SSS; um script poderia trocar esse executável para a execução seguinte (§8.5) | Os scripts continuam recusados nessas pastas (`SSS_DIR`); o interpretador usado fica em `interpreter_used` e no log do ticket; quem cadastra e quem dispara são perfis controlados; as pastas por ticket e por script são `0700` |
 | Granularidade fina "perfil × script × ambiente" | Não suportada; a intersecção `profile_env ∩ script_env` atende ao escopo atual |
 | Semântica de horário de verão | Horário de parede do servidor Oracle (§7.1), com o pré-requisito de banco sem horário de verão (D3). Se ele não for cumprido: com `SKIP`, a ocorrência que cai no avanço do relógio é perdida; o recuo atrasa a regra pelo tamanho do recuo; a detecção de nó offline é suspensa pela trava de salto de relógio (§8.8) |

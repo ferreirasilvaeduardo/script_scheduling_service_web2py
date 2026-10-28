@@ -545,17 +545,21 @@ class TestConfig(unittest.TestCase):
     def test_segredos_carregados_sao_registrados_no_masking(self):
         """Regressao: todo segredo carregado e entregue a masking.register_secret (AGENTS §3.3)."""
         path_sec, tokens = self._create_temp_secrets(mode=0o600)
-        # CR-032 (D14): cada papel registra o que le do arquivo compartilhado.
-        sss_config.load_secrets(path_sec)
-        self.assertEqual(sorted(self.masked), sorted([tokens["oracle_pwd"], tokens["cookie_key"]]))
+        # CR-032 (D14): cada papel le o que precisa do arquivo compartilhado; revisao do CR-032 (achado 3): os
+        # segredos das secoes do outro papel tambem entram no masking (o script le o mesmo arquivo).
+        everything = sorted([tokens["oracle_pwd"], tokens["cookie_key"], tokens["prod_pwd"], tokens["hml_pwd"]])
+        seg = sss_config.load_secrets(path_sec)
+        self.assertEqual(sorted(self.masked), everything)
+        self.assertEqual(seg.environments, {}, "o web nao le os ambientes")
         del self.masked[:]
-        sss_config.load_secrets(path_sec, role="agent")
-        self.assertEqual(sorted(self.masked), sorted([tokens["oracle_pwd"], tokens["prod_pwd"], tokens["hml_pwd"]]))
+        seg = sss_config.load_secrets(path_sec, role="agent")
+        self.assertEqual(sorted(self.masked), everything)
+        self.assertIsNone(seg.cookie_key, "o agente nao le o cookie_key")
 
         del self.masked[:]
         path_sec, tokens = self._create_temp_secrets(mode=0o600, include_oracle=False)
         sss_config.load_secrets(path_sec, data_backend="FAKE")
-        self.assertEqual(sorted(self.masked), [tokens["cookie_key"]])
+        self.assertEqual(sorted(self.masked), sorted([tokens["cookie_key"], tokens["prod_pwd"], tokens["hml_pwd"]]))
 
     def test_carga_de_segredos_sem_masking_falha(self):
         """Regressao: sem masking.py a carga falha, em vez de seguir sem mascaramento."""
@@ -861,11 +865,18 @@ class TestConfigCR007(unittest.TestCase):
                              (role, "conta_unica", "banco:1521/svc", common))
         cfg = sss_config.load(self._ini_text(agent + "[oracle]\nuser = outra_conta\n"))
         self.assertEqual((cfg.oracle.user, cfg.oracle.dsn), ("outra_conta", "banco:1521/svc"), "chave do processo vence")
+        sss_config.pending_warnings()
+        with open(common, "a", encoding="utf-8") as f:
+            f.write("pool_min = 2\n")
+        sss_config.load(self._ini_text(agent))
+        self.assertTrue(any(w.startswith("common.ini: chave [oracle] pool_min ignorada")
+                            for w in sss_config.pending_warnings()), "aviso cita o common.ini")
         with open(common, "a", encoding="utf-8") as f:
             f.write("chave_estranha = 1\n")
         with self.assertRaises(sss_config.ConfigError) as ctx:
             sss_config.load(self._ini_text(agent))
         self.assertEqual(ctx.exception.key, "chave_estranha")
+        self.assertIn("common.ini", str(ctx.exception))
         with open(common, "w", encoding="utf-8") as f:
             f.write("[web]\nallowed_origins = http://y\n")
         with self.assertRaises(sss_config.ConfigError) as ctx:

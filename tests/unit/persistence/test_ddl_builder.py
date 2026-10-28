@@ -353,6 +353,24 @@ class TestInitDbCli(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("Argumentos nao suportados", mock_err.getvalue())
 
+    def test_cr032_esquema_real_so_com_real_schema(self):
+        """CR-032 (D11): sem sss_env, o init_db sempre exige o esquema descartavel sem --real-schema; com ele,
+        so confere que a sessao e a do dono (revisao do CR-032, achado 14)."""
+        conn = mock.MagicMock()
+        conn.cursor.return_value.fetchone.return_value = ("OUTRA_CONTA",)
+        env = {"SSS_INIT_DB_PASSWORD": "senha-do-dono-de-teste", "SSS_BOOTSTRAP_ADMIN_PASSWORD": "Senha-Forte-2026!"}
+        with mock.patch.dict(os.environ, env), mock.patch.object(init_db, "_connect", return_value=conn), \
+                mock.patch.object(init_db, "_validate_disposable_schema_dev",
+                                  side_effect=RuntimeError("esquema nao descartavel")) as guard, \
+                mock.patch("sys.stderr", new_callable=io.StringIO):
+            self.assertNotEqual(init_db.main(["--config", _EXAMPLE_CONFIG]), 0)
+            self.assertEqual(guard.call_count, 1, "sem --real-schema: trava do esquema descartavel")
+            guard.reset_mock()
+            self.assertNotEqual(init_db.main(["--config", _EXAMPLE_CONFIG, "--real-schema"]), 0)
+            guard.assert_not_called()
+        executed = [c[0][0] for c in conn.cursor.return_value.execute.call_args_list]
+        self.assertIn("SELECT USER FROM DUAL", executed, "com --real-schema: confere a sessao do dono")
+
     def test_prefixo_invalido_aborta_com_critical(self):
         """Prefixo que inicia com digito ou excede 8 chars gera log CRITICAL e codigo 2."""
         with tempfile.TemporaryDirectory() as tmp:

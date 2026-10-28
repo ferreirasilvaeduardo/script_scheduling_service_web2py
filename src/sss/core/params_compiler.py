@@ -454,8 +454,7 @@ def validate_snapshot(json_str, cfg, notes=None):
     lanca SnapshotError. script_real (o path_file resolvido) alimenta o SSS_SCRIPT_DIR do env_builder.
 
     cfg expoe, opcionais, sss_dirs (log_dir, work_dir e as pastas dos scripts, onde nenhum script pode ficar),
-    script_base_dir (base do caminho relativo, CR-023), dev (script em dev/ da aplicacao aceito, CR-023 D8)
-    e search_path (PATH do agente, onde os nomes sao procurados). notes, se dado, recebe as linhas para o log
+    script_base_dir (base do caminho relativo, CR-023) e search_path (PATH do agente, onde os nomes sao procurados). notes, se dado, recebe as linhas para o log
     do ticket (ex.: #! ignorado, CR-026).
     Status e homologacao do script ficam a cargo do chamador.
     """

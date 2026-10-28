@@ -70,7 +70,7 @@ def _excluded_from_app(rel):
         return True
     if rel.startswith("instance/"):
         # CR-028: de instance/ so vao os exemplos; instance/<nome>/ (config e segredos reais) fica no servidor.
-        # O instance/secrets.cfg do formato unico anterior continua entrando, para o pacote ser recusado.
+        # O instance/secrets.cfg (o arquivo real do servidor, CR-032 D14) continua entrando, para o pacote ser recusado.
         if rel == "instance/secrets.cfg":
             return False
         return not (rel == "instance/exemplos" or rel.startswith("instance/exemplos/") or rel.endswith(".example"))

@@ -152,7 +152,7 @@ Para subir como nos servidores via launcher oficial:
 ### Regras Mandatórias de Execução:
 
 1. **Escuta estrita em 127.0.0.1:**
-   O servidor escuta só em `127.0.0.1` (padrão do `--host`). Nunca utilize `0.0.0.0` em ambiente de desenvolvimento, garantindo isolamento na máquina local.
+   O servidor escuta em `127.0.0.1` (padrão do `--host`). Para os usuários entrarem direto por HTTP, o keepalive aceita `web0001:0.0.0.0:<porta>` (CR-032, D19), igual ao PROD (DEPLOYMENT §10.4); na máquina de desenvolvimento, prefira `127.0.0.1`.
 2. **Sem FAKE na aplicação:** desde o F7.3, a aplicação usa sempre o Oracle (pool de conexões por processo). O FAKE em memória só existe nos testes automáticos.
    * **Trava de segurança:** o FAKE dos testes só é aceito onde a pasta `dev/` existe (o repositório); no pacote, a `repo_factory` o recusa (CR-032, D11).
 
@@ -258,7 +258,7 @@ Os arquivos precisam de modo `0644` ou `0755` (`chmod -R go-w dev/scripts`). Uma
 * **Config enxuto (CR-026, CR-028):** o `instance/agente0001/config.ini` do DEV só tem as chaves obrigatórias e as que fogem do padrão (`name = agente0001`, `environments`, `max_parallel_jobs`, `script_base_dir = <RAIZ>/dev/scripts`, `env_passthrough` e `level = DEBUG`); o do `web0001`, `name`, `level` e `allowed_origins`; o `[oracle]` dos dois fica no `instance/common.ini` (CR-032, D18). As pastas saem do nome. Não há `[agent] interpreters`: o agente procura `python3`, `bash`... no `PATH` do terminal que o subiu. O agente sobe pelo nome: `PYTHON=~/.pyenv/versions/3.6.15/bin/python3 bin/sss-scheduler.sh agente0001`. Para parar, `bin/sss-stop.sh agente0001` ou `SIGTERM` no PID do agente: ele encerra pela máquina de estados (README §8.11).
 * **Pasta de trabalho dos scripts (CR-019, CR-028):** no DEV é `var/agente0001/script_work` (padrão do nome; fora do git; criada pelo agente na subida, CR-032). Cada ticket recebe `SSS_WORK_DIR` em `script_work/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, que fica depois do ticket até a limpeza manual (README §11.3, CR-030).
 * **DEV igual ao PROD (CR-032, D7, D8, D11):** os scripts rodam com a conta do agente, sem `sudo` nem helper, no DEV e no PROD; não há `sss_env` nem papel monitor. As linhas antigas (`sss_env`, `exec_users`, `exec_work_dir`, `helper_path`, `[monitor]`) só geram aviso.
-* `cron_horizon_days` é fixo em 1.461 desde o CR-032, `max_log_size_bytes` vai até 64 MiB; o `table_prefix` só aceita minúsculas. Um `config.ini` antigo fora dessas faixas aborta a subida com a chave no log.
+* `cron_horizon_days` é fixo em 1.461 desde o CR-032 (uma linha antiga só gera aviso); `max_log_size_bytes` vai até 64 MiB e o `table_prefix` só aceita minúsculas: um `config.ini` fora dessas faixas aborta a subida com a chave no log.
 * **CR-008:** `[web] session_max_hours` (padrão 12) e `[agent] log_dir_min_free_mb` (padrão 1.024; 0 desliga) são opcionais. `[oracle] user` pode ser igual ao `owner` (CR-032, D11). O `scripts/health.py` usa os segredos e a conta do processo do `--name` (CR-032, D8).
 
 ---

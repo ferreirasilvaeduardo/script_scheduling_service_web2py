@@ -173,30 +173,42 @@ class TestLaunchers(unittest.TestCase):
         _c, reg, _e = self._run_loop("sss-web.sh")
         self.assertIsNone(reg["ld"], "sem SSS_IC_DIR nada e exportado")
 
-    def _config(self, agent_id="srv-a", work=None):
-        work = work if work is not None else os.path.join(self.root, "work")
-        os.makedirs(os.path.join(self.root, "work"), exist_ok=True)
+    def _config(self, name="srv-a", stale=False, work=True):
+        """CR-032 (D4): o sss-stop.sh usa so o [app] name; linhas antigas agent_id/work_dir sao ignoradas."""
+        if work:
+            os.makedirs(os.path.join(self.root, "var", name, "work"), exist_ok=True)
         path = os.path.join(self.root, "agente.ini")
         with open(path, "w") as f:
-            f.write("[agent]\nagent_id = %s   ; comentario\nwork_dir = %s\n" % (agent_id, work))
+            f.write("[app]\nname = %s   ; comentario\n[agent]\n" % name)
+            if stale:
+                f.write("agent_id = outro\nwork_dir = %s\n" % os.path.join(self.root, "antigo"))
         return path
 
     def test_stop_cria_o_arquivo_no_work_dir(self):
         code, _r, error = self._run_loop("sss-stop.sh", "--config", self._config(), PYTHON=sys.executable)
         self.assertEqual(code, 0, error)
-        stop = os.path.join(self.root, "work", "sss-srv-a.stop")
+        stop = os.path.join(self.root, "var", "srv-a", "work", "sss-srv-a.stop")
         self.assertEqual(os.stat(stop).st_mode & 0o777, 0o600)
         self.assertEqual(self._run_loop("sss-stop.sh", "--config", self._config(), PYTHON=sys.executable)[0], 0,
                          "idempotente")
+        os.remove(stop)
+        # Revisao do CR-032 (achado 1): agent_id/work_dir antigos nao desviam o .stop (o agente os ignora).
+        code, _r, error = self._run_loop("sss-stop.sh", "--config", self._config(stale=True), PYTHON=sys.executable)
+        self.assertEqual(code, 0, error)
+        self.assertTrue(os.path.exists(stop))
+        self.assertFalse(os.path.exists(os.path.join(self.root, "antigo")))
 
     def test_stop_recusa_configuracao_invalida(self):
-        cases = [("--config", self._config(agent_id="purge")), ("--config", self._config(work="relativo/work")),
-                 ("--config", self._config(work=os.path.join(self.root, "nao_existe"))),
-                 ("--config", os.path.join(self.root, "sem_arquivo.ini")), ("--outro",), ()]
+        no_name = os.path.join(self.root, "sem_nome.ini")
+        with open(no_name, "w") as f:
+            f.write("[agent]\nagent_id = srv-a\nwork_dir = %s\n" % self.root)
+        cases = [("--config", self._config(name="purge")), ("--config", self._config(name="sem-work", work=False)),
+                 ("--config", no_name), ("--config", os.path.join(self.root, "sem_arquivo.ini")), ("--outro",), ()]
         for args in cases:
             code, _r, error = self._run_loop("sss-stop.sh", *args, PYTHON=sys.executable)
             self.assertEqual(code, 2, (args, error))
-        self.assertEqual(os.listdir(os.path.join(self.root, "work")), [])
+        self.assertFalse([d for d, _s, files in os.walk(os.path.join(self.root, "var")) if any(
+            f.endswith(".stop") for f in files)])
         # CR-029: sem argumento nao ha config padrao; a mensagem lista os processos de instance/.
         os.makedirs(os.path.join(self.root, "instance", "agente0007"))
         open(os.path.join(self.root, "instance", "agente0007", "config.ini"), "w").close()

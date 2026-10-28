@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Registrada** em 2026-10-27, pendente (depois do CR-031) |
+| Status | **Encerrado** em 2026-10-28 (032a a 032d3; D1 a D20). O 032e (pastas no plural) segue como passo separado |
 | Origem | Pedido do responsável pelo produto: verificar toda a parametrização dos `config.ini` e `secrets.cfg`, inclusive as chaves não obrigatórias e as que têm padrão, para ver o que pode ser simplificado ou até retirado |
 | Objetivo | Config funcional e prático, sem abrir mão da funcionalidade |
 | Restrições | Python 3.6.0 a 3.13; sem dependência nova; o ambiente real tem um usuário de banco e um usuário do sistema operacional, só DEV e PROD, `sss_env = DEV` nos dois (CR-028 D12, CR-030) |
@@ -96,18 +96,19 @@ O `config.ini` do agente ficaria com `sss_env`, `name`, `[oracle]` (`dsn`, `owne
 | D8 | A: retirar o papel monitor (`[monitor]`, GRANTs, papel no `db_conn`); o `health.py` usa a conta do próprio processo |
 | D9 | B: parada fixa em `TERMINATE` com 30 s (`shutdown_mode` e `shutdown_grace_s` saem) |
 | D10 | A: o PROD continua com `sss_env = DEV` (D12 do CR-028): os usuários acessam por HTTP, sem proxy HTTPS (senha e cookie de sessão abertos na rede interna: risco aceito, DEPLOYMENT §4.0) |
-| D11 | A: retirar o `[app] sss_env` (passo 032c); DEV e PROD idênticos por construção. Comportamento único: cookie `Secure` só quando a requisição chega por HTTPS; origem das `allowed_origins` e do próprio `Host`; conta Oracle igual ao owner aceita; seção de outro papel nos segredos só gera aviso; ambiente atendido sem credencial no `secrets.cfg` do agente recusa a subida; `init_db` mantém a trava de esquema descartável (`--real-schema`); tela `/dev`, FAKE e scripts em `dev/` só onde existem (o repositório; o pacote não os leva); a faixa de ambiente vem da pasta `<TIPO>` |
+| D11 | A: retirar o `[app] sss_env` (passo 032c); DEV e PROD idênticos por construção. Comportamento único: cookie `Secure` só quando a requisição chega por HTTPS; origem das `allowed_origins` e do próprio `Host`; conta Oracle igual ao owner aceita; seção de outro papel nos segredos ignorada sem aviso (o valor entra no masking, revisão do 032d3); ambiente atendido sem credencial no `secrets.cfg` do agente recusa a subida; `init_db` mantém a trava de esquema descartável (`--real-schema`); tela `/dev`, FAKE e scripts em `dev/` só onde existem (o repositório; o pacote não os leva); a faixa de ambiente vem da pasta `<TIPO>` |
 
 ### 4.1 Decisões D12 a D17 (2026-10-27, depois do 032a)
 
 | # | Decisão |
 |---|---|
-| D12 | A: o processo cria na subida as pastas que faltarem (modos de hoje, uma linha no log por pasta criada); o `prepare_dirs.py` sai; continua recusando pasta existente inutilizável (link, outro dono, modo errado) |
+| D12 | A: o processo cria na subida as pastas que faltarem (modos de hoje, uma linha no log por pasta criada); o `prepare_dirs.py` sai; continua recusando pasta existente inutilizável (como antes do CR: pasta do sistema, arquivo no lugar ou sem escrita; link é seguido e dono e modo não são conferidos, revisão do 032d3) |
 | D13 | A: saída e entrada por chamadas diretas no agente (zip em segundo plano, sem travar o laço; mesmas validações de caminho); sai o `bin/sss-helper` |
 | D14 | A: um `instance/secrets.cfg` compartilhado (`[oracle]`, `[web]`, `[environment:*]`); configs continuam um por processo; `secrets.cfg` antigo em `instance/<nome>/` lido com aviso para mover |
 | D15 | A: DEPLOYMENT só com o caminho real (roteiro do §4.0); saem o cenário com administrador, `systemd`, apêndice B e a migração de `/opt/sss/app`; notas por versão só as da estrutura nova |
 | D16 | A: `critical_config` só com `call_timeout_ms` e `misfire_policy` (atualização com todos os agentes parados) |
 | D17 | B: o `check_env.py` fica |
+| D20 | A (2026-10-28, achado 4 da revisão): uma senha `[oracle]` por servidor no `secrets.cfg` único; web e agentes do mesmo servidor usam a mesma conta Oracle, ou contas com a mesma senha; sem mudança de código |
 | D19 | A (2026-10-28): o keepalive aceita `<nome>:<endereço IPv4>:<porta>` para o web (ex.: `web0001:0.0.0.0:18000`), para os usuários entrarem direto por HTTP; sem endereço, continua `127.0.0.1`. Risco aceito no README §14 |
 | D18 | A (2026-10-28): `instance/common.ini` por servidor, na pasta de cima da do config (como o `secrets.cfg`), com o `[oracle]` comum ao web e aos agentes; uma chave repetida no `config.ini` do processo vale no lugar da comum. Passo 032d |
 
@@ -119,7 +120,7 @@ O `config.ini` do agente ficaria com `sss_env`, `name`, `[oracle]` (`dsn`, `owne
 | 032b | D4 (`name` obrigatório, fim do formato único), D14 (`secrets.cfg` único), D12 (pastas criadas na subida, sem `prepare_dirs`) | Concluído (f57a921) |
 | 032c | D7 e D13 (sem `sudo`/helper; funções no agente), D8 (sem monitor), D11 (sem `sss_env`), D16 (`critical_config` enxuto); linha de subida com o ambiente da instalação (`<TIPO>` e caminho) no web e no agente; no DEV, título da aba com `[DEV]` e cabeçalho com outra cor (além da faixa que já existe) | Concluído (§6) |
 | 032e | Pastas do processo no plural: `inputs`, `outputs`, `works`, `script_works` (pedido de 2026-10-27; passo separado depois do 032d) | Pendente |
-| 032d | 032d1 feito (D18, configs do DEV e modelos, §7); 032d2 feito (§8): D15 (DEPLOYMENT enxuto; apêndice B movido para `docs/architecture/`, opção B; roteiro próprio "raiz compartilhada por vários servidores", pedido de 2026-10-28: nome único por processo, cada agente sempre no mesmo servidor e só no cron dele, sem trocar de servidor com ticket rodando, atualização com tudo parado em todos os servidores, `secrets.cfg` com o `[environment:*]` de todos os ambientes, mesma conta e UID, `flock` em NFS coberto pelo `agent_id` único no banco, webs com nome e porta próprios); 032d3: homologação real, revisão independente, encerramento | Pendente |
+| 032d | 032d1 feito (D18, configs do DEV e modelos, §7); 032d2 feito (§8): D15 (DEPLOYMENT enxuto; apêndice B movido para `docs/architecture/`, opção B; roteiro próprio "raiz compartilhada por vários servidores", pedido de 2026-10-28: nome único por processo, cada agente sempre no mesmo servidor e só no cron dele, sem trocar de servidor com ticket rodando, atualização com tudo parado em todos os servidores, `secrets.cfg` com o `[environment:*]` de todos os ambientes, mesma conta e UID, `flock` em NFS coberto pelo `agent_id` único no banco, webs com nome e porta próprios); 032d3: homologação real, revisão independente, encerramento | Concluído (032d1 8b03ced, 032d2 01b7f25, D19 5205959, 032d3 no commit de encerramento) |
 
 ## 6. O que o 032c fez (2026-10-28)
 
@@ -143,3 +144,24 @@ O `config.ini` do agente ficaria com `sss_env`, `name`, `[oracle]` (`dsn`, `owne
 * **Opção B do apêndice B:** o Apêndice B, a migração de `/opt/sss/app` e as notas por versão anteriores ao CR-028 foram para `docs/architecture/DEPLOYMENT-history.md` (registro, não vigente). O §18.2 novo tem só as notas da estrutura por processo (CR-030 e CR-032).
 * **Achado:** pelo keepalive, o web atende só em `127.0.0.1`; sem um proxy ou balanceador na frente, os usuários só chegam por túnel. O §10.4 diz isso; a decisão fica com o responsável.
 * **D19 (2026-10-28, depois do achado):** `bin/sss-keepalive.sh` aceita `<nome>:<endereço IPv4>:<porta>` para o web (cada parte de 0 a 255; senão, `recusado: endereco invalido`, código 3); sem endereço, `127.0.0.1`. Teste novo em `test_keepalive.py`; README §12.2 e §14 (risco aceito), DEPLOYMENT §2, §10.1, §10.4 e §10.6.
+
+## 9. Revisão independente (032d3, 2026-10-28)
+
+Feita por um subagente, só em leitura, sobre `cf886f3^..5205959`: nenhum achado bloqueante, 4 importantes e vários menores.
+
+* **Corrigidos:**
+  * **1:** o `sss-stop.sh` obedecia a `[agent] agent_id`/`work_dir` antigos e gravava o `.stop` onde o agente não olha; agora usa só o `[app] name`.
+  * **2:** o keepalive tratava como agente o web com `[agent]` parcial; agora decide o papel como o `sss_config`.
+  * **3:** o `cookie_key` não era mascarado no agente com o `secrets.cfg` único; os valores das seções do outro papel entram no masking, sem validar.
+  * **5 a 11:** textos do README, DEPLOYMENT, DEV_ENVIRONMENT, AGENTS e deste documento, e comentários de código.
+  * **12:** aviso e recusa do `common.ini` citam o arquivo certo.
+  * **13:** o DEPLOYMENT exige `X-Forwarded-Proto: https` de um proxy HTTPS.
+  * **14:** testes do `init_db --real-schema`, da tela `/dev` sem a pasta `dev/` e das marcas de DEV no layout.
+  * **15:** item do checklist sobre as pastas acima da raiz.
+* **Achado 4** (contas Oracle separadas por papel com um `[oracle] password` único): o README §4.1 passou a dizer o que o código faz (uma senha por servidor); decisão do responsável (D20, abaixo).
+
+## 10. Encerramento (032d3, 2026-10-28)
+
+* **Homologação real no DEV** (`capture_evidence.js`, `SSS_ADMIN_START=new`, `SSS_EVIDENCE_DATE=20261028`): 34 casos, 332/332 verificações, 102 figuras; `docs/homologation/SSS_Homologation_Evidence_2026-10-28.docx`. Uma primeira passada saiu com a data padrão fixa do roteiro (20261023), sobrescreveu o `results.json` daquela evidência (restaurado pelo git) e as figuras locais dela; o padrão passou a ser a data do dia.
+* **Validação final:** suíte em 3.6.0, 3.6.15 e 3.13.2 (1492 testes), bateria Oracle com o DEV parado, `make lint` e `make type-check`.
+* **Fica para o 032e:** pastas do processo no plural (`inputs`, `outputs`, `works`, `script_works`).

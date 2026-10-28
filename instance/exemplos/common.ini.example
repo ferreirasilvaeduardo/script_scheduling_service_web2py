@@ -1,6 +1,7 @@
 ; common.ini do SERVIDOR (CR-032, D18): copie para instance/common.ini (ao lado do secrets.cfg).
 ; Lido pelo web e por todos os agentes deste servidor. So aceita [oracle]: o banco do SSS comum a todos.
 ; Uma chave escrita no config.ini de um processo vale no lugar desta (caso raro: outro banco ou outra conta).
+; A senha e uma so por servidor ([oracle] password do secrets.cfg; CR-032, D20): outra conta precisa da mesma senha.
 ; A senha fica no instance/secrets.cfg ([oracle] password), nunca aqui.
 
 [oracle]

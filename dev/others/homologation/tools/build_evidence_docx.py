@@ -671,6 +671,21 @@ RODADAS["20261027_r2"] = dict(RODADAS["20261027"], **{
         u"O banco não foi recriado: o admin já estava com a senha escolhida (SSS_ADMIN_START=new).",
     ],
 })
+RODADAS["20261028"] = dict(RODADAS["20261027_r2"], **{
+    "commit": u"5205959 (CR-032a a 032d2 e D19) mais as correções da revisão independente do 032d3, no mesmo "
+              u"commit deste documento",
+    "observacoes": [
+        u"Rodada do CR-032 (032d3): sem sss_env (DEV e PROD com o mesmo comportamento), sem usuário de execução, "
+        u"sudo nem helper (os scripts rodam com a conta do agente), sem papel monitor, um secrets.cfg e um "
+        u"common.ini por servidor e as pastas criadas na subida. Marca %s." % STAMP,
+        u"O DEV mostra [DEV] no título da aba e o cabeçalho em outra cor; web e agente registram na subida o "
+        u"ambiente da instalação e de onde veio o [oracle] (instance/common.ini).",
+        u"Web e agente subidos pelo bin/sss-keepalive.sh (web em 127.0.0.1:18000).",
+        u"O banco não foi recriado: o admin já estava com a senha escolhida (SSS_ADMIN_START=new).",
+        u"Uma primeira passada no mesmo dia saiu com a data padrão antiga do roteiro (20261023) e foi refeita; os "
+        u"registros HOMOLOG_20261023_1308 que ela criou ficam no DEV como evidência inativa.",
+    ],
+})
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]

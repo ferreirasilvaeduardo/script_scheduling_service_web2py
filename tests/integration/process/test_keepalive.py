@@ -104,6 +104,16 @@ class TestKeepalive(unittest.TestCase):
             self.assertEqual(code, 3, bad)
             self.assertIn("endereco invalido", err, bad)
 
+    def test_web_com_agent_parcial_continua_web(self):
+        """Revisao do CR-032 (achado 2): o [agent] parcial do web (so misfire_policy) nao o torna
+        agente."""
+        _write(os.path.join(self.root, "instance", "web0001", "config.ini"),
+               "[app]\n[web]\n[agent]\nmisfire_policy = SKIP\n")
+        code, _out, err = self._run("web0001:18997")
+        self.assertEqual(code, 0, err)
+        self.assertIn("bin/sss-web.sh web0001 --host 127.0.0.1 --port 18997",
+                      self._log("web0001")[-1])
+
     def test_processo_que_nao_sobe(self):
         _write(os.path.join(self.root, "scripts", "run_scheduler.py"), "import sys\nsys.exit(2)\n")
         code, _out, err = self._run("agente0001")
