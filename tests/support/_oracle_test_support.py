@@ -16,6 +16,7 @@ import re
 
 from tests.support import _testenv  # noqa: F401
 
+from sss.config import sss_config
 from sss.persistence import db_conn
 
 KEY = "SSS_TEST_ORACLE"
@@ -71,8 +72,9 @@ def check_environment_preconditions(cfg=None):
     if cfg is None:
         return True, ""
 
-    if getattr(getattr(cfg, "app", None), "sss_env", None) != "DEV":
-        return False, "Ambiente deve ser DEV para testes Oracle reais"
+    if not sss_config.has_dev_dir():
+        # CR-032 (D11): sem sss_env; a bateria real so roda no repositorio (com a pasta dev/), nunca no pacote.
+        return False, "Testes Oracle reais so no repositorio (pasta dev/)"
     if not _cfg_oracle(cfg, "dsn"):
         return False, "[oracle] dsn vazio no config"
     owner = _cfg_oracle(cfg, "owner").upper()
@@ -145,7 +147,8 @@ def _check_sss_schema(cur, owner, prefix):
 def prepare_disposable_schema(role="web", cfg=None, secrets=None):
     """Valida o banco real para o papel e devolve o cfg do instance/agente0001/config.ini (ou o informado)."""
     global _current_mode
-    from sss.config import sss_config
+    # Import local: o teste da trava troca sss.config.sss_config pelo duble (mock.patch no pacote).
+    from sss.config import sss_config  # pylint: disable=redefined-outer-name,reimported
 
     ok, reason = check_environment_preconditions()
     if not ok:
@@ -161,8 +164,6 @@ def prepare_disposable_schema(role="web", cfg=None, secrets=None):
     user_expected = getattr(getattr(cfg, "oracle", None), "user", None)
     if role == "purge":
         user_expected = getattr(getattr(cfg, "retention", None), "purge_user", None)
-    elif role == "monitor":
-        user_expected = getattr(getattr(cfg, "monitor", None), "user", None)
 
     if mode == DISPOSABLE_MODE and user_expected and user_expected.strip().upper() == cfg_owner:
         raise SchemaPreconditionError("Usuario de teste '%s' nao pode ser o owner do esquema" % user_expected)

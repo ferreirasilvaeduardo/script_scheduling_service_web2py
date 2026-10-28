@@ -12,7 +12,7 @@ Valida requisitos do prompt F0.4, README §2.5 e AGENTS.md §4, §5.5, §7:
 8. perm_version incrementando em alteracoes de perfil, matriz e usuario;
 9. Paginacao estavel e deterministica com desempate por id;
 10. Escopo de environments na listagem de tickets;
-11. repo_factory com trava de environment (sss_env != DEV com FAKE lanca RuntimeError);
+11. repo_factory com trava do FAKE (sem a pasta dev/ do repositorio, RuntimeError; CR-032, D11);
 12. repo_factory rejeita apenas o proximo agregado Oracle ainda nao implementado (F7.3 incremental);
 13. Nenhum import repo_fake fora de repo_factory.py;
 14. FAKE nao expos nenhum metodo publico alem dos definidos no contrato (paridade estrita);
@@ -771,7 +771,7 @@ class TestRepoContractFake(unittest.TestCase, BaseRepoContractTest):
     """Executa a bateria de contratos contra o backend FAKE."""
 
     def setUp(self):
-        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE"}})
         repo_factory.reset_singletons()
 
     def obter_repo(self, name):
@@ -888,7 +888,7 @@ class _OracleContract(object):
         app_context.set_config(cls._previous_sss_cfg)
 
     def setUp(self):
-        repo_factory.configure({"app": {"sss_env": "DEV"}})
+        repo_factory.configure({"app": {}})
         repo_factory.reset_singletons()
         self._fixtures = None
 
@@ -939,7 +939,7 @@ class TestLastAdminFake(unittest.TestCase, BaseLastAdminTest):
     """Protecao do ultimo administrador no FAKE (seed com um unico admin ativo)."""
 
     def setUp(self):
-        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE"}})
         repo_factory.reset_singletons()
 
     def obter_repo(self, name):
@@ -953,17 +953,14 @@ class TestRepoFactoryAndIntegrity(unittest.TestCase):
         repo_factory.configure(None)
         repo_factory.reset_singletons()
 
-    def test_fake_fora_de_dev_lanca_runtime_error(self):
-        # FAKE com HML deve abortar com RuntimeError (README §2.5)
-        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "HML"}})
-        with self.assertRaises(RuntimeError) as ctx:
-            repo_factory.get("users")
-        self.assertIn("FAKE (so de teste) e proibido fora de DEV", str(ctx.exception))
-
-        # FAKE com PROD tambem deve abortar
-        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "PROD"}})
-        with self.assertRaises(RuntimeError):
-            repo_factory.get("users")
+    def test_fake_fora_do_repositorio_lanca_runtime_error(self):
+        # CR-032 (D11): sem a pasta dev/ (o pacote de implantacao), o FAKE aborta com RuntimeError (README §2.5)
+        repo_factory.configure({"app": {"data_backend": "FAKE"}})
+        with mock.patch.object(repo_factory, "_APP_DEV_DIR", "/pasta/que/nao/existe/dev"):
+            with self.assertRaises(RuntimeError) as ctx:
+                repo_factory.get("users")
+        self.assertIn("FAKE (so de teste) e proibido fora do repositorio", str(ctx.exception))
+        self.assertIsInstance(repo_factory.get("users"), RepoUsers)
 
     def test_oracle_integrado_exige_banco_autorizado(self):
         """A bateria Oracle so roda com SSS_TEST_ORACLE=1, DEV e o esquema validado (detalhes no test_db_conn)."""
@@ -971,7 +968,6 @@ class TestRepoFactoryAndIntegrity(unittest.TestCase):
 
         cfg = mock.Mock()
         cfg.app.data_backend = "FAKE"
-        cfg.app.sss_env = "DEV"
         cfg.oracle.owner = "SSS_TEST_APP"
         cfg.oracle.dsn = "dbtest.local/sss"
         cfg.oracle.user = "SSS_APP"
@@ -999,18 +995,18 @@ class TestRepoFactoryAndIntegrity(unittest.TestCase):
         self.assertEqual(connection.cursor.return_value.execute.call_args[0][0], "SELECT USER FROM DUAL")
         connection.close.assert_called_once_with()
 
-        # Desligado, variavel antiga ou fora de DEV: recusa antes de conectar.
+        # Desligado, variavel antiga ou fora do repositorio: recusa antes de conectar.
         db_conn_mock.connect.reset_mock()
         for env in ({}, {"SSS_TEST_ORACLE": "1", "SSS_TEST_DSN": "dbtest.local/sss"}):
             with self.assertRaises(SchemaPreconditionError):
                 preparar(env)
-        cfg.app.sss_env = "HML"
-        with self.assertRaises(SchemaPreconditionError):
-            preparar({"SSS_TEST_ORACLE": "1"})
+        with mock.patch("tests.support._oracle_test_support.sss_config.has_dev_dir", return_value=False):
+            with self.assertRaises(SchemaPreconditionError):
+                preparar({"SSS_TEST_ORACLE": "1"})
         db_conn_mock.connect.assert_not_called()
 
     def test_oracle_agregado_seguinte_ainda_nao_implementado(self):
-        repo_factory.configure({"app": {"data_backend": "ORACLE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "ORACLE"}})
         aggregates = ("RBAC_USUARIOS", "CATALOGO", "TICKETS", "AGENDAMENTOS", "AUDITORIA_AGENTES")
         selected = os.environ.get("SSS_TEST_REPO_AGREGADO")
         if selected not in aggregates:
@@ -1060,7 +1056,7 @@ class TestRepoFactoryAndIntegrity(unittest.TestCase):
 
     def test_paridade_estrita_sem_metodos_extras_no_fake(self):
         """Verifica que as classes Fake nao expõem metodos publicos alem dos contratos."""
-        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE"}})
         repo_factory.reset_singletons()
 
         pairs = [
@@ -1093,7 +1089,7 @@ class TestRepoFactoryAndIntegrity(unittest.TestCase):
 
     def test_retornos_nao_vazam_referencia_mutavel(self):
         """Verifica que o backend FAKE devolve copias independentes (deepcopy)."""
-        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE"}})
         repo_factory.reset_singletons()
 
         usr = repo_factory.get("users")
@@ -1125,32 +1121,24 @@ class TestFailFastRegression(unittest.TestCase):
         self.assertIn("Configuracao ausente", str(ctx.exception))
 
     def test_configuracao_incompleta_falha(self):
-        for cfg in ({}, {"app": {"data_backend": "FAKE"}}):
-            with self.subTest(cfg=cfg):
-                repo_factory.configure(cfg)
-                with self.assertRaises(KeyError):
-                    repo_factory.get("users")
+        repo_factory.configure({})
+        with self.assertRaises(KeyError):
+            repo_factory.get("users")
 
     def test_sem_data_backend_a_aplicacao_e_oracle(self):
         """F7.3: o config.ini nao tem mais data_backend; so o dict de teste pode pedir o FAKE."""
-        self.assertEqual(repo_factory._resolve_config({"app": {"sss_env": "DEV"}}), ("ORACLE", "DEV"))
-        self.assertEqual(repo_factory._resolve_config({"app": {"sss_env": "DEV", "data_backend": "FAKE"}}),
-                         ("FAKE", "DEV"))
+        self.assertEqual(repo_factory._resolve_config({"app": {}}), "ORACLE")
+        self.assertEqual(repo_factory._resolve_config({"app": {"data_backend": "FAKE"}}), "FAKE")
         from sss.config import sss_config
-        cfg_app = sss_config.AppConfig(sss_env="PROD")
-        self.assertEqual(repo_factory._resolve_config({"app": cfg_app}), ("ORACLE", "PROD"))
+        cfg_app = sss_config.AppConfig(name="web0001")
+        self.assertEqual(repo_factory._resolve_config({"app": cfg_app}), "ORACLE")
 
     def test_usa_app_context_quando_sem_override(self):
-        app_context.set_config({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        app_context.set_config({"app": {"data_backend": "FAKE"}})
         self.assertIsInstance(repo_factory.get("users"), RepoUsers)
 
-        repo_factory.reset_singletons()
-        app_context.set_config({"app": {"data_backend": "FAKE", "sss_env": "PROD"}})
-        with self.assertRaises(RuntimeError):
-            repo_factory.get("users")
-
     def test_paginacao_rejeita_entrada_nao_numerica(self):
-        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE"}})
         usr = repo_factory.get("users")
         with self.assertRaises(ValueError):
             usr.list(page="abc")
@@ -1162,7 +1150,7 @@ class TestFailFastRegression(unittest.TestCase):
         self.assertEqual((page["page"], page["size"]), (1, 20))
 
     def test_log_ler_rejeita_entrada_nao_numerica(self):
-        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE"}})
         tck = repo_factory.get("tickets")
         with self.assertRaises(ValueError):
             tck.log_read(11, offset="x", max_chars=20)

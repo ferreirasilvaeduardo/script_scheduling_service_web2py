@@ -32,7 +32,7 @@ def _cfg():
                 misfire_policy="RUN_ONCE", misfire_tolerance_s=300, cron_horizon_days=1461,
                 queue_aging_min=60)
     return NS(oracle=NS(owner="openrisow", table_prefix="tbsss_", call_timeout_ms=30000), agent=agent,
-              secrets=NS(secrets_file="/x/secrets.cfg"))
+              secrets=NS(secrets_file="/x/secrets.cfg"), app=NS(role="agent"))
 
 
 CRITICAL = sss_config.critical_config(_cfg())
@@ -173,7 +173,7 @@ class TestChecks(unittest.TestCase):
         self.assertIn(("sem_pid", 5), repo.calls)
 
     def test_configuracao_divergente(self):
-        other = CRITICAL.replace("kill=5", "kill=10")
+        other = CRITICAL.replace("misfire=RUN_ONCE", "misfire=SKIP")
         code, text, _r = self._run_loop(agents=[_agent("srv-a"), _agent("srv-b", cfg=other),
                                                  _agent("srv-c", status="STOPPED", cfg=other)])
         self.assertEqual(code, saude_cli.WARNING)
@@ -206,7 +206,7 @@ class TestMain(unittest.TestCase):
         output = io.StringIO()
         get = mock.Mock(side_effect=sss_config.ConfigError(reason="faltou dsn") if cfg_error else None,
                           return_value=_cfg())
-        load = mock.Mock(side_effect=sss_config.ConfigError(reason="sem [monitor]") if secrets_error else None,
+        load = mock.Mock(side_effect=sss_config.ConfigError(reason="sem [oracle]") if secrets_error else None,
                              return_value=object())
         with mock.patch.object(saude_cli.sss_config, "get_config", get), \
                 mock.patch.object(saude_cli.sss_config, "load_secrets", load), \
@@ -215,7 +215,8 @@ class TestMain(unittest.TestCase):
         self.load = load
         return code, output.getvalue()
 
-    def test_ok_com_papel_monitor(self):
+    def test_ok_com_a_conta_do_proprio_processo(self):
+        """CR-032 (D8): sem papel monitor; os segredos e a conexao sao os do papel do --name."""
         conn = _ConnNow()
         roles = []
 
@@ -225,14 +226,14 @@ class TestMain(unittest.TestCase):
         code, text = self._main(connect=conectar)
         self.assertEqual(code, 0)
         self.assertTrue(text.startswith("SSS OK - 0 problemas"))
-        self.assertEqual(self.load.call_args[1]["role"], "monitor")
+        self.assertEqual(self.load.call_args[1]["role"], "agent")
         self.assertTrue(conn.closed)
 
     def test_unknown(self):
         self.assertEqual(self._main(cfg_error=True), (3, "SSS UNKNOWN - configuracao invalida: faltou dsn\n"))
         code, text = self._main(secrets_error=True)
         self.assertEqual(code, 3)
-        self.assertIn("sem [monitor]", text)
+        self.assertIn("sem [oracle]", text)
         code, text = self._main(connect=mock.Mock(side_effect=RuntimeError("ORA-12541: TNS:no listener")))
         self.assertEqual(code, 3)
         self.assertIn("falha ao conectar no Oracle", text)
@@ -243,8 +244,8 @@ class TestMain(unittest.TestCase):
         self.assertIn("falha de banco", text)
         self.assertTrue(conn.closed)
 
-    def test_segredos_do_monitor_sem_os_outros_papeis(self):
-        # Integracao com o sss_config real: o arquivo do servidor do agente, com [oracle] e [environment:*].
+    def test_cr032_secao_monitor_ignorada_com_aviso(self):
+        """CR-032 (D8): a secao [monitor] antiga do secrets.cfg so gera aviso; a senha dela nunca e lida."""
         dir_value = tempfile.mkdtemp(prefix="sss_test_saude_")
         self.addCleanup(shutil.rmtree, dir_value, True)
         path = os.path.join(dir_value, "secrets.cfg")
@@ -254,10 +255,15 @@ class TestMain(unittest.TestCase):
                     "[monitor]\nuser = sss_monitor\npassword = senha-mon-1\n")
         os.chmod(path, 0o600)
         registered = []
-        with mock.patch("sss.core.masking.register_secret", side_effect=registered.append):
-            seg = sss_config.load_secrets(path, sss_env="PROD", role="monitor")
-        self.assertEqual((seg.monitor_user, seg.oracle_password, seg.environments), ("sss_monitor", None, {}))
-        self.assertEqual(registered, ["senha-mon-1"])
+        with mock.patch("sss.core.masking.register_secret", side_effect=registered.append), \
+                self.assertLogs("sss_config", "WARNING") as logs:
+            seg = sss_config.load_secrets(path, role="agent")
+        self.assertIn("secao [monitor] ignorada", "\n".join(logs.output))
+        self.assertEqual(seg.oracle_password, "senha-agt-1")
+        self.assertNotIn("senha-mon-1", registered)
+        self.assertFalse(hasattr(seg, "monitor_user"))
+        with self.assertRaises(sss_config.ConfigError):
+            sss_config.load_secrets(path, role="monitor")
 
 
 class TestSqlRepoHealth(unittest.TestCase):

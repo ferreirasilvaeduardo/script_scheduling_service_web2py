@@ -2,7 +2,7 @@
 """Testes do tools/package.py (README §12.2; F9.1c; CR-005; CR-003 P10).
 
 Arvore falsa do repositorio em diretorio temporario: pacote gerado, SHA256SUMS de fora conferindo com o tar.gz e o
-de dentro com cada arquivo, tar reprodutivel, bin/sss-helper executavel, sem nada do web2py (CR-021f), DEV, testes
+de dentro com cada arquivo, tar reprodutivel, bin/*.sh executaveis, sem nada do web2py (CR-021f), DEV, testes
 e pastas de execucao fora; recusa (sem gravar nada e sem imprimir o valor) com secrets.cfg, credencial fora do
 placeholder, bytecode, link simbolico, outra aplicacao e resto do web2py na raiz.
 """
@@ -34,7 +34,6 @@ class TestPack(unittest.TestCase):
             "bin/sss-web.sh": "#!/bin/bash\n", "bin/sss-scheduler.sh": "#!/bin/bash\n",
             "bin/sss-stop.sh": "#!/bin/bash\n", "bin/sss-update.sh": "#!/bin/bash\n",
             "bin/sss-keepalive.sh": "#!/bin/bash\n",
-            "bin/sss-helper": "#!/usr/bin/env python3\n",
             "bin/start_local.sh": "#!/bin/bash\n", "CLAUDE.md": "x", "parameters_8000.py": "x",
             "src/sss/web/controllers/default.py": "# default\n", "src/sss/web/controllers/dev.py": "# dev\n",
             "scripts/run_web.py": "# servidor\n", "src/sss/web/app/bootstrap.py": "# web\n",
@@ -58,7 +57,6 @@ class TestPack(unittest.TestCase):
         }
         for rel, text in files.items():
             self._write(rel, text)
-        os.chmod(os.path.join(self.origem, "bin", "sss-helper"), 0o755)
 
     def _write(self, rel, text):
         path = os.path.join(self.origem, *rel.split("/"))
@@ -99,9 +97,10 @@ class TestPack(unittest.TestCase):
                 hash_, rel = line.split("  ", 1)
                 self.assertEqual(hashlib.sha256(tar.extractfile(top + rel).read()).hexdigest(), hash_, rel)
         files = set(n for n, m in members.items() if m.isfile())
-        self.assertEqual(members["bin/sss-helper"].mode, 0o755, "helper executavel")
-        self.assertEqual((members["bin/sss-helper"].uid, members["scripts/run_web.py"].mode),
+        self.assertEqual(members["bin/sss-keepalive.sh"].mode, 0o755, "involucro executavel")
+        self.assertEqual((members["bin/sss-keepalive.sh"].uid, members["scripts/run_web.py"].mode),
                          (0, 0o644))
+        self.assertNotIn("bin/sss-helper", members, "CR-032 (D7): sem helper de execucao")
         for rel in ("bin/sss-web.sh", "bin/sss-scheduler.sh", "bin/sss-stop.sh", "bin/sss-update.sh",
                     "bin/sss-keepalive.sh",
                     "src/sss/web/controllers/default.py", "scripts/run_web.py",
@@ -209,9 +208,9 @@ class TestPack(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stdout.decode("utf-8", "replace"))
         self.assertFalse([d for d, _s, _f in os.walk(self.origem) if d.endswith("__pycache__")])
 
-    def test_helper_ausente(self):
-        os.remove(os.path.join(self.origem, "bin", "sss-helper"))
-        self._refused("bin/sss-helper: ausente")
+    def test_involucro_ausente(self):
+        os.remove(os.path.join(self.origem, "bin", "sss-keepalive.sh"))
+        self._refused("bin/sss-keepalive.sh: ausente")
 
     def test_pacote_da_arvore_real_sem_segredo_nem_dev(self):
         # Coleta da propria arvore: as regras de inclusao nunca puxam DEV, testes nem runtime.

@@ -697,14 +697,14 @@ def build_ddl_script(owner, prefix, lob_storage="SECUREFILE", include_comments=T
     return "\n".join(rows)
 
 
-GRANT_ROLES = ("web", "agent", "monitor")  # CR-030: sem o papel purge
+GRANT_ROLES = ("web", "agent")  # CR-030: sem o papel purge; CR-032 (D8): sem o monitor
 
 
 def build_grants_by_role(owner, prefix, user_roles):
     """Gera comandos GRANT para os usuarios informados por papel (README §11.1).
 
     user_roles: dict com mapeamento papel -> usuario Oracle, ex:
-      {'web': 'sss_web', 'agent': 'sss_agente', 'monitor': 'sss_monitor'}
+      {'web': 'sss_web', 'agent': 'sss_agente'}
 
     Nunca concede a PUBLIC. A conta de cada papel e validada como identificador Oracle (entra no
     texto do GRANT). Papel sem conta ou cuja conta e a dona do esquema nao recebe GRANT: o owner ja
@@ -841,19 +841,6 @@ def build_grants_by_role(owner, prefix, user_roles):
         for ent in ("tickets", "ticket_answer", "agents", "audit", "ticket_output", "input_listing"):
             commands.append("GRANT SELECT ON {}.{} TO {};".format(
                 owner, schema[ent]["sequence"], usr_agt
-            ))
-
-    # 3. PAPEL: monitor (CR-008, E3/R-04)
-    # Somente SELECT nas 7 tabelas que health.py consulta, zero sequences
-    usr_mon = user_roles.get("monitor")
-    if usr_mon:
-        tables_monitor = (
-            "agents", "tickets", "schedules", "scripts",
-            "environments", "control", "audit"
-        )
-        for ent in tables_monitor:
-            commands.append("GRANT SELECT ON {}.{} TO {};".format(
-                owner, schema[ent]["tabela"], usr_mon
             ))
 
     return commands

@@ -13,8 +13,7 @@ from sss.scheduler import env_builder
 from sss.core import masking
 from sss.config.sss_config import EnvironmentSecret, Secrets
 
-_AgentStub = collections.namedtuple("_Agente", "agent_id child_locale env_passthrough exec_users exec_work_dir "
-                                               "script_base_dir")
+_AgentStub = collections.namedtuple("_Agente", "agent_id child_locale env_passthrough script_base_dir")
 _Cfg = collections.namedtuple("_Cfg", "agent")
 
 WORK = "/srv/sss/work/ticket_41"
@@ -24,8 +23,8 @@ DAEMON = {"PATH": "/opt/daemon/bin:/usr/bin", "HOME": "/home/sssagente", "TZ": "
           "LD_PRELOAD": "/tmp/x.so", "PYTHONPATH": "/tmp"}
 
 
-def _cfg(passthrough=("ORACLE_HOME", "NLS_LANG", "TNS_ADMIN"), users=(), exec_work_dir=None):
-    return _Cfg(_AgentStub("srv-01", "C.UTF-8", tuple(passthrough), tuple(users), exec_work_dir, None))
+def _cfg(passthrough=("ORACLE_HOME", "NLS_LANG", "TNS_ADMIN")):
+    return _Cfg(_AgentStub("srv-01", "C.UTF-8", tuple(passthrough), None))
 
 
 def _secrets(environments=None):
@@ -71,12 +70,12 @@ class TestEnvBuilder(unittest.TestCase):
         self.assertNotIn("ORACLE_HOME", env)
         self.assertNotIn("TZ", env)
 
-    def test_home_com_usuario_de_execucao(self):
-        cfg = _cfg(users=(("PRODUCAO", "sssprd"),), exec_work_dir="/srv/sss/exec")
+    def test_home_na_pasta_exec_do_ticket(self):
+        """CR-032 (D7): sem usuario de execucao, o cwd/HOME e sempre work_dir/ticket_<id>/exec."""
         with self.assertLogs("sss_scheduler", "WARNING"):
-            env = self.build(cfg=cfg)
-        self.assertEqual(env["HOME"], "/srv/sss/exec/sssprd/ticket_41")
-        self.assertEqual(env["TMPDIR"], "/srv/sss/exec/sssprd/ticket_41/tmp")
+            env = self.build()
+        self.assertEqual(env["HOME"], os.path.join(WORK, "exec"))
+        self.assertEqual(env["TMPDIR"], os.path.join(WORK, "exec", "tmp"))
         self.assertNotEqual(env["HOME"], env["SSS_SCRIPT_DIR"], "cwd/HOME nao e a pasta do script")
 
     def test_variaveis_bloqueadas_e_chaves_fixas_geram_erro(self):

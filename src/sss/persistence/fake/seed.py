@@ -418,11 +418,10 @@ def load_seed(store, force=False, dev_password=None):
                                     {"id": 2, "code": "agt-host02", "hostname": "worker02.internal", "daemon_pid": 1002, "version": "1.0.0", "environments": "HOMOLOGACAO,DESENV", "platform": "UNIX", "status": "ACTIVE", "started_at": base_dt - datetime.timedelta(days=2), "heartbeat_at": base_dt - datetime.timedelta(seconds=_HB_FROZEN_S), "created_at": base_dt - datetime.timedelta(days=2)},
                                 ]
                                 # Quadros de atencao do painel (CR-007, R-18): o agt-host02 ficou com a configuracao
-                                # antiga (kill=10) e e o unico que atende SH em HOMOLOGACAO.
+                                # antiga (misfire=SKIP) e e o unico que atende SH em HOMOLOGACAO.
                                 for ag in agents:
-                                    ag["critical_config"] = ("hb=10;fence=90;offline=180;call=30;kill=%d;"
-                                                              "misfire=RUN_ONCE;tol=300;horizonte=1461;envelhecimento=60"
-                                                              % (10 if ag["id"] == 2 else 5))
+                                    ag["critical_config"] = ("call=30;misfire=%s"
+                                                              % ("SKIP" if ag["id"] == 2 else "RUN_ONCE"))
                                     store.agents[ag["id"]] = ag
                                 # agt-host01 renova o heartbeat; agt-host02 envelhece com o relogio (F6.1).
                                 store.agents_hb_simulated.add("agt-host01")

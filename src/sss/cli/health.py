@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """Verificacao de saude no padrao Nagios (README §13; F9.1b; CR-007 R-18; CR-008 E3, R-15, R-16).
 
-Roda com a conta so de leitura do papel monitor ([monitor] user e password no secrets.cfg). CR-030 (P1): com
-sss_env = DEV e sem [monitor], usa a conta do [oracle] (ambiente com um usuario de banco so). Uso:
+Roda com a conta do proprio processo do --name ([oracle] user e a senha do secrets.cfg; CR-032, D8: sem papel
+monitor). Uso:
 
     python scripts/health.py --name <nome> | --config <config.ini> [--no-pid-min 2] [--queue-warn 500]
                             [--queue-crit 5000] [--wait-warn-min 30] [--wait-crit-min 120]
@@ -160,7 +160,7 @@ def main(argv=None, connect=None, output=None):
         # CR-026f: sem log da aplicacao aqui; o aviso do config.ini vai para o stderr (o stdout e do Nagios).
         for message in sss_config.pending_warnings():
             print(message, file=sys.stderr)
-        secrets_value = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role="monitor")
+        secrets_value = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role=cfg.app.role)
     except sss_config.ConfigError as exc:
         return _unknown(output, "configuracao invalida: %s" % exc)
     try:
@@ -179,7 +179,7 @@ def main(argv=None, connect=None, output=None):
 
 
 def _connect(cfg, secrets):
-    return db_conn.connect(cfg, secrets, role="monitor")
+    return db_conn.connect(cfg, secrets, role=cfg.app.role)
 
 
 if __name__ == "__main__":

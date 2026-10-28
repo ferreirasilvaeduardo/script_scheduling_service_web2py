@@ -63,7 +63,7 @@ class TestLaunchers(unittest.TestCase):
         return p.returncode, record, p.stderr.decode("utf-8", "replace")
 
     def test_sintaxe(self):
-        for name in LAUNCHERS + ("sss-helper",):
+        for name in LAUNCHERS:
             path = os.path.join(BIN, name)
             self.assertTrue(os.stat(path).st_mode & 0o111, name)
             if name.endswith(".sh"):

@@ -15,15 +15,15 @@ O README.md é a especificação. Quando este guia e o README divergirem, vale o
 ### 1.1 Componentes
 
 ```text
- usuários ── HTTPS ──> proxy reverso ──> nó web (run_web.py, bin/sss-web.sh) ┐
+ usuários ── HTTP(S) ──> nó web (run_web.py, bin/sss-web.sh) ──────────────────┐
                                                                            ├──> Oracle (owner do esquema, tabelas tbsss_*)
  cron ──> sss-keepalive.sh ──┐                                             │
  monitoramento ──> health.py ─┼──> agente (bin/sss-scheduler.sh) ───────────┘
-                             │       └── sudo ──> sss-root/bin/sss-helper ──> script do usuário (usuário de execução do ambiente)
+                             │       └── script do usuário (com a conta do agente, CR-032)
 ```
 
 * **Nó web:** telas, cadastros e disparo de tickets. Não executa scripts.
-* **Agente:** daemon (`scripts/run_scheduler.py`) que desdobra os agendamentos, reserva os tickets (claim), executa os scripts pelo helper, coleta o log e mantém o heartbeat. Pode haver vários agentes; cada ticket roda em um só.
+* **Agente:** daemon (`scripts/run_scheduler.py`) que desdobra os agendamentos, reserva os tickets (claim), executa os scripts com a própria conta (CR-032, D7: sem `sudo` nem helper), coleta o log e mantém o heartbeat. Pode haver vários agentes; cada ticket roda em um só.
 * **Keepalive** (`bin/sss-keepalive.sh`, CR-030) e **saúde** (`scripts/health.py`): chamados pelo `cron` e pelo monitoramento. Não há purge: a limpeza é manual (README §11.3, §12).
 
 ### 1.2 Contas Oracle por papel
@@ -33,9 +33,8 @@ O README.md é a especificação. Quando este guia e o README divergirem, vale o
 | Dono do esquema | `openrisow` (exemplo) | Só o DBA, na criação do esquema (§5) | Com o DBA; nunca em arquivo do SSS |
 | web | `sss_web` | Nó web | `[oracle] password` do `secrets.cfg` do web |
 | agente | `sss_agente` | Agente | `[oracle] password` do `secrets.cfg` do agente |
-| monitor | `sss_monitor` | `health.py` (só leitura) | `[monitor] user` e `password` do `secrets.cfg` de quem roda o `health.py` |
 
-Fora de DEV, a conta da aplicação igual à dona do esquema é recusada (CR-008, R-29). **Com um usuário de banco só** (§4.0), essa conta é a dona do esquema e faz os papéis web, agente e monitor, com `sss_env = DEV`. Os privilégios de cada papel estão no README §11.1 e saem do gerador de scripts SQL (§5.2).
+O `health.py` usa a conta do processo do `--name` (CR-032, D8: não há papel monitor). **Com um usuário de banco só** (§4.0), essa conta é a dona do esquema e faz os papéis web e agente; a conta igual ao owner é aceita (CR-032, D11). Os privilégios de cada papel estão no README §11.1 e saem do gerador de scripts SQL (§5.2).
 
 ### 1.3 Ordem do procedimento
 
@@ -46,7 +45,7 @@ Fora de DEV, a conta da aplicação igual à dona do esquema é recusada (CR-008
  4. Banco (DBA) ........................ §5    12. Limpeza manual ............... §12
  5. Driver Oracle ...................... §6    13. Monitoração .................. §13
  6. Configuração ....................... §7    14. Logs ......................... §14
- 7. Helper e sudoers (agentes) ......... §8    15. Problemas e soluções ......... §15
+ 7. (retirado no CR-032) .............. §8    15. Problemas e soluções ......... §15
                                                16 a 20. Rotações, backup, atualização, checklist, desinstalação
 ```
 
@@ -59,7 +58,6 @@ Fora de DEV, a conta da aplicação igual à dona do esquema é recusada (CR-008
 
 ```text
 /portaloptrib/TESHUVA/SSS/<TIPO>/       # dono: root, 0755 (§4.1)
-├── sss-root/bin/sss-helper             # helper de execução: FORA da <RAIZ>, só do root (§8)
 └── script_scheduling_service/          # a <RAIZ>
 
 <RAIZ>/                                 # dono: sss
@@ -74,7 +72,6 @@ Fora de DEV, a conta da aplicação igual à dona do esquema é recusada (CR-008
 │   ├── web0001/      logs/
 │   ├── agente0001/   logs/  work/  output/  input/  script_work/
 │   ├── agente0002/   logs/  work/  output/  input/  script_work/
-│   ├── exec/<usuário de execução>/     # pasta de trabalho dos scripts, uma por usuário
 │   └── update/<data>/retorno/          # pacotes de retorno do sss-update.sh
 └── scripts_ambiente/                   # PRESERVADO: scripts dos ambientes (script_base_dir padrão)
 ```
@@ -86,12 +83,10 @@ Fora de DEV, a conta da aplicação igual à dona do esquema é recusada (CR-008
 | `<RAIZ>/instance/secrets.cfg` | Segredos do servidor, um arquivo só (CR-032, D14) | `sss` | `0600` | — |
 | `<RAIZ>/var/<nome>/logs` | Logs da aplicação e dos scripts | `sss` | `0750` | padrão de `[logging] log_dir` |
 | `<RAIZ>/var/<agente>/work` | Trabalho do agente (trava, `.stop`, pastas dos tickets) | `sss` | `0700` | padrão de `[agent] work_dir` |
-| `<RAIZ>/var/exec/<usuário>` | Diretório de trabalho dos scripts, um por usuário de execução | o usuário de execução | `0700` (pai `root`, `0755`) | padrão de `[agent] exec_work_dir` |
-| `<RAIZ>/var/<agente>/output/<ambiente>` | Saída dos scripts (CR-012) | o usuário de execução | `0700` (pai `sss`, `0755`) | padrão de `[agent] output_dir` |
-| `<RAIZ>/var/<agente>/input/<ambiente>` | Entrada dos scripts, uma subpasta permanente por script (CR-014) | o usuário de execução | `0700` (pai `sss`, `0755`) | padrão de `[agent] input_dir` |
-| `<RAIZ>/var/<agente>/script_work/<ambiente>` | Pasta de trabalho dos scripts, uma por ticket (CR-019) | o usuário de execução | `0700` (pai `sss`, `0755`) | padrão de `[agent] script_work_dir` |
+| `<RAIZ>/var/<agente>/output/<ambiente>` | Saída dos scripts (CR-012) | `sss` | `0700` (pai `0755`) | padrão de `[agent] output_dir` |
+| `<RAIZ>/var/<agente>/input/<ambiente>` | Entrada dos scripts, uma subpasta permanente por script (CR-014) | `sss` | `0700` (pai `0755`) | padrão de `[agent] input_dir` |
+| `<RAIZ>/var/<agente>/script_work/<ambiente>` | Pasta de trabalho dos scripts, uma por ticket (CR-019) | `sss` | `0700` (pai `0755`) | padrão de `[agent] script_work_dir` |
 | `<RAIZ>/scripts_ambiente` | Scripts dos ambientes | `sss` (ou a equipe do ambiente) | `0755` | padrão de `[agent] script_base_dir` |
-| `/portaloptrib/TESHUVA/SSS/<TIPO>/sss-root/bin/sss-helper` | Helper de execução (agentes), fora da `<RAIZ>` | `root` | `0755`; a pasta e todas as acima dela só do root (§4.1) | padrão de `[agent] helper_path` |
 
 Com `[app] name`, todas essas pastas saem do nome do processo, sem precisar escrevê-las (CR-028, D5; README §12.1). Uma chave escrita no `config.ini` vale no lugar do padrão; escrita vazia (ex.: `output_dir =`) desliga a função. A instalação anterior ao CR-028 (`/opt/sss/app`, `/etc/sss/secrets.cfg`, `/var/lib/sss`, `/var/log/sss`, com o `config.ini` de formato único) continua aceita, com os caminhos escritos no `config.ini`.
 
@@ -108,7 +103,7 @@ Com `[app] name`, todas essas pastas saem do nome do processo, sem precisar escr
 | Banco | Oracle 11gR2 (11.2.0.4) ou superior, charset AL32UTF8, servidor **sem horário de verão** (UTC recomendado) e NTP em modo *slew* em todas as instâncias (README §7.1) |
 | Rede | Dos nós web e agentes até o listener Oracle. O nó web escuta só em `127.0.0.1`; os usuários chegam por proxy reverso HTTPS ou túnel SSH (§10.4) |
 | Relógio dos servidores | NTP ativo. O fuso vem de `SSS_TZ` no launcher (§10) |
-| Ferramentas | `tar`, `sha256sum`, `curl`, `sudo` (agentes) e `systemd` ou outro supervisor |
+| Ferramentas | `tar`, `sha256sum`, `curl` e o `cron` da conta (ou `systemd`, com administrador) |
 
 ---
 
@@ -148,12 +143,12 @@ O pacote só tem o `bin/` e a aplicação (o código, os templates e os estátic
 
 ### 4.0 Instalação com um usuário só (CR-028, D12; CR-030)
 
-É o caso dos servidores sem administrador: **um usuário de banco** e **um usuário do sistema operacional** para tudo, sem root, sem `sudo` e sem `systemd`. DEV e PROD sobem com **`[app] sss_env = DEV`** em todos os `config.ini`, e a separação entre eles é física, pela pasta `<TIPO>` (`DEV` ou `PROD`). Roteiro:
+É o caso dos servidores sem administrador: **um usuário de banco** e **um usuário do sistema operacional** para tudo, sem root, sem `sudo` e sem `systemd`. DEV e PROD têm o mesmo comportamento (CR-032, D11: não há `sss_env`); a separação entre eles é física, pela pasta `<TIPO>` (`DEV` ou `PROD`), que também dá o ambiente mostrado na tela. Roteiro:
 
 1. **Pacote (§3)** extraído na `<RAIZ>` com a sua conta.
-2. **Pule** o usuário `sss` (§4.1; use a sua conta no lugar dele), os usuários de execução (§4.2), as pastas acima da raiz (§4.1), o helper e o `sudoers` (§8) e as units do `systemd` (§10.5).
+2. **Pule** o usuário `sss` (§4.1; use a sua conta no lugar dele) e as units do `systemd` (§10.5). Não há usuário de execução, helper nem `sudoers` desde o CR-032.
 3. **Banco (§5):** a conta única é a **dona do esquema**. Não há GRANT a aplicar (pule o `03_grants`); o `init_db.py --name agente0001` precisa de `--real-schema`, porque o esquema não é descartável (§5.3).
-4. **Configuração (§7):** um `instance/<nome>/config.ini` por processo, com `[app] name` igual ao nome da pasta e `[oracle] user` = a conta única. Os segredos ficam num **único** `instance/secrets.cfg` (CR-032, D14): `[oracle] password`, `[web] cookie_key` e os `[environment:<NOME>]` dos ambientes atendidos (os bancos que os scripts usam têm usuários próprios). Não escreva `[monitor]`: o `health.py` usa a conta do `[oracle]` (CR-030).
+4. **Configuração (§7):** um `instance/<nome>/config.ini` por processo, com `[app] name` igual ao nome da pasta e `[oracle] user` = a conta única. Os segredos ficam num **único** `instance/secrets.cfg` (CR-032, D14): `[oracle] password`, `[web] cookie_key` e os `[environment:<NOME>]` dos ambientes atendidos (os bancos que os scripts usam têm usuários próprios). O `health.py` usa a conta do processo do `--name` (CR-032, D8).
 5. **Pastas:** nada a fazer. Na subida, o web e o agente criam as pastas que faltarem em `var/<nome>/` e `scripts_ambiente/` (CR-032, D12), com uma linha `pasta criada` no log.
 6. **Subida e permanência (§10.6):** `bin/sss-keepalive.sh` no `crontab` da sua conta, com `@reboot` e a cada 5 minutos.
 7. **Monitoração (§13)** e **limpeza manual (§12, README §11.3)** pelo mesmo `crontab`.
@@ -171,18 +166,18 @@ R=/portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service
 ```
 
 * **Risco aceito:** os scripts rodam com a mesma conta do agente e podem ler o `secrets.cfg`, o `config.ini` e os logs do SSS, além de alterar o código. Quem cadastra um script tem o poder dessa conta. E a conta do banco, sendo a dona do esquema, pode alterar qualquer objeto dele.
-* **Proteções que o `sss_env = DEV` desliga** e que precisam ser seguidas à mão:
+* **Comportamento único (CR-032, D11)**, o mesmo em DEV e PROD:
 
-| O que deixa de ser exigido | Faça mesmo assim |
+| Item | Como fica |
 |---|---|
-| Conta Oracle diferente do owner do esquema | Com um usuário de banco só, não há como; guarde a senha como a do dono do esquema |
-| Segredos só do papel e credencial de todo ambiente atendido | `secrets.cfg` de cada processo só com as suas seções (§7.2); confira os `[environment:*]` de cada agente |
-| Cookie `Secure` sempre | Acesso só por HTTPS, com o proxy enviando `X-Forwarded-Proto: https` (assim o cookie continua `Secure`); nunca exponha a porta do `run_web.py` sem o proxy |
-| Origem só de `allowed_origins` | `allowed_origins` com a URL pública; o DEV aceita também a do próprio `Host` |
-| Scripts proibidos dentro da raiz | Não crie a pasta `dev/` na `<RAIZ>`: no DEV, scripts dentro dela são aceitos |
+| Conta Oracle | Pode ser a dona do esquema; guarde a senha como a do dono do esquema |
+| Segredos | Um `secrets.cfg` por servidor (§7.2); cada processo usa só o que precisa. Ambiente atendido sem `[environment:<NOME>]` recusa a subida do agente |
+| Cookie de sessão | `Secure` só quando a requisição chega por HTTPS; com acesso por HTTP, o cookie vai sem `Secure` |
+| Origem | `allowed_origins` e a do próprio `Host` da requisição |
+| Scripts dentro da raiz | Recusados, salvo `scripts_ambiente/` e `dev/` onde ela existe; o pacote não leva `dev/`, então não crie essa pasta na `<RAIZ>` |
 | `init_db.py` | Recusa um esquema que não é descartável sem `--real-schema` (§5.3) |
 
-* **Faixa na tela (CR-028, D12):** a faixa "Ambiente ... — dados e execuções não produtivos" e o rodapé mostram o `<TIPO>` da pasta acima da raiz (`DEV` ou `PROD`), e não o `sss_env`. Em `PROD` a faixa não aparece. Fora dessas pastas, vale o `sss_env`.
+* **Faixa na tela (CR-028, D12; CR-032):** a faixa "Ambiente ... — dados e execuções não produtivos", o rodapé, o `[DEV]` no título da aba e a cor do cabeçalho vêm do nome da pasta `<TIPO>` acima da raiz. Em `PROD` a faixa não aparece; o cabeçalho tem outra cor só em `DEV`. O web e o agente registram na subida `ambiente da instalação: <TIPO> (<raiz>)`.
 * A tela de DEV (`/dev/...`) não existe numa instalação feita pelo pacote, que não leva o `dev.py` (§3).
 
 ### 4.1 Usuário de serviço
@@ -197,37 +192,15 @@ install -d -o root -g root -m 0755 /portaloptrib/TESHUVA/SSS /portaloptrib/TESHU
 install -d -o sss -g sss -m 0750 /portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service
 ```
 
-**Pastas acima da raiz (CR-028, só nos agentes fora de DEV):** o helper de execução fica em `/portaloptrib/TESHUVA/SSS/<TIPO>/sss-root/bin/`. Quem pudesse renomear qualquer pasta desse caminho trocaria o helper por outro e rodaria comandos como os usuários de execução. Por isso, na subida, o agente confere que **toda** pasta acima do helper, até `/`, é do root e não aceita escrita de grupo nem de outros, ou tem o sticky bit, e recusa subir se não for assim (código 13, §15):
-
-```bash
-# como root: SSS e <TIPO> do root, sem escrita de outros (feito acima)
-stat -c '%U %a %n' / /portaloptrib /portaloptrib/TESHUVA /portaloptrib/TESHUVA/SSS /portaloptrib/TESHUVA/SSS/<TIPO>
-# /portaloptrib e /portaloptrib/TESHUVA com escrita para todos (777) precisam de UMA destas correções:
-chmod +t /portaloptrib /portaloptrib/TESHUVA          # sticky bit (1777): só o dono renomeia o que é seu; menor impacto
-chmod go-w /portaloptrib /portaloptrib/TESHUVA        # ou tire a escrita de grupo e outros (confira quem mais grava ali)
-```
-
-No DEV de referência (`/portaloptrib` e `/portaloptrib/TESHUVA` com `777`), o agente roda sem usuário de execução e sem helper, e essa conferência não acontece.
-
 As pastas `var/<nome>/...` são criadas pelo próprio processo na subida (CR-032, D12).
 
-### 4.2 Usuários de execução (só nos agentes; CR-007, D1)
+### 4.2 Usuários de execução (retirados no CR-032)
 
-Fora de DEV, cada ambiente tem um usuário do sistema operacional que executa os scripts dele. Esse usuário é diferente do `sss` e do root, não tem senha nem login e não lê os segredos nem os logs do agente.
-
-```bash
-# como root, em cada agente, um por ambiente (ex.: PRODUCAO -> sssprd, HOMOLOGACAO -> ssshml)
-useradd --system --shell /sbin/nologin --no-create-home \
-        --home-dir /portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service/var/exec/sssprd sssprd
-```
-
-* A pasta `var/exec/<usuário>` (dono o usuário de execução, `0700`) é criada pelo root (§8).
-* **Cota e limites:** cota de disco na partição de `var/`, e `nproc` e `nofile` por usuário em `/etc/security/limits.d/sss.conf` (por exemplo, `sssprd hard nproc 256`), para que um script não esgote o servidor.
-* No `config.ini` do agente: `exec_users = PRODUCAO=sssprd,HOMOLOGACAO=ssshml`. O `exec_work_dir` sai de `var/exec` (CR-028).
+Não há mais usuário de execução por ambiente (CR-032, D7): os scripts rodam com a conta do agente, sem `sudo` nem helper. Linhas antigas `exec_users`, `exec_work_dir` e `helper_path` no `config.ini` só geram aviso. Com root, limites de recurso (`nproc`, `nofile` em `/etc/security/limits.d/`) e cota de disco valem para a conta do serviço.
 
 ### 4.3 Partição dos logs (CR-008, R-25)
 
-A pasta `<RAIZ>/var/` (onde ficam os `log_dir` de cada processo, `var/<nome>/logs`) fica de preferência num **sistema de arquivos próprio**, separado de `/`, e dimensionado para os dias de logs que você guarda até a limpeza manual (§12). A cota do usuário de execução não protege o `log_dir`, porque o arquivo de log de cada ticket pertence ao `sss`.
+A pasta `<RAIZ>/var/` (onde ficam os `log_dir` de cada processo, `var/<nome>/logs`) fica de preferência num **sistema de arquivos próprio**, separado de `/`, e dimensionado para os dias de logs que você guarda até a limpeza manual (§12).
 
 O agente para de fazer claim com menos de `[agent] log_dir_min_free_mb` livres (padrão 1.024 MB; linha `DISCO_LOG` no log, §15). O monitoramento corporativo deve alertar antes, por exemplo com 80% de uso.
 
@@ -256,7 +229,7 @@ Os três scripts saem do mesmo registro de identificadores, com o owner e o pref
 ```bash
 # na máquina de desenvolvimento ou num servidor com o pacote
 cd <RAIZ>
-python3 scripts/generate_sql.py --config instance/web0001/config.ini --grants-to web=sss_web,agent=sss_agente,monitor=sss_monitor
+python3 scripts/generate_sql.py --config instance/web0001/config.ini --grants-to web=sss_web,agent=sss_agente
 # gera docs/sql/01_deploy_sss_openrisow_tbsss.sql, 02_rollback_sss_<owner>_<prefixo>.sql, 99_validate_deploy_<owner>_<prefixo>.sql e 03_grants_sss_<owner>_<prefixo>.sql
 ```
 
@@ -274,7 +247,7 @@ SPOOL OFF
 
 * O `01` termina com "concluída com sucesso!" mesmo que um comando falhe (`WHENEVER SQLERROR CONTINUE`). Procure `ORA-` e `SP2-` nos dois logs antes de dar a implantação por concluída.
 * O `99` só lê. As duas linhas de resumo precisam dizer `OK: nenhuma falha`.
-* As contas `sss_web`, `sss_agente` e `sss_monitor` são criadas pelo DBA antes do `01` (com um usuário só, §4.0, nenhuma conta nova), com a política de senhas da empresa. Nenhum GRANT vai para PUBLIC.
+* As contas `sss_web` e `sss_agente` são criadas pelo DBA antes do `01` (com um usuário só, §4.0, nenhuma conta nova), com a política de senhas da empresa. Nenhum GRANT vai para PUBLIC.
 * **Rollback total** (só em instalação nova ou com autorização): `@docs/sql/02_rollback_sss_openrisow_tbsss.sql`. Ele apaga os dados.
 
 ### 5.3 Usuários iniciais
@@ -329,12 +302,12 @@ O papel vem do próprio arquivo (CR-028, D4): o do web tem `[web]` e não tem `[
 
 | Processo | Chaves a preencher |
 |---|---|
-| Web (`instance/web0001/`) | `[app] sss_env` e `name` (o nome da pasta); `[oracle]` (`user` = `sss_web`, `dsn`, `owner`, `table_prefix`); `[web] allowed_origins` e, atrás de proxy, `trusted_proxies` |
-| Agente (`instance/agente0001/`) | `[app] sss_env` e `name` (o nome da pasta, que é o `agent_id`); `[oracle]` (`user` = `sss_agente`...); `[agent] environments`, `max_parallel_jobs`, `exec_users` (vazio com `sss_env = DEV`, §4.0) |
+| Web (`instance/web0001/`) | `[app] name` (o nome da pasta); `[oracle]` (`user` = `sss_web`, `dsn`, `owner`, `table_prefix`); `[web] allowed_origins` e, atrás de proxy, `trusted_proxies` |
+| Agente (`instance/agente0001/`) | `[app] name` (o nome da pasta, que é o `agent_id`); `[oracle]` (`user` = `sss_agente`...); `[agent] environments`, `max_parallel_jobs` |
 
-As pastas (`log_dir`, `work_dir`, `exec_work_dir`, `output_dir`, `input_dir`, `script_work_dir` e `script_base_dir`) saem do nome e não precisam ser escritas. A tabela completa, com o padrão e a faixa de cada chave, está no README §12.1. **O próprio processo cria na subida as pastas que faltarem** (CR-032, D12): não há passo manual de pastas. `[agent] interpreters` não existe mais (CR-026): uma linha antiga só gera aviso. O web usa sete valores de `[agent]` que precisam ser iguais aos dos agentes (`heartbeat_interval_s`, `fence_timeout_s`, `node_offline_timeout_s`, `misfire_policy`, `misfire_tolerance_s`, `cron_horizon_days` e `queue_aging_min`). Sem `[agent]` no config do web, valem os padrões. Se mudar algum nos agentes, escreva o mesmo valor num `[agent]` do config do web, que só aceita essas sete chaves e continua com o papel web (README §12.1). Em `instance/<nome>/`, o `[app] name` precisa ser o nome da pasta: ao copiar a pasta de um agente para criar outro, troque o `name`.
+As pastas (`log_dir`, `work_dir`, `output_dir`, `input_dir`, `script_work_dir` e `script_base_dir`) saem do nome e não precisam ser escritas. A tabela completa, com o padrão e a faixa de cada chave, está no README §12.1. **O próprio processo cria na subida as pastas que faltarem** (CR-032, D12): não há passo manual de pastas. `[agent] interpreters` não existe mais (CR-026): uma linha antiga só gera aviso. Dos valores de `[agent]`, o web usa só a `misfire_policy` (os demais são fixos desde o CR-032). Sem `[agent]` no config do web, vale o padrão. Se mudar a `misfire_policy` nos agentes, escreva o mesmo valor num `[agent]` do config do web, que só aceita essa chave e continua com o papel web (README §12.1). Em `instance/<nome>/`, o `[app] name` precisa ser o nome da pasta: ao copiar a pasta de um agente para criar outro, troque o `name`.
 
-**Tempos que precisam ser idênticos em todos os agentes (README §8.9, D7):** desde o CR-032, os tempos de saúde e os ajustes do desdobro são fixos no código (`heartbeat_interval_s` 10, `fence_timeout_s` 90, `node_offline_timeout_s` 180, `kill_grace_s` 5, `misfire_tolerance_s` 300, `cron_horizon_days` 1461, `queue_aging_min` 60). Dos valores do `critical_config`, só `call_timeout_ms` e `misfire_policy` vêm do config: escreva-os iguais em todos os agentes (ou deixe o padrão). Cada agente registra na subida:
+**Tempos que precisam ser idênticos em todos os agentes (README §8.9, D7):** desde o CR-032, os tempos de saúde e os ajustes do desdobro são fixos no código (`heartbeat_interval_s` 10, `fence_timeout_s` 90, `node_offline_timeout_s` 180, `kill_grace_s` 5, `misfire_tolerance_s` 300, `cron_horizon_days` 1461, `queue_aging_min` 60). O `critical_config` tem só `call_timeout_ms` e `misfire_policy` (CR-032, D16): escreva-os iguais em todos os agentes (ou deixe o padrão). Na troca desta versão, pare todos os agentes antes de subir o primeiro, porque o texto mudou. Cada agente registra na subida:
 
 `INFO ... [action=INICIO] tempos do fencing: fence_timeout_s=90 node_offline_timeout_s=180`
 
@@ -363,40 +336,19 @@ Um `secrets.cfg` antigo dentro de `instance/<nome>/` ainda é lido, com um aviso
 
 ---
 
-## 8. Helper de execução, pastas e `sudoers` (CR-007, D1; CR-028) [não ensaiado]
+## 8. Pastas dos processos (sem helper nem `sudoers` desde o CR-032)
 
-```bash
-# como root, em cada agente: o helper fica FORA da <RAIZ> (que é do sss), numa pasta só do root (CR-028)
-install -o root -g root -m 0755 -d /portaloptrib/TESHUVA/SSS/<TIPO>/sss-root /portaloptrib/TESHUVA/SSS/<TIPO>/sss-root/bin
-install -o root -g root -m 0755 <RAIZ>/bin/sss-helper /portaloptrib/TESHUVA/SSS/<TIPO>/sss-root/bin/sss-helper
-visudo -f /etc/sudoers.d/sss
-```
-
-**Pastas de cada processo (CR-032, D12):** o web e o agente criam na subida as pastas que faltarem (`var/<nome>/logs` `0750`, `var/<nome>/work` `0700`, `output`, `input`, `script_work` e `scripts_ambiente` `0755`). Uma pasta existente que não possa ser usada (arquivo no lugar, sem escrita, pasta do sistema) recusa a subida (código 13, §15).
-
-Conteúdo do `/etc/sudoers.d/sss`, com uma linha por usuário de execução:
-
-```text
-Defaults:sss !requiretty
-sss ALL=(sssprd) NOPASSWD: /portaloptrib/TESHUVA/SSS/<TIPO>/sss-root/bin/sss-helper
-sss ALL=(ssshml) NOPASSWD: /portaloptrib/TESHUVA/SSS/<TIPO>/sss-root/bin/sss-helper
-```
-
-* `sss` é a conta do agente neste guia; o README usa `sssagente` no mesmo exemplo. Use o nome da conta que você criou no §4.1.
-* Nenhuma outra regra de `sudo` para o `sss`. Não use `Defaults use_pty` nessa regra: com um terminal, o script iria para outro grupo de processos e não receberia os sinais de encerramento.
-* O caminho do helper é o `[agent] helper_path` (padrão: `sss-root/bin/sss-helper` ao lado da `<RAIZ>`). Se mudar, mude também o `sudoers`. Uma instalação anterior ao CR-028, com o helper em `/opt/sss/bin`, escreve `helper_path = /opt/sss/bin/sss-helper`.
-* Na subida, o agente confere o helper (dono root, `0755`, pasta só do root, e as pastas acima dela até `/`, §4.1), o `sudo -n -l`, os usuários e as pastas, e recusa subir com uma linha CRITICAL por falha (código 13, §15).
-* Na atualização de versão, copie o `sss-helper` novo da mesma forma (`install` a partir de `<RAIZ>/bin/sss-helper`), como root, depois do `sss-update.sh` (§18).
+O web e o agente criam na subida as pastas que faltarem (CR-032, D12): `var/<nome>/logs` (`0750`), `var/<nome>/work` (`0700`), `output`, `input`, `script_work` e `scripts_ambiente` (`0755`). Uma pasta existente que não possa ser usada (arquivo no lugar, sem escrita, pasta do sistema) recusa a subida (código 13, §15). Não há helper de execução, `sudoers` nem usuário de execução (CR-032, D7): os scripts rodam com a conta do agente. Numa instalação anterior, depois de atualizar, apague `/etc/sudoers.d/sss`, a pasta `sss-root/` ao lado da `<RAIZ>` e `var/exec/` (com root), e as linhas `exec_users`, `exec_work_dir` e `helper_path` dos `config.ini`.
 
 ---
 
 ## 9. Scripts cadastrados (CR-005, CR-011, CR-023)
 
-* O caminho cadastrado (`path_file`) é **absoluto** ou **relativo à pasta base** do agente (CR-023), em qualquer pasta fora das pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`), fora das pastas do SSS (`log_dir`, `work_dir`, `exec_work_dir`, `output_dir`, `input_dir` e `script_work_dir`) e fora da pasta da aplicação (a `<RAIZ>`, cujo código é trocado a cada atualização), **exceto** `<RAIZ>/scripts_ambiente/`, que a atualização preserva (CR-028, D3).
+* O caminho cadastrado (`path_file`) é **absoluto** ou **relativo à pasta base** do agente (CR-023), em qualquer pasta fora das pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`), fora das pastas do SSS (`log_dir`, `work_dir`, `output_dir`, `input_dir` e `script_work_dir`) e fora da pasta da aplicação (a `<RAIZ>`, cujo código é trocado a cada atualização), **exceto** `<RAIZ>/scripts_ambiente/`, que a atualização preserva (CR-028, D3).
 * **Pasta base (CR-023, CR-028):** `[agent] script_base_dir`, por padrão `<RAIZ>/scripts_ambiente/`. O agente junta o caminho relativo cadastrado (ex.: `faturamento/carga.py`) a ela e confere o resultado como um caminho absoluto; o arquivo real pode ficar fora da pasta base (link). A pasta pode ser diferente em cada servidor, mas **todo agente de um ambiente que tem script com caminho relativo precisa dela**: o ticket vai para qualquer agente do ambiente, e o agente sem pasta base termina o ticket em `PRECHECK_FAILED` (`NO_BASE_DIR`). Na subida, o log mostra a pasta base (INFO) ou avisa que ela não existe (WARNING); o painel de agentes mostra a de cada um. Os 14 scripts de demonstração do seed são cadastrados como `utilitarios/<arquivo>`.
-* **Pasta de entrada (CR-014):** com `[agent] input_dir`, cada script recebe `SSS_INPUT_DIR` = `input_dir/<ambiente>/<nome do script em minúsculo, sem acento nem espaço>/` (ex.: "Carga Diária" em `PRODUCAO`, no `agente0001` → `<RAIZ>/var/agente0001/input/producao/carga_diaria/`). A pasta é criada na primeira execução e **nunca** é limpa pelo SSS: quem deposita os arquivos e o próprio script cuidam do conteúdo. Para depositar arquivos de fora, use o usuário de execução do ambiente (ou um processo dele).
-* **Pasta de trabalho (CR-019):** com `[agent] script_work_dir`, cada ticket recebe `SSS_WORK_DIR` = `script_work_dir/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, criada antes da execução e mantida depois dela, para consulta no servidor do agente. O `HOME` e a pasta corrente do script continuam na pasta descartável de `exec_work_dir`.
-* Pode ser um link simbólico. O arquivo **real** precisa existir no servidor do agente, ser arquivo regular, ser legível pelo usuário de execução e **não** ter escrita de grupo nem de outros (`chmod go-w`).
+* **Pasta de entrada (CR-014):** com `[agent] input_dir`, cada script recebe `SSS_INPUT_DIR` = `input_dir/<ambiente>/<nome do script em minúsculo, sem acento nem espaço>/` (ex.: "Carga Diária" em `PRODUCAO`, no `agente0001` → `<RAIZ>/var/agente0001/input/producao/carga_diaria/`). A pasta é criada na primeira execução e **nunca** é limpa pelo SSS: quem deposita os arquivos e o próprio script cuidam do conteúdo. Para depositar arquivos de fora, use a conta do agente (ou a tela de Entrada, CR-020).
+* **Pasta de trabalho (CR-019):** com `[agent] script_work_dir`, cada ticket recebe `SSS_WORK_DIR` = `script_work_dir/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, criada antes da execução e mantida depois dela, para consulta no servidor do agente. O `HOME` e a pasta corrente do script continuam na pasta descartável `work_dir/ticket_<id>/exec`.
+* Pode ser um link simbólico. O arquivo **real** precisa existir no servidor do agente, ser arquivo regular, ser legível pela conta do agente e **não** ter escrita de grupo nem de outros (`chmod go-w`).
 * O conteúdo e a versão do script são controlados pelo ambiente: o SSS não confere hash nem dono (CR-011). Quem grava na pasta do script muda o que vai rodar.
 * O nó web confere o formato do caminho e, no caminho absoluto, as pastas do sistema e a da aplicação (o relativo só pelo formato). A conferência do arquivo é feita pelo agente, antes de cada execução; uma recusa aparece como `PRECHECK_FAILED` (§15).
 * **Interpretador (CR-025, CR-026, CR-027):** o cadastro guarda só o nome (`python`, `python3`, `sh` ou `bash`). Na execução vale, nesta ordem (CR-027): o interpretador digitado no disparo (caminho absoluto ou só o nome, ex.: `python3.13`), se existir no servidor; o `#!` da primeira linha do script, se o executável existir; o nome do cadastro, com `python` e `python3` servindo um ao outro. Quem não existe é pulado, com uma linha `[SSS]` no log do ticket. Os nomes são procurados no `PATH` herdado pelo **processo do agente**: o da unit do systemd (o padrão do systemd, ou `Environment=PATH=...` na unit) ou o do shell que rodou o `bin/sss-scheduler.sh`, que não o altera. **Confira esse `PATH` em cada servidor:** ele precisa achar `python3`, `bash` e os demais que os scripts usam. O agente atende qualquer interpretador; num servidor sem nenhum interpretador possível (o digitado, o do `#!` e o do cadastro, com a troca `python` ↔ `python3`), o ticket termina em `PRECHECK_FAILED` (`INTERPRETER_NOT_FOUND`). O agente só confere, como o usuário do agente, se o executável existe e é executável (não confere se ele está numa pasta do SSS: risco aceito, README §14), e o executa sem resolver links (o Python de um virtualenv funciona). `#!/usr/bin/env python3` funciona: o `env` procura o `python3` no `PATH` fixo do filho (`/usr/bin:/bin`, README §8.6), não no do agente, e o interpretador registrado como usado é `/usr/bin/env`. Um interpretador digitado que não existe é pulado (CR-027): vale o `#!` ou o cadastro, e o log do ticket registra a tentativa. **Risco aceito pelo responsável pelo produto:** quem pode disparar escolhe o programa que roda o script (o digitado vence o `#!`, CR-027), e, sem digitado, quem edita a primeira linha troca o interpretador sem passar pelo cadastro. O digitado fica no snapshot, em `tbsss_tickets.interpreter_path` e na auditoria do disparo; o usado, em `tbsss_tickets.interpreter_used` e na linha `[SSS] interpretador usado` do log (README §8.5).
@@ -413,7 +365,7 @@ Os launchers recusam root, aplicam `umask 077`, exportam `TZ` (de `SSS_TZ`), `LA
 # como sss
 cd <RAIZ>
 export PYTHON=/usr/bin/python3 SSS_TZ=America/Sao_Paulo
-bin/sss-web.sh "$PYTHON" web0001 --check                      # CONFIG_OK sss_env=<ambiente>; nao abre a porta
+bin/sss-web.sh "$PYTHON" web0001 --check                      # CONFIG_OK ambiente=<TIPO>; nao abre a porta
 bin/sss-web.sh "$PYTHON" web0001 --host 127.0.0.1 --port 8000  # instance/web0001/config.ini (CR-028)
 ```
 
@@ -453,7 +405,7 @@ bin/sss-scheduler.sh agente0001            # instance/agente0001/config.ini (CR-
 
 ### 10.4 Acesso dos usuários
 
-* **Proxy reverso HTTPS** [não ensaiado]: em HML e PROD, o nó web fica atrás de um proxy (nginx, Apache ou o balanceador da empresa) que termina o TLS e repassa para `http://127.0.0.1:8000`. Inclua a URL pública em `[web] allowed_origins` e o endereço do proxy em `[web] trusted_proxies`. Com `sss_env = HML` ou `PROD`, o cookie de sessão é `Secure`: sem HTTPS, ninguém consegue entrar. **Tamanho do corpo (CR-020d):** o limite de corpo do proxy (por exemplo, `client_max_body_size` do nginx ou `LimitRequestBody` do Apache) precisa ser pelo menos `[web] input_upload_max_bytes` mais 64 KiB, senão o envio da tela de Entrada para no proxy com um erro dele, antes de chegar ao SSS.
+* **Proxy reverso HTTPS** [não ensaiado, opcional]: com administrador, o nó web pode ficar atrás de um proxy (nginx, Apache ou o balanceador da empresa) que termina o TLS e repassa para `http://127.0.0.1:8000`. Inclua a URL pública em `[web] allowed_origins` e o endereço do proxy em `[web] trusted_proxies`. Por HTTPS, o cookie de sessão sai `Secure`; por HTTP, sem `Secure` (CR-032, D11). Sem proxy, os usuários acessam por HTTP a porta do `run_web.py` ou por túnel. **Tamanho do corpo (CR-020d):** o limite de corpo do proxy (por exemplo, `client_max_body_size` do nginx ou `LimitRequestBody` do Apache) precisa ser pelo menos `[web] input_upload_max_bytes` mais 64 KiB, senão o envio da tela de Entrada para no proxy com um erro dele, antes de chegar ao SSS.
 * **Túnel SSH** (homologação e suporte): `ssh -N -L 8000:127.0.0.1:8000 <usuário>@<servidor>` e, no navegador, `http://localhost:8000/`. Inclua `http://localhost:8000` em `allowed_origins`.
 
 ### 10.5 Units do `systemd` (exemplo) [não ensaiado]
@@ -514,7 +466,7 @@ KillMode=mixed
 TimeoutStopSec=60
 Restart=on-failure
 RestartSec=30
-# NoNewPrivileges impede o sudo do helper: fora de DEV, NAO use no agente
+NoNewPrivileges=yes
 ProtectSystem=strict
 ReadWritePaths=/portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service/var
 PrivateTmp=yes
@@ -525,8 +477,7 @@ WantedBy=multi-user.target
 
 * `TimeoutStopSec` do web precisa ser maior que `[web] socket_timeout_s`; se mudar o timeout, ajuste os dois.
 * `KillMode=mixed` manda o `SIGTERM` só ao processo principal e, se o prazo acabar, o `SIGKILL` a todo o grupo. O agente encerra os próprios scripts antes disso.
-* **Atenção no agente:** `NoNewPrivileges=yes` impede o `sudo` e, com ele, o helper. Por isso fica fora da unit do agente. Valide com a segurança da empresa.
-* `ReadWritePaths` cobre `var/` inteira (logs, trabalho, saída, entrada e `exec`). Se um script grava em `scripts_ambiente/` ou em outra pasta, inclua-a.
+* `ReadWritePaths` cobre `var/` inteira (logs, trabalho, saída e entrada). Se um script grava em `scripts_ambiente/` ou em outra pasta, inclua-a.
 * Dois nós web no mesmo servidor precisam de portas diferentes: crie uma cópia da unit com outra `--port`.
 * Ative com `systemctl daemon-reload && systemctl enable --now sss-web@web0001 sss-agente@agente0001`.
 
@@ -592,9 +543,9 @@ O SSS não apaga nada sozinho: não há `purge.py` nem retenção automática. O
 ## 13. Monitoração (`health.py`; README §13)
 
 ```bash
-# como o usuário que lê o secrets.cfg com a seção [monitor] (no servidor do agente: o sss)
+# como a conta do SSS (a dona do instance/secrets.cfg); usa a conta do processo do --name (CR-032, D8)
 cd <RAIZ>
-python3 scripts/health.py --name agente0001      # [ensaiado]; instance/agente0001/ com a seção [monitor] nos segredos
+python3 scripts/health.py --name agente0001      # [ensaiado]
 ```
 
 Saída do ensaio (um agente saudável e outros ambientes sem agente):
@@ -615,7 +566,7 @@ CRITICAL: ambiente CLONE1 ativo sem nenhum agente saudavel
   command[check_sss]=/usr/bin/sudo -n -u sss /usr/bin/python3 /portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service/scripts/health.py --name agente0001
   ```
   **Sem root nem `sudo` (§4.0):** rode o `health.py` pelo cron da própria conta e grave a saída num arquivo (`var/<nome>/logs/health.txt`, exemplo no §4.0); o código de saída e a primeira linha dizem o estado.
-  Num servidor de monitoração separado, use um `config.ini` próprio com `--config` (mesmos tempos do de referência, para a checagem de configuração divergente) e um `secrets.cfg` só com `[monitor]`.
+  Num servidor de monitoração separado, use um `config.ini` próprio com `--config` (mesmos `call_timeout_ms` e `misfire_policy`, para a checagem de configuração divergente) e o `secrets.cfg` com a senha da conta dele.
 
 **O que fazer em cada alerta:**
 
@@ -688,8 +639,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | 11 | `child_locale <x> nao consta em locale -a (CR-007, R-17)` | Locale do filho não instalado | Instale o locale `C.UTF-8` (fixo desde o CR-032) |
 | 12 | `secrets.cfg invalido: <reason>` (ex.: `Arquivo de segredos possui permissoes inseguras (mode 644, ...)`, `... deve pertencer ao usuario corrente`, `Secao [web] nao pertence ao papel 'agente'`) | Modo, dono ou seções do `secrets.cfg` | `chmod 0600`, `chown sss`, e só as seções do papel (§7.2) |
 | 13 | `work_dir <pasta> recusado: <motivo>` (ou `output_dir`, `input_dir`, `script_work_dir`) | A pasta existe mas não pode ser usada (arquivo no lugar, sem escrita, pasta do sistema); a que falta é criada na subida (CR-032, D12) | Corrija ou apague o que está no caminho e suba de novo |
-| 13 | Linhas `execucao fora de DEV: <falha>` e depois `N falha(s) na conferencia do helper e do sudoers` | Helper ou `sudoers` incompletos: `helper ... nao pertence ao root`, `... deve ter modo 0755`, `sudo -n -l sem a regra do helper para <usuário>`, `<pasta> deve pertencer a <usuário> com modo 0700`, `usuario de execucao <x> nao existe` | §8 e §4.2 |
-| 13 | `<nome> <caminho> recusado: <código>` (`log_dir`, `work_dir`...), `output_dir ... recusado` / `pasta de saida: <falha>` e `input_dir ... recusado` / `pasta de entrada: <falha>` e `script_work_dir ... recusado` / `pasta de trabalho: <falha>` | Pasta ausente, sem escrita ou nas pastas do sistema | §4 e §8 |
+| 13 | `<nome> <caminho> recusado: <código>` (`log_dir`, `work_dir`...), `output_dir ... recusado`, `input_dir ... recusado` e `script_work_dir ... recusado` | Pasta sem escrita ou nas pastas do sistema | §4 e §8 |
 | 14 | `Outra instancia do agente ja esta em execucao (<work_dir>/sss-<agent_id>.lock)` | Outro agente com o mesmo `work_dir` e `agent_id` | Pare o outro, ou use `config.ini` próprio (§7.1) |
 | 15 | `sem conexao com o Oracle` ou `banco: <erro>` (ex.: `Versao do esquema incompativel: esperada N, encontrada M`) | Banco inacessível, driver (§15.2) ou versão do esquema | §15.2, §15.3 ou a migração (§18) |
 | 16 | `agent_id duplicado: ...` | Outro agente ativo com o mesmo `agent_id` | `agent_id` único por agente |
@@ -740,7 +690,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | ↳ `UNSUPPORTED_VERSION` | | Ticket criado por uma versão anterior (snapshot antes da versão 5), ou agente anterior ao CR-026 diante de um ticket com snapshot versão 7 (ou anterior ao CR-025 com a 6) | Dispare de novo pela tela; no segundo caso, atualize os agentes (§18) |
 | ↳ `REGISTRATION_CHANGED`, `SCRIPT_INACTIVE`, `NOT_HOMOLOGATED`, `ENVIRONMENT_INACTIVE`, `NO_PERMISSION` | | O cadastro mudou entre o disparo e a execução | Confira o cadastro e dispare de novo |
 | ↳ `DB_ERROR: ORA-nnnnn` | `falha antes do spawn: DB_ERROR: ...` | Erro de banco na pré-validação | Veja o código ORA |
-| `FAILED` / `SPAWN_ERROR` | `falha antes do spawn: <erro>` e `[SSS] falha ao iniciar: <erro> (agente X)` | Não foi possível criar o log ou o processo (disco, permissão, `sudo`) | Veja o erro; confira o §8 |
+| `FAILED` / `SPAWN_ERROR` | `falha antes do spawn: <erro>` e `[SSS] falha ao iniciar: <erro> (agente X)` | Não foi possível criar o log ou o processo (disco, permissão) | Veja o erro; confira o §8 |
 | `FAILED` / `LOG_LIMIT` | `encerramento pedido: LOG_LIMIT` | O log local passou de `max_local_log_size_bytes` | Reduza a saída do script ou aumente o limite |
 | `FAILED` / `TIMEOUT` | `encerramento pedido: TIMEOUT` | Passou do `timeout_s` do script (ou `script_timeout_s`) | Ajuste o cadastro |
 | `FAILED` / `FENCED` | `FENCED: ...` (§15.3) | O agente perdeu o banco durante a execução | §15.3 |
@@ -768,7 +718,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | HTTP 500 em todas as telas | `CRITICAL ... Subida abortada: configuracao invalida: ...` no `sss_web_<PID>.log` (ou no stderr, se o `log_dir` não aceita escrita) | Configuração, segredos ou banco | Corrija pelo motivo da linha; o detalhe de cada erro 500 fica no log `sss_web` (§14), com o id de ocorrência mostrado na tela |
 | "Requisição recusada." (HTTP 403) nos formulários | `requisicao rejeitada (reason=origem ...)` | URL de acesso fora de `allowed_origins` | §10.4 |
 | Idem | `reason=csrf` | Página aberta há muito tempo | Recarregue e repita |
-| Ninguém entra com HTTPS ausente | — | `sss_env = HML/PROD` exige cookie `Secure` | Acesse por HTTPS (§10.4) |
+| Ninguém entra por HTTP atrás de um proxy HTTPS | — | O proxy manda `X-Forwarded-Proto: https` e o cookie sai `Secure`, mas o navegador chega por HTTP | Acesse pela mesma URL do proxy, ou direto pela porta do `run_web.py` (§10.4) |
 | Um usuário não entra: "Houve muitas tentativas com a senha errada..." | — | Bloqueio após `login_max_attempts` | Aguarde `login_lockout_s` ou desbloqueie em Gestão de Usuários |
 | `Socket 127.0.0.1:8000 in use by other process` | Terminal | Porta ocupada | `ss -ltnp \| grep :8000` |
 
@@ -779,8 +729,8 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | `falhou ao subir: veja var/<nome>/logs/<nome>.out` (`keepalive.log`, código 3) | O processo saiu logo depois de subir | Leia o `.out` e o log da aplicação (§14, §15.1) |
 | `recusado: o web precisa da porta` (`keepalive.log`) | Faltou `<nome>:<porta>` na linha do cron | §10.6 |
 | `config.ini: chave [retention] ... ignorada` ou `secao [purge] ignorada` (WARNING na subida) | Linha antiga de antes do CR-030 | Apague a linha (o processo sobe normalmente) |
-| `SSS UNKNOWN - falha ao conectar no Oracle: ...` (`health.py`) | Conta `sss_monitor` ou rede | §15.2 |
-| `SSS UNKNOWN - configuracao invalida: Secao [monitor] obrigatoria ausente em secrets.cfg` | Falta a seção (com `sss_env = DEV`, vale a conta do `[oracle]`, §4.0) | §7.2 |
+| `SSS UNKNOWN - falha ao conectar no Oracle: ...` (`health.py`) | Conta do processo ou rede | §15.2 |
+| `SSS UNKNOWN - configuracao invalida: ...` | `config.ini` ou `secrets.cfg` do `--name` (o `health.py` usa a conta do processo, CR-032) | §7 |
 | `Pacote recusado:` (`package.py`, código 1) | Segredo, bytecode ou código de DEV na árvore | Gere de uma cópia limpa (§3) |
 
 ---
@@ -788,7 +738,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 ## 16. Rotações de segredos
 
 * **`cookie_key`** (nó web): gere um novo (§7.2), grave em todos os nós web e reinicie todos juntos. **Todas as sessões são invalidadas**; os usuários entram de novo.
-* **Senha de uma conta Oracle** (`sss_web`, `sss_agente`, `sss_monitor`, ou a conta única do §4.0): o DBA troca a senha; grave a nova no `secrets.cfg` dos servidores daquele papel e reinicie os processos. Com a senha antiga, a cadeia de driver para em `ORA-01017` (§15.2).
+* **Senha de uma conta Oracle** (`sss_web`, `sss_agente`, ou a conta única do §4.0): o DBA troca a senha; grave a nova no `secrets.cfg` dos servidores daquele papel e reinicie os processos. Com a senha antiga, a cadeia de driver para em `ORA-01017` (§15.2).
 * **Senha de ambiente** (`[environment:X]`): grave a nova em todos os agentes que atendem o ambiente e reinicie-os. A senha chega ao script pela variável `PADRAO_VALOR_RUN_CONEXAO_BD`, só na próxima execução.
 
 ---
@@ -824,19 +774,19 @@ Com a estrutura por processo, o código é trocado **no lugar** pelo `bin/sss-up
    * **`bin/` é trocado inteiro:** um arquivo local que você tenha posto em `bin/` some (fica só no pacote de retorno). Guarde scripts próprios fora do código, por exemplo em `scripts_ambiente/`.
    * **Pacotes de retorno:** `var/update/<data>/` não é apagado sozinho. Depois de validar a versão nova, apague à mão os pacotes antigos que não quiser guardar.
    * **Dono de `var/`:** o `sss-update.sh` roda com o usuário do serviço e grava em `var/update/`. Na instalação com um usuário só (§4.0), `var/` é sempre dessa conta.
-4. Como root, em cada agente: copie o helper novo (`install -o root -g root -m 0755 <RAIZ>/bin/sss-helper <helper_path>`, §8).
+4. Desde o CR-032 não há helper a copiar (§8).
 5. Compare cada `instance/<nome>/config.ini` com o modelo novo (`diff instance/exemplos/agente0001/config.ini.example instance/agente0001/config.ini`). Chave obrigatória nova ou removida aparece na subida como `configuracao invalida` (§15.1).
 6. Suba e valide (§11): `systemctl start sss-web@web0001 sss-agente@agente0001 ...`; sem `systemd`, `sss-keepalive.sh --resume` de cada nome e uma passada do `sss-keepalive.sh` (ou espere a do cron).
 
-**Retorno:** pare tudo de novo (como no passo 2), rode o comando de retorno impresso no passo 3 e copie o helper anterior (que está no `bin/` restaurado). Com migração de esquema, o retorno precisa também do SQL de retorno ou do backup do banco (§17).
+**Retorno:** pare tudo de novo (como no passo 2), rode o comando de retorno impresso no passo 3. Voltar para uma versão anterior ao CR-032 exige de novo o helper e o `sudoers` dela. Com migração de esquema, o retorno precisa também do SQL de retorno ou do backup do banco (§17).
 
 ### 18.2 Da instalação anterior para a estrutura por processo (CR-028, D9)
 
 Uma instalação no formato anterior (`/opt/sss/app`, `/etc/sss/secrets.cfg`, `/var/lib/sss`, `/var/log/sss`) passa para a `<RAIZ>` **uma vez**, com tudo parado:
 
-1. Instale o pacote novo na `<RAIZ>` (§3), crie as pastas acima dela e o helper em `sss-root/bin` (§4.1, §8) e troque o `sudoers` para o caminho novo.
+1. Instale o pacote novo na `<RAIZ>` (§3) e apague o `sudoers` e o helper da instalação anterior (§8).
 2. Divida o `config.ini` antigo em um por processo (`instance/web0001/`, `instance/agente0001/`, §7.1), a partir dos modelos: copie só as chaves que fogem do padrão, e apague as de pastas (elas saem do nome). Divida o `secrets.cfg` da mesma forma (§7.2).
-3. **Mova** os dados de cada agente: `log_dir` → `var/<nome>/logs`, `output_dir` → `var/<nome>/output`, `input_dir` → `var/<nome>/input`, `script_work_dir` → `var/<nome>/script_work`. O `work_dir` não precisa ir: pare os agentes sem tickets `RUNNING` e ele é recriado vazio. Depois de mover, rode o `prepare_dirs.py` de novo para acertar donos e modos.
+3. **Mova** os dados de cada agente: `log_dir` → `var/<nome>/logs`, `output_dir` → `var/<nome>/output`, `input_dir` → `var/<nome>/input`, `script_work_dir` → `var/<nome>/script_work`. O `work_dir` não precisa ir: pare os agentes sem tickets `RUNNING` e ele é recriado vazio. Depois de mover, acerte o dono para a conta do serviço.
 4. Troque as units do `systemd` pelas novas, por nome (§10.5), e o monitoramento (`--name`, §13); a limpeza passa a ser manual (§12).
 5. Suba, valide (§11) e só depois apague as pastas antigas. Retorno: as pastas antigas continuam intactas até esse passo.
 
@@ -855,7 +805,7 @@ Os passos abaixo valem para a instalação no formato anterior, com a aplicaçã
    * **Variáveis do script renomeadas (CR-015a):** os scripts recebem só os nomes em inglês (de-para em `docs/architecture/CR-015a-english-names.md`). Antes de atualizar, procure os nomes antigos nos scripts cadastrados, por exemplo: `grep -rnE 'SSS_(AMBIENTE|AGENTE|PLATAFORMA|VERSAO|SCRIPT_NOME|SCRIPT_ARQUIVO|INTERPRETADOR|TIPO_EXECUCAO|PRIORIDADE|DATA_|TIMEOUT_SEG|AGENDAMENTO|RECORRENCIA|LOG_ARQUIVO|SAIDA_DIR|ENTRADA_DIR|TICKET_PAI_ID)' <pastas dos scripts>`. Script que ainda lê um nome antigo recebe vazio.
 3. Se o esquema mudou (`SCHEMA_VERSION`), o DBA aplica a migração antes (§5.2). Web e agentes recusam subir com versão diferente (código 15).
    * **Nomes em inglês no banco (CR-016a), sem migração:** a atualização de um banco com o esquema anterior (tabelas `tbsss_environments`, `tbsss_controle`…) **apaga os dados do SSS**. Faça o backup (§17), aplique o `02_rollback_sss.sql` **gerado pela versão anterior** e depois o `01_deploy_sss.sql` e o `99_validate_deploy.sql` da versão nova (§5.2). O `init_db` recusa criar o esquema novo com a `tbsss_controle` antiga presente.
-4. Copie o `sss-helper` novo para o `[agent] helper_path`, como root (§8).
+4. Desde o CR-032 não há helper (§8); as notas abaixo valem só para voltar a uma versão anterior.
    * **Helper ao lado da raiz (CR-028):** o padrão do `helper_path` passou a ser `sss-root/bin/sss-helper` na pasta de cima da aplicação (em `/opt/sss/app`, seria `/opt/sss/sss-root/bin/sss-helper`). Na instalação no formato anterior, escreva `helper_path = /opt/sss/bin/sss-helper` no `[agent]` de cada agente antes de subir; sem isso, o agente recusa a subida com `helper ... nao encontrado` (código 13).
    * **Entrada pela tela (CR-020c):** o helper anterior não tem `put-input` nem `list-input`, e as entregas terminariam em `FAILED`/`ERROR`. Instale o helper novo em todos os agentes junto com a versão.
    * **Pasta de trabalho (CR-019):** o helper anterior ignora o campo `work` da especificação: a pasta não é criada e o script recebe em `SSS_WORK_DIR` um caminho que não existe. Antes de ligar `[agent] script_work_dir`, instale o helper novo e crie `script_work_dir/<ambiente>/` de cada ambiente atendido (§8); com a chave vazia, nada muda.
@@ -919,10 +869,10 @@ Os passos abaixo valem para a instalação no formato anterior, com a aplicaçã
 ## 19. Checklist pré-produção
 
 - [ ] Estrutura por processo (CR-028): `<RAIZ>` = `/portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service`, um `instance/<nome>/` por processo com `[app] name` igual ao nome da pasta, e nomes de agente únicos em toda a instalação
-- [ ] `[app] sss_env = PROD` (ou `HML`) em todos os servidores
-- [ ] Tela de Entrada (CR-020): cada agente com `[agent] input_dir` e a pasta `input_dir/<ambiente>` criada pelo root (§8), o helper novo instalado, e o proxy com limite de corpo acima de `[web] input_upload_max_bytes`
+- [ ] Nenhuma linha `[app] sss_env`, `exec_users`, `exec_work_dir` nem `helper_path` (CR-032; só geram aviso); a pasta `<TIPO>` acima da raiz é `PROD`
+- [ ] Tela de Entrada (CR-020): cada agente com `[agent] input_dir` (padrão `var/<nome>/input`) e, com proxy, o limite de corpo acima de `[web] input_upload_max_bytes`
 - [ ] Nenhuma linha `data_backend` no `config.ini` (removida no F7.3; a aplicação usa sempre o Oracle)
-- [ ] `[oracle] user` de cada servidor é a conta do papel, nunca a dona do esquema
+- [ ] `[oracle] user` de cada servidor: a conta do papel ou, com um usuário de banco só, a dona do esquema (CR-032)
 - [ ] Nenhuma linha `[retention]`, `*_retention_days` nem `[purge]` (CR-030; só geram aviso)
 - [ ] Limpeza manual combinada: quem roda o SQL do banco e o `find` dos arquivos, e com que frequência (§12, README §11.3)
 - [ ] `[web] allowed_origins` com a URL pública e `trusted_proxies` com o proxy
@@ -930,12 +880,10 @@ Os passos abaixo valem para a instalação no formato anterior, com a aplicaçã
 - [ ] `call_timeout_ms` e `misfire_policy` iguais em todos os agentes (os demais tempos são fixos, CR-032), conferidos pela linha `tempos do fencing` de cada um
 - [ ] Combinação de driver registrada (linha `driver=... modo=... servidor=... cliente=...` de cada servidor)
 - [ ] `ls <RAIZ>` sem `applications/`, `gluon/` nem `web2py.py`; `curl .../admin/...` dá 404; `src/sss/web/controllers/dev.py` ausente
-- [ ] `secrets.cfg` com `0600` e dono `sss`, só com as seções do papel
-- [ ] Helper em `/portaloptrib/TESHUVA/SSS/<TIPO>/sss-root/bin/sss-helper` (root, `0755`), pastas acima dele do root sem escrita de outros (§4.1) e `sudoers` de cada usuário de execução (§8)
-- [ ] Com `output_dir`, `input_dir` ou `script_work_dir`: a pasta de cada ambiente atendido criada pelo root, do usuário de execução, `0700` (§8)
+- [ ] `instance/secrets.cfg` único, com `0600` e dono a conta do serviço, com o `[environment:*]` de todo ambiente atendido
 - [ ] Com script de caminho relativo (CR-023): `[agent] script_base_dir` em **todos** os agentes do ambiente, a pasta existente e a linha `pasta base dos scripts` no log de subida e no painel de agentes (§9)
 - [ ] Interpretador (CR-025, CR-026): o `PATH` do processo do agente (unit ou shell que roda o `sss-scheduler.sh`) acha `python3`, `bash` e os demais interpretadores dos scripts e os que os operadores vão digitar só pelo nome (§9); nenhuma linha `[agent] interpreters` (só gera aviso)
-- [ ] `config.ini` só com as chaves obrigatórias e as que fogem do padrão (README §12.1); todas as pastas configuradas criadas antes da primeira subida (§8)
+- [ ] `config.ini` só com as chaves obrigatórias e as que fogem do padrão (README §12.1); as pastas são criadas na subida (§8)
 - [ ] `<RAIZ>/var` em partição própria, com alerta de uso (§4.3)
 - [ ] Senha inicial do seed trocada (§5.3)
 - [ ] `sss-keepalive.sh` no cron (§10.6) e `health.py` no monitoramento (§13)
@@ -950,10 +898,10 @@ Os passos abaixo valem para a instalação no formato anterior, com a aplicaçã
 # como root
 systemctl disable --now 'sss-web@*' 'sss-agente@*' 2>/dev/null
 rm -f /etc/systemd/system/sss-web@.service /etc/systemd/system/sss-agente@.service && systemctl daemon-reload
-rm -f /etc/sudoers.d/sss /etc/sudoers.d/sss-monitor
+rm -f /etc/sudoers.d/sss-monitor      # só se o monitoramento usar sudo (§13)
 # depois de guardar o que precisar de var/ (logs, saídas) e de instance/ (configuração, em cofre)
-rm -rf /portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service /portaloptrib/TESHUVA/SSS/<TIPO>/sss-root
-userdel sss; userdel sssprd; userdel ssshml
+rm -rf /portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service
+userdel sss
 ```
 
 O esquema do banco é removido pelo DBA com o `02_rollback_sss_<owner>_<prefixo>.sql` (§5.2), **depois** do backup.
@@ -962,12 +910,11 @@ O esquema do banco é removido pelo DBA com o `02_rollback_sss_<owner>_<prefixo>
 
 ## Apêndice A. Servidor único de demonstração (DEV)
 
-Para demonstração ou homologação interna, web e agente podem ficar no mesmo servidor, com `[app] sss_env = DEV`:
+Para demonstração ou homologação interna, web e agente podem ficar no mesmo servidor, na pasta `DEV`:
 
 * A mesma estrutura por processo (CR-028): `instance/web0001/` e `instance/agente0001/`, dados em `var/web0001/` e `var/agente0001/`, subida por `bin/sss-web.sh <python3> web0001` e `bin/sss-scheduler.sh agente0001`. O DEV de referência guarda os scripts de teste em `dev/scripts` (`script_base_dir`) e mantém um `instance/config.ini` no formato único, usado pela bateria de testes e pelas ferramentas de banco (`init_db.py`, `generate_sql.py`).
-* `[agent] exec_users` vazio: os scripts rodam com o próprio `sss`, sem helper nem `sudo` (§8 não se aplica).
-* Um único `secrets.cfg` pode ter `[oracle]`, `[web]`, `[environment:*]` e `[monitor]`. Em DEV, a seção de outro papel só gera `WARNING ... Secao [x] nao pertence ao papel '...'; ignorada fora de HML/PROD`.
-* A conta Oracle pode ser a dona do esquema (recusado fora de DEV).
+* Um único `instance/secrets.cfg` com `[oracle]`, `[web]` e os `[environment:*]` (CR-032, D14).
+* A conta Oracle pode ser a dona do esquema (CR-032, D11: também no PROD).
 * Siga o §3 (pacote), o §7 (configuração), o §10.1 e o §10.2 (subida), o §10.4 (túnel SSH) e o §11 (validação). **Esse é o cenário ensaiado em 2026-10-21.**
 
 Os scripts `bin/start_local.sh` e `bin/stop_local.sh` do repositório são só da máquina de desenvolvimento e não vêm no pacote. Um DEV instalado pelo pacote não tem a vitrine `/dev/...` (o `src/sss/web/controllers/dev.py` não vai no pacote): ela responde 404, e o resto sobe normalmente (CR-021f3).

@@ -54,7 +54,7 @@ class TestAuthService(unittest.TestCase):
         env.start()
         self.addCleanup(env.stop)
 
-        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE"}})
         repo_factory.reset_singletons()
         self.addCleanup(repo_factory.reset_singletons)
         self.addCleanup(repo_factory.configure, None)
@@ -341,7 +341,7 @@ class TestAuthService(unittest.TestCase):
 class TestSeedDev(unittest.TestCase):
 
     def setUp(self):
-        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE"}})
         repo_factory.reset_singletons()
         self.addCleanup(repo_factory.reset_singletons)
         self.addCleanup(repo_factory.configure, None)

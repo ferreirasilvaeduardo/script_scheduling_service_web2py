@@ -22,16 +22,8 @@ _DATE_FMT = "%Y-%m-%d %H:%M:%S"
 PLATFORMS = ("LINUX", "UNIX")
 
 
-def exec_user(cfg, environment_name):
-    """Usuario do SO do ambiente em [agent] exec_users, ou None (so DEV, validado no config)."""
-    return dict(cfg.agent.exec_users or ()).get(environment_name) or None
-
-
-def script_work_dir(ticket_id, user, exec_work_dir, work_dir_ticket):
-    """cwd/HOME do script (README §8.4 passo 2): exec_work_dir/<usuario>/ticket_<id> com usuario de
-    execucao (criado pelo helper); em DEV sem usuario, work_dir/ticket_<id>/exec."""
-    if user:
-        return os.path.join(exec_work_dir, user, "ticket_%d" % int(ticket_id))
+def script_work_dir(work_dir_ticket):
+    """cwd/HOME do script (README §8.4 passo 2): work_dir/ticket_<id>/exec, com a conta do agente (CR-032, D7)."""
     return os.path.join(work_dir_ticket, "exec")
 
 
@@ -99,8 +91,7 @@ def build(cfg, secrets, ticket, environment, script_real, work_dir_ticket, envir
         raise ValueError("script_real deve ser absoluto")
     ticket_id = int(ticket["id"])
     agent = cfg.agent
-    user = exec_user(cfg, environment["name"])
-    home = script_work_dir(ticket_id, user, agent.exec_work_dir, work_dir_ticket)
+    home = script_work_dir(work_dir_ticket)
     snap = snapshot or {}
 
     env = _passthrough(agent.env_passthrough, environ_daemon)

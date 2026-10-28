@@ -7,6 +7,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 
 from sss.platform import path_guard
 from sss.platform.path_guard import Code, PathGuardError
@@ -199,18 +200,19 @@ class TestBaseDir(unittest.TestCase):
 
 
 class TestAppDir(unittest.TestCase):
-    """CR-023 (D8): script dentro da pasta da aplicacao e recusado; no DEV, dev/ e a excecao."""
+    """CR-023 (D8): script dentro da pasta da aplicacao e recusado; dev/ e a excecao onde existe (CR-032, D11)."""
 
     def test_pasta_da_aplicacao(self):
         inside = os.path.join(path_guard.APP_DIR, "src", "x.py")
-        for dev in (False, True):
-            with self.assertRaises(PathGuardError) as ctx:
-                path_guard.check_forbidden_dirs(inside, dev=dev)
-            self.assertEqual(ctx.exception.code, Code.APP_DIR)
-        in_dev = os.path.join(path_guard.APP_DIR, "dev", "scripts", "x.py")
-        path_guard.check_forbidden_dirs(in_dev, dev=True)
         with self.assertRaises(PathGuardError) as ctx:
-            path_guard.check_forbidden_dirs(in_dev)
+            path_guard.check_forbidden_dirs(inside)
+        self.assertEqual(ctx.exception.code, Code.APP_DIR)
+        in_dev = os.path.join(path_guard.APP_DIR, "dev", "scripts", "x.py")
+        path_guard.check_forbidden_dirs(in_dev)
+        # No pacote (sem a pasta dev/), dev/ tambem e recusada.
+        with mock.patch.object(path_guard, "APP_DEV_DIR", os.path.join(path_guard.APP_DIR, "nao_existe")):
+            with self.assertRaises(PathGuardError) as ctx:
+                path_guard.check_forbidden_dirs(in_dev)
         self.assertEqual(ctx.exception.code, Code.APP_DIR)
 
     def test_link_para_dentro_da_aplicacao(self):
@@ -219,7 +221,7 @@ class TestAppDir(unittest.TestCase):
         link = os.path.join(root, "app.py")
         os.symlink(os.path.join(path_guard.APP_DIR, "README.md"), link)
         with self.assertRaises(PathGuardError) as ctx:
-            path_guard.check_forbidden_dirs(link, dev=True)
+            path_guard.check_forbidden_dirs(link)
         self.assertEqual(ctx.exception.code, Code.APP_DIR)
 
     def test_relativo_nao_e_conferido_no_cadastro(self):
@@ -314,8 +316,7 @@ class TestScriptsAmbienteCr028(unittest.TestCase):
     def test_scripts_ambiente_aceita_em_todos_os_ambientes(self):
         # CR-028 (D3): scripts_ambiente/ e preservada pela atualizacao; o resto da aplicacao continua proibido.
         inside = os.path.join(path_guard.APP_SCRIPTS_DIR, "faturamento", "carga.py")
-        for dev in (False, True):
-            path_guard.check_forbidden_dirs(inside, dev=dev)
+        path_guard.check_forbidden_dirs(inside)
         with self.assertRaises(PathGuardError) as ctx:
             path_guard.check_forbidden_dirs(os.path.join(path_guard.APP_DIR, "src", "x.py"))
         self.assertEqual(ctx.exception.code, Code.APP_DIR)

@@ -37,8 +37,8 @@ SHEBANG_MAX_BYTES = 256
 SYSTEM_DIRS = os_platform.SYSTEM_DIRS
 # Tamanho maximo de path_file (coluna VARCHAR2(500 CHAR)).
 MAX_LENGTH = 500
-# Pasta da aplicacao (src/sss/platform/ -> raiz), que a atualizacao troca inteira (CR-023, D8);
-# no DEV, a subpasta dev/ guarda os scripts de exemplo e e a excecao.
+# Pasta da aplicacao (src/sss/platform/ -> raiz), que a atualizacao troca inteira (CR-023, D8); a subpasta dev/
+# guarda os scripts de exemplo e e a excecao onde existe (o repositorio; o pacote nao a leva; CR-032, D11).
 APP_DIR = os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
 APP_DEV_DIR = os.path.join(APP_DIR, "dev")
 # CR-028 (D3): scripts dos ambientes dentro do projeto, preservados pela atualizacao (bin/sss-update.sh), em
@@ -136,12 +136,13 @@ def _inside(path, folder):
     return os.path.commonpath([path, folder]) == folder
 
 
-def check_forbidden_dirs(path_file: str, sss_dirs: Iterable[Optional[str]] = (), dev: bool = False) -> None:
-    """Recusa pastas do sistema, as do SSS (log_dir, work_dir...) e a da aplicacao (salvo dev/ no DEV,
-    CR-023 D8), no caminho digitado e no resolvido (symlink). Caminho relativo: nada a conferir aqui."""
+def check_forbidden_dirs(path_file: str, sss_dirs: Iterable[Optional[str]] = ()) -> None:
+    """Recusa pastas do sistema, as do SSS (log_dir, work_dir...) e a da aplicacao (salvo dev/ onde ela existe,
+    CR-023 D8 e CR-032 D11), no caminho digitado e no resolvido (symlink). Caminho relativo: nada a conferir."""
     if is_relative(path_file):
         return
     sss = [os_platform.final_path(d) for d in sss_dirs if d]
+    dev = os.path.isdir(APP_DEV_DIR)
     for target in (path_file, os_platform.final_path(path_file)):
         if any(_inside(target, d) for d in SYSTEM_DIRS):
             raise PathGuardError(Code.SYSTEM_DIR)
@@ -162,8 +163,7 @@ def _stat(path):
         raise PathGuardError(Code.NOT_FOUND)
 
 
-def resolve(path_file: str, sss_dirs: Iterable[Optional[str]] = (), base_dir: Optional[str] = None,
-            dev: bool = False) -> str:
+def resolve(path_file: str, sss_dirs: Iterable[Optional[str]] = (), base_dir: Optional[str] = None) -> str:
     """Confere o script no servidor do agente e devolve o caminho real, que e o executado (README §8.5, CR-011).
 
     Formato do caminho cadastrado; o relativo vira base_dir/<relativo> (CR-023; sem base, NO_BASE_DIR) e o
@@ -173,7 +173,7 @@ def resolve(path_file: str, sss_dirs: Iterable[Optional[str]] = (), base_dir: Op
     """
     validate_registration(path_file)
     target = join_base(path_file, base_dir)
-    check_forbidden_dirs(target, sss_dirs, dev=dev)
+    check_forbidden_dirs(target, sss_dirs)
     code = os_platform.validate_script_path(target)
     if code:
         raise PathGuardError(code)

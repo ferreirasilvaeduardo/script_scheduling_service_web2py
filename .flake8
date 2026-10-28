@@ -71,6 +71,7 @@ per-file-ignores =
     src/sss/platform/__init__.py: E501
     src/sss/platform/os_platform/__init__.py: E501
     src/sss/platform/os_platform/posix.py: E127,E128,E501,E741
+    src/sss/platform/os_platform/ticket_files.py: E127,E501
     src/sss/platform/path_guard.py: E501
     src/sss/scheduler/env_builder.py: E127,E501
     src/sss/scheduler/executor.py: E127,E128,E501
@@ -135,7 +136,7 @@ per-file-ignores =
     tests/integration/process/test_executor.py: E127,E128,E303,E501,F401
     tests/integration/process/test_launchers.py: E501
     tests/integration/process/test_platform.py: E127,E128,E501
-    tests/integration/process/test_sss_helper.py: E128,E501
+    tests/integration/process/test_ticket_files.py: E128,E501
     tests/support/_oracle_test_support.py: E127,E501,F401,F811
     tests/support/_output_memory.py: E127,E501
     tests/support/_testenv.py: E501

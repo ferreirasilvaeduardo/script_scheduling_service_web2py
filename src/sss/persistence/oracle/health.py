@@ -3,7 +3,7 @@
 
 Importado so pelo scripts/health.py e, pelo SQL e pelo calculo dos pares atendidos, pelo repo_oracle/agents.py
 (a tela de agentes e o monitoramento nao divergem). Sem gluon (excecao do AGENTS §5.5). So leituras, nas
-tabelas que a conta do papel monitor le (README §11.1); nenhum LOB e lido.
+tabelas que as contas do web e do agente leem (README §11.1); nenhum LOB e lido.
 """
 import datetime
 

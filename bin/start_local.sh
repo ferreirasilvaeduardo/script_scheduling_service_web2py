@@ -102,13 +102,11 @@ if ! command -v "${PYTHON}" >/dev/null 2>&1; then
 fi
 
 # 7. Validacao rapida da configuracao (diagnostico antes de subir): run_web.py --check confere
-#    config.ini e segredos sem abrir a porta; aqui ainda se exige DEV e o driver Oracle neste Python.
+#    config.ini e segredos sem abrir a porta; aqui ainda se exige o driver Oracle neste Python.
 SERVER="${APP_DIR}/scripts/run_web.py"
 DIAG_ERRORS="$("${PYTHON}" "${SERVER}" --name "${NAME}" --check 2>&1 || true)"
 if echo "${DIAG_ERRORS}" | grep -q "^CONFIG_OK"; then
-    if ! echo "${DIAG_ERRORS}" | grep -q "^CONFIG_OK sss_env=DEV$"; then
-        DIAG_ERRORS="ERRO: sss_env deve ser DEV para ambiente local."
-    elif ! "${PYTHON}" -c "import oracledb" >/dev/null 2>&1 && ! "${PYTHON}" -c "import cx_Oracle" >/dev/null 2>&1; then
+    if ! "${PYTHON}" -c "import oracledb" >/dev/null 2>&1 && ! "${PYTHON}" -c "import cx_Oracle" >/dev/null 2>&1; then
         # A aplicacao usa sempre o Oracle: o Python escolhido precisa ter oracledb ou cx_Oracle.
         DIAG_ERRORS="ERRO: driver Oracle (oracledb ou cx_Oracle) ausente neste Python; use PYTHON=<python com driver>"
     fi

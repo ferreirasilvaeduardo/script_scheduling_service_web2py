@@ -120,7 +120,7 @@ cd /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
 
 **A aplicação usa sempre o Oracle** do `[oracle]` do config do processo (`instance/web0001/` e `instance/agente0001/`: owner e prefixo; F7.3). Por isso, o Python precisa ter o driver Oracle (`oracledb` ou `cx_Oracle`). Nesta máquina, o 3.6.0 e o 3.6.15 têm; no `bin/start_local.sh`, use `PYTHON=~/.pyenv/versions/3.6.15/bin/python3` (o launcher só aceita interpretador chamado `python3` ou `python3.X`, não o `python` do pyenv). Para parar, `Ctrl+C` ou `SIGTERM`: o servidor espera as requisições em andamento até `[web] socket_timeout_s`.
 
-**Estrutura por processo (CR-028):** o DEV tem a mesma estrutura do PROD (DEPLOYMENT §1; não há HOM, CR-030), com `<RAIZ>` = `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`: `instance/web0001/` e `instance/agente0001/` (cada um com o seu `config.ini`; os segredos num único `instance/secrets.cfg` `0600`, fora do git), logs do web em `var/web0001/logs` e as pastas do agente em `var/agente0001/` (`logs`, `work`, `output`, `input`, `script_work`). Para criar do zero, copie os modelos de `instance/exemplos/` (`sss_env = DEV`, o `[oracle]` com owner, prefixo e DSN), as pastas são criadas na subida (CR-032) e siga o `docs/DEPLOYMENT.md` §7. O `bin/start_local.sh` sobe o `web0001` (outro nome com `SSS_WEB_NAME`) e carrega `instance/web0001/web.env` (`SSS_DEV_SEED_PASSWORD` e `SSS_TZ`; `0600`, fora do git). Não há config padrão (CR-029): as ferramentas de banco rodam com `--name agente0001` (`init_db.py`, `generate_sql.py`, `check_env.py`), e a bateria Oracle lê `instance/agente0001/` (config e segredos).
+**Estrutura por processo (CR-028):** o DEV tem a mesma estrutura do PROD (DEPLOYMENT §1; não há HOM, CR-030), com `<RAIZ>` = `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`: `instance/web0001/` e `instance/agente0001/` (cada um com o seu `config.ini`; os segredos num único `instance/secrets.cfg` `0600`, fora do git), logs do web em `var/web0001/logs` e as pastas do agente em `var/agente0001/` (`logs`, `work`, `output`, `input`, `script_work`). Para criar do zero, copie os modelos de `instance/exemplos/` (o `[oracle]` com owner, prefixo e DSN; não há `sss_env` desde o CR-032: o ambiente mostrado vem da pasta `DEV`), as pastas são criadas na subida (CR-032) e siga o `docs/DEPLOYMENT.md` §7. O `bin/start_local.sh` sobe o `web0001` (outro nome com `SSS_WEB_NAME`) e carrega `instance/web0001/web.env` (`SSS_DEV_SEED_PASSWORD` e `SSS_TZ`; `0600`, fora do git). Não há config padrão (CR-029): as ferramentas de banco rodam com `--name agente0001` (`init_db.py`, `generate_sql.py`, `check_env.py`), e a bateria Oracle lê `instance/agente0001/` (config e segredos).
 
 A aplicação fica no endereço local `127.0.0.1:8000/script_scheduling_service` (porta 8000, caminho `/script_scheduling_service`).
 
@@ -134,7 +134,7 @@ bin/start_local.sh               # sobe em background na porta 8000
 bin/stop_local.sh               # SIGTERM; SIGKILL só se não parar em 40 s (SSS_STOP_GRACE_S)
 ```
 
-O `start_local.sh` recusa subir se o `run_web.py --check` falhar, se `sss_env` não for `DEV` ou se o Python escolhido não tiver o driver Oracle.
+O `start_local.sh` recusa subir se o `run_web.py --check` falhar ou se o Python escolhido não tiver o driver Oracle. A tela mostra `[DEV]` no título da aba e o cabeçalho em outra cor (além da faixa), porque a pasta acima da raiz é `DEV` (CR-032).
 
 Para subir como nos servidores via launcher oficial:
 `bin/sss-web.sh "$(command -v python3)" --host 127.0.0.1 --port 8000` (o launcher só aceita interpretador chamado `python3` ou `python3.X` e só inicia o `run_web.py`): ele recusa root, aplica `umask 077`, exporta `TZ` a partir de `SSS_TZ` e `LANG`/`LC_ALL` a partir de `SSS_LOCALE` (padrão `C.UTF-8`) (`docs/DEPLOYMENT.md` §10.1 e Apêndice A).
@@ -154,7 +154,7 @@ Para subir como nos servidores via launcher oficial:
 1. **Escuta estrita em 127.0.0.1:**
    O servidor escuta só em `127.0.0.1` (padrão do `--host`). Nunca utilize `0.0.0.0` em ambiente de desenvolvimento, garantindo isolamento na máquina local.
 2. **Sem FAKE na aplicação:** desde o F7.3, a aplicação usa sempre o Oracle (pool de conexões por processo). O FAKE em memória só existe nos testes automáticos.
-   * **Trava de segurança:** o FAKE dos testes só é aceito com `sss_env = DEV`; fora de DEV, a `repo_factory` o recusa.
+   * **Trava de segurança:** o FAKE dos testes só é aceito onde a pasta `dev/` existe (o repositório); no pacote, a `repo_factory` o recusa (CR-032, D11).
 
 ---
 
@@ -175,7 +175,7 @@ python -m unittest tests.unit.core.test_cron_parser         # um arquivo
 |---|---|---|
 | `tests/unit/` | Sem banco real nem rede | `make test-unit` |
 | `tests/integration/oracle/` | Oracle real, só com `SSS_TEST_ORACLE=1` (sem a chave, tudo pulado) | `make test-integration` |
-| `tests/integration/process/` | Processos do sistema (spawn, sinais, helper, launchers) | `make test-integration` |
+| `tests/integration/process/` | Processos do sistema (spawn, sinais, ticket_files, launchers) | `make test-integration` |
 | `tests/functional/` | A aplicação inteira, por requisição ou com o servidor real | `make test-functional` |
 | `tests/architecture/` | Regras lidas no código e nos documentos | `make test-architecture` |
 
@@ -225,7 +225,7 @@ O script fica num **caminho absoluto** em qualquer lugar do servidor ou num cami
 * **No agente**, a cada execução:
   * o relativo é juntado à `script_base_dir` (sem ela, `NO_BASE_DIR`);
   * o caminho pode ser link simbólico, inclusive para fora da pasta base; o agente resolve o caminho real e executa o arquivo real;
-  * o caminho, juntado ou real, não fica em pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`), nem dentro de `log_dir`, `work_dir`, `exec_work_dir`, `output_dir`, `input_dir` ou `script_work_dir`, nem na pasta da aplicação (no DEV, `dev/` é a exceção);
+  * o caminho, juntado ou real, não fica em pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`), nem dentro de `log_dir`, `work_dir`, `output_dir`, `input_dir` ou `script_work_dir`, nem na pasta da aplicação (`dev/` é a exceção onde existe, o repositório);
   * o arquivo real existe, é arquivo regular e não tem escrita para grupo nem para outros (`st_mode & 0o022 == 0`); as pastas do caminho não são conferidas.
 
 **No DEV:** o seed (Oracle e FAKE) e os diagnósticos da homologação usam caminho relativo (`utilitarios/zipar_arquivos.py`, `carga_diaria.py`, `diagnostico/gerar_saida.sh`), e o `instance/agente0001/config.ini` aponta a pasta base para os scripts do repositório:
@@ -255,11 +255,11 @@ Os arquivos precisam de modo `0644` ou `0755` (`chmod -R go-w dev/scripts`). Uma
 
 ### 6.3 Agente em DEV (a partir do F8, CR-007)
 
-* **Config enxuto (CR-026, CR-028):** o `instance/agente0001/config.ini` do DEV só tem as chaves obrigatórias e as que fogem do padrão (`sss_env = DEV`, `name = agente0001`, `[oracle]`, `environments`, `max_parallel_jobs`, `script_base_dir = <RAIZ>/dev/scripts`, `env_passthrough` e `level = DEBUG`); o do `web0001`, `name`, `[oracle]`, `level` e `allowed_origins`. As pastas saem do nome. Não há `[agent] interpreters`: o agente procura `python3`, `bash`... no `PATH` do terminal que o subiu. O agente sobe pelo nome: `PYTHON=~/.pyenv/versions/3.6.15/bin/python3 bin/sss-scheduler.sh agente0001`. Para parar, `bin/sss-stop.sh agente0001` ou `SIGTERM` no PID do agente: ele encerra pela máquina de estados (README §8.11).
+* **Config enxuto (CR-026, CR-028):** o `instance/agente0001/config.ini` do DEV só tem as chaves obrigatórias e as que fogem do padrão (`name = agente0001`, `[oracle]`, `environments`, `max_parallel_jobs`, `script_base_dir = <RAIZ>/dev/scripts`, `env_passthrough` e `level = DEBUG`); o do `web0001`, `name`, `[oracle]`, `level` e `allowed_origins`. As pastas saem do nome. Não há `[agent] interpreters`: o agente procura `python3`, `bash`... no `PATH` do terminal que o subiu. O agente sobe pelo nome: `PYTHON=~/.pyenv/versions/3.6.15/bin/python3 bin/sss-scheduler.sh agente0001`. Para parar, `bin/sss-stop.sh agente0001` ou `SIGTERM` no PID do agente: ele encerra pela máquina de estados (README §8.11).
 * **Pasta de trabalho dos scripts (CR-019, CR-028):** no DEV é `var/agente0001/script_work` (padrão do nome; fora do git; criada pelo agente na subida, CR-032). Cada ticket recebe `SSS_WORK_DIR` em `script_work/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, que fica depois do ticket até a limpeza manual (README §11.3, CR-030).
-* Em DEV, `[agent] exec_users` pode ficar vazio: o agente executa os scripts com o próprio usuário e registra WARN `SEM_USUARIO_EXECUCAO`. Para testar o helper e o `sudo` como nos servidores, siga o `DEPLOYMENT.md` §8 numa VM.
+* **DEV igual ao PROD (CR-032, D7, D8, D11):** os scripts rodam com a conta do agente, sem `sudo` nem helper, no DEV e no PROD; não há `sss_env` nem papel monitor. As linhas antigas (`sss_env`, `exec_users`, `exec_work_dir`, `helper_path`, `[monitor]`) só geram aviso.
 * `cron_horizon_days` é fixo em 1.461 desde o CR-032, `max_log_size_bytes` vai até 64 MiB; o `table_prefix` só aceita minúsculas. Um `config.ini` antigo fora dessas faixas aborta a subida com a chave no log.
-* **CR-008:** `[web] session_max_hours` (padrão 12) e `[agent] log_dir_min_free_mb` (padrão 1.024; 0 desliga, só em DEV) são opcionais. Em DEV, `[oracle] user` pode ser igual ao `owner`; fora de DEV, é recusado. O `scripts/health.py` lê só a seção `[monitor]` do `secrets.cfg`.
+* **CR-008:** `[web] session_max_hours` (padrão 12) e `[agent] log_dir_min_free_mb` (padrão 1.024; 0 desliga) são opcionais. `[oracle] user` pode ser igual ao `owner` (CR-032, D11). O `scripts/health.py` usa os segredos e a conta do processo do `--name` (CR-032, D8).
 
 ---
 

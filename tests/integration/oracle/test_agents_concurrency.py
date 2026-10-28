@@ -15,6 +15,7 @@ import datetime
 import io
 import json
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -159,7 +160,6 @@ class _TwoAgentsBase(unittest.TestCase):
         # self.root, onde estao as pastas de dirs).
         cp["app"]["name"] = agent
         cp["agent"].update({"environments": self.amb["name"],
-                            "exec_users": "", "exec_work_dir": "",
                             "max_parallel_jobs": "4",
                             "output_dir": dirs["output"], "input_dir": dirs["input"],
                             "log_dir_min_free_mb": "0"})
@@ -174,6 +174,11 @@ class _TwoAgentsBase(unittest.TestCase):
         if not os.path.exists(shared):
             shutil.copyfile(_oracle_secrets(), shared)
             os.chmod(shared, 0o600)
+            # CR-032 (D11): ambiente atendido sem credencial recusa a subida tambem no DEV. O ambiente do teste
+            # ganha uma credencial gerada aqui (o script de teste nao conecta em banco nenhum).
+            with open(shared, "a", encoding="utf-8") as f:
+                f.write("\n[environment:%s]\nuser = tst_app\npassword = %s\n"
+                        % (self.amb["name"], secrets.token_hex(16)))
         path = os.path.join(instance, agent, "config.ini")
         with open(path, "w", encoding="utf-8") as f:
             cp.write(f)

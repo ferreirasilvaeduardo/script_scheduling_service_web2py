@@ -108,13 +108,23 @@ O `config.ini` do agente ficaria com `sss_env`, `name`, `[oracle]` (`dsn`, `owne
 | D15 | A: DEPLOYMENT só com o caminho real (roteiro do §4.0); saem o cenário com administrador, `systemd`, apêndice B e a migração de `/opt/sss/app`; notas por versão só as da estrutura nova |
 | D16 | A: `critical_config` só com `call_timeout_ms` e `misfire_policy` (atualização com todos os agentes parados) |
 | D17 | B: o `check_env.py` fica |
+| D18 | A (2026-10-28): `instance/common.ini` por servidor, na pasta de cima da do config (como o `secrets.cfg`), com o `[oracle]` comum ao web e aos agentes; uma chave repetida no `config.ini` do processo vale no lugar da comum. Passo 032d |
 
 ## 5. Passos
 
 | Passo | Conteúdo | Situação |
 |---|---|---|
 | 032a | D1, D2, D3, D9 | Concluído (cf886f3) |
-| 032b | D4 (`name` obrigatório, fim do formato único), D14 (`secrets.cfg` único), D12 (pastas criadas na subida, sem `prepare_dirs`) | Pendente |
-| 032c | D7 e D13 (sem `sudo`/helper; funções no agente), D8 (sem monitor), D11 (sem `sss_env`), D16 (`critical_config` enxuto); linha de subida com o ambiente da instalação (`<TIPO>` e caminho) no web e no agente; no DEV, título da aba com `[DEV]` e cabeçalho com outra cor (além da faixa que já existe) | Pendente |
+| 032b | D4 (`name` obrigatório, fim do formato único), D14 (`secrets.cfg` único), D12 (pastas criadas na subida, sem `prepare_dirs`) | Concluído (f57a921) |
+| 032c | D7 e D13 (sem `sudo`/helper; funções no agente), D8 (sem monitor), D11 (sem `sss_env`), D16 (`critical_config` enxuto); linha de subida com o ambiente da instalação (`<TIPO>` e caminho) no web e no agente; no DEV, título da aba com `[DEV]` e cabeçalho com outra cor (além da faixa que já existe) | Concluído (§6) |
 | 032e | Pastas do processo no plural: `inputs`, `outputs`, `works`, `script_works` (pedido de 2026-10-27; passo separado depois do 032d) | Pendente |
-| 032d | D15 (DEPLOYMENT enxuto), configs do DEV e modelos, homologação real, revisão independente, encerramento | Pendente |
+| 032d | D15 (DEPLOYMENT enxuto), D18 (`instance/common.ini` com o `[oracle]`), configs do DEV e modelos, homologação real, revisão independente, encerramento | Pendente |
+
+## 6. O que o 032c fez (2026-10-28)
+
+* **D7 e D13, sem `sudo` nem helper:** o `bin/sss-helper` saiu do pacote. As operações de arquivo das pastas do ticket (`pack`, `clean-output`, `put-input`, `list-input`) foram para `src/sss/platform/os_platform/ticket_files.py`, dentro da camada de plataforma, rodadas por `sys.executable -I` com a conta do agente e sem esperar (o daemon continua sem threads). Saíram `run`, `term`, `kill`, `clean` e `stop-ticket` do helper, `validate_execution`, `validate_output_dirs`, `set_helper`, `clean_script_dir`, `FailureAfterSpawn` e o parâmetro `exec_user` da plataforma, do executor, das fases de entrada e saída e do `scheduler_loop`. O script roda em `work_dir/ticket_<id>/exec` em DEV e PROD. `exec_users`, `exec_work_dir` e `helper_path` (e `usuarios_execucao`) ficam em `sss_config.IGNORED_KEYS`.
+* **D8, sem monitor:** o papel `monitor` saiu de `sss_config.ROLES`, do `db_conn.connect` e dos GRANTs (`ddl_builder.GRANT_ROLES`, `init_db`, `generate_sql`); `[monitor]` no `secrets.cfg` só gera aviso. O `health.py` carrega os segredos e conecta com o papel do `--name` (a conta do agente lê as seis tabelas que ele consulta). `docs/sql/01_deploy` regenerado (sem as linhas de purge e monitor que tinham ficado do CR-030).
+* **D11, sem `sss_env`:** a chave saiu do `SCHEMA` e do `AppConfig` e fica em `IGNORED_KEYS`. Comportamento único: cookie `Secure` só sob HTTPS; o próprio `Host` aceito como origem; conta igual ao owner aceita; segredos do outro papel ignorados; ambiente sem credencial recusa a subida do agente; `init_db` sem `--real-schema` só no esquema descartável. A tela `/dev`, o FAKE e os scripts em `dev/` valem onde a pasta `dev/` existe (`sss_config.has_dev_dir`, `path_guard`, `repo_factory`); o `path_guard` perdeu o parâmetro `dev`. A bateria Oracle exige o repositório (pasta `dev/`) no lugar do `sss_env = DEV`.
+* **D16:** `critical_config` = `call=<s>;misfire=<política>`; a troca exige parar todos os agentes.
+* **Ambiente visível:** `sss_config.env_label()` dá o nome da pasta `<TIPO>`; web e agente registram `ambiente da instalação: <TIPO> (<raiz>)` na subida; com `DEV`, o título da aba começa com `[DEV]` e o cabeçalho usa `--sss-header-dev-bg`. O `run_web.py --check` imprime `CONFIG_OK ambiente=<TIPO>`.
+* **DEV:** as linhas `sss_env = DEV` saíram de `instance/web0001/config.ini` e `instance/agente0001/config.ini` (fora do git; cópia em scratchpad).

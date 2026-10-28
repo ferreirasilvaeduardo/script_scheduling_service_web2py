@@ -8,7 +8,7 @@ So em 127.0.0.1 por padrao: os usuarios chegam pelo proxy reverso HTTPS ou por t
 requisicoes em andamento ate ``[web] socket_timeout_s``.
 
 Com ``--check`` so confere configuracao, segredos e montagem da aplicacao, sem abrir a porta:
-imprime ``CONFIG_OK sss_env=<ambiente>`` (usado pelo bin/start_local.sh e na implantacao).
+imprime ``CONFIG_OK ambiente=<TIPO>`` (usado pelo bin/start_local.sh e na implantacao).
 
 Saida: 0 na parada normal ou no ``--check`` bem-sucedido; 2 configuracao ou segredos invalidos
 (CRITICAL ja registrado); 3 endereco indisponivel (porta em uso ou sem permissao).
@@ -49,7 +49,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     except sss_config.ConfigError:
         return EXIT_CONFIG
     if args.check:
-        print(f"CONFIG_OK sss_env={cfg.app.sss_env}")
+        print(f"CONFIG_OK ambiente={sss_config.env_label()}")
         return 0
     log = security.log()
     try:
@@ -63,6 +63,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     os_platform.install_stop_handler(stop)
     log.info("servidor web no ar em %s:%d (max_threads=%d socket_timeout_s=%d)", args.host,
              args.port, cfg.web.max_threads, cfg.web.socket_timeout_s, extra={"action": "INICIO"})
+    # CR-032: a instalacao (pasta <TIPO>) e o caminho, ja que o config nao diz mais o ambiente.
+    log.info("ambiente da instalacao: %s (%s)", sss_config.env_label(), sss_config.APP_DIR,
+             extra={"action": "INICIO"})
     if not serve(server, stop, grace_s=cfg.web.socket_timeout_s):
         log.warning("parada com requisicoes ainda em andamento apos %d s",
                     cfg.web.socket_timeout_s, extra={"action": "PARADA"})

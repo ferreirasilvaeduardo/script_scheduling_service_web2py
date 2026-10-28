@@ -26,8 +26,7 @@ IP = "10.7.8.9"
 DEV_PASSWORD = "senha-dev-de-teste-123"
 SECRET = "tok-auditoria-secreto-91"
 THRESHOLDS = Thresholds(10, 90, 180)
-CRITICAL_CONFIG = ("hb=10;fence=90;offline=180;call=30;kill=5;"
-                   "misfire=RUN_ONCE;tol=300;horizonte=1461;envelhecimento=60")
+CRITICAL_CONFIG = "call=30;misfire=RUN_ONCE"
 TODAY = datetime.date(2026, 10, 15)
 
 
@@ -46,7 +45,7 @@ class _Base(unittest.TestCase):
         env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: DEV_PASSWORD})
         env.start()
         self.addCleanup(env.stop)
-        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE"}})
         repo_factory.reset_singletons()
         self.addCleanup(repo_factory.reset_singletons)
         self.addCleanup(repo_factory.configure, None)
@@ -426,7 +425,7 @@ class TestAgentsDashboard(_Base):
         """Dados de demonstracao: os tres quadros aparecem (UI_FREEZE, CR-007 R-18)."""
         dashboard = self.svc_agentes.dashboard(self.ctx["admin"])
         self.assertEqual([a["code"] for a in dashboard["config_mismatch"]], ["agt-host02"])
-        self.assertIn("kill=10", dashboard["config_mismatch"][0]["critical_config"])
+        self.assertIn("misfire=SKIP", dashboard["config_mismatch"][0]["critical_config"])
         self.assertEqual([t["id"] for t in dashboard["running_without_pid"]], [16])
         self.assertEqual(dashboard["unattended_queue"], [])  # agt-host02 ainda DELAYED
         self.now = self.base + datetime.timedelta(seconds=61)  # agt-host02 AT_RISK
@@ -439,7 +438,7 @@ class TestAgentsDashboard(_Base):
     def test_diagnosticos_config_divergente_e_parado(self):
         self.store.agents[2]["critical_config"] = CRITICAL_CONFIG
         self.assertEqual(self.svc_agentes.dashboard(self.ctx["admin"])["config_mismatch"], [])
-        self.store.agents[2]["critical_config"] = CRITICAL_CONFIG.replace("hb=10", "hb=11")
+        self.store.agents[2]["critical_config"] = CRITICAL_CONFIG.replace("call=30", "call=31")
         dashboard = self.svc_agentes.dashboard(self.ctx["admin"])
         self.assertEqual([a["code"] for a in dashboard["config_mismatch"]], ["agt-host02"])
         self.assertEqual(dashboard["config_web"], CRITICAL_CONFIG)

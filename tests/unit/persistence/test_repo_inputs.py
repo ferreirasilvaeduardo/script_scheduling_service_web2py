@@ -135,7 +135,7 @@ class BaseInputsContract(object):
 class TestRepoInputsFake(unittest.TestCase, BaseInputsContract):
 
     def setUp(self):
-        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE"}})
         repo_factory.reset_singletons()
         self.addCleanup(repo_factory.reset_singletons)
         self.addCleanup(repo_factory.configure, None)

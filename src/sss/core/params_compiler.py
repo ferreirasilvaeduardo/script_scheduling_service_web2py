@@ -453,7 +453,7 @@ def validate_snapshot(json_str, cfg, notes=None):
     """Pre-valida o snapshot no claim (README §8.4 passo 1) e devolve (snap, argv, script_real);
     lanca SnapshotError. script_real (o path_file resolvido) alimenta o SSS_SCRIPT_DIR do env_builder.
 
-    cfg expoe, opcionais, sss_dirs (log_dir, work_dir e exec_work_dir, onde nenhum script pode ficar),
+    cfg expoe, opcionais, sss_dirs (log_dir, work_dir e as pastas dos scripts, onde nenhum script pode ficar),
     script_base_dir (base do caminho relativo, CR-023), dev (script em dev/ da aplicacao aceito, CR-023 D8)
     e search_path (PATH do agente, onde os nomes sao procurados). notes, se dado, recebe as linhas para o log
     do ticket (ex.: #! ignorado, CR-026).
@@ -481,10 +481,9 @@ def validate_snapshot(json_str, cfg, notes=None):
         raise SnapshotError('INVALID_ARGS')
 
     try:
-        # CR-023: caminho relativo junto da pasta base do agente; script na pasta da aplicacao so em dev/ no DEV.
+        # CR-023: caminho relativo junto da pasta base do agente; script na pasta da aplicacao so em dev/.
         real = path_guard.resolve(snap['path_file'], sss_dirs=getattr(cfg, 'sss_dirs', None) or (),
-                                  base_dir=getattr(cfg, 'script_base_dir', None),
-                                  dev=bool(getattr(cfg, 'dev', False)))
+                                  base_dir=getattr(cfg, 'script_base_dir', None))
     except path_guard.PathGuardError as e:
         raise SnapshotError('PATH_GUARD_' + e.code)
     try:

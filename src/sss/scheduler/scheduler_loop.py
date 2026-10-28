@@ -98,10 +98,10 @@ class _Log(logging.LoggerAdapter):
 def _sss_dirs(cfg):
     """Pastas do SSS onde nenhum script pode ficar (SSS_DIR, README §8.5; o interpretador nao e conferido
     contra elas desde o CR-026, risco aceito, README §14). CR-014 e CR-019:
-    inclui output_dir, input_dir e script_work_dir, que o usuario de execucao grava (um script ali poderia ser
-    trocado por outro)."""
+    inclui output_dir, input_dir e script_work_dir, que os scripts gravam (um script ali poderia ser trocado
+    por outro)."""
     agent = cfg.agent
-    return tuple(d for d in (cfg.logging.log_dir, agent.work_dir, agent.exec_work_dir,
+    return tuple(d for d in (cfg.logging.log_dir, agent.work_dir,
                              getattr(agent, "output_dir", None), getattr(agent, "input_dir", None),
                              getattr(agent, "script_work_dir", None)) if d)
 
@@ -160,9 +160,6 @@ class Agent(object):
     def _conn(self):
         return self.connection.get_connection()
 
-    def _exec_user(self, environment):
-        return dict(self.cfg.agent.exec_users or ()).get(environment) or None
-
     # --------------------------------------------------------------- passos
 
     def initialize(self):
@@ -175,6 +172,8 @@ class Agent(object):
             raise
         self.log.info("agente inicializado (versao %s, %d grupo(s) em encerramento, %d pasta(s) preservada(s))",
                       sss_config.SSS_VERSION, len(self.stopping), len(self.preserved))
+        # CR-032: a instalacao (pasta <TIPO>) e o caminho, ja que o config nao diz mais o ambiente.
+        self.log.info("ambiente da instalacao: %s (%s)", sss_config.env_label(), sss_config.APP_DIR)
         return self
 
     def release_resources(self):
@@ -248,22 +247,9 @@ class Agent(object):
             if code:
                 self._fail(EXIT_DIRECTORIES, "%s %s recusado: %s", name, path, code)
         # CR-026: sem [agent] interpreters; o interpretador e conferido a cada ticket (#!, digitado, cadastro).
-        # CR-028: [agent] helper_path vale para todas as chamadas do helper pelo sudo, inclusive no DEV com
-        # exec_users (revisao do CR-028, M4); a conferencia do helper e do sudoers so roda fora de DEV.
-        set_helper = getattr(self.plat, "set_helper", None)
-        helper_path = getattr(agent, "helper_path", None)
-        if set_helper and helper_path:
-            set_helper(helper_path)
-        if self.cfg.app.sss_env != "DEV":
-            failures = self.plat.validate_execution(agent.exec_users, agent.exec_work_dir,
-                                                    helper=agent.helper_path)
-            for failure in failures:
-                self.log.critical("execucao fora de DEV: %s", failure)
-            if failures:
-                self._fail(EXIT_DIRECTORIES, "%d falha(s) na conferencia do helper e do sudoers", len(failures))
-        self._check_user_dir("output_dir", "pasta de saida", "pastas de saida (CR-012)")
-        self._check_user_dir("input_dir", "pasta de entrada", "pastas de entrada (CR-014)")
-        self._check_user_dir("script_work_dir", "pasta de trabalho", "pastas de trabalho (CR-019)")
+        # CR-032 (D7): sem usuario de execucao nem helper; tudo roda com a conta do agente.
+        for key in ("output_dir", "input_dir", "script_work_dir"):
+            self._check_user_dir(key)
         self._check_script_base_dir()
 
     def _check_script_base_dir(self) -> None:
@@ -286,9 +272,9 @@ class Agent(object):
             self.log.warning("pasta base dos scripts %s nao existe: scripts com caminho relativo vao terminar "
                              "em PRECHECK_FAILED (NOT_FOUND)", base, extra={"action": "INICIO"})
 
-    def _check_user_dir(self, key, name, plural):
-        """README §8.12 passo 4: a pasta da chave fora das pastas do sistema; fora de DEV, a pasta de cada
-        ambiente atendido do usuario de execucao dele, sem escrita de grupo nem de outros (CR-012, CR-014, CR-019)."""
+    def _check_user_dir(self, key):
+        """README §8.12 passo 4: a pasta da chave (CR-012, CR-014, CR-019), criada se faltar, gravavel e fora das
+        pastas do sistema."""
         agent = self.cfg.agent
         folder = getattr(agent, key, None)
         if not folder:
@@ -297,15 +283,6 @@ class Agent(object):
         code = self.plat.validate_restricted_dir(folder)
         if code:
             self._fail(EXIT_DIRECTORIES, "%s %s recusado: %s", key, folder, code)
-        if self.cfg.app.sss_env == "DEV" and not agent.exec_users:
-            return
-        pairs = [(os.path.join(folder, log_paths.environment_dir(env)), self._exec_user(env))
-                 for env in agent.environments if self._exec_user(env)]
-        failures = self.plat.validate_output_dirs(pairs)
-        for failure in failures:
-            self.log.critical("%s: %s", name, failure)
-        if failures:
-            self._fail(EXIT_DIRECTORIES, "%d falha(s) nas %s", len(failures), plural)
 
     def _step5_instance(self):
         work = self.cfg.agent.work_dir
@@ -425,17 +402,14 @@ class Agent(object):
             proc = _read_state(dir_value, executor.PROC, self.plat)
             spawn = _read_state(dir_value, executor.SPAWN, self.plat)
             results[tid] = _read_state(dir_value, executor.RESULT, self.plat)
-            user = (proc or spawn or {}).get("exec_user")
             if proc is not None:
-                self._reopen(tid, dir_value, proc, user, log)
+                self._reopen(tid, dir_value, proc, log)
             elif spawn is not None:
                 # Talvez iniciado (CR-008, R-01): nunca volta a fila. Unica espera da subida (kill_grace_s).
-                base = os.path.join(agent.exec_work_dir, user) if user else agent.work_dir
-                if self.plat.stop_ticket(base, tid, user, agent.kill_grace_s) == "UNSUPPORTED":
+                if self.plat.stop_ticket(agent.work_dir, tid, agent.kill_grace_s) == "UNSUPPORTED":
                     # O processo pode seguir vivo: a pasta fica como rastro (CR-008, R-26).
                     self.preserved.add(tid)
-                    log.warning("TALVEZ_INICIADO sem meio de encerrar nesta plataforma: o processo fica com o "
-                                "usuario de execucao")
+                    log.warning("TALVEZ_INICIADO sem meio de encerrar nesta plataforma")
                 log.error("TALVEZ_INICIADO: .sss_spawn sem .sss_proc")
         for tid, ticket in sorted(running.items()):
             log = _Log(_log, {"agent": self.agent_id, "ticket": tid, "action": "STARTUP"})
@@ -468,12 +442,11 @@ class Agent(object):
             self.log.warning("%d temporario(s) de entrega da pasta de entrada removido(s) na subida", removed,
                              extra={"action": "STARTUP"})
 
-    def _reopen(self, tid, folder, proc, user, log):
+    def _reopen(self, tid, folder, proc, log):
         process = self.plat.reopen_group(proc)
         if process is None:
             return
-        execution = executor.Execution(tid, folder, user,
-                                     os.path.join(self.cfg.agent.exec_work_dir, user) if user else None, None)
+        execution = executor.Execution(tid, folder, None)
         execution.process = process
         execution.pid = process.pid
         execution.identity = process.identity
@@ -509,12 +482,7 @@ class Agent(object):
                          extra={"agent": self.agent_id, "ticket": tid, "action": "STARTUP"})
 
     def _clean_dir(self, tid, folder):
-        execution = executor.Execution(tid, folder, None, None, None)
-        state = _read_state(folder, executor.PROC, self.plat) or _read_state(folder, executor.SPAWN, self.plat) or {}
-        user = state.get("exec_user")
-        if user:
-            execution.exec_user = user
-            execution.base_dir = os.path.join(self.cfg.agent.exec_work_dir, user)
+        execution = executor.Execution(tid, folder, None)
         try:
             executor.clean(execution)
         except Exception as exc:  # noqa: BLE001 - a pasta fica para a proxima subida
@@ -561,7 +529,7 @@ class Agent(object):
 
     def _secret_values(self):
         seg = self.secrets
-        values = [getattr(seg, "oracle_password", None), getattr(seg, "monitor_password", None)]
+        values = [getattr(seg, "oracle_password", None)]
         for cred in (getattr(seg, "environments", None) or {}).values():
             values.append(getattr(cred, "password", None))
         return values
@@ -932,15 +900,13 @@ class Agent(object):
         self.delivery = delivery
 
     def _input_place(self, environment, script_name, script_id):
-        """(base, pasta do script, usuario de execucao); em DEV sem usuario, o agente cria a base e a pasta."""
+        """(base, pasta do script), criadas pelo agente se faltarem."""
         base, script_dir = log_paths.input_dir(self.cfg.agent.input_dir, environment, script_name, script_id)
-        user = env_builder.exec_user(self.cfg, environment)
-        if not user:
-            self.plat.create_input_dir(base, script_dir)
-        return base, script_dir, user
+        self.plat.create_input_dir(base, script_dir)
+        return base, script_dir
 
     def _publish_listing(self, conn, environment, script_id, script_name):
-        """Retrato da pasta pelo helper list-input; falha registrada e nova tentativa so depois de um minuto."""
+        """Retrato da pasta pelo list-input; falha registrada e nova tentativa so depois de um minuto."""
         key = (environment, script_id)
         now = self.clock()
         if self._listing_retry.get(key, 0) > now:
@@ -950,8 +916,8 @@ class Agent(object):
             result = {"files": [], "count": 0, "truncated": False}
         else:
             try:
-                base, script_dir, user = self._input_place(environment, script_name, script_id)
-                result = self.plat.list_input(base, script_dir, repo_inputs.LISTING_MAX_ITEMS, user)
+                base, script_dir = self._input_place(environment, script_name, script_id)
+                result = self.plat.list_input(base, script_dir, repo_inputs.LISTING_MAX_ITEMS)
             except Exception as exc:  # noqa: BLE001 - o pedido continua valendo; nova tentativa depois
                 self._listing_retry[key] = now + 60
                 self.log.warning("retrato da pasta de entrada de %s/%s falhou (%s)", environment, script_name,
@@ -962,7 +928,7 @@ class Agent(object):
                                      result["count"], "Y" if result["truncated"] else "N", conn=conn)
 
     def _advance_input(self, now):
-        """Avanca a entrega em andamento sem esperar: baixar, gravar pelo helper e marcar (README §8.14)."""
+        """Avanca a entrega em andamento sem esperar: baixar, gravar pelo put-input e marcar (README §8.14)."""
         delivery = self.delivery
         if delivery is None or self._terminating or now < delivery.next_attempt:
             return
@@ -975,14 +941,14 @@ class Agent(object):
             if delivery.step == input_phase.WRITE:
                 if delivery.process is None:
                     try:
-                        base, script_dir, user = self._input_place(delivery.environment, delivery.script_name,
-                                                                   delivery.script_id)
+                        base, script_dir = self._input_place(delivery.environment, delivery.script_name,
+                                                             delivery.script_id)
                     except Exception as exc:  # noqa: BLE001 - pasta de entrada inutilizavel: FAILED ERROR
                         self.log.warning("entrega %s: pasta de entrada recusada (%s)", delivery.id,
                                          exc.__class__.__name__, extra={"action": "ENTRADA"})
                         delivery.fail("ERROR")
                     else:
-                        input_phase.start_write(delivery, self.plat, base, script_dir, user, now)
+                        input_phase.start_write(delivery, self.plat, base, script_dir, now)
                         if delivery.step == input_phase.WRITE:
                             return
                 elif not input_phase.advance_write(delivery, self.plat, now):
@@ -1032,11 +998,9 @@ class Agent(object):
             spawn = _read_state(dir_value, executor.SPAWN, self.plat)
             res = _read_state(dir_value, executor.RESULT, self.plat)
             if proc is not None:
-                self._reopen(tid, dir_value, proc, proc.get("exec_user"), log)
+                self._reopen(tid, dir_value, proc, log)
             elif spawn is not None:
-                user = spawn.get("exec_user")
-                base = os.path.join(self.cfg.agent.exec_work_dir, user) if user else self.cfg.agent.work_dir
-                if self.plat.stop_ticket(base, tid, user, self.cfg.agent.kill_grace_s) == "UNSUPPORTED":
+                if self.plat.stop_ticket(self.cfg.agent.work_dir, tid, self.cfg.agent.kill_grace_s) == "UNSUPPORTED":
                     self.preserved.add(tid)
                     log.warning("TALVEZ_INICIADO sem meio de encerrar nesta plataforma")
                 log.error("TALVEZ_INICIADO: .sss_spawn sem .sss_proc")
@@ -1258,7 +1222,6 @@ class Agent(object):
         class _Cfg(object):
             sss_dirs = _sss_dirs(self.cfg)
             script_base_dir = getattr(agent, "script_base_dir", None)
-            dev = self.cfg.app.sss_env == "DEV"
             # CR-025/CR-026: os nomes (digitado e cadastro) sao buscados no PATH do proprio agente.
             search_path = os.environ.get("PATH", os.defpath)
         return _Cfg()
@@ -1322,7 +1285,6 @@ class Agent(object):
         ticket = item.ticket
         item.script_path = script_real
         item.interpreter_used = argv[0] if argv else None
-        user = env_builder.exec_user(self.cfg, ticket["environment"])
         label = "SSS-%s-%s" % (self.agent_id, item.tid)
         try:
             work_dir_ticket = executor.prepare_directory(agent.work_dir, item.tid, startup_concluido=True)
@@ -1350,7 +1312,7 @@ class Agent(object):
                 # CR-012 (README §8.13): pasta de saida com as partes do log e o mesmo minuto.
                 base, relative = log_paths.output_dir(agent.output_dir, ticket["environment"], snap["script_name"],
                                                         item.started_at, item.tid, snap.get("script_id"))
-                output = output_phase.Output(item.tid, base, relative, user, work_dir_ticket)
+                output = output_phase.Output(item.tid, base, relative, work_dir_ticket)
             if getattr(agent, "script_work_dir", None):
                 # CR-019 (README §8.15): pasta de trabalho com as partes da pasta de saida e o mesmo minuto.
                 work = log_paths.script_work_dir(agent.script_work_dir, ticket["environment"], snap["script_name"],
@@ -1367,8 +1329,7 @@ class Agent(object):
         except Exception as exc:  # noqa: BLE001 - CR-007 R-17: SPAWN_ERROR
             ex = executor.failure_before_spawn(fd, item.tid, exc, label, work_dir_ticket)
             return self._after_start(item, ex, snap, connection)
-        ex = executor.start(item.tid, argv, fd, env, work_dir_ticket, user, agent.exec_work_dir,
-                              dict(self.plat.DEFAULT_RLIMITS), label,
+        ex = executor.start(item.tid, argv, fd, env, work_dir_ticket, dict(self.plat.DEFAULT_RLIMITS), label,
                               output=(output.base, output.relative) if output else None, input_value=input_value,
                               work=work)
         if not ex.spawn_error:

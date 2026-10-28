@@ -4,8 +4,8 @@
 Uma entrega por vez, avancada a cada volta do laco do agente:
   1. baixar: o arquivo sai do banco em partes de 1 MiB (ate PARTS_PER_ROUND por volta) para um temporario do
      agente (work_dir/input/delivery_<id>.part, 0600); no fim, tamanho e SHA-256 conferidos;
-  2. gravar: o helper put-input roda num grupo proprio, como o usuario de execucao, com o temporario na entrada
-     padrao (ele nunca le o work_dir), acompanhado por poll() e com prazo fixo;
+  2. gravar: o put-input (ticket_files) roda num grupo proprio, com o temporario na entrada padrao,
+     acompanhado por poll() e com prazo fixo;
   3. marcar: DELIVERED ou FAILED pelo repositorio (INPUT_DELIVERY na mesma transacao); o temporario e apagado.
 O conteudo do arquivo nunca vai para log nenhum. Toda primitiva de SO vem de `os_platform`.
 """
@@ -111,13 +111,13 @@ def download(delivery, conn, repo):
     delivery.step = WRITE
 
 
-def start_write(delivery, plat, base, script_dir, exec_user, now):
-    """Inicia o helper put-input sem esperar, com o temporario na entrada padrao."""
+def start_write(delivery, plat, base, script_dir, now):
+    """Inicia o put-input sem esperar, com o temporario na entrada padrao."""
     try:
         fd = os.open(delivery.part_path, os.O_RDONLY)
         try:
             delivery.process = plat.start_put_input(base, script_dir, delivery.relative_dir, delivery.file_name,
-                                                    delivery.replace, delivery.sha256, delivery.size, fd, exec_user)
+                                                    delivery.replace, delivery.sha256, delivery.size, fd)
         finally:
             os.close(fd)
     except Exception as exc:  # noqa: BLE001 - qualquer falha local: FAILED ERROR
@@ -151,7 +151,7 @@ def advance_write(delivery, plat, now):
     elif rc == 2:
         delivery.fail("NAME")
     else:
-        _log.warning("entrega %s: helper put-input terminou com codigo %s", delivery.id, rc,
+        _log.warning("entrega %s: put-input terminou com codigo %s", delivery.id, rc,
                      extra={"action": "ENTRADA"})
         delivery.fail("ERROR")
     return True
@@ -163,7 +163,7 @@ def mark(delivery, conn, repo, agent_id):
 
 
 def discard(delivery, plat):
-    """Fim da entrega (ou parada do agente): encerra o helper vivo e apaga o temporario."""
+    """Fim da entrega (ou parada do agente): encerra o put-input vivo e apaga o temporario."""
     if delivery.process is not None and delivery.process.popen.poll() is None:
         plat.signal_group(delivery.process, signal.SIGKILL)
     try:

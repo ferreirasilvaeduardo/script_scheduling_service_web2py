@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 """Testes de src/sss/platform/os_platform (README §8.0, AGENTS §3.2 e §7): processos reais em grupo proprio, trava,
-estado local, validacoes de arquivos e caminhos e dubles do sudo/helper. Somente POSIX (CR-005)."""
+estado local, validacoes de arquivos e caminhos e o ticket_files. Somente POSIX (CR-005)."""
 from tests.support import _testenv  # noqa: F401
 
-import collections
 import os
 import shutil
 import signal
@@ -19,9 +18,6 @@ from sss.platform import os_platform
 from sss.platform.os_platform import posix
 
 NONEXISTENT_PID = 2 ** 31 - 2
-
-_Stat = collections.namedtuple("_Stat", "st_uid st_mode")
-_Pw = collections.namedtuple("_Pw", "pw_name pw_uid")
 
 
 def _wait(condition, deadline=10.0):
@@ -161,7 +157,7 @@ class TestProcesses(_WithProcesses):
 
     def test_reabrir_grupo(self):
         proc = self.start("import time\ntime.sleep(300)\n")
-        state = {"pid": proc.pid, "process_start": proc.identity, "exec_user": None}
+        state = {"pid": proc.pid, "process_start": proc.identity}
         reopened = os_platform.reopen_group(state)
         self.assertEqual((reopened.pid, reopened.identity, reopened.popen), (proc.pid, proc.identity, None))
         self.assertIsNone(os_platform.reopen_group(dict(state, process_start=proc.identity + 1)))
@@ -184,7 +180,7 @@ class TestProcesses(_WithProcesses):
         neighbor = os.path.join(self.root, "exec", "ticket_70")
         os.makedirs(neighbor)
         outside = self.start("import time\ntime.sleep(300)\n", cwd=neighbor)
-        self.assertEqual(os_platform.stop_ticket(os.path.join(self.root, "exec"), 7, None, 2), "OK")
+        self.assertEqual(os_platform.stop_ticket(os.path.join(self.root, "exec"), 7, 2), "OK")
         self.assertTrue(_wait(lambda: not _alive(inside.pid) and not _alive(grandchild)))
         self.assertTrue(_alive(outside.pid), "processo do mesmo usuario fora da pasta do ticket")
 
@@ -199,77 +195,8 @@ class TestProcesses(_WithProcesses):
         self.assertFalse(os_platform.group_alive(proc))
 
 
-class TestHelperDoubles(unittest.TestCase):
-    """Usuario de execucao: o Popen e o do sudo + helper (dubles, sem sudo real)."""
-
-    def setUp(self):
-        posix._helper_requests[:] = []
-
-    def test_iniciar_processo_com_usuario_manda_especificacao_pela_entrada(self):
-        fake = mock.MagicMock(pid=4321)
-        with mock.patch.object(posix.subprocess, "Popen", return_value=fake) as popen, \
-                mock.patch.object(posix, "process_identity", return_value=99):
-            proc = os_platform.start_process({"ticket_id": 3, "argv": ["/bin/true"]}, 7, exec_user="exec1")
-        argv = popen.call_args[0][0]
-        self.assertEqual(argv, [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "run"])
-        kw = popen.call_args[1]
-        self.assertEqual((kw["shell"], kw["start_new_session"], kw["stdout"]), (False, True, 7))
-        self.assertNotIn("preexec_fn", kw)
-        self.assertEqual(kw["env"], posix._ENV_HELPER)
-        fake.stdin.write.assert_called_once_with(b'{"argv": ["/bin/true"], "ticket_id": 3}')
-        fake.stdin.close.assert_called_once_with()
-        self.assertEqual((proc.pid, proc.identity, proc.exec_user), (4321, 99, "exec1"))
-
-    def test_sinalizar_pelo_helper_nao_espera(self):
-        slow = mock.MagicMock()
-        slow.poll.return_value = None
-        with mock.patch.object(posix.subprocess, "Popen", return_value=slow) as popen:
-            start = time.monotonic()
-            ok = os_platform.signal_group(os_platform.Process(500, 77, exec_user="exec1"), signal.SIGKILL)
-            self.assertLess(time.monotonic() - start, 0.5)
-        self.assertTrue(ok)
-        self.assertEqual(popen.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "kill",
-                                                 "500", "77"])
-        slow.wait.assert_not_called()
-        self.assertEqual(len(posix._helper_requests), 1)
-        slow.poll.return_value = 3
-        with self.assertLogs("sss_scheduler", "WARNING"):
-            posix._reap_helper_requests()
-        self.assertEqual(posix._helper_requests, [])
-
-    def test_falha_ao_entregar_a_especificacao_devolve_o_processo(self):
-        fake = mock.MagicMock(pid=4322)
-        fake.stdin.write.side_effect = BrokenPipeError(32, "Broken pipe")
-        with mock.patch.object(posix.subprocess, "Popen", return_value=fake), \
-                mock.patch.object(posix, "process_identity", return_value=7):
-            with self.assertRaises(os_platform.FailureAfterSpawn) as ctx:
-                os_platform.start_process({"ticket_id": 3, "argv": ["/bin/true"]}, 7, exec_user="exec1")
-        self.assertEqual((ctx.exception.process.pid, ctx.exception.process.identity), (4322, 7))
-        self.assertIsInstance(ctx.exception.cause, BrokenPipeError)
-        fake.stdin.close.assert_called_once_with()
-
-    def test_limpar_dir_script_pelo_helper(self):
-        with mock.patch.object(posix, "_run_short", return_value=(0, "")) as ex:
-            os_platform.clean_script_dir("/srv/exec/exec1", 9, "exec1")
-        self.assertEqual(ex.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "clean",
-                                              "/srv/exec/exec1", "9"])
-        with mock.patch.object(posix, "_run_short", return_value=(2, "")):
-            with self.assertRaises(RuntimeError):
-                os_platform.clean_script_dir("/srv/exec/exec1", 9, "exec1")
-
-    def test_encerrar_ticket_pelo_helper(self):
-        for code, expected in ((0, "OK"), (5, "UNSUPPORTED")):
-            with mock.patch.object(posix, "_run_short", return_value=(code, "")) as ex:
-                self.assertEqual(os_platform.stop_ticket("/srv/exec/exec1", 9, "exec1", 10), expected)
-            self.assertEqual(ex.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER,
-                                                  "stop-ticket", "/srv/exec/exec1", "9", "10"])
-        with mock.patch.object(posix, "_run_short", return_value=(4, "")):
-            with self.assertRaises(RuntimeError):
-                os_platform.stop_ticket("/srv/exec/exec1", 9, "exec1", 10)
-
-
 class TestOutputDir(unittest.TestCase):
-    """CR-012 (README §8.13): fora de DEV pelo sudo + helper (dubles); em DEV a copia do pacote, real."""
+    """CR-012 (README §8.13): o ticket_files.py com a conta do agente (CR-032, D7)."""
 
     def setUp(self):
         self.root = os.path.realpath(tempfile.mkdtemp(prefix="sss_saida_"))
@@ -277,34 +204,32 @@ class TestOutputDir(unittest.TestCase):
         self.base = os.path.join(self.root, "output", "producao")
         self.rel = "carga/2026/10/20/14/05/ticket_5"
 
-    def test_argv_do_helper_com_e_sem_usuario(self):
-        self.assertEqual(posix._helper_argv("clean-output", ["/b", "r"], "exec1"),
-                         [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "clean-output", "/b", "r"])
-        self.assertEqual(posix._helper_argv("purge-output", ["/b", 7]),
-                         [sys.executable, "-I", posix.PACKAGE_HELPER, "purge-output", "/b", "7"])
-        self.assertTrue(os.path.isfile(posix.PACKAGE_HELPER), posix.PACKAGE_HELPER)
+    def test_argv_do_ticket_files(self):
+        self.assertEqual(posix._files_argv("clean-output", ["/b", 7]),
+                         [sys.executable, "-I", posix.TICKET_FILES, "clean-output", "/b", "7"])
+        self.assertTrue(os.path.isfile(posix.TICKET_FILES), posix.TICKET_FILES)
 
-    def test_iniciar_empacotar_com_usuario_nao_espera(self):
+    def test_iniciar_empacotar_nao_espera(self):
         fake = mock.MagicMock(pid=4400)
         with mock.patch.object(posix.subprocess, "Popen", return_value=fake) as popen, \
                 mock.patch.object(posix, "process_identity", return_value=55):
-            proc = os_platform.start_pack(self.base, self.rel, 1048576, 10, 9, exec_user="exec1")
-        self.assertEqual(popen.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "pack",
+            proc = os_platform.start_pack(self.base, self.rel, 1048576, 10, 9)
+        self.assertEqual(popen.call_args[0][0], [sys.executable, "-I", posix.TICKET_FILES, "pack",
                                                  self.base, self.rel, "1048576", "10"])
         kw = popen.call_args[1]
         self.assertEqual((kw["shell"], kw["start_new_session"], kw["stdout"], kw["env"]),
-                         (False, True, 9, posix._ENV_HELPER))
+                         (False, True, 9, posix._ENV_MINIMAL))
         fake.wait.assert_not_called()
-        self.assertEqual((proc.pid, proc.identity, proc.exec_user), (4400, 55, "exec1"))
+        self.assertEqual((proc.pid, proc.identity), (4400, 55))
 
-    def test_limpar_pelo_helper(self):
+    def test_limpar_saida_falha(self):
         with mock.patch.object(posix, "_run_short", return_value=(0, "")) as ex:
-            os_platform.clean_output(self.base, self.rel, "exec1")
+            os_platform.clean_output(self.base, self.rel)
         self.assertEqual(ex.call_args_list[0][0][0][-3:], ["clean-output", self.base, self.rel])
         self.assertFalse(hasattr(os_platform, "purge_output"), "CR-030: sem purge")
         with mock.patch.object(posix, "_run_short", return_value=(4, "")):
             with self.assertRaises(RuntimeError):
-                os_platform.clean_output(self.base, self.rel, "exec1")
+                os_platform.clean_output(self.base, self.rel)
 
     def test_dev_cria_empacota_e_limpa_com_o_proprio_usuario(self):
         import io
@@ -364,21 +289,6 @@ class TestOutputDir(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             os_platform.create_output_dir(self.base, self.rel)
         self.assertEqual(os.listdir(outside), [])
-
-    def test_validar_pastas_saida(self):
-        os.makedirs(self.base, 0o700)
-        me = posix.pwd.getpwuid(os.geteuid()).pw_name
-        self.assertEqual(os_platform.validate_output_dirs([(self.base, me)]), [])
-        os.chmod(self.base, 0o770)
-        self.assertEqual(len(os_platform.validate_output_dirs([(self.base, me)])), 1)
-        os.chmod(self.base, 0o700)
-        link = os.path.join(self.root, "link")
-        os.symlink(self.base, link)
-        failures = os_platform.validate_output_dirs([(link, me), (os.path.join(self.root, "nada"), me),
-                                                  (self.base, "usuario_que_nao_existe_sss")])
-        self.assertEqual(len(failures), 3, failures)
-        with mock.patch.object(posix.pwd, "getpwnam", return_value=_Pw("exec1", os.geteuid() + 1)):
-            self.assertEqual(len(os_platform.validate_output_dirs([(self.base, "exec1")])), 1, "dono diferente")
 
 
 class TestLockStopPrivilege(unittest.TestCase):
@@ -574,126 +484,19 @@ class TestRestrictedFile(unittest.TestCase):
         self.assertEqual(os_platform.validate_restricted_file(os.path.dirname(self.path))[0], "NAO_REGULAR")
 
 
-class TestValidateExecution(unittest.TestCase):
-    """Dubles do helper (stat), dos usuarios (pwd) e do sudo -n -l."""
-
-    HELPER = "/opt/sss/bin/sss-helper"
-    EXEC = "/srv/sss/exec"
-    UID_EXEC = 2001
-
-    def setUp(self):
-        self.stats = {
-            self.HELPER: _Stat(0, 0o100755),
-            "/opt/sss/bin": _Stat(0, 0o040755),
-            "/opt/sss": _Stat(0, 0o040755), "/opt": _Stat(0, 0o040755), "/": _Stat(0, 0o040755),
-            os.path.join(self.EXEC, "exec1"): _Stat(self.UID_EXEC, 0o040700),
-        }
-        self.users = {"exec1": _Pw("exec1", self.UID_EXEC), "root": _Pw("root", 0),
-                         "agente": _Pw("agente", os.geteuid())}
-        self.sudo = {"exec1": (0, "%s\n" % self.HELPER)}
-        self.calls = []
-
-    def _stat(self, path, *a, **k):
-        if path in self.stats:
-            return self.stats[path]
-        raise FileNotFoundError(path)
-
-    def _getpwnam(self, name):
-        return self.users[name]
-
-    def _executar(self, argv):
-        self.calls.append(argv)
-        return self.sudo.get(argv[4], (1, "Sorry, user may not run sudo"))
-
-    def validate(self, users=("exec1",)):
-        with mock.patch.object(posix.os, "stat", side_effect=self._stat), \
-                mock.patch.object(posix.pwd, "getpwnam", side_effect=self._getpwnam):
-            return os_platform.validate_execution([("PROD", u) for u in users], self.EXEC,
-                                               helper=self.HELPER, run=self._executar, agent_user="agente")
-
-    def test_tudo_certo(self):
-        self.assertEqual(self.validate(), [])
-        self.assertEqual(self.calls, [["/usr/bin/sudo", "-n", "-l", "-u", "exec1", self.HELPER]])
-
-    def test_helper(self):
-        self.stats[self.HELPER] = _Stat(1000, 0o100755)
-        self.assertIn("nao pertence ao root", " ".join(self.validate()))
-        self.stats[self.HELPER] = _Stat(0, 0o100775)
-        self.assertIn("modo 0755", " ".join(self.validate()))
-        self.stats[self.HELPER] = _Stat(0, 0o100755)
-        self.stats["/opt/sss/bin"] = _Stat(0, 0o040775)
-        self.assertIn("so do root", " ".join(self.validate()))
-        del self.stats[self.HELPER]
-        self.assertIn("nao encontrado", " ".join(self.validate()))
-
-    def test_pastas_acima_do_helper_cr028(self):
-        """CR-028: toda pasta acima do helper e do root e sem escrita de outros; 1777 (sticky) vale."""
-        self.stats["/opt"] = _Stat(0, 0o040777)
-        self.assertEqual(self.validate(),
-                         ["pasta /opt acima do helper deve ser do root e sem escrita de outros"])
-        self.stats["/opt"] = _Stat(0, 0o041777)
-        self.assertEqual(self.validate(), [])
-        self.stats["/opt/sss"] = _Stat(1000, 0o040755)
-        self.assertEqual(self.validate(),
-                         ["pasta /opt/sss acima do helper deve ser do root e sem escrita de outros"])
-        del self.stats["/opt/sss"]
-        self.assertEqual(self.validate(), ["pasta /opt/sss acima do helper nao encontrada"])
-
-    def test_link_simbolico_cr028(self):
-        """Revisao do CR-028 (B1, B4): helper que e link e recusado; a cadeia do caminho real tambem conta."""
-        tmp = tempfile.mkdtemp(prefix="sss_helper_link_")
-        self.addCleanup(shutil.rmtree, tmp, True)
-        real = os.path.join(tmp, "real")
-        os.makedirs(real)
-        open(os.path.join(real, "sss-helper"), "w").close()
-        link = os.path.join(tmp, "atalho")
-        os.symlink(real, link)
-        helper_link = os.path.join(tmp, "helper-link")
-        os.symlink(os.path.join(real, "sss-helper"), helper_link)
-        failures = os_platform.validate_execution([], self.EXEC, helper=helper_link, run=self._executar,
-                                                  agent_user="agente")
-        self.assertIn("helper %s nao pode ser link simbolico" % helper_link, failures)
-        chain = posix._chain_failures(os.path.join(link, "bin"))
-        self.assertTrue(any(os.path.realpath(tmp) in f for f in chain), chain)
-
-    def test_caminho_do_helper_configurado_cr028(self):
-        """CR-028: sem helper explicito, vale o de set_helper ([agent] helper_path)."""
-        self.addCleanup(os_platform.set_helper, posix.HELPER)
-        os_platform.set_helper("/srv/root/bin/sss-helper")
-        with mock.patch.object(posix.os, "stat", side_effect=self._stat), \
-                mock.patch.object(posix.pwd, "getpwnam", side_effect=self._getpwnam):
-            failures = os_platform.validate_execution([("PROD", "exec1")], self.EXEC,
-                                                      run=self._executar, agent_user="agente")
-        self.assertIn("helper /srv/root/bin/sss-helper nao encontrado", failures)
-        self.assertEqual(posix._helper_argv("pack", ["a"], "exec1")[:6],
-                         ["/usr/bin/sudo", "-n", "-u", "exec1", "--", "/srv/root/bin/sss-helper"])
-
-    def test_usuarios_invalidos(self):
-        self.assertIn("nao existe", " ".join(self.validate(users=("fantasma",))))
-        self.assertIn("nao pode ser root", " ".join(self.validate(users=("root",))))
-        self.assertIn("proprio usuario do agente", " ".join(self.validate(users=("agente",))))
-
-    def test_sudo_sem_regra_e_pasta(self):
-        self.sudo["exec1"] = (0, "/usr/bin/outro\n")
-        self.assertIn("sem a regra do helper", " ".join(self.validate()))
-        self.sudo["exec1"] = (0, self.HELPER)
-        self.stats[os.path.join(self.EXEC, "exec1")] = _Stat(self.UID_EXEC, 0o040750)
-        self.assertIn("modo 0700", " ".join(self.validate()))
-        del self.stats[os.path.join(self.EXEC, "exec1")]
-        self.assertIn("nao existe", " ".join(self.validate()))
-
-
 class TestInterface(unittest.TestCase):
 
     def test_exporta_a_interface_do_readme(self):
-        for name in ("NAME", "Process", "start_process", "signal_group", "group_alive", "validate_execution",
+        for name in ("NAME", "Process", "start_process", "signal_group", "group_alive",
                      "write_state", "read_state", "stop_ticket", "free_space_mb", "process_identity",
                      "process_exists", "reopen_group", "lock_instance", "release_instance",
                      "is_privileged_user", "validate_restricted_file", "validate_restricted_dir",
                      "validate_script_path", "final_path", "create_work_dir", "install_stop_handler",
-                     "create_output_dir", "start_pack", "clean_output",
-                     "validate_output_dirs", "set_helper"):
+                     "create_output_dir", "start_pack", "clean_output", "TICKET_FILES"):
             self.assertTrue(hasattr(os_platform, name), name)
+        for name in ("validate_execution", "validate_output_dirs", "set_helper", "clean_script_dir", "HELPER",
+                     "FailureAfterSpawn"):
+            self.assertFalse(hasattr(os_platform, name), "CR-032 (D7): sem sudo nem helper (%s)" % name)
         self.assertIn(os_platform.NAME, ("LINUX", "UNIX"))
         self.assertFalse(hasattr(os_platform, "encerrar_grupo"), "encerramento escalonado e do executor (F8.1)")
 

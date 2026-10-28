@@ -57,7 +57,7 @@ class _Plat(object):
         self.cleaned = []
         self.proc = None
 
-    def start_pack(self, base, relative, max_bytes, max_files, fd, user):
+    def start_pack(self, base, relative, max_bytes, max_files, fd):
         if self.content is not None:
             os.write(fd, self.content)
         self.proc = _Proc(None)
@@ -67,8 +67,8 @@ class _Plat(object):
         self.signals.append(signal_value)
         return True
 
-    def clean_output(self, base, relative, user):
-        self.cleaned.append((base, relative, user))
+    def clean_output(self, base, relative):
+        self.cleaned.append((base, relative))
 
 
 def _zip(files):
@@ -86,7 +86,7 @@ class TestStateMachine(unittest.TestCase):
         import shutil
         self.work = tempfile.mkdtemp(prefix="sss_fase_")
         self.addCleanup(shutil.rmtree, self.work, True)
-        self.output = output_phase.Output(7, "/s/producao", "carga/2026/10/20/14/05/ticket_7", None, self.work)
+        self.output = output_phase.Output(7, "/s/producao", "carga/2026/10/20/14/05/ticket_7", self.work)
         self.repo = RepoOutputMemory({7: {"agent_id": AGENT}})
         self.conn = _Conn()
 
@@ -118,7 +118,7 @@ class TestStateMachine(unittest.TestCase):
     def test_vazia_excedeu_e_falhou(self):
         for rc, expected in ((6, (output_phase.EMPTY, None)), (7, (output_phase.EXCEEDED, "FILES")),
                              (8, (output_phase.EXCEEDED, "BYTES")), (4, (output_phase.FAILED, "ERROR"))):
-            self.output = output_phase.Output(7, "/s/p", "c/2026/10/20/14/05/ticket_7", None, self.work)
+            self.output = output_phase.Output(7, "/s/p", "c/2026/10/20/14/05/ticket_7", self.work)
             self.repo = RepoOutputMemory({7: {"agent_id": AGENT}})
             with self.assertLogs("sss_scheduler", "WARNING") if rc == 4 else _nothing():
                 self._pack(_Plat(b""), rc)
@@ -132,7 +132,7 @@ class TestStateMachine(unittest.TestCase):
                 self.assertFalse(output_phase.should_remove_dir(self.output), "a pasta fica no disco")
         self.assertEqual(output_phase.log_line(self.output, AGENT, 10, 1048576),
                          "saida nao empacotada: falha (agente srv-t)")
-        s = output_phase.Output(7, "/s", "c/2026/10/20/14/05/ticket_7", None, self.work)
+        s = output_phase.Output(7, "/s", "c/2026/10/20/14/05/ticket_7", self.work)
         s.result, s.reason = output_phase.EXCEEDED, "BYTES"
         self.assertEqual(output_phase.log_line(s, AGENT, 1000, 20 * 1024 * 1024),
                          "saida nao empacotada: excede o limite de 20 MiB (agente srv-t)")
@@ -155,7 +155,7 @@ class TestStateMachine(unittest.TestCase):
         with self.assertLogs("sss_scheduler", "WARNING"):
             self._pack(_Plat(b"nao e zip"), 0)
         self.assertEqual((self.output.result, self.output.reason), (output_phase.FAILED, "ERROR"))
-        s = output_phase.Output(8, "/s", "c/2026/10/20/14/05/ticket_8", None, os.path.join(self.work, "nao_existe"))
+        s = output_phase.Output(8, "/s", "c/2026/10/20/14/05/ticket_8", os.path.join(self.work, "nao_existe"))
         with self.assertLogs("sss_scheduler", "WARNING"):
             output_phase.start_pack(s, _Plat(b""), 1, 1, 0.0)
         self.assertEqual((s.result, s.reason), (output_phase.FAILED, "ERROR"))

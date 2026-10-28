@@ -44,7 +44,7 @@ def _prepare_real_db(cls):
     if cls.tem_banco_real:
         cls.cfg = _oracle_test_support.prepare_disposable_schema("web")
         app_context.set_config(cls.cfg)
-    repo_factory.configure({"app": {"data_backend": "ORACLE", "sss_env": "DEV"}})
+    repo_factory.configure({"app": {"data_backend": "ORACLE"}})
 
 
 def _restore_real_db(cls):

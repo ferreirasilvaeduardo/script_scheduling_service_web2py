@@ -56,7 +56,7 @@ class TestInputPhase(unittest.TestCase):
         while delivery.step == input_phase.DOWNLOAD:
             input_phase.download(delivery, None, repo)
         if delivery.step == input_phase.WRITE:
-            input_phase.start_write(delivery, os_platform, self.base, "carga_diaria", None, time.monotonic())
+            input_phase.start_write(delivery, os_platform, self.base, "carga_diaria", time.monotonic())
             while delivery.step == input_phase.WRITE and not input_phase.advance_write(delivery, os_platform,
                                                                                        time.monotonic()):
                 self.assertLess(time.monotonic(), limit)

@@ -88,7 +88,7 @@ def output_dir(output_dir, environment, script_name, started_at, ticket_id, scri
     """Pasta de saida do ticket (CR-012, README §8.13), com as mesmas partes do log de execucao.
 
     Devolve (base, relativo): base = output_dir/<ambiente> (do usuario de execucao fora de DEV) e
-    relativo = <pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>, o formato que o helper confere.
+    relativo = <pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>, o formato que o ticket_files confere.
     """
     base = os.path.join(output_dir, environment_dir(environment))
     relative = "/".join((script_dir(script_name, script_id),) + minute_parts(started_at)

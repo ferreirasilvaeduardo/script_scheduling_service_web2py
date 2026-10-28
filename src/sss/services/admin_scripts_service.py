@@ -163,10 +163,9 @@ def _links_version(links, mapping):
 class AdminScriptsService(object):
     """Regras do cadastro de scripts com repositorios, configuracao do agente, relogio e log injetados."""
 
-    def __init__(self, catalog, schedules, sss_env, log, clock, runners=None, rules=None, tickets=None):
+    def __init__(self, catalog, schedules, log, clock, runners=None, rules=None, tickets=None):
         self._catalog = catalog
         self._schedules = schedules
-        self._env = sss_env
         self._log = log
         self._clock = clock
         # Quem pode rodar o script (admin_profiles_service.script_runners): a conta de "Quem pode o que".
@@ -299,7 +298,7 @@ class AdminScriptsService(object):
             return
         try:
             path_guard.validate_registration(path_file)
-            path_guard.check_forbidden_dirs(path_file, dev=self._env == "DEV")
+            path_guard.check_forbidden_dirs(path_file)
         except PathGuardError as exc:
             errors["path_file"] = PATH_MESSAGES[exc.code]
 
@@ -658,7 +657,6 @@ def _service():
             _default = AdminScriptsService(
                 catalog=factory.get("catalog"),
                 schedules=factory.get("schedules"),
-                sss_env=cfg.app.sss_env,
                 log=sss_logging.get_logger("sss_web", cfg),
                 clock=tickets.now,
                 runners=admin_profiles_service._service().script_runners,

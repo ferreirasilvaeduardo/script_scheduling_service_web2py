@@ -31,7 +31,7 @@ FAKE_AGENT = 2 ** 31 - 3
 STARTED_AT = datetime.datetime(2026, 10, 16, 14, 5, 33)
 SH = "/bin/sh"
 
-_AgentStub = collections.namedtuple("_Agente", "agent_id child_locale env_passthrough exec_users exec_work_dir")
+_AgentStub = collections.namedtuple("_Agente", "agent_id child_locale env_passthrough")
 _Cfg = collections.namedtuple("_Cfg", "agent")
 _CfgSnap = collections.namedtuple("_CfgSnap", "search_path")  # CR-026: nomes no PATH do agente
 
@@ -99,7 +99,7 @@ class _Base(unittest.TestCase):
         wd = executor.prepare_directory(self.work, ticket_id)
         fd, _partial = executor.open_log(self.logs, "DEV", "Teste Script", STARTED_AT, ticket_id)
         ex = executor.start(ticket_id, argv or [SH, "-c", command], fd, env or {"PATH": "/usr/bin:/bin"}, wd,
-                              None, None, os_platform.DEFAULT_RLIMITS, label or "SSS-srv-01-%d" % ticket_id)
+                              os_platform.DEFAULT_RLIMITS, label or "SSS-srv-01-%d" % ticket_id)
         self.execs.append(ex)
         return ex
 
@@ -271,22 +271,22 @@ class TestLocalState(_Base):
         original = os_platform.start_process
         seen = {}
 
-        def _confere(spec, log_fd, user):
+        def _confere(spec, log_fd):
             wd = os.path.join(self.work, "ticket_3")
             seen["spawn"] = os_platform.read_state(os.path.join(wd, executor.SPAWN))
             seen["proc"] = os.path.exists(os.path.join(wd, executor.PROC))
             seen["spec"] = spec
-            return original(spec, log_fd, user)
+            return original(spec, log_fd)
 
         with mock.patch.object(os_platform, "start_process", side_effect=_confere):
             ex = self.start("sleep 300", ticket_id=3)
-        self.assertEqual((seen["spawn"]["ticket_id"], seen["spawn"]["exec_user"]), (3, None))
+        self.assertEqual(seen["spawn"]["ticket_id"], 3)
+        self.assertNotIn("exec_user", seen["spawn"], "CR-032 (D7): sem usuario de execucao")
         self.assertIn("monotonic", seen["spawn"])
         self.assertFalse(seen["proc"], ".sss_proc so depois do Popen")
         self.assertEqual(seen["spec"]["cwd"], os.path.join(self.work, "ticket_3", "exec"))
         proc = os_platform.read_state(os.path.join(ex.work_dir_ticket, executor.PROC))
-        self.assertEqual(proc, {"ticket_id": 3, "pid": ex.pid, "pgid": ex.pid, "process_start": ex.identity,
-                                "exec_user": None})
+        self.assertEqual(proc, {"ticket_id": 3, "pid": ex.pid, "pgid": ex.pid, "process_start": ex.identity})
         self.assertIsNotNone(ex.identity)
         self.stop(ex)
         self.assertFalse(os.path.exists(os.path.join(ex.work_dir_ticket, executor.RESULT)))
@@ -338,14 +338,6 @@ class TestLocalState(_Base):
         self.stop(ex)
         executor.clean(ex)
         self.assertFalse(os.path.exists(ex.work_dir_ticket))
-
-    def test_limpar_com_usuario_chama_o_helper(self):
-        wd = executor.prepare_directory(self.work, 11)
-        ex = executor.Execution(11, wd, "sssprd", "/srv/exec/sssprd", None)
-        with mock.patch.object(os_platform, "clean_script_dir") as helper:
-            executor.clean(ex)
-        helper.assert_called_once_with("/srv/exec/sssprd", 11, "sssprd")
-        self.assertFalse(os.path.exists(wd))
 
 
 class TestSpawnFailures(_Base):
@@ -409,67 +401,24 @@ class TestSpawnFailures(_Base):
         self.assertEqual(ex.spawn_error_info, "PermissionError")
         self.assertTrue(ex.log_path.endswith("ticket_13_0.log"))
 
-    def test_falha_apos_popen_do_helper(self):
-        leader = subprocess.Popen(["sleep", "300"], start_new_session=True)
-        self.extras.append(leader)
-        process = os_platform.Process(leader.pid, os_platform.process_identity(leader.pid), popen=leader)
-        failure = os_platform.FailureAfterSpawn(process, BrokenPipeError(32, "Broken pipe"))
-        with mock.patch.object(os_platform, "start_process", side_effect=failure), \
-                self.assertLogs("sss_scheduler", "ERROR"):
-            ex = self.start("ignorado", ticket_id=14)
-        self.execs.remove(ex)
-        self.assertTrue(ex.failed_after_spawn)
-        self.assertEqual((ex.pid, ex.spawn_error_info, ex.phase), (leader.pid, "BrokenPipeError", executor.PHASE_TERM))
-        self.assertEqual(leader.wait(5), -signal.SIGTERM)
-
-    def test_especificacao_do_helper_com_usuario_de_execucao(self):
-        captured = {}
-
-        def _captura(spec, log_fd, user):
-            captured.update(spec=spec, user=user)
-            raise RuntimeError("sem sudo no teste")
-
-        wd = executor.prepare_directory(self.work, 15)
-        fd, _ = executor.open_log(self.logs, "DEV", "Teste Script", STARTED_AT, 15)
-        with mock.patch.object(os_platform, "start_process", side_effect=_captura), \
-                self.assertLogs("sss_scheduler", "ERROR"):
-            ex = executor.start(15, ["/usr/bin/python3", "-I", "/opt/s.py"], fd, {"PATH": "/usr/bin:/bin"}, wd,
-                                  "sssprd", "/srv/exec", os_platform.DEFAULT_RLIMITS, "SSS-srv-01-15")
-        self.assertEqual(captured["user"], "sssprd")
-        self.assertEqual(captured["spec"], {
-            "ticket_id": 15, "argv": ["/usr/bin/python3", "-I", "/opt/s.py"], "env": {"PATH": "/usr/bin:/bin"},
-            "rlimits": {"RLIMIT_CORE": [0, 0], "RLIMIT_NOFILE": [1024, 1024]}, "base_dir": "/srv/exec/sssprd"})
-        self.assertFalse(os.path.exists(os.path.join(wd, "exec")), "fora de DEV o cwd e criado pelo helper")
-        self.assertEqual((ex.base_dir, ex.spawn_error_info), ("/srv/exec/sssprd", "RuntimeError"))
-
-
-    def test_cr014_entrada_na_especificacao_e_criada_em_dev(self):
-        self.assertEqual(executor.build_spec(15, ["/bin/true"], {}, {}, "/srv/exec/sssprd",
-                                                input_value=("/srv/sss/input/producao", "carga"))["input"],
-                         {"base": "/srv/sss/input/producao", "relativo": "carga"})
-        self.assertNotIn("input", executor.build_spec(15, ["/bin/true"], {}, {}, "/srv/exec/sssprd"))
+    def test_cr014_entrada_criada_antes_do_script(self):
         base = os.path.join(self.root, "input", "dev")
         wd = executor.prepare_directory(self.work, 16)
         fd, _ = executor.open_log(self.logs, "DEV", "Teste Script", STARTED_AT, 16)
         with mock.patch.object(os_platform, "start_process", side_effect=RuntimeError("parar")), \
                 self.assertLogs("sss_scheduler", "ERROR"):
-            executor.start(16, ["/bin/true"], fd, {}, wd, None, None, os_platform.DEFAULT_RLIMITS, "SSS-srv-01-16",
+            executor.start(16, ["/bin/true"], fd, {}, wd, os_platform.DEFAULT_RLIMITS, "SSS-srv-01-16",
                              input_value=(base, "teste_script"))
         self.assertEqual(os.stat(os.path.join(base, "teste_script")).st_mode & 0o777, 0o700)
 
-    def test_cr019_trabalho_na_especificacao_e_criado_em_dev(self):
-        rel = "carga/2026/10/20/03/00/ticket_15"
-        self.assertEqual(executor.build_spec(15, ["/bin/true"], {}, {}, "/srv/exec/sssprd",
-                                                work=("/srv/sss/work/producao", rel))["work"],
-                         {"base": "/srv/sss/work/producao", "relativo": rel})
-        self.assertNotIn("work", executor.build_spec(15, ["/bin/true"], {}, {}, "/srv/exec/sssprd"))
+    def test_cr019_trabalho_criado_antes_do_script(self):
         base = os.path.join(self.root, "work_scripts", "dev")
         rel = "teste_script/2026/10/20/03/00/ticket_17"
         wd = executor.prepare_directory(self.work, 17)
         fd, _ = executor.open_log(self.logs, "DEV", "Teste Script", STARTED_AT, 17)
         with mock.patch.object(os_platform, "start_process", side_effect=RuntimeError("parar")), \
                 self.assertLogs("sss_scheduler", "ERROR"):
-            executor.start(17, ["/bin/true"], fd, {}, wd, None, None, os_platform.DEFAULT_RLIMITS, "SSS-srv-01-17",
+            executor.start(17, ["/bin/true"], fd, {}, wd, os_platform.DEFAULT_RLIMITS, "SSS-srv-01-17",
                              work=(base, rel))
         self.assertEqual(os.stat(os.path.join(base, rel)).st_mode & 0o777, 0o700)
 
@@ -501,7 +450,7 @@ class TestSnapshotV4(_Base):
         snap, argv, script_real = pc.validate_snapshot(snap_js, _CfgSnap(os.path.dirname(sys.executable)))
         self.assertEqual(argv, [python3, "-I", script_real, "--data", "2026-10-13"])
         wd = executor.prepare_directory(self.work, 21)
-        cfg = _Cfg(_AgentStub("srv-01", "C.UTF-8", (), (), None))
+        cfg = _Cfg(_AgentStub("srv-01", "C.UTF-8", ()))
         fd, partial = executor.open_log(self.logs, "DEV", snap["script_name"], STARTED_AT, 21, snap["script_id"])
         ticket = {"id": 21, "environment": "DEV", "schedule_id": 5, "parent_ticket_id": None, "priority": 3,
                   "started_at": STARTED_AT, "scheduled_at": STARTED_AT}
@@ -511,7 +460,7 @@ class TestSnapshotV4(_Base):
                                         script_real, wd, {}, os_platform.NAME, snapshot=snap,
                                         schedule={"name": "Diario DEV", "recurrence_type": "DAILY"},
                                         log_path=partial, timeout_sec=60, hostname="host-dev", version="t")
-        ex = executor.start(21, argv, fd, env, wd, None, None, os_platform.DEFAULT_RLIMITS, "SSS-srv-01-21")
+        ex = executor.start(21, argv, fd, env, wd, os_platform.DEFAULT_RLIMITS, "SSS-srv-01-21")
         self.execs.append(ex)
         self.assertEqual(self.until_exit(ex), 0, _read(ex.log_path))
         cwd = os.path.join(wd, "exec")

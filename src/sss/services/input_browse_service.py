@@ -4,7 +4,7 @@
 A pasta existe so no servidor de cada agente; a tela mostra o retrato que cada agente publicou
 (tbsss_input_listing) e o envio vai pelo banco para todos os agentes vivos do ambiente (repositorio inputs).
 Permissao: UPLOAD_INPUT, o ambiente e o script no perfil (admin: todos), so script ativo homologado em
-ambiente ativo. Fora disso, RepoNotFound (404, nunca 403). Nome e subpasta seguem a regra do helper put-input.
+ambiente ativo. Fora disso, RepoNotFound (404, nunca 403). Nome e subpasta seguem a regra do put-input (ticket_files).
 """
 import hashlib
 import json
@@ -44,7 +44,7 @@ class InvalidRequest(Exception):
 
 
 def valid_part(text):
-    """Um nivel da subpasta ou o nome do arquivo, como o helper put-input confere."""
+    """Um nivel da subpasta ou o nome do arquivo, como o put-input (ticket_files) confere."""
     return isinstance(text, str) and bool(_RE_PART.match(text)) and not text.startswith(".")
 
 

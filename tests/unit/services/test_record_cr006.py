@@ -32,7 +32,7 @@ class TestRecordInServices(unittest.TestCase):
         env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: "senha-dev-de-teste-123"})
         env.start()
         self.addCleanup(env.stop)
-        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE"}})
         repo_factory.reset_singletons()
         self.addCleanup(repo_factory.reset_singletons)
         self.addCleanup(repo_factory.configure, None)
@@ -54,7 +54,7 @@ class TestRecordInServices(unittest.TestCase):
                          lambda: r("users").get_by_id(2)),
             "parameters": (AdminParametersService(r("catalog"), log), 1,
                            lambda: r("catalog").parameters_get(1)),
-            "scripts": (AdminScriptsService(r("catalog"), r("schedules"), "DEV", log, tickets.now), 1,
+            "scripts": (AdminScriptsService(r("catalog"), r("schedules"), log, tickets.now), 1,
                         lambda: r("catalog").scripts_get(1)),
         }
         self.schedules = SchedulesService(r("schedules"), r("catalog"), r("users"), self.ticket,

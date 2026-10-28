@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <meta name="csrf-token" content="{{=session.csrf_token}}">
-  <title>{{=response.title or 'Script Scheduling Service'}}</title>
+  <title>{{if response.env_label == 'DEV':}}[DEV] {{pass}}{{=response.title or 'Script Scheduling Service'}}</title>
   <link rel="icon" type="image/svg+xml" href="{{=URL('static', 'img/favicon.svg')}}">
   <link rel="stylesheet" href="{{=URL('static', 'bootstrap/bootstrap.min.css')}}">
   <link rel="stylesheet" href="{{=URL('static', 'css/sss.css')}}">
@@ -21,7 +21,7 @@
 </div>
 {{pass}}
 
-<header class="sss-header">
+<header class="sss-header{{if response.env_label == 'DEV':}} sss-header-dev{{pass}}">
   <a class="sss-brand" href="{{=URL(c='default', f='index')}}">
     <svg class="sss-icon sss-icon-lg" aria-hidden="true" focusable="false"><use href="{{=icons}}#icon-logo"></use></svg>
     <span>SSS</span>

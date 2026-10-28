@@ -89,7 +89,7 @@ _RE_URL_EXTERNA = re.compile(r"https?://", re.IGNORECASE)
 
 
 def find_python_files(app_dir, repo_root):
-    """Localiza fontes Python de APP e bin/, incluindo o helper sem extensao."""
+    """Localiza fontes Python de APP e bin/."""
     files_py = []
     dev_scripts_dir = os.path.normpath(os.path.join(app_dir, "dev", "scripts"))
 
@@ -119,86 +119,17 @@ def find_python_files(app_dir, repo_root):
                         if p not in files_py:
                             files_py.append(p)
 
-    helper = os.path.join(repo_root, "bin", "sss-helper")
-    if os.path.isfile(helper) and helper not in files_py:
-        files_py.append(helper)
-
     return sorted(files_py)
 
 
 def check_os_primitives(path, app_dir, repo_root):
-    """Rejeita primitivas POSIX fora da plataforma e da allowlist estrita do helper."""
+    """Rejeita primitivas POSIX fora da plataforma (CR-032, D7: sem a excecao do helper)."""
     platform_dir = os.path.normpath(os.path.join(app_dir, "src", "sss", "platform", "os_platform"))
-    helper = os.path.normpath(os.path.join(repo_root, "bin", "sss-helper"))
     path = os.path.normpath(path)
     if os.path.commonpath([path, platform_dir]) == platform_dir:
         return []
     if os.path.basename(path).startswith("test_"):
         return []
-
-    if path == helper:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            source = f.read()
-        source_lines = source.splitlines()
-        violations = []
-
-        class HelperVisitor(ast.NodeVisitor):
-            def __init__(self):
-                self.functions = []
-
-            def _add(self, node):
-                line_number = getattr(node, "lineno", 1)
-                line = source_lines[line_number - 1].strip()
-                violations.append((path, line_number, line))
-
-            def visit_FunctionDef(self, node):
-                self.functions.append(node.name)
-                self.generic_visit(node)
-                self.functions.pop()
-
-            def visit_AsyncFunctionDef(self, node):
-                self.functions.append(node.name)
-                self.generic_visit(node)
-                self.functions.pop()
-
-            def visit_Import(self, node):
-                if any(alias.name == "fcntl" for alias in node.names):
-                    self._add(node)
-                self.generic_visit(node)
-
-            def visit_ImportFrom(self, node):
-                if node.module == "fcntl" or node.module == "resource":
-                    self._add(node)
-                self.generic_visit(node)
-
-            def visit_Attribute(self, node):
-                if isinstance(node.value, ast.Name):
-                    module = node.value.id
-                    # Funcoes aninhadas contam como parte da funcao de topo que as define.
-                    function = self.functions[0] if self.functions else None
-                    if module == "os" and node.attr == "setsid":
-                        self._add(node)
-                    elif module == "os" and node.attr == "killpg" and function not in ("_term", "_kill"):
-                        self._add(node)
-                    elif module == "resource" and node.attr == "setrlimit" and function != "_run":
-                        self._add(node)
-                    elif module == "resource" and node.attr != "setrlimit":
-                        self._add(node)
-                    elif module == "sys" and node.attr == "platform":
-                        self._add(node)
-                self.generic_visit(node)
-
-            def visit_Str(self, node):
-                function = self.functions[0] if self.functions else None
-                # /proc/<pid>/cwd so em _stop_ticket; a leitura de /proc/<pid>/stat (identidade do
-                # lider, README §8.0) so em _identity, usada por term/kill (AGENTS §3.2).
-                if "/proc/" in node.s and function not in ("_stop_ticket", "_identity"):
-                    self._add(node)
-                elif "pwdx" in node.s and function != "_stop_ticket":
-                    self._add(node)
-
-        HelperVisitor().visit(ast.parse(source, filename=path))
-        return violations
 
     patterns = [
         re.compile(r"\bos\.killpg\s*\("),
@@ -323,7 +254,7 @@ class TestPy36Compat(unittest.TestCase):
         )
 
     def test_primitivas_so_fora_da_plataforma(self):
-        """Permite apenas a allowlist de primitivas POSIX do helper isolado."""
+        """Permite apenas a allowlist de primitivas POSIX fora da camada de plataforma."""
         files = find_python_files(self.app_dir, self.repo_root)
         violations = []
         for path in files:
@@ -392,7 +323,7 @@ class TestPy36Compat(unittest.TestCase):
     def test_exec_and_compile_only_in_template_engine(self):
         """CR-021 D2: exec() so no motor de templates; compile() tambem, salvo nos testes.
 
-        Teste pode usar compile() so para conferir sintaxe (ex.: test_sss_helper), sem executar.
+        Teste pode usar compile() so para conferir sintaxe (ex.: test_ticket_files), sem executar.
         """
         found = []
         for path in find_python_files(self.app_dir, self.repo_root):
@@ -439,16 +370,14 @@ class TestPy36Compat(unittest.TestCase):
         self.assertFalse(_RE_URL_EXTERNA.search("/static/js/app/bundle.js"))
 
     def test_negativo_detector_primitivas_so(self):
-        """Detecta primitivas POSIX fora da plataforma e limita a excecao ao helper."""
+        """Detecta primitivas POSIX fora da plataforma; dentro dela (posix.py, ticket_files.py) sao aceitas."""
         with tempfile.TemporaryDirectory() as root:
             app_dir = os.path.join(root, "app")
             repo_root = os.path.join(root, "web2py")
             path_bad = os.path.join(app_dir, "modules", "outro", "bad_source.py")
-            helper = os.path.join(repo_root, "bin", "sss-helper")
             platform_value = os.path.join(app_dir, "src", "sss", "platform", "os_platform", "posix.py")
             for path, content in (
                 (path_bad, "os.killpg(1, 15)\nos.setsid()\nimport resource\nimport fcntl\nproc = '/proc/1/cwd'\nsubprocess.Popen(['pwdx', '1'])\nvalor = sys.platform\n"),
-                (helper, "import os\nimport resource\nimport subprocess\ndef _run():\n    resource.setrlimit(1, (2, 3))\ndef _term():\n    os.killpg(1, 15)\ndef _kill():\n    os.killpg(1, 9)\ndef _stop_ticket():\n    proc = '/proc/1/cwd'\n    subprocess.Popen(['/usr/bin/pwdx', '1'])\n"),
                 (platform_value, "os.killpg(1, 15)\n"),
             ):
                 os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -457,14 +386,6 @@ class TestPy36Compat(unittest.TestCase):
 
             self.assertEqual(
                 len(check_os_primitives(path_bad, app_dir, repo_root)), 7
-            )
-            self.assertEqual(check_os_primitives(helper, app_dir, repo_root), [])
-            helper_bad = "import os\nimport resource\nimport subprocess\ndef _run():\n    os.killpg(1, 15)\ndef _term():\n    resource.setrlimit(1, (2, 3))\ndef _stop_ticket():\n    pass\ndef _clean():\n    proc = '/proc/1/cwd'\n    subprocess.Popen(['/usr/bin/pwdx', '1'])\n"
-            with open(helper, "w") as f:
-                f.write(helper_bad)
-            self.assertEqual(
-                len(check_os_primitives(helper, app_dir, repo_root)), 4,
-                repr(check_os_primitives(helper, app_dir, repo_root)),
             )
             self.assertEqual(check_os_primitives(platform_value, app_dir, repo_root), [])
 

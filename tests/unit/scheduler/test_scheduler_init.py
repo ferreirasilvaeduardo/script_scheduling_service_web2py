@@ -30,15 +30,14 @@ from sss.persistence.oracle.scheduler_queue import DuplicateAgent
 from tests.support._output_memory import RepoOutputMemory
 
 _Agent = collections.namedtuple("_Agent", (
-    "agent_id", "environments", "work_dir", "exec_users",
-    "exec_work_dir", "heartbeat_interval_s", "fence_timeout_s", "node_offline_timeout_s", "kill_grace_s",
+    "agent_id", "environments", "work_dir", "heartbeat_interval_s", "fence_timeout_s", "node_offline_timeout_s", "kill_grace_s",
     "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "queue_aging_min", "child_locale",
-    "output_dir", "input_dir", "script_work_dir", "helper_path"))
-# CR-012, CR-014 e CR-019: pastas opcionais desligadas; CR-028: helper no caminho padrao.
-_Agent.__new__.__defaults__ = (None, None, None, "/srv/sss-root/bin/sss-helper")
+    "output_dir", "input_dir", "script_work_dir"))
+# CR-012, CR-014 e CR-019: pastas opcionais desligadas.
+_Agent.__new__.__defaults__ = (None, None, None)
 _Cfg = collections.namedtuple("_Cfg", "agent logging app oracle secrets")
 _NS = collections.namedtuple("_NS", "log_dir")
-_App = collections.namedtuple("_App", "sss_env")
+_App = collections.namedtuple("_App", "name")
 _Oracle = collections.namedtuple("_Oracle", "dsn call_timeout_ms owner table_prefix")
 
 
@@ -151,9 +150,6 @@ def _alive(pid):
 class _Base(unittest.TestCase):
 
     def setUp(self):
-        # A subida aplica o [agent] helper_path na plataforma real (set_helper): volta ao valor anterior.
-        from sss.platform.os_platform import posix  # pylint: disable=import-outside-toplevel
-        self.addCleanup(os_platform.set_helper, posix.HELPER)
         self.root = os.path.realpath(tempfile.mkdtemp(prefix="sss_init_"))
         self.work = os.path.join(self.root, "work")
         self.logs = os.path.join(self.root, "logs")
@@ -182,14 +178,12 @@ class _Base(unittest.TestCase):
 
     def cfg(self, **agent):
         base = dict(agent_id="srv-t", environments=("DEV",), work_dir=self.work,
-                    exec_users=(), exec_work_dir=None,
                     heartbeat_interval_s=10, fence_timeout_s=40, node_offline_timeout_s=120, kill_grace_s=1,
                     misfire_policy="RUN_ONCE", misfire_tolerance_s=300, cron_horizon_days=366,
                     queue_aging_min=30, child_locale="C.UTF-8")
-        env = agent.pop("sss_env", "DEV")
         log_dir = agent.pop("log_dir", self.logs)
         base.update(agent)
-        return _Cfg(_Agent(**base), _NS(log_dir), _App(env),
+        return _Cfg(_Agent(**base), _NS(log_dir), _App("srv-t"),
                     _Oracle("db:1521/x", 30000, "OWN_X", "pfx_"), None)
 
     def agent(self, cfg=None, plat=None, **kw):
@@ -234,8 +228,7 @@ class TestSteps(_Base):
         self.assertEqual((r["code"], r["hostname"], r["version"], r["platform"]),
                          ("srv-t", "host-t", sss_config.SSS_VERSION, os_platform.NAME))
         self.assertNotIn("interpreters", r, "CR-026: o agente nao publica lista de interpretadores")
-        self.assertEqual(r["critical_config"], "hb=10;fence=40;offline=120;call=30;kill=1;misfire=RUN_ONCE;tol=300;"
-                                               "horizonte=366;envelhecimento=30")
+        self.assertEqual(r["critical_config"], "call=30;misfire=RUN_ONCE")
         self.assertTrue(os.path.exists(os.path.join(self.work, "sss-srv-t.lock")))
 
     def test_root_recusado(self):
@@ -259,23 +252,8 @@ class TestSteps(_Base):
         open(blocked, "w").close()
         self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(work_dir=blocked)))
 
-    def test_validar_execucao_fora_de_dev(self):
-        cfg = self.cfg(sss_env="PROD", exec_work_dir=self.root)
-        plat = _Plat(validate_execution=lambda *a, **k: ["helper /opt/sss/bin/sss-helper nao encontrado"])
-        output = self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=cfg, plat=plat))
-        self.assertTrue(any("helper /opt/sss/bin/sss-helper nao encontrado" in x for x in output))
-
-    def test_cr028_helper_path_aplicado_tambem_no_dev(self):
-        """Revisao do CR-028 (M4): no DEV (com exec_users, D12) o helper_path tambem vale; sem conferencia."""
-        seen = []
-        plat = _Plat(set_helper=seen.append,
-                     validate_execution=lambda *a, **k: self.fail("conferencia so fora de DEV"))
-        self.agent(cfg=self.cfg(), plat=plat).initialize()
-        self.assertEqual(seen, ["/srv/sss-root/bin/sss-helper"])
-
     def test_cr014_pasta_de_entrada_na_subida(self):
-        # CR-014 (README §8.12 passo 4): input_dir fora das pastas do sistema e existente; fora de DEV, a pasta
-        # de cada ambiente atendido do usuario de execucao dele.
+        # CR-014 (README §8.12 passo 4): input_dir fora das pastas do sistema e existente.
         self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(input_dir="/usr/local/sss-entrada")))
         # CR-032 (D12): a pasta que falta e criada na subida, com o modo certo.
         created = os.path.join(self.root, "nao_input_dir")
@@ -286,17 +264,6 @@ class TestSteps(_Base):
         input_value = os.path.join(self.root, "entrada")
         os.mkdir(input_value, 0o755)
         self.agent(cfg=self.cfg(input_dir=input_value)).initialize()
-        seen = []
-
-        def _pastas(pairs):
-            seen.extend(pairs)
-            return ["%s deve ser diretorio de exec1 sem escrita de grupo nem de outros" % pairs[0][0]]
-        plat = _Plat(validate_execution=lambda *a, **k: [], validate_output_dirs=_pastas)
-        cfg = self.cfg(sss_env="PROD", exec_work_dir=self.root, exec_users=(("DEV", "exec1"),),
-                       input_dir=input_value)
-        logs = self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=cfg, plat=plat))
-        self.assertEqual(seen, [(os.path.join(input_value, "dev"), "exec1")])
-        self.assertTrue(any("pasta de entrada:" in x for x in logs))
 
     def test_cr019_pasta_de_trabalho_na_subida(self):
         # CR-019 (README §8.12 passo 4): script_work_dir como a de saida.
@@ -310,18 +277,7 @@ class TestSteps(_Base):
         work = os.path.join(self.root, "trabalho")
         os.mkdir(work, 0o755)
         self.agent(cfg=self.cfg(script_work_dir=work)).initialize()
-        seen = []
-
-        def _pastas(pairs):
-            seen.extend(pairs)
-            return ["%s deve ser diretorio de exec1 sem escrita de grupo nem de outros" % pairs[0][0]]
-        plat = _Plat(validate_execution=lambda *a, **k: [], validate_output_dirs=_pastas)
-        cfg = self.cfg(sss_env="PROD", exec_work_dir=self.root, exec_users=(("DEV", "exec1"),),
-                       script_work_dir=work)
-        logs = self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=cfg, plat=plat))
-        self.assertEqual(seen, [(os.path.join(work, "dev"), "exec1")])
-        self.assertTrue(any("pasta de trabalho:" in x for x in logs))
-        self.assertIn(work, sl._sss_dirs(cfg), "script nem interpretador dentro dela (SSS_DIR)")
+        self.assertIn(work, sl._sss_dirs(self.cfg(script_work_dir=work)), "script nem interpretador dentro dela (SSS_DIR)")
 
     def test_pasta_de_saida_na_subida(self):
         # CR-012 (README §8.12 passo 4): output_dir fora das pastas do sistema e existente.
@@ -335,18 +291,6 @@ class TestSteps(_Base):
         output = os.path.join(self.root, "saida")
         os.mkdir(output, 0o755)
         self.agent(cfg=self.cfg(output_dir=output)).initialize()
-        # Fora de DEV: a pasta de cada ambiente atendido, do usuario de execucao dele.
-        seen = []
-
-        def _pastas(pairs):
-            seen.extend(pairs)
-            return ["%s deve ser diretorio de exec1 sem escrita de grupo nem de outros" % pairs[0][0]]
-        plat = _Plat(validate_execution=lambda *a, **k: [], validate_output_dirs=_pastas)
-        cfg = self.cfg(sss_env="PROD", exec_work_dir=self.root, exec_users=(("DEV", "exec1"),),
-                       output_dir=output)
-        logs = self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=cfg, plat=plat))
-        self.assertEqual(seen, [(os.path.join(output, "dev"), "exec1")])
-        self.assertTrue(any("pasta de saida:" in x for x in logs))
 
     def test_instancia_unica_e_stop_antigo(self):
         stop = os.path.join(self.work, "sss-srv-t.stop")

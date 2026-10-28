@@ -37,10 +37,8 @@ class _FakeOracleConfig(object):
 class _FakeConfig(object):
     def __init__(self, driver_mode="auto", user="sss_web", dsn="localhost:2424/GFPR",
                  owner="openrisow", table_prefix="tbsss_", call_timeout_ms=5000,
-                 oracle_client_lib_dir=None, sss_env="DEV", data_backend="ORACLE"):
-        self.app = collections.namedtuple("AppConfig", ["sss_env", "data_backend"])(
-            sss_env=sss_env, data_backend=data_backend
-        )
+                 oracle_client_lib_dir=None, data_backend="ORACLE"):
+        self.app = collections.namedtuple("AppConfig", ["data_backend"])(data_backend=data_backend)
         self.oracle = _FakeOracleConfig(
             driver_mode=driver_mode,
             user=user,
@@ -55,13 +53,9 @@ class _FakeConfig(object):
 
 
 class _FakeSecrets(object):
-    def __init__(self, password="senha_super_secreta", purge_password="senha_purge_123",
-                 monitor_user="sss_monitor", monitor_password="senha_mon_123"):
+    def __init__(self, password="senha_super_secreta", purge_password="senha_purge_123"):
         self.oracle = collections.namedtuple("OracleSecret", ["password"])(password=password)
         self.purge = collections.namedtuple("PurgeSecret", ["password"])(password=purge_password)
-        self.monitor = collections.namedtuple("MonitorSecret", ["user", "password"])(
-            user=monitor_user, password=monitor_password
-        )
 
     @property
     def oracle_password(self):
@@ -70,14 +64,6 @@ class _FakeSecrets(object):
     @property
     def purge_password(self):
         return self.purge.password
-
-    @property
-    def monitor_user(self):
-        return self.monitor.user
-
-    @property
-    def monitor_password(self):
-        return self.monitor.password
 
 
 class TestDbConnSelectionMocks(unittest.TestCase):
@@ -676,9 +662,8 @@ class TestOracleTestSupportMocks(unittest.TestCase):
 
     _ENABLED = {"SSS_TEST_ORACLE": "1"}
 
-    def _cfg(self, owner="openrisow", user="openrisow", sss_env="DEV", dsn="localhost:2424/GFPR"):
+    def _cfg(self, owner="openrisow", user="openrisow", dsn="localhost:2424/GFPR"):
         cfg = mock.MagicMock()
-        cfg.app.sss_env = sss_env
         cfg.app.data_backend = "FAKE"
         cfg.oracle.owner = owner
         cfg.oracle.user = user
@@ -716,10 +701,13 @@ class TestOracleTestSupportMocks(unittest.TestCase):
         self.assertEqual(_oracle_test_support.owner_mode("openrisow"), _oracle_test_support.SHARED_MODE)
 
     def test_precondicoes_do_config(self):
-        """DEV obrigatorio, DSN preenchido e owner valido; o data_backend nao importa."""
+        """Repositorio (pasta dev/) obrigatorio, DSN preenchido e owner valido; o data_backend nao importa."""
         with mock.patch.dict(os.environ, self._ENABLED, clear=True):
             self.assertEqual(_oracle_test_support.check_environment_preconditions(cfg=self._cfg()), (True, ""))
-            for cfg, snippet in ((self._cfg(sss_env="HML"), "DEV"), (self._cfg(dsn=""), "dsn"),
+            with mock.patch.object(_oracle_test_support.sss_config, "has_dev_dir", return_value=False):
+                ok, reason = _oracle_test_support.check_environment_preconditions(cfg=self._cfg())
+            self.assertEqual((ok, "dev/" in reason), (False, True), "CR-032: so no repositorio")
+            for cfg, snippet in ((self._cfg(dsn=""), "dsn"),
                                 (self._cfg(owner="openrisow;DROP"), "owner"),
                                 (self._cfg(owner="SSS_TEST_"), "descartavel"), (self._cfg(owner="SSS_TEST_" + "X" * 25), "owner")):
                 ok, reason = _oracle_test_support.check_environment_preconditions(cfg=cfg)
@@ -858,24 +846,16 @@ class TestProbeWithRoleAccount(unittest.TestCase):
         process.communicate.return_value = (b'{"candidate": "thin", "ok": true}', b"")
         cfg = _FakeConfig(driver_mode="thin")
         ini = os.path.abspath(__file__)
-        cfg.app = collections.namedtuple("AppConfig", ["sss_env", "config_path"])(sss_env="DEV", config_path=ini)
+        cfg.app = collections.namedtuple("AppConfig", ["config_path"])(config_path=ini)
         with mock.patch.object(db_conn.subprocess, "Popen", return_value=process) as popen:
             db_conn.select_driver(cfg, _FakeSecrets(password="x"))
         cmd = popen.call_args[0][0]
         self.assertEqual(cmd[cmd.index("--config") + 1], ini)
 
-    def test_conectar_monitor_sonda_com_a_conta_do_monitor(self):
-        secrets_value = mock.Mock(monitor=mock.Mock(user="sss_monitor", password="senha-mon-77"))
-        captured = {}
-
-        def selecionar(cfg, secrets_obj, user=None, password_value=None):
-            captured.update(usuario=user, senha=password_value)
-            raise RuntimeError("parar aqui")
-        with mock.patch.object(db_conn, "select_driver", side_effect=selecionar), \
-                mock.patch.object(db_conn, "connection_budget_s"):
-            with self.assertRaises(RuntimeError):
-                db_conn.connect(_FakeConfig(driver_mode="thin"), secrets_value, role="monitor")
-        self.assertEqual(captured, {"usuario": "sss_monitor", "senha": "senha-mon-77"})
+    def test_cr032_sem_papel_monitor(self):
+        with mock.patch.object(db_conn, "connection_budget_s"):
+            with self.assertRaises(ValueError):
+                db_conn.connect(_FakeConfig(driver_mode="thin"), _FakeSecrets(), role="monitor")
 
     def test_sondar_driver_usa_o_usuario_informado(self):
         cfg = _FakeConfig(driver_mode="thin")

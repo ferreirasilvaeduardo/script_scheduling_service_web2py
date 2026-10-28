@@ -1,6 +1,5 @@
 ; Modelo do AGENTE so para os testes (CR-032, D4): um config por processo; as pastas saem do name.
 [app]
-sss_env = DEV                     ; DEV | HML | PROD
 name = agente0001
 
 [oracle]
@@ -13,9 +12,6 @@ driver_mode = thick
 [agent]
 environments = PRODUCAO,HOMOLOGACAO
 max_parallel_jobs = 4
-exec_users =                      ; AMBIENTE=usuario do SO por ambiente; obrigatorio fora de DEV
-exec_work_dir =                   ; obrigatoria fora de DEV
-helper_path =
 script_base_dir =                 ; vazio: so caminho absoluto
 output_dir =                      ; vazio desliga
 input_dir =                       ; vazio desliga

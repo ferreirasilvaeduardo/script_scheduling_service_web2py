@@ -11,8 +11,7 @@ if os.name != "posix":
 
 from sss.platform.os_platform.posix import (  # noqa: E402,F401
                                             NAME,
-                                            HELPER,
-                                            PACKAGE_HELPER,
+                                            TICKET_FILES,
                                             SYSTEM_DIRS,
                                             DEFAULT_RLIMITS,
                                             OUTPUT_TOO_MANY_FILES,
@@ -21,7 +20,6 @@ from sss.platform.os_platform.posix import (  # noqa: E402,F401
                                             INPUT_EXISTS,
                                             INPUT_SPACE,
                                             INPUT_HASH,
-                                            FailureAfterSpawn,
                                             InstanceAlreadyRunning,
                                             Process,
                                             final_path,
@@ -41,7 +39,6 @@ from sss.platform.os_platform.posix import (  # noqa: E402,F401
                                             install_stop_handler,
                                             read_state,
                                             release_instance,
-                                            clean_script_dir,
                                             clean_output,
                                             locale_available,
                                             process_exists,
@@ -53,7 +50,4 @@ from sss.platform.os_platform.posix import (  # noqa: E402,F401
                                             validate_script_path,
                                             validate_restricted_dir,
                                             ensure_dir,
-                                            validate_execution,
-                                            set_helper,
-                                            validate_output_dirs,
                                             )

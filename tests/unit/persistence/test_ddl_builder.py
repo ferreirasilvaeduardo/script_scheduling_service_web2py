@@ -221,7 +221,6 @@ class TestGrantsByRole(unittest.TestCase):
         self.roles = {
             "web": "sss_web",
             "agent": "sss_agente",
-            "monitor": "sss_monitor",
         }
         self.grants = ddl_builder.build_grants_by_role("openrisow", "tbsss_", self.roles)
         self.grants_text = "\n".join(self.grants)
@@ -236,24 +235,16 @@ class TestGrantsByRole(unittest.TestCase):
                 if "sss_agente" in g:
                     self.assertTrue(g.startswith("GRANT INSERT ON"))
 
-    def test_papel_monitor_apenas_select_7_tabelas(self):
-        """Papel monitor (CR-008, E3) so tem SELECT nas 7 tabelas e zero sequences."""
-        grants_monitor = [g for g in self.grants if "TO sss_monitor" in g]
-        self.assertEqual(len(grants_monitor), 7, "Monitor deve ter acesso a exatamente 7 tabelas")
-
-        for g in grants_monitor:
-            self.assertTrue(g.startswith("GRANT SELECT ON"))
-            self.assertNotIn("INSERT", g)
-            self.assertNotIn("UPDATE", g)
-            self.assertNotIn("DELETE", g)
-            self.assertNotIn("sq_", g, "Monitor nao deve ter GRANT em sequences")
-
-        tables_monitor = [
-            "tbsss_agents", "tbsss_tickets", "tbsss_schedules", "tbsss_scripts",
-            "tbsss_environments", "tbsss_control", "tbsss_audit"
-        ]
-        for t in tables_monitor:
-            self.assertTrue(any(t in g for g in grants_monitor), "Faltou GRANT para %s" % t)
+    def test_cr032_health_le_com_a_conta_do_web_e_do_agente(self):
+        """CR-032 (D8): sem papel monitor; o health.py le agentes, tickets, agendamentos, scripts, ambientes e
+        controle com a conta do proprio processo, web ou agente."""
+        for user in ("sss_web", "sss_agente"):
+            for t in ("tbsss_agents", "tbsss_tickets", "tbsss_schedules", "tbsss_scripts", "tbsss_environments",
+                      "tbsss_control"):
+                self.assertTrue(any(g.startswith("GRANT SELECT") and "openrisow.%s TO %s;" % (t, user) in g
+                                    for g in self.grants), (user, t))
+        with self.assertRaises(ValueError):
+            ddl_builder.build_grants_by_role("openrisow", "tbsss_", {"monitor": "sss_monitor"})
 
     def test_grants_da_saida_do_ticket(self):
         """CR-012: web so le o zip; agente le, inclui e altera (com a sequence); monitor nada."""
@@ -269,22 +260,21 @@ class TestGrantsByRole(unittest.TestCase):
         """O script de implantacao nao concede nada a PUBLIC (tbsss_users guarda password_hash)."""
         script = ddl_builder.build_full_deploy_script("openrisow", "tbsss_", user_roles=self.roles)
         self.assertNotIn("PUBLIC", script.upper().replace("NENHUM GRANT A PUBLIC", ""))
-        self.assertIn("GRANT SELECT ON openrisow.tbsss_agents TO sss_monitor;", script)
+        self.assertIn("GRANT SELECT ON openrisow.tbsss_agents TO sss_web;", script)
+        self.assertNotIn("monitor", script.lower(), "CR-032 (D8): sem papel monitor")
         self.assertFalse(hasattr(ddl_builder, "gerar_grants_public"))
 
     def test_conta_igual_ao_owner_nao_recebe_grant(self):
         """Papel que usa a conta dona do esquema vira comentario (GRANT a si mesmo e ORA-01749)."""
         grants = ddl_builder.build_grants_by_role(
-            "openrisow", "tbsss_", {"web": "OPENRISOW", "agent": "openrisow", "monitor": "sss_monitor"})
-        commands = [g for g in grants if not g.startswith("--")]
-        self.assertTrue(commands)
-        self.assertTrue(all(g.endswith("TO sss_monitor;") for g in commands))
+            "openrisow", "tbsss_", {"web": "OPENRISOW", "agent": "openrisow"})
+        self.assertEqual([g for g in grants if not g.startswith("--")], [])
         self.assertIn("-- papel web: usa a conta dona do esquema (openrisow); nenhum GRANT necessario", grants)
         self.assertIn("-- papel agent: usa a conta dona do esquema (openrisow); nenhum GRANT necessario", grants)
 
     def test_sem_contas_nenhum_grant(self):
         grants = ddl_builder.build_grants_by_role("openrisow", "tbsss_", {})
-        self.assertEqual(len(grants), 3)
+        self.assertEqual(len(grants), 2)
         self.assertTrue(all(g.startswith("-- papel ") for g in grants))
 
     def test_conta_ou_papel_invalidos_recusados(self):
@@ -368,7 +358,7 @@ class TestInitDbCli(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ini_bad = os.path.join(tmp, "config.ini")
             with open(ini_bad, "w", encoding="utf-8") as f:
-                f.write("[app]\nsss_env=DEV\ndata_backend=FAKE\n")
+                f.write("[app]\nname=init_teste\ndata_backend=FAKE\n")
                 f.write("[oracle]\nuser=u\ndsn=d\nowner=ow\ntable_prefix=1prefix_\nmodo_driver=auto\n")
                 f.write("[secrets]\nsecrets_file=/tmp/secrets.cfg\n")
 

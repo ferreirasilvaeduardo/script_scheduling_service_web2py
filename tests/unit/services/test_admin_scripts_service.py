@@ -73,7 +73,6 @@ _SKIP_ROOT = unittest.skipIf(os.geteuid() == 0, "path_guard rejeita qualquer arq
 
 
 class _Base(unittest.TestCase):
-    ENV = "DEV"
 
     def setUp(self):
         patcher = mock.patch.object(security, "ITERATIONS", 1000)
@@ -82,7 +81,7 @@ class _Base(unittest.TestCase):
         env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: "senha-dev-de-teste-123"})
         env.start()
         self.addCleanup(env.stop)
-        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE"}})
         repo_factory.reset_singletons()
         self.addCleanup(repo_factory.reset_singletons)
         self.addCleanup(repo_factory.configure, None)
@@ -98,11 +97,11 @@ class _Base(unittest.TestCase):
         self.ctx["gestor"] = dict(self.ctx["op.prod"], features=frozenset(["MANAGE_SCRIPTS"]))
         self.base = _tree()
         self.addCleanup(_remove, self.base)
-        self.svc = self._service(self.ENV)
+        self.svc = self._service()
         self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["items"]] or [0])
 
-    def _service(self, env):
-        return AdminScriptsService(self.catalog, repo_factory.get("schedules"), env, self.log, lambda: NOW)
+    def _service(self):
+        return AdminScriptsService(self.catalog, repo_factory.get("schedules"), self.log, lambda: NOW)
 
     def _p(self, name):
         return os.path.join(self.base, name)
@@ -158,27 +157,28 @@ class TestRegistration(_Base):
 
     def test_cr023_relativo_e_pasta_da_aplicacao(self):
         """CR-023: o relativo so tem o formato conferido no cadastro; a pasta da aplicacao e recusada,
-        salvo dev/ no DEV."""
+        salvo dev/ onde ela existe (CR-032, D11: no pacote, sem dev/, tambem e recusada)."""
         _sid, errors, _ = self._insert(path_file="relatorios/novo.py")
         self.assertEqual(errors, {})
         app_src = os.path.join(path_guard.APP_DIR, "src", "x.py")
         app_dev = os.path.join(path_guard.APP_DIR, "dev", "scripts", "x.py")
-        for env, path, expected in (("HML", app_src, Code.APP_DIR), ("DEV", app_src, Code.APP_DIR),
-                                    ("HML", app_dev, Code.APP_DIR), ("DEV", app_dev, None)):
-            _sid, errors, _ = self._insert(svc=self._service(env), name="App %s %s" % (env, path[-12:]),
-                                           path_file=path)
+        without_dev = os.path.join(path_guard.APP_DIR, "pasta_que_nao_existe")
+        for has_dev, path, expected in ((True, app_src, Code.APP_DIR), (False, app_src, Code.APP_DIR),
+                                        (False, app_dev, Code.APP_DIR), (True, app_dev, None)):
+            with mock.patch.object(path_guard, "APP_DEV_DIR", path_guard.APP_DEV_DIR if has_dev else without_dev):
+                _sid, errors, _ = self._insert(name="App %s %s" % (has_dev, path[-12:]), path_file=path)
             self.assertEqual(errors.get("path_file"),
-                             scr_mod.PATH_MESSAGES[expected] if expected else None, (env, path))
+                             scr_mod.PATH_MESSAGES[expected] if expected else None, (has_dev, path))
 
     def test_path_file_invalidos(self):
-        # CR-005 (README §8.5): caminho absoluto, normalizado e fora das pastas do sistema; vale em qualquer sss_env.
+        # CR-005 (README §8.5): caminho absoluto, normalizado e fora das pastas do sistema; vale em DEV e PROD.
         cases = (("./novo.py", Code.PATH_NOT_NORMALIZED), ("../novo.py", Code.HAS_DOTS),
                  ("/etc/passwd", Code.SYSTEM_DIR),
                  ("/usr/local/bin/x.py", Code.SYSTEM_DIR), ("/etc/nao_existe.py", Code.SYSTEM_DIR),
                  (self.base + "/../x.py", Code.HAS_DOTS), (self.base + "//novo.py", Code.PATH_NOT_NORMALIZED),
                  ("/opt\\x.py", Code.INVALID_SEPARATOR))
         for env in ("DEV", "HML"):
-            svc = self._service(env)
+            svc = self._service()
             for path, code in cases:
                 _sid, errors, _ = self._insert(svc=svc, path_file=path)
                 self.assertEqual(errors.get("path_file"), scr_mod.PATH_MESSAGES[code], (env, path))
@@ -196,7 +196,7 @@ class TestRegistration(_Base):
         # CR-011 (S1): ausente, gravavel ou pasta neste servidor nao importam aqui; o agente confere ao executar.
         for env in ("DEV", "HML", "PROD"):
             for i, path in enumerate(("/opt/automacoes/scripts/nao_existe.py", self._p("gravavel.py"), self._p("sub"))):
-                sid, errors, warning = self._insert(svc=self._service(env), name="Sem conferencia %s %d" % (env, i),
+                sid, errors, warning = self._insert(svc=self._service(), name="Sem conferencia %s %d" % (env, i),
                                                   path_file=path)
                 self.assertEqual((errors, warning), ({}, None), (env, path))
                 self.assertIsNotNone(sid)
@@ -226,7 +226,7 @@ class TestRegistration(_Base):
 
     def test_edicao_e_reativacao_sem_conferir_o_arquivo(self):
         # CR-011 (S1): o estado do arquivo neste servidor nao impede editar, desativar nem reativar.
-        svc = self._service("HML")
+        svc = self._service()
         sid = self.catalog.scripts_insert({"name": "Gravavel", "interpreter": "python3",
                                              "path_file": self._p("gravavel.py"), "param_type": "POSITIONAL"}, actor="teste")["id"]
         f = svc.form(self.ctx["admin"], str(sid))
@@ -463,7 +463,7 @@ class TestReadiness(_Base):
         super(TestReadiness, self).setUp()
         self.rbac = repo_factory.get("rbac")
         profiles = AdminProfilesService(self.rbac, self.catalog, repo_factory.get("users"), self.log)
-        self.svc = AdminScriptsService(self.catalog, repo_factory.get("schedules"), self.ENV, self.log,
+        self.svc = AdminScriptsService(self.catalog, repo_factory.get("schedules"), self.log,
                                        lambda: NOW, runners=profiles.script_runners)
         # So o op.hml (perfil 3) tem o script 1, em HOMOLOGACAO; os demais nao administradores, nada.
         self.rbac.matrix_save(2, [1], [1], [], actor="teste")
@@ -498,7 +498,7 @@ class TestReadiness(_Base):
         self.assertIn("inactive", [m["code"] for m in r["missing"]])
 
     def test_sem_calculo_injetado_nao_tem_quadro(self):
-        self.assertIsNone(self._service(self.ENV).form(self.ctx["admin"], "1")["readiness"])
+        self.assertIsNone(self._service().form(self.ctx["admin"], "1")["readiness"])
 
 
 class TestQueuedWarning(_Base):
@@ -507,7 +507,7 @@ class TestQueuedWarning(_Base):
     def setUp(self):
         super(TestQueuedWarning, self).setUp()
         self.tickets = repo_factory.get("tickets")
-        self.svc = AdminScriptsService(self.catalog, repo_factory.get("schedules"), self.ENV, self.log,
+        self.svc = AdminScriptsService(self.catalog, repo_factory.get("schedules"), self.log,
                                        lambda: NOW, tickets=self.tickets)
         self.pending = self.tickets.create({"script_id": 1, "environment": "HOMOLOGACAO", "requested_by": "admin",
                                             "status": "PENDING", "priority": 2, "submitted_params": "{}"}, [])
@@ -528,7 +528,7 @@ class TestQueuedWarning(_Base):
 
             def rules_at_risk(self, ids):
                 return [{"id": 7, "name": "R7", "reason": u"Parâmetros inválidos"}]
-        svc = AdminScriptsService(self.catalog, repo_factory.get("schedules"), self.ENV, self.log, lambda: NOW,
+        svc = AdminScriptsService(self.catalog, repo_factory.get("schedules"), self.log, lambda: NOW,
                                   rules=_Rules())
         text = svc.rules_warning(self.ctx["admin"], "1")
         self.assertIn(u"1 de 2 regra(s)", text)

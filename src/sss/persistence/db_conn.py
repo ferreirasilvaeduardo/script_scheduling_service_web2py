@@ -160,8 +160,8 @@ def _run_probe_subprocess(candidate, cfg, password_value, user=None):
 def select_driver(cfg, secrets, probe_runner=None, user=None, password_value=None):
     """Sonda e seleciona a combinacao de driver Oracle apropriada.
 
-    Em 'auto': Thin -> Thick -> cx_Oracle. usuario e senha: as credenciais do papel que vai conectar (F9.1d:
-    o monitor pode usar outra conta); sem eles, [oracle] user e password.
+    Em 'auto': Thin -> Thick -> cx_Oracle. usuario e senha: as credenciais de quem vai conectar (ex.: o dono
+    no init_db); sem eles, [oracle] user e password.
     Interrompe a cadeia imediatamente em falhas de AUTENTICACAO.
     Falhas fatais geram registro em CRITICAL e RuntimeError.
     """
@@ -538,7 +538,7 @@ def connection_budget_s(dsn, call_timeout_s):
 # ==============================================================================
 
 def connect(cfg, secrets, role="web", user=None, password=None):
-    """Abre conexao Oracle neutra para o papel especificado (web, agente, monitor)."""
+    """Abre conexao Oracle neutra para o papel especificado (web ou agente; dono so no init_db)."""
     # 1. Resolver credenciais conforme o papel
     if user is not None and password is not None:
         u = user
@@ -546,10 +546,6 @@ def connect(cfg, secrets, role="web", user=None, password=None):
     elif role in ("web", "agent"):
         u = getattr(cfg.oracle, "user", None)
         p = _get_password(secrets)
-    elif role == "monitor":
-        mon = getattr(secrets, "monitor", None)
-        u = getattr(mon, "user", None) if mon else getattr(getattr(cfg, "monitor", None), "user", None)
-        p = getattr(mon, "password", None) if mon else None
     elif role == "dono":
         u = user or getattr(cfg.oracle, "owner", None)
         p = password or _get_password(secrets)

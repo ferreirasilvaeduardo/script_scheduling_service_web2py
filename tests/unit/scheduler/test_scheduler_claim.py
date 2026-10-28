@@ -37,8 +37,7 @@ AMB = "DEV"
 ENV_PASSWORD = "SenhaDoAmbiente#2026"
 
 _Agent = collections.namedtuple("_Agent", (
-    "agent_id", "environments", "work_dir", "exec_users",
-    "exec_work_dir", "heartbeat_interval_s", "fence_timeout_s", "node_offline_timeout_s", "kill_grace_s",
+    "agent_id", "environments", "work_dir", "heartbeat_interval_s", "fence_timeout_s", "node_offline_timeout_s", "kill_grace_s",
     "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "queue_aging_min", "child_locale",
     "cancel_poll_interval_s", "orchestrator_interval_s", "max_parallel_jobs",
     "log_dir_min_free_mb", "script_timeout_s", "env_passthrough", "output_dir", "output_max_bytes",
@@ -49,7 +48,7 @@ _Agent = collections.namedtuple("_Agent", (
 _Agent.__new__.__defaults__ = (None, 20971520, 1000, 50, "TERMINATE", 30, None, None)
 _Log = collections.namedtuple("_Log", "log_dir max_log_size_bytes max_local_log_size_bytes")
 _Cfg = collections.namedtuple("_Cfg", "agent logging app oracle secrets")
-_App = collections.namedtuple("_App", "sss_env")
+_App = collections.namedtuple("_App", "name")
 _Oracle = collections.namedtuple("_Oracle", "dsn call_timeout_ms owner table_prefix")
 
 
@@ -359,7 +358,6 @@ class _Base(unittest.TestCase):
 
     def cfg(self, **changes):
         base = dict(agent_id="srv-t", environments=(AMB,), work_dir=self.work,
-                    exec_users=(), exec_work_dir=None,
                     heartbeat_interval_s=0.2, fence_timeout_s=40, node_offline_timeout_s=120, kill_grace_s=1,
                     misfire_policy="RUN_ONCE", misfire_tolerance_s=300, cron_horizon_days=366,
                     queue_aging_min=30, child_locale="C.UTF-8",
@@ -367,7 +365,7 @@ class _Base(unittest.TestCase):
                     log_dir_min_free_mb=1, script_timeout_s=60, env_passthrough=())
         local = changes.pop("max_local_log_size_bytes", 10 * 1024 * 1024)
         base.update(changes)
-        return _Cfg(_Agent(**base), _Log(self.logs, 5 * 1024 * 1024, local), _App("DEV"),
+        return _Cfg(_Agent(**base), _Log(self.logs, 5 * 1024 * 1024, local), _App("srv-t"),
                     _Oracle("db:1521/x", 30000, "OWN_X", "pfx_"), None)
 
     def start_agent(self, **changes):
@@ -563,7 +561,7 @@ class TestExecution(_Base):
         item.phase = sl._Item.RODANDO
         p = subprocess.Popen(["true"], start_new_session=True)
         p.wait()
-        item.execution = executor.Execution(1, self.work, None, None, None)
+        item.execution = executor.Execution(1, self.work, None)
         item.execution.process = os_platform.Process(p.pid, None, popen=p)
         item.execution.pid = p.pid
         self.ag._stop(item, "CANCEL")

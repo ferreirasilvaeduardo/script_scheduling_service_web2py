@@ -73,7 +73,15 @@ IGNORED_KEYS.update({("agent", "agent_id"): _DERIVED_REASON, ("agent", "work_dir
 IGNORED_KEYS.update({("agent", "claim_batch_size"): _REMOVED_REASON,
                      ("agent", "max_parallel_hard_limit"): _REMOVED_REASON,
                      ("oracle", "oracle_client_lib_dir"): _REMOVED_REASON})
+# CR-032 (D11): DEV e PROD com o mesmo comportamento; o ambiente mostrado vem da pasta <TIPO>.
+IGNORED_KEYS[("app", "sss_env")] = ("o comportamento e o mesmo em DEV e PROD desde o CR-032; o ambiente mostrado "
+                                    "vem da pasta acima da raiz")
+# CR-032 (D7): sem usuario de execucao, sudo nem helper; tudo roda com a conta do agente.
+_NO_EXEC_USER = "sem usuario de execucao desde o CR-032; os scripts rodam com a conta do agente"
+IGNORED_KEYS.update(dict((("agent", key), _NO_EXEC_USER)
+                         for key in ("exec_users", "usuarios_execucao", "exec_work_dir", "helper_path")))
 
+_NO_MONITOR = "sem papel monitor desde o CR-032; o health.py usa a conta do proprio processo"
 # Secoes inteiras ignoradas com aviso (CR-030): o load() registra uma linha por chave.
 IGNORED_SECTIONS = {"retention": _NO_PURGE, "retencao": _NO_PURGE,
                     "secrets": "o secrets.cfg e o unico de instance/ desde o CR-032"}
@@ -98,7 +106,6 @@ RENAMED_KEYS = {
     # CR-016b: configuracao e operacao em ingles
     ("oracle", "modo_driver"): "driver_mode",
     ("agent", "ambientes_atendidos"): "environments",
-    ("agent", "usuarios_execucao"): "exec_users",
     ("agent", "fila_envelhecimento_min"): "queue_aging_min",
     ("agent", "log_dir_min_livre_mb"): "log_dir_min_free_mb",
     ("web", "sessao_max_horas"): "session_max_hours",
@@ -111,9 +118,8 @@ RENAMED_SECTIONS = {"ambiente:": "environment:"}
 
 # Atores do sistema que nao podem ser agent_id (README §4.4 e §8.12).
 RESERVED_AGENT_IDS = ("init_db", "seed", "purge")
-_RE_EXEC_USER = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 _ENVIRONMENTS_MAX = 1000
-ROLES = ("web", "agent", "monitor")
+ROLES = ("web", "agent")
 
 _log = logging.getLogger("sss_config")
 
@@ -174,7 +180,6 @@ class FieldDef(object):
 # Esquema declarativo completo de todas as secoes e chaves (README §12.1)
 SCHEMA = collections.OrderedDict([
     ("app", collections.OrderedDict([
-        ("sss_env", FieldDef("enum", required=True, allowed_values=("DEV", "HML", "PROD"))),
         # CR-028 (D5, D6): nome do processo (web0001, agente0001...); as pastas saem de var/<nome>/ e, no
         # agente, e o agent_id.
         ("name", FieldDef("str", required=True, regex=r"^[a-z][a-z0-9_-]{0,29}$")),
@@ -190,12 +195,6 @@ SCHEMA = collections.OrderedDict([
     ])),
     ("agent", collections.OrderedDict([
         ("environments", FieldDef("list_csv", required=True)),
-        # Usuario do SO por ambiente e pasta base dos diretorios de trabalho dos scripts (CR-007, D1):
-        # obrigatorios fora de DEV (validacao cruzada em carregar()).
-        ("exec_users", FieldDef("map_csv", required=False, default=())),
-        ("exec_work_dir", FieldDef("path", required=False, default=None)),
-        # CR-028: helper de execucao, numa pasta so do root ao lado da raiz (padrao HELPER_DEFAULT).
-        ("helper_path", FieldDef("path", required=False, default=None)),
         ("max_parallel_jobs", FieldDef("int", required=True, min_val=1, max_val=999)),
         # Pedido do responsavel pelo produto (2026-10-27): padrao de 168 h; maximo igual ao do cadastro do
         # script (tbsss_scripts.timeout_s, NUMBER(7)).
@@ -248,13 +247,13 @@ class _ItemAccessMixin(object):
 
 
 class AppConfig(_ItemAccessMixin, collections.namedtuple("AppConfig",
-                                                         ["sss_env", "name", "role", "config_path"])):
+                                                         ["name", "role", "config_path"])):
     __slots__ = ()
 
 
 # name, role e config_path sao opcionais na construcao direta (testes); o load() sempre os preenche (CR-028,
 # CR-029: config_path e o arquivo lido, repassado a sondagem do driver).
-AppConfig.__new__.__defaults__ = (None, "all", None)
+AppConfig.__new__.__defaults__ = ("all", None)
 
 
 class OracleConfig(_ItemAccessMixin, collections.namedtuple("OracleConfig", [
@@ -276,9 +275,9 @@ class AgentConfig(_ItemAccessMixin, collections.namedtuple("AgentConfig", [
     "node_offline_timeout_s", "kill_grace_s", "script_timeout_s",
     "shutdown_mode", "shutdown_grace_s", "misfire_policy",
     "misfire_tolerance_s", "cron_horizon_days", "child_locale",
-    "env_passthrough", "exec_users", "exec_work_dir", "queue_aging_min",
+    "env_passthrough", "queue_aging_min",
     "log_dir_min_free_mb", "output_dir", "output_max_bytes", "output_max_files", "input_dir",
-    "script_work_dir", "script_base_dir", "helper_path"
+    "script_work_dir", "script_base_dir"
 ])):
     __slots__ = ()
 
@@ -419,11 +418,12 @@ def _convert_value(section_name, key_name, cdef, raw_val):
 APP_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
 VAR_DIR = os.path.join(APP_DIR, "var")
 SCRIPTS_DIR = os.path.join(APP_DIR, "scripts_ambiente")
-# Pasta <TIPO> acima da raiz (CR-028, D1): DEV, HOM ou PROD. Com D12, HOM e PROD sobem com sss_env = DEV.
-INSTALL_TYPES = ("DEV", "HOM", "HML", "PROD")
+# Pasta <TIPO> acima da raiz (CR-028, D1): DEV ou PROD. CR-032 (D11): so o que se mostra na tela e no log de
+# subida; o comportamento e o mesmo em todo <TIPO>.
 INSTALL_TYPE = os.path.basename(os.path.dirname(APP_DIR)).upper()
-# Helper de execucao (CR-028): fora da raiz, que e do usuario de servico; pasta do root ao lado dela.
-HELPER_DEFAULT = os.path.join(os.path.dirname(APP_DIR), "sss-root", "bin", "sss-helper")
+# Pasta dev/ do repositorio (CR-032, D11): a tela /dev, o FAKE e os scripts em dev/ so valem onde ela existe; o
+# pacote de implantacao nao a leva.
+APP_DEV_DIR = os.path.join(APP_DIR, "dev")
 # Secoes que cada papel nao usa (CR-028, D4): o papel vem do proprio arquivo.
 _ROLE_SKIPPED = {"web": ("agent",), "agent": ("web",)}
 # Chaves de [agent] que o web tambem usa (painel de saude, agendamentos, fila) e que precisam ser iguais as dos
@@ -434,10 +434,15 @@ WEB_AGENT_KEYS = ("misfire_policy",)
 _AGENT_ONLY_REQUIRED = ("environments", "max_parallel_jobs")
 
 
-def env_label(sss_env: str, install_type: Optional[str] = None) -> str:
-    """Ambiente mostrado na tela (CR-028, D12): o <TIPO> da pasta quando ele e conhecido; senao, o sss_env."""
-    tipo = INSTALL_TYPE if install_type is None else install_type
-    return tipo if tipo in INSTALL_TYPES else sss_env
+def env_label(install_type: Optional[str] = None) -> str:
+    """Ambiente mostrado na tela e na linha de subida (CR-028, D12; CR-032, D11): o nome da pasta <TIPO>."""
+    tipo = INSTALL_TYPE if install_type is None else install_type.upper()
+    return tipo or "?"
+
+
+def has_dev_dir() -> bool:
+    """CR-032 (D11): a pasta dev/ existe (o repositorio); no pacote, nao."""
+    return os.path.isdir(APP_DEV_DIR)
 
 
 def role_of(sections):
@@ -458,7 +463,6 @@ def _derived_paths(name, role, present):
     derived = {}
     if role != "web":
         derived.update({
-            ("agent", "exec_work_dir"): os.path.join(VAR_DIR, "exec"),
             ("agent", "output_dir"): os.path.join(base, "output"),
             ("agent", "input_dir"): os.path.join(base, "input"),
             ("agent", "script_work_dir"): os.path.join(base, "script_work"),
@@ -590,8 +594,6 @@ def load(ini_path: str) -> "Config":
                           reason="Nome reservado do sistema: %s (README §4.4 e §8.12)" % app_name)
     data_sections["app"]["role"] = role
     data_sections["app"]["config_path"] = os.path.abspath(ini_path)
-    if role != "web" and data_sections["agent"]["helper_path"] is None:
-        data_sections["agent"]["helper_path"] = HELPER_DEFAULT
 
     # CR-032 (D14): um secrets.cfg por servidor, na pasta de cima da do config (instance/secrets.cfg). O antigo,
     # na pasta do processo, ainda e lido, com aviso para mover.
@@ -646,7 +648,7 @@ def _inside(path, folder):
     return os.path.commonpath([path, folder]) == folder
 
 
-def _validate_script_base_dir(agent: dict, log_dir: str, dev: bool) -> None:
+def _validate_script_base_dir(agent: dict, log_dir: str) -> None:
     """CR-023 (D5): formato da pasta base; a existencia so e avisada na subida do agente (README §8.5)."""
     # pylint: disable=import-outside-toplevel
     from sss.platform import path_guard
@@ -654,14 +656,13 @@ def _validate_script_base_dir(agent: dict, log_dir: str, dev: bool) -> None:
     if not os.path.isabs(base) or os.path.normpath(base) != base:
         raise ConfigError(section="agent", key="script_base_dir",
                           reason="Deve ser um caminho absoluto e normalizado")
-    sss_dirs = (agent["work_dir"], log_dir, agent["exec_work_dir"], agent["output_dir"],
-                agent["input_dir"], agent["script_work_dir"])
+    sss_dirs = (agent["work_dir"], log_dir, agent["output_dir"], agent["input_dir"], agent["script_work_dir"])
     try:
-        path_guard.check_forbidden_dirs(base, sss_dirs, dev=dev)
+        path_guard.check_forbidden_dirs(base, sss_dirs)
     except path_guard.PathGuardError as exc:
         reasons = {"SYSTEM_DIR": "Nao pode ficar numa pasta do sistema",
                    "SSS_DIR": "Nao pode ficar dentro de uma pasta do SSS (log, trabalho, entrada, saida)",
-                   "APP_DIR": "Nao pode ficar dentro da pasta da aplicacao (no DEV, so em dev/)"}
+                   "APP_DIR": "Nao pode ficar dentro da pasta da aplicacao (so em dev/, onde existe)"}
         raise ConfigError(section="agent", key="script_base_dir",
                           reason=reasons.get(exc.code, exc.code))
 
@@ -681,60 +682,20 @@ def _validate_cr007(app, oracle, agent, logging_dict, role="all"):
 
     if role != "web":
         _validate_agent_paths(app, agent, logging_dict)
-
-    if app["sss_env"] != "DEV" and oracle["user"].upper() == oracle["owner"].upper():
-        # CR-008, R-29: a conta da aplicacao nunca e a dona do esquema fora de DEV (D1b do CR-007).
-        raise ConfigError(section="oracle", key="user",
-                         reason="Fora de DEV, a conta da aplicacao deve ser diferente do owner do esquema")
+    # CR-032 (D11): a conta igual ao owner do esquema e aceita (ambiente com um usuario de banco so).
 
 
 def _validate_agent_paths(app, agent, logging_dict):
-    """Validacoes do agente (CR-007, CR-012, CR-014, CR-019, CR-023): ambientes, execucao e pastas."""
+    """Validacoes do agente (CR-007, CR-012, CR-014, CR-019, CR-023): ambientes e pastas."""
     if len(",".join(agent["environments"])) > _ENVIRONMENTS_MAX:
         raise ConfigError(section="agent", key="environments",
                          reason="Lista com mais de %d caracteres (coluna tbsss_agentes.ambientes)" % _ENVIRONMENTS_MAX)
 
-    dev = app["sss_env"] == "DEV"
-    users = dict(agent["exec_users"])
-    for env, usr in agent["exec_users"]:
-        if env not in agent["environments"]:
-            raise ConfigError(section="agent", key="exec_users",
-                             reason="Ambiente '%s' nao esta em environments" % env)
-        if not _RE_EXEC_USER.match(usr) or usr == "root":
-            raise ConfigError(section="agent", key="exec_users",
-                             reason="Usuario de execucao invalido para '%s'" % env)
-    if not dev:
-        missing = [a for a in agent["environments"] if a not in users]
-        if missing:
-            raise ConfigError(section="agent", key="exec_users",
-                             reason="Fora de DEV, todo ambiente atendido precisa de usuario de execucao: %s"
-                                    % ", ".join(missing))
-        if not agent["exec_work_dir"]:
-            raise ConfigError(section="agent", key="exec_work_dir", reason="Obrigatorio fora de DEV (CR-007, D1)")
-    if agent["exec_work_dir"]:
-        for name, other in (("work_dir", agent["work_dir"]), ("log_dir", logging_dict["log_dir"])):
-            if _inside(agent["exec_work_dir"], other) or _inside(other, agent["exec_work_dir"]):
-                raise ConfigError(section="agent", key="exec_work_dir",
-                                 reason="Nao pode ficar dentro de %s nem conte-lo" % name)
-    helper = agent["helper_path"]
-    if helper:
-        # CR-028: o helper roda pelo sudo como o usuario de execucao; nunca numa pasta do usuario de servico.
-        if not os.path.isabs(helper):
-            raise ConfigError(section="agent", key="helper_path", reason="Deve ser um caminho absoluto")
-        for name, other in (("a pasta da aplicacao", APP_DIR), ("work_dir", agent["work_dir"]),
-                            ("log_dir", logging_dict["log_dir"]), ("exec_work_dir", agent["exec_work_dir"]),
-                            ("output_dir", agent["output_dir"]), ("input_dir", agent["input_dir"]),
-                            ("script_work_dir", agent["script_work_dir"]),
-                            ("script_base_dir", agent["script_base_dir"])):
-            if other and os.path.isabs(other) and _inside(helper, other):
-                raise ConfigError(section="agent", key="helper_path",
-                                 reason="Nao pode ficar dentro de %s (pasta so do root, CR-028)" % name)
     if agent["output_dir"]:
         # CR-012: a pasta de saida nao se sobrepoe as pastas do SSS (README §8.13).
         if not os.path.isabs(agent["output_dir"]):
             raise ConfigError(section="agent", key="output_dir", reason="Deve ser um caminho absoluto")
-        for name, other in (("work_dir", agent["work_dir"]), ("log_dir", logging_dict["log_dir"]),
-                            ("exec_work_dir", agent["exec_work_dir"])):
+        for name, other in (("work_dir", agent["work_dir"]), ("log_dir", logging_dict["log_dir"])):
             if other and (_inside(agent["output_dir"], other) or _inside(other, agent["output_dir"])):
                 raise ConfigError(section="agent", key="output_dir",
                                  reason="Nao pode ficar dentro de %s nem conte-lo" % name)
@@ -743,7 +704,7 @@ def _validate_agent_paths(app, agent, logging_dict):
         if not os.path.isabs(agent["input_dir"]):
             raise ConfigError(section="agent", key="input_dir", reason="Deve ser um caminho absoluto")
         for name, other in (("work_dir", agent["work_dir"]), ("log_dir", logging_dict["log_dir"]),
-                            ("exec_work_dir", agent["exec_work_dir"]), ("output_dir", agent["output_dir"])):
+                            ("output_dir", agent["output_dir"])):
             if other and (_inside(agent["input_dir"], other) or _inside(other, agent["input_dir"])):
                 raise ConfigError(section="agent", key="input_dir",
                                  reason="Nao pode ficar dentro de %s nem conte-lo" % name)
@@ -752,13 +713,12 @@ def _validate_agent_paths(app, agent, logging_dict):
         if not os.path.isabs(agent["script_work_dir"]):
             raise ConfigError(section="agent", key="script_work_dir", reason="Deve ser um caminho absoluto")
         for name, other in (("work_dir", agent["work_dir"]), ("log_dir", logging_dict["log_dir"]),
-                            ("exec_work_dir", agent["exec_work_dir"]), ("output_dir", agent["output_dir"]),
-                            ("input_dir", agent["input_dir"])):
+                            ("output_dir", agent["output_dir"]), ("input_dir", agent["input_dir"])):
             if other and (_inside(agent["script_work_dir"], other) or _inside(other, agent["script_work_dir"])):
                 raise ConfigError(section="agent", key="script_work_dir",
                                  reason="Nao pode ficar dentro de %s nem conte-lo" % name)
     if agent["script_base_dir"]:
-        _validate_script_base_dir(agent, logging_dict["log_dir"], dev)
+        _validate_script_base_dir(agent, logging_dict["log_dir"])
 
 
 def check_encoding(log_name=None, log_dir=None):
@@ -837,13 +797,12 @@ class EnvironmentSecret(object):
 class Secrets(object):
     """Container seguro de segredos carregados do secrets.cfg."""
 
-    __slots__ = ("_oracle", "_web", "_environments", "_monitor")
+    __slots__ = ("_oracle", "_web", "_environments")
 
-    def __init__(self, oracle_password, cookie_key, environments, monitor=None):
+    def __init__(self, oracle_password, cookie_key, environments):
         self._oracle = OracleSecret(oracle_password) if oracle_password is not None else None
         self._web = WebSecret(cookie_key) if cookie_key is not None else None
         self._environments = dict(environments)
-        self._monitor = monitor  # EnvironmentSecret com user e password (CR-008, E3)
 
     @property
     def oracle(self):
@@ -862,18 +821,6 @@ class Secrets(object):
         return self._web.cookie_key if self._web else None
 
     @property
-    def monitor(self):
-        return self._monitor
-
-    @property
-    def monitor_password(self):
-        return self._monitor.password if self._monitor else None
-
-    @property
-    def monitor_user(self):
-        return self._monitor.user if self._monitor else None
-
-    @property
     def environments(self):
         return self._environments
 
@@ -889,10 +836,6 @@ class Secrets(object):
             if self._web is None:
                 raise KeyError(item)
             return {"cookie_key": self.cookie_key}
-        elif item == "monitor":
-            if self._monitor is None:
-                raise KeyError(item)
-            return {"user": self.monitor_user, "password": self.monitor_password}
         elif item.startswith("environment:"):
             name = item.split(":", 1)[1]
             env = self.get_environment(name)
@@ -905,9 +848,8 @@ class Secrets(object):
         raise KeyError(item)
 
     def __repr__(self):
-        return "<Segredos: oracle=%s, web=%s, monitor=%s, environments=%r>" % (
+        return "<Segredos: oracle=%s, web=%s, environments=%r>" % (
             "***" if self._oracle else "None", "***" if self._web else "None",
-            "***" if self._monitor else "None",
             sorted(list(self._environments.keys()))
         )
 
@@ -915,35 +857,7 @@ class Secrets(object):
         return "<Segredos: ***redacted***>"
 
 
-def _monitor_secrets(cp, env, cfg=None):
-    """Papel monitor (README §4.1; CR-008, E3; F9.1b): so [monitor]; as demais secoes do arquivo do servidor
-    (CR-032: um secrets.cfg compartilhado) sao ignoradas, sem validar nem registrar no masking.
-
-    CR-030 (P1): com sss_env = DEV e sem [monitor], a monitoracao usa a conta do [oracle] (ambiente com um
-    usuario de banco so)."""
-    if "monitor" not in cp.sections():
-        user = getattr(getattr(cfg, "oracle", None), "user", None)
-        password = (cp["oracle"].get("password") or "").strip() if "oracle" in cp.sections() else ""
-        if env == "DEV" and user and password:
-            from sss.core.masking import register_secret
-            register_secret(password)
-            return Secrets(oracle_password=None, cookie_key=None, environments={},
-                           monitor=EnvironmentSecret(user=user, password=password))
-        raise ConfigError(section="monitor", key=None, reason="Secao [monitor] obrigatoria ausente em secrets.cfg")
-    values = {}
-    for key in ("user", "password"):
-        if key not in cp["monitor"]:
-            raise ConfigError(section="monitor", key=key, reason="Chave %s obrigatoria ausente em [monitor]" % key)
-        values[key] = cp["monitor"][key].strip()
-        if not values[key]:
-            raise ConfigError(section="monitor", key=key, reason="%s nao pode ser vazio em [monitor]" % key)
-    from sss.core.masking import register_secret
-    register_secret(values["password"])
-    return Secrets(oracle_password=None, cookie_key=None, environments={},
-                    monitor=EnvironmentSecret(user=values["user"], password=values["password"]))
-
-
-def load_secrets(path, cfg=None, sss_env=None, data_backend=None, role="web"):
+def load_secrets(path, cfg=None, data_backend=None, role="web"):
     """Valida e carrega segredos de arquivo com modo 0600 e ownership restrito.
 
     papel ('web' ou 'agent', CR-007 D1b) define as secoes obrigatorias e as proibidas (README §4.1).
@@ -978,12 +892,7 @@ def load_secrets(path, cfg=None, sss_env=None, data_backend=None, role="web"):
             )
         )
 
-    if cfg is not None:
-        env = getattr(cfg.app, "sss_env", sss_env)
-        backend = data_backend
-    else:
-        env = sss_env
-        backend = data_backend
+    backend = data_backend
 
     cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
     try:
@@ -991,9 +900,6 @@ def load_secrets(path, cfg=None, sss_env=None, data_backend=None, role="web"):
             cp.read_file(f)
     except Exception as e:
         raise ConfigError(reason="Erro ao ler arquivo de segredos %s: %s" % (path, e))
-
-    if role == "monitor":
-        return _monitor_secrets(cp, env, cfg)
 
     # [web] cookie_key: obrigatorio no papel web e proibido no agente (README §4.1)
     cookie_key = None
@@ -1009,7 +915,7 @@ def load_secrets(path, cfg=None, sss_env=None, data_backend=None, role="web"):
 
     # [oracle] password: em DEV e FAKE e opcional; obrigatorio para web e agente
     oracle_password = None
-    is_dev_fake = (env == "DEV" and backend == "FAKE")
+    is_dev_fake = backend == "FAKE"
     if "oracle" in cp.sections():
         if "password" not in cp["oracle"]:
             if not is_dev_fake:
@@ -1026,6 +932,9 @@ def load_secrets(path, cfg=None, sss_env=None, data_backend=None, role="web"):
     # [purge]: o purge foi retirado (CR-030); a secao antiga so gera aviso, e o valor nunca e lido.
     if "purge" in cp.sections():
         _log.warning("secrets.cfg: secao [purge] ignorada: %s; apague a secao", _NO_PURGE)
+    # [monitor]: o papel monitor foi retirado (CR-032, D8); o health.py usa a conta do proprio processo.
+    if "monitor" in cp.sections():
+        _log.warning("secrets.cfg: secao [monitor] ignorada: %s; apague a secao", _NO_MONITOR)
 
     # [environment:<NOME>]: so no papel agente
     environments = {}
@@ -1055,14 +964,13 @@ def load_secrets(path, cfg=None, sss_env=None, data_backend=None, role="web"):
         else:
             raise ConfigError(section=sec, key=None, reason="Secao desconhecida em secrets.cfg: [%s]" % sec)
 
-    if role == "agent" and cfg is not None and env != "DEV":
+    if role == "agent" and cfg is not None:
         missing = [a for a in cfg.agent.environments if a not in environments]
         if missing:
             raise ConfigError(section="ambiente", key=None,
                              reason="Ambientes atendidos sem credencial em secrets.cfg: %s" % ", ".join(missing))
 
-    secrets_value = Secrets(oracle_password=oracle_password, cookie_key=cookie_key, environments=environments,
-                        monitor=None)
+    secrets_value = Secrets(oracle_password=oracle_password, cookie_key=cookie_key, environments=environments)
 
     # Import tardio para nao acoplar carregar() ao masking. Sem masking.py a carga de
     # segredos falha (ImportError): segredo sem mascaramento nunca chega aos logs (AGENTS §3.3).
@@ -1187,12 +1095,6 @@ def reset_secrets_cache():
 
 
 def critical_config(cfg):
-    """Texto canonico dos parametros que precisam coincidir nos nos (README §8.12)."""
-    fields = (("hb", "heartbeat_interval_s"), ("fence", "fence_timeout_s"),
-              ("offline", "node_offline_timeout_s"), ("call", None),
-              ("kill", "kill_grace_s"), ("misfire", "misfire_policy"),
-              ("tol", "misfire_tolerance_s"), ("horizonte", "cron_horizon_days"),
-              ("envelhecimento", "queue_aging_min"))
-    return ";".join("%s=%s" % (label, call_timeout_s(cfg.oracle.call_timeout_ms) if key is None
-                               else getattr(cfg.agent, key))
-                    for label, key in fields)
+    """Texto canonico dos parametros que precisam coincidir nos nos (README §8.12). CR-032 (D16): os demais
+    sao fixos no codigo; sobram o call_timeout_ms (em segundos) e a misfire_policy."""
+    return "call=%s;misfire=%s" % (call_timeout_s(cfg.oracle.call_timeout_ms), cfg.agent.misfire_policy)

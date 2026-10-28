@@ -3,7 +3,7 @@
 
 A aplicacao usa sempre o Oracle do [oracle] do config.ini (owner e table_prefix). O FAKE so existe
 quando um teste o injeta explicitamente por configurar({"app": {"data_backend": "FAKE", ...}}), e so
-com sss_env = DEV. Garante singletons por processo.
+onde a pasta dev/ existe (o repositorio; CR-032, D11). Garante singletons por processo.
 """
 import logging
 import os
@@ -14,7 +14,8 @@ from sss.core import masking
 from sss.core import security
 
 # O repo_fake nao vai no pacote de implantacao (README §12.2): e importado so no ramo FAKE, que so um teste
-# em DEV liga (F9.1d).
+# liga (F9.1d), e so onde existe a pasta dev/ da raiz (src/sss/persistence/ -> raiz).
+_APP_DEV_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "dev")
 
 _factory_lock = threading.RLock()
 _singletons = {}
@@ -42,10 +43,10 @@ def reset_singletons():
 
 
 def _resolve_config(config_param=None):
-    """Resolve (backend, sss_env) do parametro, do override ou do app_context.
+    """Resolve o backend do parametro, do override ou do app_context.
 
     O config.ini nao tem mais data_backend: sem a chave, o backend e ORACLE. So o dict de teste
-    passado a configurar() pode pedir FAKE. Sem configuracao, ou sem [app] sss_env, falha.
+    passado a configurar() pode pedir FAKE. Sem configuracao, falha.
     """
     cfg = config_param
     if cfg is None:
@@ -57,7 +58,7 @@ def _resolve_config(config_param=None):
 
     app = cfg["app"]
     backend = app.get("data_backend", "ORACLE") if isinstance(app, dict) else "ORACLE"
-    return str(backend).upper(), str(app["sss_env"]).upper()
+    return str(backend).upper()
 
 
 def _dev_seed_password():
@@ -102,16 +103,16 @@ def _oracle_class(normalized_name):
 def get(name, config=None):
     """Retorna a instancia singleton do repositorio solicitado.
 
-    Lanca RuntimeError se o FAKE (so de teste) for pedido fora de sss_env=DEV e ValueError para
+    Lanca RuntimeError se o FAKE (so de teste) for pedido onde nao ha a pasta dev/ e ValueError para
     um repositorio desconhecido.
     """
     global _fake_store
 
-    backend, env = _resolve_config(config)
+    backend = _resolve_config(config)
 
-    # Trava de ambiente estrita (README §2.5 e AGENTS §5.5)
-    if backend == "FAKE" and env != "DEV":
-        raise RuntimeError("FAKE (so de teste) e proibido fora de DEV (sss_env=%s)" % env)
+    # Trava estrita (README §2.5 e AGENTS §5.5; CR-032, D11): o FAKE so existe onde ha a pasta dev/.
+    if backend == "FAKE" and not os.path.isdir(_APP_DEV_DIR):
+        raise RuntimeError("FAKE (so de teste) e proibido fora do repositorio (sem a pasta dev/)")
 
     name_norm = str(name).lower().replace("repo_", "")
 

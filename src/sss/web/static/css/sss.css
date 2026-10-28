@@ -134,6 +134,8 @@
   --sss-focus: #5f0684;
 
   --sss-header-bg: #430463;
+  /* CR-032: cabecalho do DEV em outra cor, para nao confundir com o PROD. */
+  --sss-header-dev-bg: #7a2e0e;
   --sss-header-text: #ffffff;
   --sss-header-muted: #e2cdf0;
   --sss-header-focus: #68d8bd;
@@ -189,6 +191,7 @@
     --sss-focus: #68d8bd;
 
     --sss-header-bg: #2b0240;
+    --sss-header-dev-bg: #5c2209;
     --sss-header-text: #ffffff;
     --sss-header-muted: #d9c2ea;
     --sss-header-focus: #68d8bd;
@@ -293,7 +296,7 @@
   color: var(--sss-accent-text);
 }
 
-/* Faixa de ambiente nao produtivo (sss_env != PROD) */
+/* Faixa de ambiente nao produtivo (pasta <TIPO> diferente de PROD; CR-032) */
 .sss-env-banner {
   display: flex;
   align-items: center;
@@ -320,6 +323,10 @@
   color: var(--sss-header-text);
   /* Faixa no azul esverdeado da marca (conexao entre as cores principais). */
   border-bottom: 3px solid var(--sss-header-stripe);
+}
+
+.sss-header.sss-header-dev {
+  background-color: var(--sss-header-dev-bg);
 }
 
 .sss-header :focus-visible {

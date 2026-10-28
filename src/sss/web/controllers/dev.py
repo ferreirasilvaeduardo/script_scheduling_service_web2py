@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Vitrine do layout para desenvolvimento. Nao implantado em HML/PROD (README §12.2)."""
+"""Vitrine do layout para desenvolvimento. Nao vai no pacote de implantacao (README §12.2; CR-032, D11)."""
 import datetime
 import re
 
-from sss.config import app_context
+from sss.config import sss_config
 from sss.ui import ui_helpers
 
 from sss.web.app.context import HTTP, URL, request, response
@@ -12,7 +12,7 @@ from sss.web.app.security import require_login as _require_login
 
 
 def _require_dev():
-    if app_context.require_config().app.sss_env != "DEV":
+    if not sss_config.has_dev_dir():
         raise HTTP(404)
 
 

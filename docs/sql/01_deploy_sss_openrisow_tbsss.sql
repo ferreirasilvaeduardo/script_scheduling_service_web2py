@@ -316,9 +316,7 @@ CREATE TABLE openrisow.tbsss_control (
     id NUMBER(10) NOT NULL,
     schema_version NUMBER(6) NOT NULL,
     version_applied_at DATE NOT NULL,
-    version_applied_by VARCHAR2(40 CHAR) NOT NULL,
-    purge_owner VARCHAR2(40 CHAR),
-    purge_lease_until DATE
+    version_applied_by VARCHAR2(40 CHAR) NOT NULL
 );
 
 CREATE TABLE openrisow.tbsss_ticket_output (
@@ -1377,8 +1375,6 @@ COMMENT ON COLUMN openrisow.tbsss_control.id IS 'Identificador unico da linha de
 COMMENT ON COLUMN openrisow.tbsss_control.schema_version IS 'Numero da versao estrutural do banco de dados atualmente instalada';
 COMMENT ON COLUMN openrisow.tbsss_control.version_applied_at IS 'Data e hora de aplicacao da versao de esquema atual';
 COMMENT ON COLUMN openrisow.tbsss_control.version_applied_by IS 'Identificador de quem realizou a aplicacao do esquema';
-COMMENT ON COLUMN openrisow.tbsss_control.purge_owner IS 'Identificador do no que detem a concessao de purga de dados';
-COMMENT ON COLUMN openrisow.tbsss_control.purge_lease_until IS 'Data e hora limite de expiracao da concessao de purga';
 COMMENT ON TABLE openrisow.tbsss_ticket_output IS 'Zip da pasta de saida de cada ticket, gravado pelo agente (CR-012)';
 COMMENT ON COLUMN openrisow.tbsss_ticket_output.id IS 'Identificador unico sequencial da saida (chave primaria)';
 COMMENT ON COLUMN openrisow.tbsss_ticket_output.ticket_id IS 'Ticket dono da saida (FK para tbsss_tickets, removida em cascata)';
@@ -1402,7 +1398,7 @@ COMMENT ON COLUMN openrisow.tbsss_input_upload.size_bytes IS 'Tamanho do arquivo
 COMMENT ON COLUMN openrisow.tbsss_input_upload.sha256 IS 'Hash SHA-256 do conteudo, conferido pelo agente na entrega';
 COMMENT ON COLUMN openrisow.tbsss_input_upload.replace_existing IS 'Se pode substituir um arquivo com o mesmo nome (Y ou N)';
 COMMENT ON COLUMN openrisow.tbsss_input_upload.source_ip IS 'Endereco IP de quem enviou';
-COMMENT ON COLUMN openrisow.tbsss_input_upload.content IS 'Conteudo do arquivo (BLOB), esvaziado pelo purge depois das entregas';
+COMMENT ON COLUMN openrisow.tbsss_input_upload.content IS 'Conteudo do arquivo (BLOB), mantido ate a limpeza manual (README 11.3)';
 COMMENT ON COLUMN openrisow.tbsss_input_upload.created_at IS 'Data e hora da criacao do registro no banco de dados (imutavel)';
 COMMENT ON COLUMN openrisow.tbsss_input_upload.created_by IS 'Identificador do usuario ou servico responsavel pela criacao (imutavel)';
 COMMENT ON COLUMN openrisow.tbsss_input_upload.updated_at IS 'Data e hora da ultima alteracao de negocio (nulo ate a primeira alteracao)';
@@ -5404,8 +5400,6 @@ COMMIT;
 
 -- papel web: usa a conta dona do esquema (openrisow); nenhum GRANT necessario
 -- papel agent: usa a conta dona do esquema (openrisow); nenhum GRANT necessario
--- papel purge: conta nao informada; nenhum GRANT gerado
--- papel monitor: conta nao informada; nenhum GRANT gerado
 
 PROMPT Implantacao do SSS concluida com sucesso!
 EXIT;

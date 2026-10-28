@@ -34,7 +34,7 @@ sys.dont_write_bytecode = True
 from sss.config import sss_config  # noqa: E402
 
 DEFAULT_ROOT = _APP_DIR  # CR-022a: a aplicacao e a raiz do repositorio
-BIN = ("sss-web.sh", "sss-scheduler.sh", "sss-stop.sh", "sss-update.sh", "sss-keepalive.sh", "sss-helper")
+BIN = ("sss-web.sh", "sss-scheduler.sh", "sss-stop.sh", "sss-update.sh", "sss-keepalive.sh")
 # Da raiz so entram estas pastas e arquivos da aplicacao (lista de permissao, CR-022a): o resto da raiz
 # (.git, Makefile, CLAUDE.md, input/, output/, logs/...) e da maquina de desenvolvimento.
 APP_DIRS = ("docs", "instance", "scripts", "src")

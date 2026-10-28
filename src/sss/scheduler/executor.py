@@ -42,11 +42,9 @@ class PreservedDirectory(RuntimeError):
 class Execution(object):
     """Um ticket em execucao (ou que falhou ao iniciar) no mapa local do agente."""
 
-    def __init__(self, ticket_id, work_dir_ticket, exec_user, base_dir, log_path):
+    def __init__(self, ticket_id, work_dir_ticket, log_path):
         self.ticket_id = ticket_id
         self.work_dir_ticket = work_dir_ticket
-        self.exec_user = exec_user
-        self.base_dir = base_dir
         self.log_path = log_path
         self.process = None
         self.pid = None
@@ -143,29 +141,6 @@ def open_log(log_dir, environment, script_name, started_at, ticket_id, script_id
     return fd, path
 
 
-def build_spec(ticket_id, argv, env, rlimits, base_dir, output=None, input_value=None, work=None):
-    """Especificacao do helper run (README §8.0), serializada em JSON pela plataforma.
-
-    saida: (base, relativo) da pasta de saida do ticket (CR-012), que o helper cria antes do script.
-    entrada: (base, relativo) da pasta de entrada do script (CR-014), que o helper cria se nao existir.
-    work: (base, relativo) da pasta de trabalho do ticket (CR-019), que o helper cria antes do script.
-    """
-    spec = {
-        "ticket_id": int(ticket_id),
-        "argv": list(argv),
-        "env": dict(env),
-        "rlimits": dict((name, [int(pair[0]), int(pair[1])]) for name, pair in (rlimits or {}).items()),
-        "base_dir": base_dir,
-    }
-    if output is not None:
-        spec["output"] = {"base": output[0], "relativo": output[1]}
-    if input_value is not None:
-        spec["input"] = {"base": input_value[0], "relativo": input_value[1]}
-    if work is not None:
-        spec["work"] = {"base": work[0], "relativo": work[1]}
-    return spec
-
-
 # -----------------------------------------------------------------------------
 # Spawn
 # -----------------------------------------------------------------------------
@@ -194,12 +169,12 @@ def _spawn_failure(execution, log_fd, error, agent):
 def failure_before_spawn(log_fd, ticket_id, error, label, work_dir_ticket=None):
     """SPAWN_ERROR depois de open_log e antes de iniciar (ex.: excecao no env_builder): grava a linha [SSS],
     fecha o descritor e renomeia o parcial para ticket_<id>_0.log, como em iniciar (README §8.4, passo 3)."""
-    execution = Execution(int(ticket_id), work_dir_ticket, None, None, _open_logs.pop(log_fd, None))
+    execution = Execution(int(ticket_id), work_dir_ticket, _open_logs.pop(log_fd, None))
     return _spawn_failure(execution, log_fd, error, _agent_from_label(label))
 
 
-def start(ticket_id, argv, log_fd, env, work_dir_ticket, exec_user, exec_work_dir, rlimits, label,
-            output=None, input_value=None, work=None):
+def start(ticket_id, argv, log_fd, env, work_dir_ticket, rlimits, label,
+          output=None, input_value=None, work=None):
     """Inicia o script e devolve a Execucao (README §8.4 passos 3 a 5; CR-008 R-01).
 
     Ordem: .sss_spawn -> os_platform.start_process -> rename do log para ticket_<id>_<PID>.log ->
@@ -207,39 +182,33 @@ def start(ticket_id, argv, log_fd, env, work_dir_ticket, exec_user, exec_work_di
     ticket_<id>_0.log. Qualquer falha depois dele: failed_after_spawn e SIGTERM ao grupo (sem esperar); o
     chamador acompanha a execucao ate o grupo acabar e so entao finaliza SPAWN_ERROR.
 
-    saida: (base, relativo) da pasta de saida (CR-012): o helper run a cria; em DEV, a plataforma.
+    saida: (base, relativo) da pasta de saida (CR-012), criada pela plataforma antes do script.
     entrada: (base, relativo) da pasta de entrada (CR-014), permanente: idem, so se nao existir.
     work: (base, relativo) da pasta de trabalho (CR-019): como a saida, mas fica no disco depois do ticket.
     """
     agent = _agent_from_label(label)
-    dir_base = os.path.join(exec_work_dir, exec_user) if exec_user else None
-    execution = Execution(int(ticket_id), work_dir_ticket, exec_user, dir_base, _open_logs.pop(log_fd, None))
+    execution = Execution(int(ticket_id), work_dir_ticket, _open_logs.pop(log_fd, None))
     try:
         if execution.log_path is None:
             raise ValueError("log_fd nao foi aberto por abrir_log")
-        if exec_user:
-            spec = build_spec(ticket_id, argv, env, rlimits, dir_base, output, input_value, work)
-        else:
-            # DEV sem usuario de execucao: o cwd e a pasta exec de work_dir/ticket_<id> (CR-008, R-36).
-            cwd = os_platform.create_work_dir(os.path.join(work_dir_ticket, "exec"))
-            os_platform.create_work_dir(os.path.join(cwd, "tmp"))
-            spec = {"argv": list(argv), "cwd": cwd, "env": dict(env), "rlimits": dict(rlimits or {})}
-            if output is not None:
-                os_platform.create_output_dir(output[0], output[1])
-            if input_value is not None:
-                os_platform.create_input_dir(input_value[0], input_value[1])
-            if work is not None:
-                os_platform.create_script_work_dir(work[0], work[1])
+        # O cwd e a pasta exec de work_dir/ticket_<id> (CR-008, R-36), apagada com ela no fim do ticket.
+        cwd = os_platform.create_work_dir(os.path.join(work_dir_ticket, "exec"))
+        os_platform.create_work_dir(os.path.join(cwd, "tmp"))
+        spec = {"argv": list(argv), "cwd": cwd, "env": dict(env), "rlimits": dict(rlimits or {})}
+        if output is not None:
+            os_platform.create_output_dir(output[0], output[1])
+        if input_value is not None:
+            os_platform.create_input_dir(input_value[0], input_value[1])
+        if work is not None:
+            os_platform.create_script_work_dir(work[0], work[1])
         os_platform.write_state(os.path.join(work_dir_ticket, SPAWN), {
-            "ticket_id": int(ticket_id), "exec_user": exec_user,
+            "ticket_id": int(ticket_id),
             "monotonic": time.monotonic(), "wall": time.time()})
     except Exception as e:  # noqa: BLE001 - CR-007 R-17: qualquer excecao no spawn e SPAWN_ERROR
         return _spawn_failure(execution, log_fd, e, agent)
 
     try:
-        process = os_platform.start_process(spec, log_fd, exec_user)
-    except os_platform.FailureAfterSpawn as f:
-        return _after_spawn_failed(execution, f.process, log_fd, f.cause, agent)
+        process = os_platform.start_process(spec, log_fd)
     except Exception as e:  # noqa: BLE001
         return _spawn_failure(execution, log_fd, e, agent)
 
@@ -254,7 +223,7 @@ def start(ticket_id, argv, log_fd, env, work_dir_ticket, exec_user, exec_work_di
         process.identity = execution.identity
         os_platform.write_state(os.path.join(work_dir_ticket, PROC), {
             "ticket_id": execution.ticket_id, "pid": process.pid, "pgid": process.pgid,
-            "process_start": execution.identity, "exec_user": exec_user})
+            "process_start": execution.identity})
     except Exception as e:  # noqa: BLE001
         return _after_spawn_failed(execution, process, log_fd, e, agent)
     os.close(log_fd)
@@ -370,14 +339,12 @@ def append_local_line(execution, text):
 
 
 def clean(execution):
-    """Remove work_dir/ticket_<id>/ e, pelo helper, o diretorio do script (CR-008, R-26 e R-36).
+    """Remove work_dir/ticket_<id>/, com o diretorio do script dentro dela (CR-008, R-26 e R-36).
 
     So depois de o grupo estar vazio: com membros vivos, lanca RuntimeError e nada e apagado.
     """
     if execution.process is not None and os_platform.group_alive(execution.process):
         raise RuntimeError("ticket %s: grupo ainda tem processos" % execution.ticket_id)
-    if execution.exec_user:
-        os_platform.clean_script_dir(execution.base_dir, execution.ticket_id, execution.exec_user)
     dir_value = execution.work_dir_ticket
     if os.path.basename(dir_value) != "ticket_%d" % execution.ticket_id or os.path.islink(dir_value):
         raise RuntimeError("ticket %s: pasta de trabalho inesperada" % execution.ticket_id)

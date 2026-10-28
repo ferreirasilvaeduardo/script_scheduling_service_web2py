@@ -519,7 +519,7 @@ class TestSeedFake(unittest.TestCase):
     def setUp(self):
         from sss.persistence import repo_factory
         self.repo_factory = repo_factory
-        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE"}})
         repo_factory.reset_singletons()
         self.catalog = repo_factory.get("catalog")
 

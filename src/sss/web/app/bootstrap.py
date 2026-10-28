@@ -2,10 +2,10 @@
 """Montagem do servidor web (CR-021e): configuracao, controllers, views e o Application.
 
 Era o models/00_config.py mais o despacho do web2py. Os controllers ficam num registro de imports
-explicitos (o projeto proibe import dinamico); o ``dev`` so entra com ``sss_env = DEV`` e se o
-arquivo existir, porque nao vai no pacote (um DEV instalado pelo pacote roda sem ele, como no
-web2py). Action e toda funcao definida no proprio modulo do controller, sem '_' no inicio e sem
-parametro obrigatorio (como no web2py): nomes importados, como ``redirect``, nunca viram rota.
+explicitos (o projeto proibe import dinamico); o ``dev`` so entra se o arquivo existir, porque
+nao vai no pacote (CR-032, D11: o comportamento nao depende do ambiente). Action e toda funcao
+definida no proprio modulo do controller, sem '_' no inicio e sem parametro obrigatorio (como no
+web2py): nomes importados, como ``redirect``, nunca viram rota.
 """
 import inspect
 import os
@@ -47,9 +47,9 @@ def controllers(cfg: Any) -> Dict[str, ModuleType]:
     registry = {module.__name__.rsplit(".", 1)[1]: module for module in (
         admin_environments, admin_parameters, admin_profiles, admin_scripts, admin_users, audit,
         default, inputs, logs, outputs, schedules, tickets)}
-    if cfg.app.sss_env == "DEV" and os.path.isfile(DEV_CONTROLLER):
-        # Fora do pacote de implantacao (README §12.2): so em DEV e so se estiver presente (achado
-        # no ensaio do pacote do CR-021f3: sem o arquivo, o servidor nao subia).
+    if os.path.isfile(DEV_CONTROLLER):
+        # Fora do pacote de implantacao (README §12.2): so se estiver presente (achado no ensaio do
+        # pacote do CR-021f3: sem o arquivo, o servidor nao subia).
         from sss.web.controllers import dev
         registry["dev"] = dev
     return registry

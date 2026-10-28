@@ -2,8 +2,8 @@
 """Fase de saida do ticket no agente (CR-012, README §8.7 e §8.13): maquina de estados sem espera.
 
 Duas etapas:
-  1. empacotar, depois do grupo encerrado e antes do flush final (o ticket ainda esta RUNNING): o helper
-     empacotar roda num grupo proprio, acompanhado por poll() e com prazo fixo; a linha [SSS] de excesso ou
+  1. empacotar, depois do grupo encerrado e antes do flush final (o ticket ainda esta RUNNING): o pack
+     (ticket_files) roda num grupo proprio, acompanhado por poll() e com prazo fixo; a linha [SSS] de excesso ou
      falha vai para o arquivo de log local e chega ao banco no flush final;
   2. gravar, depois da finalizacao: a linha da saida (GRAVANDO, partes de 1 MiB, DISPONIVEL; ou EXCEDEU/FALHOU
      sem conteudo) pelo repo_oracle/scheduler_output, com posse em toda gravacao e COMMIT por passo.
@@ -40,11 +40,10 @@ OWNERSHIP_LOST = "OWNERSHIP_LOST"
 class Output(object):
     """Pasta de saida de um ticket: base (output_dir/<ambiente>), relativo e o estado das duas etapas."""
 
-    def __init__(self, ticket_id, base, relative, exec_user, work_dir_ticket):
+    def __init__(self, ticket_id, base, relative, work_dir_ticket):
         self.ticket_id = int(ticket_id)
         self.base = base
         self.relative = relative
-        self.exec_user = exec_user
         self.zip_path = os.path.join(work_dir_ticket, ZIP_NAME)
         self.process = None
         self.deadline = None
@@ -69,12 +68,11 @@ class Output(object):
 
 
 def start_pack(output, plat, max_bytes, max_files, now):
-    """Abre o zip local (0600, do agente) e inicia o helper empacotar sem esperar."""
+    """Abre o zip local (0600, do agente) e inicia o pack sem esperar."""
     try:
         fd = os.open(output.zip_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:
-            output.process = plat.start_pack(output.base, output.relative, max_bytes, max_files, fd,
-                                                    output.exec_user)
+            output.process = plat.start_pack(output.base, output.relative, max_bytes, max_files, fd)
         finally:
             os.close(fd)
     except Exception as exc:  # noqa: BLE001 - qualquer falha local: FALHOU (o ticket segue)
@@ -132,7 +130,7 @@ def _check_zip(output):
 
 
 def abandon(output, plat):
-    """Parada do agente durante o empacotamento: encerra o helper; a pasta fica no disco (README §8.13)."""
+    """Parada do agente durante o empacotamento: encerra o pack; a pasta fica no disco (README §8.13)."""
     if output.process is not None and not output.packed and output.process.popen.poll() is None:
         plat.signal_group(output.process, signal.SIGKILL)
     output.result, output.reason = ABANDONED, None
@@ -202,8 +200,8 @@ def _already_written(conn, repo, output, agent_id, state_value):
 
 
 def remove_dir(output, plat):
-    """Com o zip gravado (ou a pasta vazia), a pasta de saida sai pelo helper; as de cima ficam (limpeza manual, README §11.3)."""
-    plat.clean_output(output.base, output.relative, output.exec_user)
+    """Com o zip gravado (ou a pasta vazia), a pasta de saida sai pelo clean-output; as de cima ficam (limpeza manual, README §11.3)."""
+    plat.clean_output(output.base, output.relative)
 
 
 def should_remove_dir(output):

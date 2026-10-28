@@ -8,7 +8,7 @@ no servidor de banco de dados.
 Produz (CR-024: owner e prefixo no nome, ex.: 01_deploy_sss_openrisow_tbsss.sql):
   - 01_deploy_sss_<owner>_<prefixo>.sql      : DDL, DML Seed (ambientes, controle, perfil admin), Estatisticas
   - 02_rollback_sss_<owner>_<prefixo>.sql    : Desinstalacao total e limpa (Drop triggers, tabelas, sequences)
-  - 03_grants_sss_<owner>_<prefixo>.sql      : Privilegios minimos por papel (web, agente, monitor; CR-030: sem purge) [opcional]
+  - 03_grants_sss_<owner>_<prefixo>.sql      : Privilegios minimos por papel (web e agente; CR-032: sem monitor) [opcional]
   - 99_validate_deploy_<owner>_<prefixo>.sql : Conferencia do esquema implantado
 """
 import argparse
@@ -36,7 +36,7 @@ def main(argv=None):
     parser.add_argument("--lob-basicfile", dest="lob_basicfile", action="store_true", help="Fallback LOB BASICFILE")
     parser.add_argument("--out-dir", dest="out_dir", default="docs/sql", help="Diretorio de destino dos arquivos .sql")
     parser.add_argument("--grants-to", dest="grants_para", default=None,
-                        help="web=u1,agent=u2,monitor=u3 (padrao: contas do config.ini; nunca PUBLIC)")
+                        help="web=u1,agent=u2 (padrao: contas do config.ini; nunca PUBLIC)")
     parser.add_argument("--admin-login", dest="admin_login", default=None, help="Login do administrador inicial no seed")
     parser.add_argument("--admin-name", dest="admin_nome", default=None, help="Nome do administrador inicial")
     parser.add_argument("--admin-password-hash", dest="admin_senha_hash", default=None, help="Hash PBKDF2 da senha admin")
@@ -97,8 +97,8 @@ def main(argv=None):
             role, usr = p.split("=", 1)
             roles_grants[role.strip().lower()] = usr.strip()
     elif cfg is not None:
-        # web e agente usam [oracle] user (cada no le o seu config.ini). A conta do monitor fica no
-        # secrets.cfg: so por --grants-to. CR-030: sem o papel purge.
+        # web e agente usam [oracle] user (cada no le o seu config.ini). CR-030: sem o papel purge; CR-032 (D8):
+        # sem o monitor.
         usr_app = getattr(getattr(cfg, "oracle", None), "user", None)
         roles_grants = {"web": usr_app, "agent": usr_app}
     try:

@@ -58,8 +58,9 @@ def max_body_bytes() -> int:
 
 
 def secure_cookie(req: Any) -> bool:
-    """Secure sempre, menos em DEV sobre HTTP (o navegador descartaria o cookie, README §4.2)."""
-    return not (app_context.require_config().app.sss_env == "DEV" and not req.is_https)
+    """Secure so quando a requisicao chega por HTTPS: sobre HTTP o navegador descartaria o
+    cookie (README §4.2; CR-032, D11: o mesmo em DEV e PROD)."""
+    return bool(req.is_https)
 
 
 def path_info() -> str:
@@ -85,8 +86,7 @@ def before_request(ctx: Context) -> None:
     """Antes de toda action: liga a requisicao a thread e aplica sessao, CSRF e limites."""
     context.bind(ctx)
     cfg = app_context.require_config()
-    response.sss_env = cfg.app.sss_env
-    response.env_label = sss_config.env_label(cfg.app.sss_env)
+    response.env_label = sss_config.env_label()
     # Mesma versao do pacote e do log do agente (CR-022a; antes, um 0.1.0 fixo herdado do web2py).
     response.sss_version = sss_config.SSS_VERSION
     response.sss_menu = []
@@ -158,8 +158,9 @@ def _check_size() -> None:
 
 
 def _allowed_origins(cfg: Any) -> list:
+    """As allowed_origins mais o proprio Host da requisicao (CR-032, D11: igual em DEV e PROD)."""
     sources = list(cfg.web.allowed_origins)
-    if cfg.app.sss_env == "DEV" and request.env.http_host:
+    if request.env.http_host:
         sources.append(f"{request.env.wsgi_url_scheme}://{request.env.http_host}")
     return sources
 

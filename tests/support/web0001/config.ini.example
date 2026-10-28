@@ -1,6 +1,5 @@
 ; Modelo do NO WEB so para os testes (CR-032, D4): um config por processo; o log sai do name.
 [app]
-sss_env = DEV                     ; DEV | HML | PROD
 name = web0001
 
 [oracle]

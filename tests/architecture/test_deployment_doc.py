@@ -26,7 +26,7 @@ class TestDeploymentGuide(unittest.TestCase):
     def test_comandos_citados_existem(self):
         body = _body()
         missing = []
-        for name in sorted(set(re.findall(r"\bbin/([A-Za-z0-9_.-]+\.sh|sss-helper)\b", body))):
+        for name in sorted(set(re.findall(r"\bbin/([A-Za-z0-9_.-]+\.sh)\b", body))):
             if not os.path.isfile(os.path.join(ROOT, "bin", name)):
                 missing.append("bin/" + name)
         for folder in ("scripts", "tools"):

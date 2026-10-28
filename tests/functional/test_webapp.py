@@ -96,24 +96,23 @@ class RegistryTest(unittest.TestCase):
     """Registro dos controllers e rotas expostas."""
 
     @staticmethod
-    def _cfg(env):
-        return types.SimpleNamespace(app=types.SimpleNamespace(sss_env=env))
+    def _cfg():
+        return types.SimpleNamespace(app=types.SimpleNamespace(name="web0001"))
 
-    def test_registry_matches_files_and_dev_only_in_dev(self):
-        """Todo controllers/*.py esta no registro; o dev so com sss_env = DEV."""
+    def test_registry_matches_files(self):
+        """Todo controllers/*.py esta no registro, o dev inclusive quando o arquivo existe (CR-032, D11)."""
         files = {name[:-3] for name in os.listdir(os.path.join(_testenv.WEB_DIR, "controllers"))
                  if name.endswith(".py") and name != "__init__.py"}
-        self.assertEqual(set(bootstrap.controllers(self._cfg("DEV"))), files)
-        self.assertEqual(set(bootstrap.controllers(self._cfg("PROD"))), files - {"dev"})
+        self.assertEqual(set(bootstrap.controllers(self._cfg())), files)
 
     def test_dev_without_file_is_not_registered(self):
-        """DEV instalado pelo pacote (sem controllers/dev.py): o servidor sobe sem a rota dev."""
+        """Instalado pelo pacote (sem controllers/dev.py): o servidor sobe sem a rota dev."""
         with mock.patch.object(bootstrap, "DEV_CONTROLLER", os.path.join(APP_DIR, "nao_existe.py")):
-            self.assertNotIn("dev", bootstrap.controllers(self._cfg("DEV")))
+            self.assertNotIn("dev", bootstrap.controllers(self._cfg()))
 
     def test_only_module_functions_are_actions(self):
         """Nome importado (redirect, URL, HTTP, guardas) nunca vira rota; privada e com parametro tambem nao."""
-        registry = bootstrap.controllers(self._cfg("DEV"))
+        registry = bootstrap.controllers(self._cfg())
         imported = {"redirect", "URL", "HTTP", "request", "response", "session"}
         for name, module in registry.items():
             exposed = bootstrap.actions(module)
@@ -126,9 +125,10 @@ class RegistryTest(unittest.TestCase):
 
     def test_resolver(self):
         """Rota conhecida devolve a action sem argumentos; desconhecida, None."""
-        resolve = bootstrap.make_resolver(bootstrap.controllers(self._cfg("PROD")))
+        with mock.patch.object(bootstrap, "DEV_CONTROLLER", os.path.join(APP_DIR, "nao_existe.py")):
+            resolve = bootstrap.make_resolver(bootstrap.controllers(self._cfg()))
         self.assertIsNone(resolve(Route("default", "redirect", "html", [])))
-        self.assertIsNone(resolve(Route("dev", "shell", "html", [])))
+        self.assertIsNone(resolve(Route("dev", "shell", "html", [])), "pacote sem controllers/dev.py")
         self.assertIsNone(resolve(Route("nada", "index", "html", [])))
         self.assertTrue(callable(resolve(Route("default", "login", "html", []))))
 
@@ -140,7 +140,7 @@ class SecurityHooksTest(unittest.TestCase):
         previous = app_context.get_config()
         self.addCleanup(app_context.set_config, previous)
         self.cfg = types.SimpleNamespace(
-            app=types.SimpleNamespace(sss_env="HML"),
+            app=types.SimpleNamespace(name="web0001"),
             web=types.SimpleNamespace(input_upload_max_bytes=1000, allowed_origins=("https://sss",),
                                       trusted_proxies=(), session_idle_timeout_s=1800,
                                       session_max_hours=12))
@@ -160,7 +160,7 @@ class SecurityHooksTest(unittest.TestCase):
         self.assertTrue(ctx.session.csrf_token, "token CSRF criado na primeira visita")
         from sss.config import sss_config  # pylint: disable=import-outside-toplevel
         self.assertEqual(ctx.response.sss_version, sss_config.SSS_VERSION, "rodape com a versao do pacote")
-        self.assertEqual(ctx.response.env_label, sss_config.env_label("HML"), "CR-028 (D12): faixa e rodape")
+        self.assertEqual(ctx.response.env_label, sss_config.env_label(), "CR-028 (D12): faixa e rodape")
 
     def test_post_size_origin_and_csrf(self):
         """POST acima do limite: 413; Origin de fora: 403; token errado ou ausente: 403; certo passa."""
@@ -179,6 +179,19 @@ class SecurityHooksTest(unittest.TestCase):
                 with self.assertRaises(HTTP) as raised:
                     security.before_request(ctx)
                 self.assertEqual(raised.exception.status, status)
+
+    def test_cr032_own_host_origin_and_secure_cookie_only_on_https(self):
+        """CR-032 (D11): o proprio Host vale como origem, e o cookie e Secure so sob HTTPS, em DEV e PROD."""
+        ctx = _context(method="POST", body=b"_csrf=t", HTTP_ORIGIN="http://sss-dev:18000", HTTP_HOST="sss-dev:18000")
+        ctx.session.csrf_token = "t"
+        security.before_request(ctx)
+        ctx = _context(method="POST", body=b"_csrf=t", HTTP_ORIGIN="http://outro:18000", HTTP_HOST="sss-dev:18000")
+        ctx.session.csrf_token = "t"
+        with self.assertRaises(HTTP) as raised:
+            security.before_request(ctx)
+        self.assertEqual(raised.exception.status, 403)
+        self.assertFalse(security.secure_cookie(types.SimpleNamespace(is_https=False)))
+        self.assertTrue(security.secure_cookie(types.SimpleNamespace(is_https=True)))
 
     def test_csrf_header_for_fetch(self):
         """fetch manda o token no X-CSRF-Token (sem corpo de formulario)."""
@@ -216,7 +229,7 @@ class RunWebCheckTest(unittest.TestCase):
     def setUp(self):
         from sss.cli import run_web  # pylint: disable=import-outside-toplevel
         self.run_web = run_web
-        cfg = types.SimpleNamespace(app=types.SimpleNamespace(sss_env="DEV"))
+        cfg = types.SimpleNamespace(app=types.SimpleNamespace(name="web0001"))
         for name, value in (("load_config", mock.Mock(return_value=cfg)),
                             ("make_app", mock.Mock())):
             patcher = mock.patch.object(run_web.bootstrap, name, value)
@@ -230,7 +243,7 @@ class RunWebCheckTest(unittest.TestCase):
         """Configuracao valida: CONFIG_OK com o ambiente, saida 0, make_server nunca chamado."""
         with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
             self.assertEqual(self.run_web.main(["--check", "--config", "x.ini"]), 0)
-        self.assertEqual(out.getvalue().strip(), "CONFIG_OK sss_env=DEV")
+        self.assertEqual(out.getvalue().strip(), "CONFIG_OK ambiente=%s" % self.run_web.sss_config.env_label())
         self.run_web.bootstrap.load_config.assert_called_once_with("x.ini")
         self.make_server.assert_not_called()
 

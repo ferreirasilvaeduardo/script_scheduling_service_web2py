@@ -59,7 +59,7 @@ class AppContextTest(unittest.TestCase):
 
     def test_require_returns_config(self):
         """require_config devolve a configuracao gravada."""
-        cfg = {"app": {"sss_env": "DEV"}}
+        cfg = {"app": {}}
         app_context.set_config(cfg)
         self.assertIs(app_context.require_config(), cfg)
 
@@ -91,7 +91,7 @@ class ModulesWithoutGluonTest(unittest.TestCase):
                            if not (base == top and d in skipped) and d != "__pycache__"]
                 for name in files:
                     path = os.path.join(base, name)
-                    if not (name.endswith(".py") or name == "sss-helper"):
+                    if not name.endswith(".py"):
                         continue
                     with io.open(path, encoding="utf-8") as handle:
                         source = handle.read()
