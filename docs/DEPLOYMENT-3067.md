@@ -35,84 +35,31 @@ O pedido foi escrito para uma versão anterior do SSS. Este roteiro segue o cód
 | `base_script_dir` | `[agent] script_base_dir`; o padrão é `<RAIZ>/scripts_ambiente/` (passo 10) |
 | `agent_id` e `ambientes_atendidos` | O `agent_id` é o `[app] name`; os ambientes ficam em `[agent] environments` |
 | `sondar_driver` | `scripts/probe_driver.py` e `scripts/check_env.py --name` (passos 3 e 11) |
+| `scp`/`rsync` com `ProxyJump` | A transferência é manual, pela equipe (decisão do responsável): o passo 5 lista os arquivos e confere os `sha256` no 3067 |
 
 ---
 
 ## 1. Antes de começar
 
 * Janela combinada e acesso ao cofre com: a senha da conta `openrisow` no GFPR e as contas (usuário e senha) dos bancos dos cinco ambientes (GFPREPROD, CLONE2, CLONE1, CLONE6, CLONE7).
-* Na máquina de origem: a pasta da aplicação de referência (nesta máquina, `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`). O pacote sai dos arquivos dela como estão, sem git, sem config e sem senha locais. Também: Python 3.6 ou superior, `make`, `rsync`, `tar` e OpenSSH 7.3 ou superior (`ProxyJump`).
+* Na máquina de origem: a pasta da aplicação de referência (nesta máquina, `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`). O pacote sai dos arquivos dela como estão, sem git, sem config e sem senha locais. Também: Python 3.6 ou superior, `make`, `rsync`, `tar`.
 * Abra um registro da execução (passo 17) e anote cada conferência com o resultado.
 
 ---
 
-## 2. Acesso SSH pelo bastion
+## 2. Acesso ao 3067
 
-Tudo o que o acesso usa fica numa pasta própria, `~/.ssh/sss_3067/`: o config, uma chave dedicada, os `known_hosts` e a conexão mestra. O roteiro não depende do `~/.ssh/config` nem das chaves de quem executa, e não precisa de `sudo`. Todo `ssh`, `scp` e `rsync` deste documento usa `-F "$SSH_CFG"`, e o OpenSSH repassa o `-F` ao salto do `ProxyJump`.
-
-### 2.1 Pasta, config e chave na máquina de origem
+Os passos 3 e 6 a 16 rodam numa sessão de terminal no 3067, com a conta `mastersafgf`. O 3067 só é alcançado pelo bastion (passo 0). Abra a sessão pelo meio habitual da equipe e confira:
 
 ```bash
-S=$HOME/.ssh/sss_3067; mkdir -m 0700 -p "$S"
-cat > "$S/config" <<EOF
-Host sss-bastion
-    HostName 10.238.10.109
-    User mastersafgf
-Host sss-3067
-    HostName 10.129.164.55
-    User mastersafgf
-    ProxyJump sss-bastion
-Host sss-bastion sss-3067
-    IdentityFile $S/id_rsa
-    IdentitiesOnly yes
-    UserKnownHostsFile $S/known_hosts
-    HostKeyAlgorithms +ssh-rsa
-    PubkeyAcceptedAlgorithms +ssh-rsa
-    ServerAliveInterval 30
-    ControlMaster auto
-    ControlPath $S/cm-%r@%h-%p
-    ControlPersist 30m
-EOF
-chmod 0600 "$S/config"
-[ -f "$S/id_rsa" ] || ssh-keygen -t rsa -b 3072 -N '' -f "$S/id_rsa" -C "sss-3067-$(whoami)@$(hostname)"
-ssh-keygen -lf "$S/id_rsa.pub"                # registre a impressão digital (passo 17)
-export SSH_CFG=$S/config                     # em toda sessão nova que for usar o acesso
-```
-
-A chave é RSA porque o 3067 e o bastion só aceitam os algoritmos `ssh-rsa`. Ela fica sem frase-senha só para esta implantação, protegida pela pasta `0700`, e é removida no fim (passo 2.3). Quem preferir frase-senha troca o `-N ''` por `-N '<frase>'` e usa `ssh-agent`.
-
-Primeira conexão ao bastion: o `ssh` mostra a impressão digital da chave do servidor e pede confirmação. Confira-a com a equipe do bastion antes de responder `yes`. Depois, ele pede a senha do bastion:
-
-```bash
-ssh -F "$SSH_CFG" sss-bastion 'hostname; whoami'   # esperado: brtlvlts1216pl / mastersafgf
-```
-
-### 2.2 Chave autorizada no destino (uma vez)
-
-O `ProxyJump` só repassa a conexão TCP. Quem se autentica no 3067 é a máquina de origem, com a chave dela, e hoje o 3067 só confia na chave do bastion. Autorize a chave dedicada pelo próprio bastion:
-
-```bash
-cat "$S/id_rsa.pub" | ssh -F "$SSH_CFG" sss-bastion \
-  'ssh -o BatchMode=yes mastersafgf@10.129.164.55 "umask 077; mkdir -p ~/.ssh; cat >> ~/.ssh/authorized_keys"'
-ssh -F "$SSH_CFG" -o BatchMode=yes sss-3067 'hostname; whoami'   # esperado: brtlvlty3067sl / mastersafgf
-```
-
-Na primeira conexão ao `sss-3067`, o `ssh` pede para confirmar a chave do 3067. A senha do bastion só é pedida de novo se a conexão mestra tiver expirado (30 min sem uso).
-
-### 2.3 Fim do trabalho
-
-Se o acesso não deve ficar, tire a chave do 3067 e apague a pasta:
-
-```bash
-ssh -F "$SSH_CFG" sss-3067 "sed -i '/sss-3067-$(whoami)@$(hostname)/d' ~/.ssh/authorized_keys"
-ssh -F "$SSH_CFG" -O exit sss-bastion 2>/dev/null; rm -rf "$HOME/.ssh/sss_3067"
+hostname; whoami                              # esperado: brtlvlty3067sl / mastersafgf
 ```
 
 ---
 
 ## 3. Pré-checagem no 3067 (só leitura)
 
-Nada é criado nem alterado neste passo. Rode numa sessão `ssh -F "$SSH_CFG" sss-3067`.
+Nada é criado nem alterado neste passo. Rode na sessão do passo 2.
 
 ### 3.1 Conta, disco e sistema
 
@@ -232,19 +179,30 @@ tar -tzf "$PKG/utilitarios.tar.gz" | grep -c '\.\(py\|sh\)$'          # esperado
 
 ---
 
-## 5. Transferência pelo bastion
+## 5. Transferência dos arquivos para o 3067
 
-Direto da origem para o 3067, pelo `ProxyJump`. Nada fica gravado no bastion.
+**É necessário levar ao 3067 os quatro arquivos da pasta `$PKG` do passo 4.2:**
+
+| Arquivo | Conteúdo |
+|---|---|
+| `sss-1.0.0-dev.tar.gz` | A aplicação (com os scripts SQL `s3dev` e `s3prd` em `docs/sql/`) |
+| `utilitarios.tar.gz` | Os 14 scripts de exemplo do seed (passo 10) |
+| `SHA256SUMS` | As impressões digitais dos dois `.tar.gz` |
+| `ORIGEM` | A pasta e a hora em que o pacote foi gerado |
+
+O destino é a pasta `~/sss_pacote` da conta `mastersafgf` no 3067 (`/home/mastersafgf/sss_pacote` ou o `$HOME` da conta). A transferência é feita pela equipe, pelo meio habitual, passando pelo bastion. Os arquivos não têm senha, mas não os deixe em pasta compartilhada do bastion. Antes de transferir, crie a pasta no 3067:
 
 ```bash
-ssh -F "$SSH_CFG" sss-3067 'mkdir -m 0700 -p ~/sss_pacote'
-scp -F "$SSH_CFG" "$PKG"/sss-*.tar.gz "$PKG"/utilitarios.tar.gz "$PKG"/SHA256SUMS "$PKG"/ORIGEM sss-3067:sss_pacote/
-# equivalente com rsync (retoma uma cópia interrompida):
-# rsync -av --partial -e "ssh -F $SSH_CFG" "$PKG"/ sss-3067:sss_pacote/
-ssh -F "$SSH_CFG" sss-3067 'cd ~/sss_pacote && sha256sum -c SHA256SUMS && cat ORIGEM'
+mkdir -m 0700 -p ~/sss_pacote
 ```
 
-Esperado: `OK` em cada arquivo e o mesmo `ORIGEM` do passo 4.2. O salto pelo bastion vem do `ProxyJump` do config (passo 2.1). Sem o config, a forma explícita é `scp -J mastersafgf@10.238.10.109 ... mastersafgf@10.129.164.55:sss_pacote/`, ou `-o ProxyCommand="ssh -W %h:%p mastersafgf@10.238.10.109"` num cliente sem `-J`.
+Depois da transferência, confira no 3067:
+
+```bash
+cd ~/sss_pacote && ls -l && sha256sum -c SHA256SUMS && cat ORIGEM
+```
+
+Esperado: os quatro arquivos, `OK` nos dois `.tar.gz` e o mesmo `ORIGEM` do passo 4.2. Um arquivo com `FAILED` foi corrompido ou trocado no caminho: transfira de novo. Por fim, apague a cópia intermediária, se ela ficou no bastion.
 
 ---
 
@@ -505,12 +463,14 @@ curl -s -D - -o /dev/null http://127.0.0.1:$PORT/script_scheduling_service/defau
 curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origin: http://evil.example" -d "x=1" http://127.0.0.1:$PORT/script_scheduling_service/default/login   # 403
 ```
 
-Na estação do usuário, por túnel (o web atende só em `127.0.0.1`):
+Na estação do usuário: o web atende só em `127.0.0.1` do 3067. Por isso, o navegador chega a ele por um túnel SSH que encaminhe as portas locais 18000 e 18001 para `127.0.0.1:18000` e `127.0.0.1:18001` do 3067, passando pelo bastion, ou por um proxy da empresa (DEPLOYMENT §10.4). Com o túnel aberto:
 
-```bash
-ssh -F "$SSH_CFG" -N -L 18000:127.0.0.1:18000 -L 18001:127.0.0.1:18001 sss-3067   # o config e a chave do passo 2 nessa estação
-# navegador: http://127.0.0.1:18000/ (DEV, faixa amarela "AMBIENTE DEV") e http://127.0.0.1:18001/ (PROD, sem faixa)
+```text
+http://127.0.0.1:18000/   DEV, com a faixa amarela "AMBIENTE DEV"
+http://127.0.0.1:18001/   PROD, sem faixa
 ```
+
+As portas locais precisam ser as mesmas do `allowed_origins` (18000 e 18001).
 
 Em cada tipo:
 1. Entre com `admin` e troque a senha inicial. Troque também as senhas de `op.prod`, `op.hml` e `consulta`, ou inative os que não forem usados.
@@ -590,14 +550,13 @@ Copie esta tabela para o registro da janela e preencha cada linha:
 
 | Passo | Conferência | Esperado | Resultado (data, hora, quem) |
 |---|---|---|---|
-| 2.1 | Impressão digital da chave dedicada; chaves do bastion conferidas | anotada; conferidas | |
-| 2.2 | `ssh -o BatchMode=yes sss-3067` sem senha do destino | `brtlvlty3067sl` | |
+| 2 | Sessão no 3067 | `brtlvlty3067sl` / `mastersafgf` | |
 | 3.2 | Python escolhido e versão; `stdlib OK`; tempo da PBKDF2 | ≥ 3.6.0; OK; ≤ 3 s | |
 | 3.3 | Driver e Instant Client; `sqlplus` | um driver; cliente presente | |
 | 3.4 | GFPR 1521 alcançável; portas 18000/18001 | alcançável; livres após o passo 6 | |
 | 4.1 | Scripts SQL gerados; `WHENEVER` 1; outros prefixos 0; maior identificador; `sha256sum` dos seis | 1; 0; ≤ 30; anotados | |
 | 4.2 | `ORIGEM` e `SHA256SUMS` do pacote; `sha256sum -c` na origem; seis SQL e 14 utilitários | anotados; OK; 6 e 14 | |
-| 5 | `sha256sum -c` no 3067 | OK nos três arquivos | |
+| 5 | Quatro arquivos em `~/sss_pacote`; `sha256sum -c`; `ORIGEM` | 4; OK nos dois; igual ao 4.2 | |
 | 6 | Instalação antiga parada; `crontab` antigo salvo | nada no ar; arquivo salvo | |
 | 7 | `conteudo confere` em DEV e PROD | as duas | |
 | 8 | `secrets.cfg` `600`, `CHANGE_ME` 0, 5 ambientes, em DEV e PROD | as duas | |
