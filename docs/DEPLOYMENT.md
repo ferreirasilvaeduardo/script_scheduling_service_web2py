@@ -130,13 +130,14 @@ mkdir -p /portaloptrib/TESHUVA/SSS/<TIPO>                    # se ainda nao exis
 cd /portaloptrib/TESHUVA/SSS/<TIPO>                          # a pasta de cima da <RAIZ>
 tar -xzf <pasta do pacote>/sss-<versao>.tar.gz
 mv sss-<versao> script_scheduling_service                    # a <RAIZ>
+chmod 0750 script_scheduling_service                         # o tar segue o umask (0755 com 022); §1.3 pede 0750
 cd script_scheduling_service && sha256sum -c --quiet SHA256SUMS && echo "conteúdo confere"
 ls                                                          # esperado: AGENTS.md README.md SHA256SUMS bin docs instance scripts src
 ```
 
 Nas **atualizações** seguintes, não extraia por cima: use o `bin/sss-update.sh` (§18), que preserva `instance/`, `var/` e `scripts_ambiente/`.
 
-O pacote só tem o `bin/` e a aplicação (o código, os templates e os estáticos ficam em `src/sss/`, CR-022b): sem web2py (CR-021f), sem `src/sss/web/controllers/dev.py`, sem o FAKE (`src/sss/persistence/fake/`) e sem testes. O servidor web é o `scripts/run_web.py` da própria aplicação, e a raiz `/` leva ao login.
+O pacote só tem o `bin/` e a aplicação (o código, os templates e os estáticos ficam em `src/sss/`, CR-022b): sem web2py (CR-021f), sem `src/sss/web/controllers/dev.py`, sem o FAKE (`src/sss/persistence/fake/`), sem testes e sem `docs/homologation/` (evidências e manual de homologação, que ficam no git; CR-033, D3: o pacote tem cerca de 3 MB). O servidor web é o `scripts/run_web.py` da própria aplicação, e a raiz `/` leva ao login.
 
 ---
 
@@ -459,7 +460,7 @@ bin/sss-keepalive.sh --resume agente0001    # volta a subir na proxima passada
 ```bash
 # no próprio servidor do web
 curl -s -o /dev/null -w "raiz: HTTP %{http_code} -> %{redirect_url}\n" http://127.0.0.1:18000/
-# esperado: raiz: HTTP 303 -> http://127.0.0.1:18000/script_scheduling_service/default/login
+# esperado: raiz: HTTP 303 -> http://127.0.0.1:18000/script_scheduling_service/ (que leva ao login)
 curl -s -o /dev/null -w "login: HTTP %{http_code}\n" http://127.0.0.1:18000/script_scheduling_service/default/login
 # esperado: login: HTTP 200
 curl -s -D - -o /dev/null http://127.0.0.1:18000/script_scheduling_service/default/login | grep -icE "content-security|x-frame|x-content|referrer"

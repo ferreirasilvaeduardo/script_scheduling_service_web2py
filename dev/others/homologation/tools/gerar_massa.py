@@ -20,7 +20,9 @@ import os
 import random
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-APP = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+# SSS_APP_ROOT: raiz da instalacao homologada (CR-033: um PROD instalado pelo pacote);
+# padrao, este repositorio.
+APP = os.path.abspath(os.environ.get("SSS_APP_ROOT") or os.path.join(HERE, "..", "..", "..", ".."))
 WORDS = ("cliente", "nota", "fiscal", "valor", "saldo", "conta", "pedido", "item", "produto",
          "cidade", "estado", "codigo", "data", "pagamento", "boleto", "remessa", "retorno", "lote",
          "parcela", "imposto")

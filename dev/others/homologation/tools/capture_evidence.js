@@ -18,6 +18,8 @@
  * Data da rodada: SSS_EVIDENCE_DATE (AAAAMMDD, padrao a data do dia): carimbo HOMOLOG_<data> dos registros criados.
  * Rodada no mesmo dia: SSS_EVIDENCE_ROUND (ex.: 2): carimbo HOMOLOG_<data>R<n> e pasta evidence_<data>_r<n>.
  * Saida: SSS_EVIDENCE_DIR (padrao dev/others/homologation/evidence_<data>[_r<n>]): <CT>_<n>.png, results.json, state.json.
+ * Instalacao homologada: SSS_APP_ROOT (padrao este repositorio, o DEV); com a raiz de um PROD instalado pelo pacote
+ *   (CR-033), o roteiro le instance/ e var/ de la e confere a tela do <TIPO> (a pasta acima da raiz).
  */
 const fs = require('fs');
 const os = require('os');
@@ -34,7 +36,9 @@ function loadPuppeteer() {
 }
 const puppeteer = loadPuppeteer();
 
-const APP = path.resolve(__dirname, '..', '..', '..', '..');
+const APP = path.resolve(process.env.SSS_APP_ROOT || path.join(__dirname, '..', '..', '..', '..'));
+// <TIPO> da instalacao (CR-028, D12): DEV mostra a faixa de ambiente; PROD so o rodape.
+const INSTALL_TYPE = path.basename(path.dirname(APP));
 const BASE_URL = process.env.SSS_BASE_URL || 'http://127.0.0.1:18000/script_scheduling_service';
 // Padrao: a data local do dia (revisao do CR-032: o padrao fixo antigo, 20261023, sobrescrevia aquela evidencia).
 const TODAY = new Date();
@@ -67,6 +71,8 @@ const AGENT_ID = AGENT_CFG.agent_id || AGENT_CFG.name;
 const INPUT = AGENT_CFG.input_dir !== undefined ? AGENT_CFG.input_dir : path.join(AGENT_VAR, 'inputs');
 const SCRIPT_WORK = AGENT_CFG.script_work_dir !== undefined ? AGENT_CFG.script_work_dir
     : path.join(AGENT_VAR, 'script_works');
+// Pasta base dos scripts (CR-023): a chave do config ou, sem ela, scripts_ambiente/ da raiz (DEPLOYMENT §1.3).
+const SCRIPT_BASE = AGENT_CFG.script_base_dir || path.join(APP, 'scripts_ambiente');
 if (!AGENT_ID || !INPUT || !SCRIPT_WORK) {
     throw new Error(`instance/${AGENT_NAME}/config.ini sem name (ou agent_id), input_dir ou script_work_dir`);
 }
@@ -341,7 +347,12 @@ CTS['CT-01'] = async () => {
     await clearCookies();
     await go('/');
     check('Endereço raiz redireciona para Entrar', page.url().includes('/default/login'), page.url().replace(BASE_URL, ''));
-    await expectText('Faixa amarela do ambiente DEV no topo', 'AMBIENTE DEV');
+    if (INSTALL_TYPE === 'DEV') {
+        await expectText('Faixa amarela do ambiente DEV no topo', 'AMBIENTE DEV');
+    } else {
+        await expectNoText(`Sem faixa de ambiente no ${INSTALL_TYPE}`, 'AMBIENTE DEV', 'não produtivos');
+        await expectText(`Rodapé com o ambiente ${INSTALL_TYPE}`, `Ambiente ${INSTALL_TYPE}`);
+    }
     await snap('Tela de login');
     const okFalha = !(await login('op.hml', 'senha-incorreta-homolog'));
     check('Senha incorreta não entra', okFalha);
@@ -1407,7 +1418,7 @@ CTS['CT-24'] = async () => {
     await ruleAction(page, 'resume', state.rule.id);
     await expectText('Regra retomada ao final', `Regra ${state.rule.name} retomada.`);
     note('Responsável inativo: no DEV as regras são do admin (o op.hml não tem Regras de Agendamento), então o cenário do manual não se aplica sem mudar permissões; coberto pelos testes automatizados.');
-    note('Caminho relativo (CR-023): os 14 scripts do seed são cadastrados como utilitarios/<arquivo> e o agente do DEV os junta à pasta base [agent] script_base_dir = dev/scripts do repositório; link simbólico continua aceito (CR-011), com o arquivo real executado.');
+    note(`Caminho relativo (CR-023): os 14 scripts do seed são cadastrados como utilitarios/<arquivo> e o agente os junta à pasta base (${SCRIPT_BASE.replace(APP + '/', '')}); link simbólico continua aceito (CR-011), com o arquivo real executado.`);
     // quadro Registro por perfil
     await login('consulta');
     await go(`/tickets/detail/${state.tickets.ok_prod}`);
@@ -1874,7 +1885,7 @@ CTS['CT-30'] = async () => {
     await go(`/tickets/detail/${tid}`);
     check(`Ticket #${tid} (diag_pasta_trabalho) deu certo`, fim.includes('Deu certo'));
     await expectText('Log: SSS_WORK_DIR na estrutura da saída e HOME na pasta descartável',
-        'Pasta de trabalho:', `${path.basename(SCRIPT_WORK)}/gfpreprod/diag_pasta_trabalho/`, `ticket_${tid}`, 'HOME:', `work/ticket_${tid}/exec`);
+        'Pasta de trabalho:', `${path.basename(SCRIPT_WORK)}/gfpreprod/diag_pasta_trabalho/`, `ticket_${tid}`, 'HOME:', `works/ticket_${tid}/exec`);
     await snap('Log do ticket com a pasta de trabalho', { full: true });
     const d = new Date();
     const p2 = (n) => String(n).padStart(2, '0');
@@ -1896,12 +1907,12 @@ CTS['CT-31'] = async () => {
     await go('/audit/agents');
     await sleep(1500);
     await expectText('Painel de agentes com a pasta base de cada agente', 'Pasta base dos scripts',
-        path.join(APP, 'dev', 'scripts'));
+        SCRIPT_BASE);
     await snap('Painel de agentes com a pasta base dos scripts', { full: true });
     await go(`/tickets/detail/${state.tickets.ct05}`);
     await expectText('Ticket do CT-05: arquivo relativo e caminho executado, o real dentro da pasta base',
         'utilitarios/gerar_hash_arquivo.py', 'relativo à pasta base do agente', 'Caminho executado',
-        path.join(APP, 'dev', 'scripts', 'utilitarios', 'gerar_hash_arquivo.py'));
+        path.join(SCRIPT_BASE, 'utilitarios', 'gerar_hash_arquivo.py'));
     await snap('Detalhe do ticket com o caminho executado', { full: true });
     const sid = await diagScript('diag_relativo_ausente', 'diagnostico/nao_existe.sh',
         'Diagnostico do CR-023: caminho relativo para arquivo que nao existe');

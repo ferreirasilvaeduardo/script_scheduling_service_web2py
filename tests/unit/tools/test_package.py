@@ -51,6 +51,7 @@ class TestPack(unittest.TestCase):
             "scripts/logs/a.log": "x", "deposit/x": "x",
             "logs/x": "x", "site-packages/x": "x", "sessions/abc": "x", "errors/e": "x",
             "work/sss-a.lock": "x", "docs/DEPLOYMENT.md": "# Implantacao\n",
+            "docs/homologation/SSS_Homologation_Evidence_2026-10-28.docx": "x",
             # CR-022a: a aplicacao e a raiz; o que e so da maquina de desenvolvimento fica fora
             "AGENTS.md": "# regras\n", "README.md": "# SSS\n", "Makefile": "x", "LEIA-ME.TXT": "x",
             ".git/config": "x", ".gitignore": "x", "input/a.txt": "x", "output/b.zip": "x", "script_work/c": "x",
@@ -112,7 +113,7 @@ class TestPack(unittest.TestCase):
         forbidden = [n for n in members if any(n == p or n.startswith(p + "/") for p in (
             "applications", "deposit", "logs", "site-packages", "scripts/logs", "work", "dev", "src/sss/web/templates/dev",
             "src/sss/persistence/fake", "modules/repo_fake", "src/sss/web/controllers/dev.py", "instance/config.ini",
-            "scripts/test_purge.py",
+            "scripts/test_purge.py", "docs/homologation",
             "tests", "tools", "sessions", "errors"))]
         self.assertEqual(forbidden, [])
         # CR-021f: nada do web2py, nem pasta de runtime vazia
@@ -222,7 +223,8 @@ class TestPack(unittest.TestCase):
         files, _problems = empacotar.collect(empacotar.DEFAULT_ROOT)
         self.assertFalse([a for a in files if a.startswith(("src/sss/persistence/fake/", "src/sss/web/templates/dev/"))
                           or a.endswith("controllers/dev.py")
-                          or a.startswith(("tests/", "tools/", "scripts/test_")) or a.endswith("instance/config.ini")])
+                          or a.startswith(("tests/", "tools/", "scripts/test_", "docs/homologation/"))
+                          or a.endswith("instance/config.ini")])
         self.assertIn("src/sss/persistence/oracle/health.py", files)
         self.assertIn("src/sss/web/templates/layout.html", files)
         self.assertIn("src/sss/web/static/css/sss.css", files)

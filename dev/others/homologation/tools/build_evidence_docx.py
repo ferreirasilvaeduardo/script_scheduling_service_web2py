@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Gera o documento de evidencias da homologacao (DEV real) a partir do results.json do capture_evidence.js.
+"""Gera o documento de evidencias da homologacao (DEV ou PROD real, CR-033) a partir do results.json do capture_evidence.js.
 
 Uso (da pasta tools/, Python 3 com python-docx):
     SSS_EVIDENCE_DATE=AAAAMMDD [SSS_EVIDENCE_ROUND=n] python3 build_evidence_docx.py [pasta_evidencias] [saida.docx]
@@ -686,6 +686,42 @@ RODADAS["20261028"] = dict(RODADAS["20261027_r2"], **{
         u"registros HOMOLOG_20261023_1308 que ela criou ficam no DEV como evidência inativa.",
     ],
 })
+RODADAS["20261028_r2"] = dict(RODADAS["20261028"], **{
+    "commit": u"5c0383d (CR-032e) instalado pelo pacote em /portaloptrib/TESHUVA/SSS/PROD, mais o roteiro do "
+              u"CR-033 no mesmo commit deste documento",
+    "instalacao": u"PROD",
+    "endereco": u"127.0.0.1:18100",
+    "nome_agente": u"agente0001",
+    "python": u"3.6.0",
+    "web": u"Servidor web do PROD subido pelo bin/sss-keepalive.sh web0001:18100 (Python 3.6.0), com o "
+           u"[oracle] do instance/common.ini do PROD (o mesmo banco do DEV).",
+    "agente": u"Agente agente0001 do PROD subido pelo mesmo keepalive, com o config.ini do modelo do pacote "
+              u"(instance/exemplos/) e os ambientes do DEV; sem [agent] interpreters (procura no PATH do terminal "
+              u"que o subiu) e sem script_base_dir (pasta base padrão scripts_ambiente/).",
+    "seed_scripts": u"Scripts do seed: cadastrados com caminho relativo (utilitarios/<arquivo>, CR-023), "
+                    u"resolvidos na pasta base scripts_ambiente/ do PROD, que recebeu uma cópia do dev/scripts do "
+                    u"repositório.",
+    "defeitos": [
+        (u"Roteiro: CT-30 esperava a pasta do HOME no singular", u"capture_evidence.js (CT-30)",
+         u"Expectativa work/ticket_<n>/exec anterior ao CR-032e (pastas no plural); o agente gravou "
+         u"works/ticket_<n>/exec, que é o correto.",
+         u"Corrigido no roteiro; CT-30 repetido em 29/10/2026 com 4/4 OK. Não é defeito do produto."),
+    ],
+    "observacoes": [
+        u"Rodada do CR-033: primeira homologação no PROD, instalado pelo pacote de implantação (DEPLOYMENT §3 e "
+        u"§4.0), com o mesmo banco do DEV (decisão D1 A: os mesmos nomes web0001 e agente0001, com o DEV parado "
+        u"durante toda a rodada). Marca %s." % STAMP,
+        u"O PROD não mostra a faixa de ambiente nem o [DEV] no título; o rodapé diz \"Ambiente PROD\". Web e agente "
+        u"registram na subida \"ambiente da instalacao: PROD\".",
+        u"Web e agente subidos pelo bin/sss-keepalive.sh (web em 127.0.0.1:18100). Scripts de exemplo copiados do "
+        u"dev/scripts do repositório para scripts_ambiente/ (a pasta base padrão); massa de teste gerada pelo "
+        u"gerar_massa.py no var/agente0001/inputs do PROD.",
+        u"O banco não foi recriado: o admin já estava com a senha escolhida (SSS_ADMIN_START=new).",
+        u"A rodada completa rodou em 28/10/2026; o CT-30 foi repetido em 29/10/2026, depois da correção do roteiro "
+        u"e de subir de novo o web e o agente pelo keepalive (a máquina tinha reiniciado e, sem crontab, nada os "
+        u"subiu sozinho). Os resultados do CT-30 são os dessa segunda passada.",
+    ],
+})
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]
@@ -693,11 +729,22 @@ DEFEITOS = RODADA["defeitos"]
 OBSERVACOES = RODADA["observacoes"]
 # Servidor web da rodada: web2py ate o CR-021e1; depois, o servidor proprio (scripts/run_web.py).
 SERVIDOR_WEB = RODADA.get("servidor_web", u"web2py")
+# Instalacao homologada (CR-033): ate a rodada 20261028, sempre o DEV na porta 18000.
+INSTALACAO = RODADA.get("instalacao", u"DEV")
+ENDERECO = RODADA.get("endereco", u"127.0.0.1:18000")
+AGENTE = RODADA.get("nome_agente", u"srv-linux-local-01")
+PYTHON = RODADA.get("python", u"3.6.15")
 
 def local(iso):
     """ISO em UTC (registro do roteiro) -> 'dd/mm/aaaa hh:mm:ss' no horario desta maquina (o mesmo das telas)."""
     utc = calendar.timegm(time.strptime(iso[:19], "%Y-%m-%dT%H:%M:%S"))
     return time.strftime("%d/%m/%Y %H:%M:%S", time.localtime(utc))
+
+
+def fim_local(inicio, fim):
+    """Fim da rodada: so a hora no mesmo dia; com a data quando passou para outro dia (CR-033, CT-30 repetido)."""
+    ini, end = local(inicio), local(fim)
+    return end[11:] if end[:10] == ini[:10] else end
 
 
 def png_size(path):
@@ -808,18 +855,18 @@ def main():
     r = t.add_run(u"Script Scheduling Service (SSS)")
     r.font.size = Pt(14)
     r.font.color.rgb = ROXO
-    doc.add_heading(u"Evidências de Homologação — DEV real (Oracle e agente)", 0)
+    doc.add_heading(u"Evidências de Homologação — %s real (Oracle e agente)" % INSTALACAO, 0)
     doc.add_paragraph(
-        u"Execução real dos casos de teste do Manual de Homologação (UI Freeze, versão 2.5) sobre o ambiente DEV: "
-        u"banco Oracle, servidor web na porta 18000 e o agente srv-linux-local-01 executando os scripts de verdade. "
+        u"Execução real dos casos de teste do Manual de Homologação (UI Freeze, versão 2.5) sobre o ambiente %s: "
+        u"banco Oracle, servidor web na porta %s e o agente %s executando os scripts de verdade. "
         u"Cada caso foi executado no navegador por um roteiro automatizado, que conferiu na própria página o "
-        u"resultado esperado e capturou as telas.")
+        u"resultado esperado e capturou as telas." % (INSTALACAO, ENDERECO.split(":")[-1], AGENTE))
     kv_table(doc, [
-        (u"Data da execução", u"%s a %s (horário de Brasília, o mesmo das telas)" % (local(inicio), local(fim)[11:])),
-        (u"Ambiente", u"DEV — %s (Python 3.6.15) em http://127.0.0.1:18000, banco Oracle 19c (driver thick)"
-         % SERVIDOR_WEB),
-        (u"Agente", u"srv-linux-local-01 (Linux), ambientes CLONE2, CLONE1, CLONE6, CLONE7 e GFPREPROD; "
-                    u"interpretadores PYTHON3, BASH e SH"),
+        (u"Data da execução", u"%s a %s (horário de Brasília, o mesmo das telas)" % (local(inicio), fim_local(inicio, fim))),
+        (u"Ambiente", u"%s — %s (Python %s) em http://%s, banco Oracle 19c (driver thick)"
+         % (INSTALACAO, SERVIDOR_WEB, PYTHON, ENDERECO)),
+        (u"Agente", AGENTE + u" (Linux), ambientes CLONE2, CLONE1, CLONE6, CLONE7 e GFPREPROD; "
+                             u"interpretadores PYTHON3, BASH e SH"),
         (u"Base", u"Manual de Homologação — UI Freeze 2.5 (17/10/2026), adaptado aos dados do DEV"),
         (u"Commit de referência", RODADA["commit"]),
         (u"Execução", u"Roteiro dev/others/homologation/tools/capture_evidence.js (Chrome headless), %d verificações, "
@@ -857,7 +904,8 @@ def main():
     doc.add_heading(u"2. Preparação do ambiente", 1)
     doc.add_heading(u"2.1 Servidor web e agente", 2)
     for txt in (
-            u"Servidor web do DEV iniciado com bin/start_local.sh 18000 (Python 3.6.15), ligado ao Oracle do DEV.",
+            RODADA.get("web", u"Servidor web do DEV iniciado com bin/start_local.sh 18000 (Python 3.6.15), ligado "
+                              u"ao Oracle do DEV."),
             RODADA.get("agente", _AGENTE_PADRAO),
             RODADA.get("seed_scripts", u"Scripts do seed: o cadastro aponta para /opt/automacoes/scripts/utilitarios/, "
                        u"instalado nesta máquina como link simbólico para dev/scripts/utilitarios/ do repositório "
@@ -983,9 +1031,9 @@ def resumo_md(res, ids, inicio, fim, total_ok, total_chk, total_fig):
     """Resumo em Markdown ao lado do .docx (como o registro do UI Freeze de 18/10)."""
     nao_ok = [(c, k) for c in ids for k in res[c]["checks"] if not k["ok"]]
     linhas = [
-        u"# Homologação no DEV real: Registro de Evidências", u"",
-        u"**Data:** %s a %s (horário de Brasília)" % (local(inicio), local(fim)[11:]), u"",
-        u"**Ambiente:** DEV, banco Oracle, %s em `127.0.0.1:18000`, agente `srv-linux-local-01`" % SERVIDOR_WEB,
+        u"# Homologação no %s real: Registro de Evidências" % INSTALACAO, u"",
+        u"**Data:** %s a %s (horário de Brasília)" % (local(inicio), fim_local(inicio, fim)), u"",
+        u"**Ambiente:** %s, banco Oracle, %s em `%s`, agente `%s`" % (INSTALACAO, SERVIDOR_WEB, ENDERECO, AGENTE),
         u"**Resultado geral:** %d de %d verificações OK; %d figuras." % (total_ok, total_chk, total_fig), u"",
         u"Documento completo, com as telas: `%s` (mesma pasta). "
         u"Gerado por `dev/others/homologation/tools/capture_evidence.js` e `build_evidence_docx.py`; o resultado bruto "

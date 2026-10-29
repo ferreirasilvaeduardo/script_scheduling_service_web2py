@@ -48,6 +48,8 @@ WEB2PY_APP_DIRS = ("sessions", "errors", "cache", "databases", "uploads", "priva
 EXCLUDE_APP = (
     "src/sss/web/controllers/dev.py", "src/sss/web/templates/dev", "dev", "src/sss/persistence/fake", "modules/repo_fake", "instance/config.ini", "instance/web.env",
     "log", "logs", "work", "exec", "dist", "scripts/logs",
+    # CR-033 (D3): as evidencias de homologacao (.docx de ~15 MB cada) ficam no git, nao no servidor.
+    "docs/homologation",
 ) + WEB2PY_APP_DIRS
 # Os testes ficam em tests/, fora da lista de permissao (CR-022b1); um test_*.py perdido em scripts/ tambem fica fora.
 _RE_TEST = re.compile(r"^scripts/test_[^/]*\.py$")
