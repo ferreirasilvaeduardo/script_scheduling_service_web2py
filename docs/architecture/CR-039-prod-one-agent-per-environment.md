@@ -26,7 +26,7 @@
 
 ## 2. Homologação real no PROD
 
-Rodada `SSS_ADMIN_START=new SSS_EVIDENCE_DATE=20261029 SSS_EVIDENCE_ROUND=6` (marca `HOMOLOG_20261029R6`), com `SSS_APP_ROOT` do PROD e os cinco agentes no ar: **353 de 353 verificações OK** na primeira passada, 35 casos, 110 figuras. Documento: `docs/homologation/SSS_Homologation_Evidence_2026-10-29_r6.docx` e `.md`. São 353 e não 352 porque o CT-01 tem no PROD uma conferência a mais (o rodapé com o ambiente).
+Rodada `SSS_ADMIN_START=new SSS_EVIDENCE_DATE=20261029 SSS_EVIDENCE_ROUND=6` (marca `HOMOLOG_20261029R6`), com `SSS_APP_ROOT` do PROD e os cinco agentes no ar: **353 de 353 verificações OK** na primeira passada, 35 casos, 110 figuras. Documento: `docs/homologation/SSS_Homologation_Evidence_2026-10-29_r6.docx` e `.md`. São 353: contra os 352 do DEV (r5), o CT-01 tem no PROD uma conferência a mais (o rodapé com o ambiente); contra os 352 do PROD na r4, o CT-33 ganhou a contagem dos arquivos de `inputs` no ajuste do roteiro para um agente por ambiente (`f74d340`).
 
 No `tbsss_tickets`, cada ticket da rodada rodou no agente do seu ambiente: GFPREPROD no `agente0001` (21), CLONE2 no `agente0002` (4) e CLONE6 no `agente0004` (1). Os sem agente são os cancelados antes do claim, como o roteiro prevê. Os do CLONE2 e do CLONE6 no `agente0001` são da rodada r4 (CR-038), de quando o PROD tinha um agente só.
 
