@@ -762,6 +762,25 @@ RODADAS["20261029_r3"] = dict(RODADAS["20261028"], **{
         u"reiniciado e o CT-33 repetido de novo, com 19/19 OK.",
     ],
 })
+RODADAS["20261029_r4"] = dict(RODADAS["20261029"], **{
+    "commit": u"3b56cbd (CR-037c) instalado no PROD pelo sss-update.sh, sobre o e0030e7, com os MERGE das "
+              u"funcionalidades novas no tbsss_ (CR-038); o roteiro no mesmo commit deste documento",
+    "defeitos": [
+        (u"Roteiro: CT-33 procurava o sha256 só no texto visível da auditoria", u"capture_evidence.js (CT-33)",
+         u"Desde a correção do CR-037c o sha256 fica no fim do detalhe, além dos 80 caracteres da lista "
+         u"(no \"ver mais\").",
+         u"O roteiro abre o detalhe antes de conferir; CT-33 repetido com 19/19 OK. Não é defeito do produto."),
+    ],
+    "observacoes": [
+        u"Rodada do CR-038: PROD atualizado de e0030e7 para 3b56cbd (CR-036 e CR-037), nas tabelas do PROD "
+        u"(tbsss_); o catálogo recebeu só os 8 MERGE das funcionalidades FILES_UPLOAD e FILES_DOWNLOAD e das "
+        u"marcas nos perfis, sem init_db. Marca %s." % STAMP,
+        u"CT-33 (Pasta de Arquivos) no PROD, com o diagnostico/pasta_arquivos.sh copiado para "
+        u"scripts_ambiente/. O conteúdo ficou em var/agente0001/files do PROD; o banco guardou só a auditoria.",
+        u"A rodada completa teve 351/352: a única falha foi a do roteiro acima; o CT-33 foi repetido.",
+        u"O banco não foi recriado: o admin já estava com a senha escolhida (SSS_ADMIN_START=new).",
+    ],
+})
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]

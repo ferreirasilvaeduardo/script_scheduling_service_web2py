@@ -2114,8 +2114,10 @@ CTS['CT-33'] = async () => {
     check('consulta sem as funcionalidades da pasta: 403', (await go('/files/index')) === 403);
     await login('admin');
     await go('/audit/index?action=FILES_UPLOAD');
+    // A lista mostra 80 caracteres; o sha256 fica no "ver mais" (abre-se cada detalhe antes de conferir).
+    await page.$$eval('td.sss-audit-detail details', (ds) => ds.forEach((d) => { d.open = true; }));
     await expectText('Auditoria: envio com sha256 e substituição', 'Envio para a pasta de arquivos', name, 'sha256',
-        'substituído');
+        'substituído:');
     await snap('Auditoria dos envios para a pasta de arquivos', { full: true });
     await go('/audit/index?action=FILES_DOWNLOAD');
     await expectText('Auditoria: download do arquivo e do zip', 'Download da pasta de arquivos', 'resumo.txt',
