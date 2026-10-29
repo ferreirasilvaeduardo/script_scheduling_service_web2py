@@ -1,3 +1,60 @@
+A web e o agente sobem separados, cada um com seu script em `bin/`, a partir da raiz do repositório e com o seu usuário (nunca root):
+
+```bash
+cd /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
+```
+
+**1. Servidor web**
+```bash
+bin/start_local.sh 18000        # sobe em segundo plano na porta 18000 (sem número: porta 8000)
+bin/start_local.sh -f           # alternativa: primeiro plano, para ver o log na tela (Ctrl+C para sair)
+```
+- Acesse **http://127.0.0.1:18000/script_scheduling_service/**.
+- Para parar: `bin/stop_local.sh`.
+- Log: `logs/server.out`. O log da aplicação fica em `logs/internal/app/AAAA/MM/DD/HH/MI/sss_web_<pid>.log`.
+- O Python usado precisa ter o driver Oracle. Nesta máquina é o 3.6.15. Se precisar escolher: `PYTHON=~/.pyenv/versions/3.6.15/bin/python3 bin/start_local.sh 18000`.
+
+**2. Agente (serviço que executa os scripts)**
+```bash
+nohup bin/sss-scheduler.sh > /dev/null 2>&1 &     # em segundo plano
+# ou: bin/sss-scheduler.sh                         # em primeiro plano, para acompanhar
+```
+- Para parar: `bin/sss-stop.sh`. Ele cria o arquivo de parada, e o agente termina sozinho em alguns segundos, sem matar scripts no meio.
+- Log: `logs/internal/app/.../sss_scheduler_<pid>.log`. Na subida aparecem "pasta base dos scripts: …" e "agente inicializado".
+- O agente usa o `PATH` do terminal em que você o subiu. Isso importa para o interpretador digitado só pelo nome (CR-025).
+
+**Para conferir se estão no ar**
+```bash
+ps aux | grep -E 'scripts/run_(web|scheduler)' | grep -v grep
+```
+
+**Antes de subir:** a configuração vem de `instance/config.ini` e `instance/secrets.cfg`, que já estão prontos no seu DEV. O `secrets.cfg` precisa ter permissão `0600`.
+
+**Agora:** os dois **estão no ar**, porque a homologação do CR-025 está usando. **Não pare nem reinicie até ela terminar**, senão a rodada falha. Eu aviso quando acabar e deixo os dois parados, como sempre.
+
+O passo a passo completo está no `docs/DEV_ENVIRONMENT.md` §4 e, para os servidores, no `docs/DEPLOYMENT.md` §10.
+
+
+=========================================
+Senha dos usuários do seed no DEV: 
+senha: Thyago@181206
+
+Depende de quais usuários você quer saber:
+
+**Usuários criados pelo percurso de teste** (`tst.<número>.adm` e `tst.<número>.web`): cada rodada gera uma senha aleatória (`Tst-…` / `Web-…`, com 18 e 16 bytes aleatórios). Ela fica só no `estado.json` da massa, com permissão 0600, e é trocada de novo no próprio percurso pelo ensaio de "minha senha" e "redefinir senha". Ao fim de cada rodada, o `limpar` apaga esses usuários e o `estado.json`. Nenhum desses usuários nem suas senhas existe hoje.
+
+**Usuários padrão do seed** (`admin`, `op.prod`, `op.hml` e `consulta`): a senha inicial é **`Sss@Homolog2026!`**. Ela está documentada em [docs/DEPLOYMENT.md:197](docs/DEPLOYMENT.md#L197) e [README.md:2523](README.md#L2523). Há duas exceções:
+- O `init_db.py` pode receber outra senha para o `admin` na instalação.
+- Se alguém já trocou a senha de algum desses usuários no ambiente DEV, vale a senha nova. O banco guarda só o hash (PBKDF2-SHA256), então não há como recuperar a senha em texto puro.
+
+A documentação recomenda trocar essa senha inicial no primeiro acesso.
+
+A validação final continua rodando em segundo plano. Até agora, as suítes do Python 3.6.0 e 3.6.8 passaram (1276 testes).
+
+
+============================
+
+
  PreProd  TESHUVA  APPL mastersafgf@brtlvlty3067sl ~]$ cat ~/.sss/web.env
 SSS_DEV_SEED_PASSWORD=VHpV_zVcR4yCd0vToXnNXyKw
 SSS_TZ=America/Sao_Paulo
@@ -224,14 +281,14 @@ O comando abaixo deve responder "No such file or directory" para cada item:
 ls -d ~/sss ~/.sss ~/sss.tar.gz
 ```
 
-Isso apaga só a instalação em `~/sss`. O repositório em `/portaloptrib/TESHUVA/web2py` não é tocado. Como o backend FAKE guarda os dados na memória, não sobra banco nem dado em outro lugar.
+Isso apaga só a instalação em `~/sss`. O repositório em `/portaloptrib/TESHUVA/SSS/DEV/web2py` não é tocado. Como o backend FAKE guarda os dados na memória, não sobra banco nem dado em outro lugar.
 
 
 
 ====================
 
 OBS :
-in : cd /portaloptrib/TESHUVA/web2py; VER=$(git rev-parse --short HEAD); git status --short | grep -v LEIA-ME; git archive --format=tar.gz -o ~/sss_pacotes/sss-$VER.tar.gz $VER && cd ~/sss_pacotes && sha256sum sss-$VER.tar.gz > sss-$VER.tar.gz.sha256 && cat sss-$VER.tar.gz.sha256 && ls -la sss-$VER.tar.gz* && tar -tzf sss-$VER.tar.gz | grep -cE "instance/(config.ini|secrets.cfg)$"; tar -tzf sss-$VER.tar.gz | grep -E "^applications/[^/]+/$"
+in : cd /portaloptrib/TESHUVA/SSS/DEV/web2py; VER=$(git rev-parse --short HEAD); git status --short | grep -v LEIA-ME; git archive --format=tar.gz -o ~/sss_pacotes/sss-$VER.tar.gz $VER && cd ~/sss_pacotes && sha256sum sss-$VER.tar.gz > sss-$VER.tar.gz.sha256 && cat sss-$VER.tar.gz.sha256 && ls -la sss-$VER.tar.gz* && tar -tzf sss-$VER.tar.gz | grep -cE "instance/(config.ini|secrets.cfg)$"; tar -tzf sss-$VER.tar.gz | grep -E "^applications/[^/]+/$"
 out : T
 ?? applications/script_scheduling_service/docs/extras/
 a42e9acc4724558d652e81109e77019a1712b3375934407d915a369c69ac37aa  sss-a670aa3.tar.gz
@@ -394,18 +451,18 @@ Consegue fazer as alteração abaixo ? :
 - Qq outro log fica na pasta app/YYYY(ano)/MM(mes)/DD(dia)/HH(hora)/MI(minuto)/<nome_log>_<PID>.log
 
 * atualizar AGENTS.md , README.md, DEPLOYMENT.md , DEV_ENVIRONMENT.md , ADMIN_CRUD_PATTERN.md de forma RIGOROSA.
-* atualizar prompt de forma RIGOROSA. /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/docs/prompts
+* atualizar prompt de forma RIGOROSA. /portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/docs/prompts
 *  atualizar documentacao de forma RIGOROSA.
-/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/docs/homologation
+/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/docs/homologation
 
 
 * LEIA :> AGENTS.md , README.md, DEPLOYMENT.md , DEV_ENVIRONMENT.md , ADMIN_CRUD_PATTERN.md de forma RIGOROSA e valide se estão atualizados com as ultimas alterações aplicadas.
 A mesma coisa para:
-/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/docs/homologation
-/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/docs/prompts
+/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/docs/homologation
+/portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/docs/prompts
 
 
-Background command "cd /portaloptrib/TESHUVA/web2py; export SSS_DEV_SEED_PASSWORD='Homolog-CR005-2026' SSS_TZ=America/Sao_Paulo; bin/sss-web.sh ~/.pyenv/versions/3.6.0/bin/python3.6 web2py.py -a '<recycle>' -i 127.0.0.1 -p 8010 --no_gui > /tmp/claude-1000/-portaloptrib-TESHUVA-web2py/4d242b84-a2df-41eb-b992-8d572a3b4de5/scratchpad/srv8010.out 2>&1" failed with exit code 137
+Background command "cd /portaloptrib/TESHUVA/SSS/DEV/web2py; export SSS_DEV_SEED_PASSWORD='Homolog-CR005-2026' SSS_TZ=America/Sao_Paulo; bin/sss-web.sh ~/.pyenv/versions/3.6.0/bin/python3.6 web2py.py -a '<recycle>' -i 127.0.0.1 -p 8010 --no_gui > /tmp/claude-1000/-portaloptrib-TESHUVA-web2py/4d242b84-a2df-41eb-b992-8d572a3b4de5/scratchpad/srv8010.out 2>&1" failed with exit code 137
 
 
 
@@ -652,18 +709,18 @@ Cada pessoa da homologação precisa de uma conta com SSH no servidor para abrir
 ===========================================================
 No **Antigravity** (assim como em ambientes de agentes de código baseados em VS Code / Cursor / Windsurf), as regras de workspace são configuradas definindo um arquivo de diretrizes na raiz do projeto que o agente lê automaticamente em cada conversa.
 
-Como você está com o terminal aberto em `/portaloptrib/TESHUVA/web2py`, há duas formas diretas de configurar isso:
+Como você está com o terminal aberto em `/portaloptrib/TESHUVA/SSS/DEV/web2py`, há duas formas diretas de configurar isso:
 
 ---
 
 ### Método 1: Via Arquivo de Regras na Raiz (Mais Prático e Recomendado)
 
-O Antigravity monitora arquivos de instrução do workspace na raiz de trabalho (geralmente `.cursorrules`, `.windsurfrules` ou `.antigravity/rules.md`). Para garantir que o agente carregue o conteúdo em qualquer variação de configuração, crie uma cópia ou link simbólico do `AGENTS.md` diretamente na raiz do workspace (`/portaloptrib/TESHUVA/web2py`):
+O Antigravity monitora arquivos de instrução do workspace na raiz de trabalho (geralmente `.cursorrules`, `.windsurfrules` ou `.antigravity/rules.md`). Para garantir que o agente carregue o conteúdo em qualquer variação de configuração, crie uma cópia ou link simbólico do `AGENTS.md` diretamente na raiz do workspace (`/portaloptrib/TESHUVA/SSS/DEV/web2py`):
 
 Execute no terminal:
 
 ```bash
-cd /portaloptrib/TESHUVA/web2py
+cd /portaloptrib/TESHUVA/SSS/DEV/web2py
 
 # Cria os arquivos padrão de regras que os agentes de workspace leem automaticamente
 cp applications/script_scheduling_service/AGENTS.md .cursorrules
@@ -687,7 +744,7 @@ Se você estiver interagindo pelo painel de configurações do próprio aplicati
 2. Procure por **Workspace Rules**, **Custom Instructions** ou **System Instructions**.
 3. No terminal, copie todo o conteúdo de `AGENTS.md` para a área de transferência:
 ```bash
-cat /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/AGENTS.md
+cat /portaloptrib/TESHUVA/SSS/DEV/web2py/applications/script_scheduling_service/AGENTS.md
 
 ```
 
@@ -718,10 +775,10 @@ Com o Método 1 aplicado no terminal, o workspace já estará configurado e pron
 
 Sim, **pode e é uma excelente prática**. O link simbólico garante que qualquer alteração ou atualização futura no arquivo `AGENTS.md` original seja refletida imediatamente na raiz, sem risco de arquivos desatualizados.
 
-Para criar os links simbólicos a partir da raiz do web2py (`/portaloptrib/TESHUVA/web2py`), execute no terminal:
+Para criar os links simbólicos a partir da raiz do web2py (`/portaloptrib/TESHUVA/SSS/DEV/web2py`), execute no terminal:
 
 ```bash
-cd /portaloptrib/TESHUVA/web2py
+cd /portaloptrib/TESHUVA/SSS/DEV/web2py
 
 # Cria os symlinks na raiz apontando para o AGENTS.md oficial da aplicação
 ln -sf applications/script_scheduling_service/AGENTS.md AGENTS.md
@@ -745,7 +802,7 @@ ls -l AGENTS.md .cursorrules .antigravity/rules.md
 Você verá as setas `->` indicando o caminho para `applications/script_scheduling_service/AGENTS.md`. Com isso, o Antigravity já carregará as regras automaticamente.
 
 #### subir no servidor
-cd /portaloptrib/TESHUVA/web2py
+cd /portaloptrib/TESHUVA/SSS/DEV/web2py
 read -s SSS_DEV_SEED_PASSWORD && export SSS_DEV_SEED_PASSWORD
 python3 web2py.py -a 'admin_web2py' -p 8000 -i 127.0.0.1
 
@@ -788,3 +845,62 @@ Aprovado. O que falta para terminar o CR-016:
 Cada parte segue o fluxo de sempre: plano, aprovação, validação, relatório, commit e push.
 
 Começo a F1 agora pela troca dos atributos de instância.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Criei as duas regras no Makefile e testei as duas de verdade. O commit é o `dce6165`, já enviado.
+
+**1. `make clean-cache`:** apaga todas as pastas `__pycache__` e `.mypy_cache` do projeto, sem mexer no `.git`. No teste, havia 37 pastas dessas, e depois não sobrou nenhuma.
+
+**2. `make package`:** gera o pacote para levar ao servidor, assim:
+- copia o último commit para uma pasta temporária, então o que não foi commitado não entra; se houver mudança sem commit, ele avisa;
+- tira as evidências da homologação (`docs/homologation`);
+- roda o `tools/package.py`, que recusa o pacote se encontrar senha, `secrets.cfg` real, código de DEV, o FAKE, testes ou `__pycache__`;
+- grava o resultado em `.bkp/pacote_<data>/`, com três arquivos: `sss-<versão>.tar.gz`, `SHA256SUMS` e `COMMIT` (o commit empacotado).
+
+No teste, o pacote ficou com 2,7 MB, contra 238 MB antes. O `sha256sum -c` deu OK, e nenhum dos arquivos proibidos entrou, inclusive `LEIA-ME.TXT`, `.sss_homolog_pw`, `secrets.cfg` e `config.ini`.
+
+**Para levar ao outro servidor:**
+```bash
+make package
+# copie sss-*.tar.gz e SHA256SUMS de .bkp/pacote_<data>/ para o servidor; lá:
+sha256sum -c SHA256SUMS
+```
+A partir daí, siga o DEPLOYMENT §3.
+
+**Pontos em aberto:**
+- As regras antigas `zip-deploy` e `zip-deploy-zip` continuam no Makefile como estavam, ainda levando senhas. Como o Makefile é seu, não mexi nelas; se quiser, eu as removo para ninguém usar por engano.
+- O pacote ainda sai como versão `1.0.0-dev`. Para produção, convém definir a versão de verdade antes de gerar o pacote final.
+
