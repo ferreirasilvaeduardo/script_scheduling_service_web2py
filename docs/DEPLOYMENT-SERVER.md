@@ -283,17 +283,26 @@ Esperado em cada tipo: `conteudo confere` e `AGENTS.md README.md SHA256SUMS bin 
 
 ## 8. Configuração (em cada raiz)
 
-Rode os blocos 8.1 a 8.4 uma vez para cada tipo, começando por:
+Rode os blocos 8.1 a 8.4 uma vez para cada tipo, na mesma sessão, começando por:
 
 ```bash
 . ~/sss_pacote/sss_vars.sh; sss_tipo DEV && cd "$R"            # depois, sss_tipo PROD
 umask 027
+sss_grava() {  # sss_grava <arquivo> <modo>: grava o stdin; se o arquivo já existe e muda, guarda o anterior
+  local f=$1 m=$2 tmp; tmp=$(mktemp "$f.XXXXXX") || return 1
+  cat > "$tmp"; chmod "$m" "$tmp"
+  if [ ! -e "$f" ]; then mv "$tmp" "$f"; echo "criado: $f"
+  elif cmp -s "$tmp" "$f"; then rm -f "$tmp"; echo "sem mudanca: $f"
+  else cp -p "$f" "$f.antes_$(date +%Y%m%d_%H%M%S)"; diff "$f" "$tmp"; mv "$tmp" "$f"; echo "atualizado: $f (anterior guardado em $f.antes_*)"; fi
+}
 ```
+
+**Pode rodar de novo:** as pastas são criadas com `mkdir -p`; cada `config.ini` passa pelo `sss_grava` (criado, sem mudança, ou atualizado com a cópia anterior guardada e a diferença na tela); o `secrets.cfg` que já existe nunca é recriado (as senhas digitadas e a `cookie_key` ficam).
 
 ### 8.1 `instance/common.ini` (o banco)
 
 ```bash
-cat > instance/common.ini <<EOF
+sss_grava instance/common.ini 0640 <<EOF
 ; common.ini do servidor (CR-032, D18): [oracle] comum ao web e aos agentes. Senha no instance/secrets.cfg.
 [oracle]
 user = $SSS_DB_USER
@@ -302,20 +311,25 @@ owner = $SSS_OWNER
 table_prefix = $PREFIX
 driver_mode = $SSS_DRIVER_MODE
 EOF
-chmod 0640 instance/common.ini; cat instance/common.ini
+cat instance/common.ini
 ```
 
 Com `auto`, cada processo testa Thin → Thick → cx_Oracle na subida e fica com o primeiro que conectar (DEPLOYMENT §6). Um driver não instalado falha na hora e deixa no log uma linha `WARNING ... Sondagem do candidato Oracle '<candidato>' falhou: codigo=IMPORT_ERROR categoria=LIBRARY`, esperada. Só um erro de senha interrompe a cadeia.
 
 ### 8.2 `instance/secrets.cfg` (senhas e chave da sessão)
 
-O arquivo fica na raiz de cada tipo, com modo `0600` e dono `$SSS_CONTA`. É o único lugar com senhas. O bloco abaixo o cria com uma `cookie_key` nova (própria de cada tipo, sem aparecer na tela), um bloco por ambiente de `SSS_AMBIENTES` e `CHANGE_ME` no lugar das senhas:
+O arquivo fica na raiz de cada tipo, com modo `0600` e dono `$SSS_CONTA`. É o único lugar com senhas. O bloco abaixo o cria, **só se ele ainda não existir**, com uma `cookie_key` nova (própria de cada tipo, sem aparecer na tela), um bloco por ambiente de `SSS_AMBIENTES` e `CHANGE_ME` no lugar das senhas:
 
 ```bash
-( umask 077
-  { printf '[oracle]\npassword = CHANGE_ME\n\n[web]\ncookie_key = %s\n' "$("$PYTHON" -c 'import secrets; print(secrets.token_urlsafe(48))')"
-    for e in $SSS_AMBIENTES; do printf '\n[environment:%s]\nuser = CHANGE_ME\npassword = CHANGE_ME\n' "$e"; done
-  } > instance/secrets.cfg )
+if [ -e instance/secrets.cfg ]; then
+  echo "ja existe: instance/secrets.cfg (mantido; para um ambiente novo, acrescente o bloco com o vi)"
+  for e in $SSS_AMBIENTES; do grep -q "^\[environment:$e\]" instance/secrets.cfg || echo "  falta o bloco [environment:$e]"; done
+else
+  ( umask 077
+    { printf '[oracle]\npassword = CHANGE_ME\n\n[web]\ncookie_key = %s\n' "$("$PYTHON" -c 'import secrets; print(secrets.token_urlsafe(48))')"
+      for e in $SSS_AMBIENTES; do printf '\n[environment:%s]\nuser = CHANGE_ME\npassword = CHANGE_ME\n' "$e"; done
+    } > instance/secrets.cfg ) && echo "criado: instance/secrets.cfg"
+fi
 vi instance/secrets.cfg                       # troque cada CHANGE_ME pelo valor do cofre
 stat -c '%a %U %n' instance/secrets.cfg       # esperado: 600 <SSS_CONTA> instance/secrets.cfg
 grep -c CHANGE_ME instance/secrets.cfg        # esperado: 0
@@ -325,8 +339,8 @@ grep -c '^\[environment:' instance/secrets.cfg; echo $SSS_AMBIENTES | wc -w   # 
 ### 8.3 Web (`instance/$SSS_WEB/config.ini`)
 
 ```bash
-mkdir -m 0750 instance/$SSS_WEB
-cat > instance/$SSS_WEB/config.ini <<EOF
+mkdir -p -m 0750 instance/$SSS_WEB
+sss_grava instance/$SSS_WEB/config.ini 0640 <<EOF
 ; config.ini do no web (CR-028). Banco no instance/common.ini; segredos no instance/secrets.cfg.
 [app]
 name = $SSS_WEB
@@ -334,7 +348,6 @@ name = $SSS_WEB
 [web]
 allowed_origins = http://127.0.0.1:$PORT
 EOF
-chmod 0640 instance/$SSS_WEB/config.ini
 ```
 
 `allowed_origins` é a URL que o navegador mostra. Com acesso por túnel ou proxy (passo 13) com outro endereço, use o endereço que o usuário digita.
@@ -343,8 +356,8 @@ chmod 0640 instance/$SSS_WEB/config.ini
 
 ```bash
 for a in $SSS_AGENTES; do name=${a%%:*}; env=${a#*:}
-  mkdir -m 0750 instance/$name
-  cat > instance/$name/config.ini <<EOF
+  mkdir -p -m 0750 instance/$name
+  sss_grava instance/$name/config.ini 0640 <<EOF
 ; config.ini do agente (CR-028): o nome e o agent_id. Banco no instance/common.ini; segredos no instance/secrets.cfg.
 [app]
 name = $name
@@ -354,7 +367,6 @@ environments = $env
 max_parallel_jobs = $SSS_MAX_PARALLEL
 env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
 EOF
-  chmod 0640 instance/$name/config.ini
 done
 grep -H "environments" instance/*/config.ini
 ```
@@ -408,7 +420,11 @@ A pasta base é a padrão, `<RAIZ>/scripts_ambiente/`, preservada pela atualiza�
 
 ```bash
 . ~/sss_pacote/sss_vars.sh; sss_tipo DEV && cd "$R"            # depois, sss_tipo PROD
-mkdir -p scripts_ambiente && tar -xzf ~/sss_pacote/utilitarios.tar.gz -C scripts_ambiente --strip-components=2
+if [ -d scripts_ambiente/utilitarios ]; then
+  echo "ja existe: scripts_ambiente/utilitarios (mantido; para trocar, veja abaixo)"
+else
+  mkdir -p scripts_ambiente && tar -xzf ~/sss_pacote/utilitarios.tar.gz -C scripts_ambiente --strip-components=2
+fi
 ls scripts_ambiente/utilitarios | wc -l                        # esperado: 14
 find scripts_ambiente -type f -exec chmod 0444 {} +
 find scripts_ambiente -type d -exec chmod 0555 {} +
@@ -500,10 +516,11 @@ O bloco gera as linhas do SSS (variáveis, keepalive com `@reboot` e a cada 5 mi
 cat ~/sss_pacote/crontab_sss.txt
 ```
 
-Revise e acrescente ao fim do `crontab` atual (as variáveis valem para as linhas abaixo delas):
+Revise e acrescente ao fim do `crontab` atual (as variáveis valem para as linhas abaixo delas). Se o bloco do SSS já estiver lá, ele não é repetido: para trocá-lo, apague o bloco antigo com `crontab -e` e rode de novo.
 
 ```bash
-(crontab -l 2>/dev/null; cat ~/sss_pacote/crontab_sss.txt) | crontab -
+if crontab -l 2>/dev/null | grep -q '^# --- SSS (DEPLOYMENT-SERVER)'; then echo "ja existe um bloco do SSS no crontab (nada acrescentado)"
+else (crontab -l 2>/dev/null; cat ~/sss_pacote/crontab_sss.txt) | crontab - && echo "bloco do SSS acrescentado"; fi
 crontab -l | grep -c sss-keepalive; echo $(( $(echo $SSS_TIPOS | wc -w) * 2 ))   # os dois números iguais
 ```
 
