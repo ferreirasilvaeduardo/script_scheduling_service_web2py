@@ -1,8 +1,8 @@
 # SSS — Explain Plan: Agregado TICKETS (F7.3)
 
-Consultas SQL estáticas do `RepoTicketsOracle` (`modules/repo_oracle/tickets.py`) no Oracle 11gR2+.
+Consultas SQL estáticas do `RepoTicketsOracle` (`src/sss/persistence/oracle/tickets.py`) no Oracle 11gR2+.
 
-> **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` de `[oracle] table_prefix` (padrão `tbsss_`). Os dois são validados por `sql_ident` e qualificados **uma vez**, na criação do repositório. Todo valor entra por bind, inclusive as listas `IN` (`:s0..`, `:e0..`, geradas por contagem e em lotes de até 500) e as datas (`TIPO_DATE`, README §7.5).
+> **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` de `[oracle] table_prefix` (ex.: `tbsss_` no PROD, `ssdev_` no DEV). Os dois são validados por `sql_ident` e qualificados **uma vez**, na criação do repositório. Todo valor entra por bind, inclusive as listas `IN` (`:s0..`, `:e0..`, geradas por contagem e em lotes de até 500) e as datas (`TIPO_DATE`, README §7.5).
 >
 > **Sem CLOB nas leituras (AGENTS §4.13):** `list`, `last_runs`, `script_history` e `answers` nunca selecionam `log_output` nem `submitted_params`. `get` traz `submitted_params`, mas nunca `log_output`, que só sai em fatias por `log_read`.
 

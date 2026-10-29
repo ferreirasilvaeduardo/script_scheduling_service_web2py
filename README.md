@@ -385,13 +385,13 @@ bin/
   Makefile                    # alvos de teste (test-*), lint (portão flake8), type-check (mypy) e pacote; só DEV
   dev/scripts/                # árvore de scripts de exemplo para DEV/testes (nunca implantada)
   dev/others/                 # apoio ao desenvolvimento, nunca implantado (reunido aqui em 2026-10-26):
-    homologation/             # ferramentas de homologação: figuras do manual de UI Freeze e evidências reais no DEV
+    homologation/             # ferramentas de homologação: figuras do manual de UI Freeze e evidências reais do DEV e do PROD
                               # (capture_evidence.js + build_evidence_docx.py; Puppeteer e .docx)
     web_harness/              # [CR-021] roteiros Playwright das telas contra o backend FAKE e o run_fake_web.py
     notas/                    # anotações antigas de desenvolvimento (sem valor normativo)
 docs/
   prompts/                    # histórico: prompts com que as fases F0 a F9 foram construídas (caminhos de antes do CR-022a)
-  homologation/               # manual de homologação (UI Freeze, histórico) e evidências reais no DEV (2026-10-22)
+  homologation/               # manual de homologação (UI Freeze, histórico) e evidências reais do DEV e do PROD (desde 2026-10-22)
 var/                          # [CR-028] dados, fora do git e preservados pela atualização:
   <nome>/logs/                #   log_dir de cada processo (web e agentes)
   <web>/tmp/                  #   temporário dos envios do web (CR-037)
@@ -2158,7 +2158,7 @@ UK/FK/CK/IX = {uk|fk|ck|ix}_{prefixo}{abrev}_{sufixo}   ix_tbsss_tck_queue
 
 ### 9.2 Tabela de abreviações
 
-*(os nomes de sequence, trigger e PK na tabela abaixo utilizam a expansão com o prefixo padrão `tbsss_`; se `table_prefix` for alterado na configuração, os identificadores são gerados com o prefixo correspondente pelo `sql_ident`)*
+*(os nomes de sequence, trigger e PK na tabela abaixo utilizam a expansão com o prefixo `tbsss_` do PROD (o DEV usa `ssdev_`; a chave não tem padrão); se `table_prefix` for alterado na configuração, os identificadores são gerados com o prefixo correspondente pelo `sql_ident`)*
 
 | Entidade | Tabela | Abrev. | Sequence | Trigger | PK |
 |---|---|---|---|---|---|
@@ -2738,7 +2738,7 @@ END;
   * `--dry-run` imprime o DDL sem executar;
   * `--lob-basicfile` aplica o fallback de LOB;
   * `--generate-sql <pasta>` (ou via `scripts/generate_sql.py`): gera scripts SQL puros e autocontidos (`01_deploy_sss_<owner>_<prefixo>.sql` com DDL/DML de seed/estatísticas, `02_rollback_sss_<owner>_<prefixo>.sql` para desinstalação total e `99_validate_deploy_<owner>_<prefixo>.sql`, só de leitura) para execução direta por DBAs via SQL*Plus em homologação/produção sem execução Python no servidor de banco;
-  * **Nome dos arquivos (CR-024):** `<base>_<owner>_<prefixo>.sql`, com o owner em minúsculas e o prefixo sem o `_` final (ex.: owner `OPENRISOW` e prefixo `tbsss_` geram `01_deploy_sss_openrisow_tbsss.sql`, `02_rollback_sss_openrisow_tbsss.sql`, `99_validate_deploy_openrisow_tbsss.sql` e, com `--grants-to`, `03_grants_sss_openrisow_tbsss.sql`). Esquemas diferentes ficam lado a lado na mesma pasta; gerar de novo para o mesmo owner e prefixo sobrescreve. O deploy cita o nome do rollback correspondente. Os arquivos versionados em `docs/sql/` são os do DEV (`openrisow`, `tbsss_`).
+  * **Nome dos arquivos (CR-024):** `<base>_<owner>_<prefixo>.sql`, com o owner em minúsculas e o prefixo sem o `_` final (ex.: owner `OPENRISOW` e prefixo `tbsss_` geram `01_deploy_sss_openrisow_tbsss.sql`, `02_rollback_sss_openrisow_tbsss.sql`, `99_validate_deploy_openrisow_tbsss.sql` e, com `--grants-to`, `03_grants_sss_openrisow_tbsss.sql`). Esquemas diferentes ficam lado a lado na mesma pasta; gerar de novo para o mesmo owner e prefixo sobrescreve. O deploy cita o nome do rollback correspondente. Os arquivos versionados em `docs/sql/` são os do PROD (`openrisow`, `tbsss_`) e os do DEV (`openrisow`, `ssdev_`), lado a lado.
   * não há opção de `DROP` nem `--recreate`, inclusive em DEV. Objetos existentes nunca são removidos automaticamente por `init_db.py`.
 * **Seed Completo** via `MERGE` (idempotente):
   * **Funcionalidades e Controle:** catálogo canônico de 14 funcionalidades (§4.3.D) e a linha de `tbsss_control` (versão do esquema e auditoria de versão).
@@ -2752,7 +2752,7 @@ END;
   * **Governança de Dados:** metadados descritivos aplicados via `COMMENT ON TABLE` e `COMMENT ON COLUMN` para todas as tabelas e colunas, além de comentários em todas as triggers de integridade.
   * **Atores de Auditoria:** a inclusão grava `created_by = 'SYSTEM:init_db'`; quando o `MERGE` muda uma linha existente, grava `updated_*` com o mesmo ator; uma linha igual ao seed não é tocada (§10, CR-006).
 * **Administrador inicial:** criado por padrão (`admin` / `ADMINISTRATOR`), ou customizado via `--admin-login` e senha lida de `getpass` ou de `SSS_BOOTSTRAP_ADMIN_PASSWORD`.
-* **Script SQL de Produção Autônomo:** gerado em `docs/sql/01_deploy_sss_openrisow_tbsss.sql` para implantação direta via SQL*Plus por DBAs, contendo DDL, comentários de governança, DML de seed completo, coleta de estatísticas pelo otimizador e os GRANTs por papel da tabela abaixo, com tratamento de erro tolerante. Script de desinstalação total em `docs/sql/02_rollback_sss_openrisow_tbsss.sql`.
+* **Script SQL de Produção Autônomo:** gerado em `docs/sql/01_deploy_sss_openrisow_tbsss.sql` para implantação direta via SQL*Plus por DBAs, contendo DDL, comentários de governança, DML de seed completo, coleta de estatísticas pelo otimizador e os GRANTs por papel da tabela abaixo, parando no primeiro erro (`WHENEVER SQLERROR EXIT FAILURE ROLLBACK`). Script de desinstalação total em `docs/sql/02_rollback_sss_openrisow_tbsss.sql`.
   * **Nenhum GRANT a PUBLIC:** `tbsss_users` guarda `password_hash`, e o banco pode ser compartilhado com outros sistemas.
   * **Contas dos papéis:** sem `--grants-to`, o gerador usa o `config.ini`: web e agente vêm de `[oracle] user` (CR-030: sem o papel purge; CR-032, D8: sem o monitor). Cada conta é validada como identificador Oracle, e `PUBLIC` é recusado.
   * Um papel sem conta, ou cuja conta é a dona do esquema, não recebe GRANT: o owner já tem todos os privilégios, e GRANT para si mesmo falha (ORA-01749). Cada caso fica registrado como comentário no script.

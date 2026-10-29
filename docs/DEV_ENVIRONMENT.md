@@ -122,9 +122,9 @@ cd /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
 
 **Prefixo do DEV (2026-10-29):** o `instance/common.ini` do DEV usa `table_prefix = ssdev_`; o PROD usa `tbsss_`, no mesmo owner (DEPLOYMENT, Apêndice A). O esquema `ssdev_` foi criado pelo `init_db --name agente0001 --real-schema`, com o seed: o `admin` começa com a senha inicial do DEPLOYMENT §5.3, e a homologação a troca no CT-01. Os scripts do DEV ficam em `docs/sql/` ao lado dos do PROD, com o prefixo no nome (`01_deploy_sss_openrisow_ssdev.sql`, `02_rollback_sss_openrisow_ssdev.sql`, `99_validate_deploy_openrisow_ssdev.sql`), gerados por `python3 scripts/generate_sql.py --config instance/agente0001/config.ini`. Para recriar o esquema do DEV: `02_rollback` e `01_deploy` do `ssdev` (apaga os dados), ou um `DROP` das tabelas `ssdev_*` seguido do `init_db`. Os comentários de coluna das FKs citam `tbsss_<tabela>` nos dois prefixos (texto fixo do dicionário, sem efeito).
 
-**Um agente por ambiente no DEV (2026-10-29):** `agente0001` = GFPREPROD (o de antes, que ficou só com ele: a massa de teste e a pasta de entrada do GFPREPROD continuam em `var/agente0001/`), `agente0002` = CLONE2, `agente0003` = CLONE1, `agente0004` = CLONE6 e `agente0005` = CLONE7. Cada um com o mesmo config enxuto (`max_parallel_jobs = 4`, `script_base_dir` = `dev/scripts`, `env_passthrough`, `level = DEBUG`) e as suas pastas em `var/agente000N/`; o `secrets.cfg` único já tem as credenciais dos cinco ambientes. Subida: `bin/sss-keepalive.sh web0001:18000 agente0001 agente0002 agente0003 agente0004 agente0005` (e `bin/sss-stop.sh` de cada um para parar). O PROD continua com um agente para os cinco.
+**Um agente por ambiente no DEV (2026-10-29):** `agente0001` = GFPREPROD (o de antes, que ficou só com ele: a massa de teste e a pasta de entrada do GFPREPROD continuam em `var/agente0001/`), `agente0002` = CLONE2, `agente0003` = CLONE1, `agente0004` = CLONE6 e `agente0005` = CLONE7. Cada um com o mesmo config enxuto (`max_parallel_jobs = 4`, `script_base_dir` = `dev/scripts`, `env_passthrough`, `level = DEBUG`) e as suas pastas em `var/agente000N/`; o `secrets.cfg` único já tem as credenciais dos cinco ambientes. Subida: `bin/sss-keepalive.sh web0001:18000 agente0001 agente0002 agente0003 agente0004 agente0005` (e `bin/sss-stop.sh` de cada um para parar). O PROD tem a mesma divisão desde o CR-039 (parado, sem `crontab`).
 
-**Estrutura por processo (CR-028):** o DEV tem a mesma estrutura do PROD (DEPLOYMENT §1; não há HOM, CR-030), com `<RAIZ>` = `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`: `instance/web0001/` e `instance/agente0001/` (cada um com o seu `config.ini`; o `[oracle]` num único `instance/common.ini` e os segredos num único `instance/secrets.cfg` `0600`, os dois fora do git), logs do web em `var/web0001/logs` e as pastas do agente em `var/agente0001/` (`logs`, `works`, `outputs`, `inputs`, `script_works`). Para criar do zero, copie os modelos de `instance/exemplos/` (o `[oracle]` com owner, prefixo e DSN; não há `sss_env` desde o CR-032: o ambiente mostrado vem da pasta `DEV`), as pastas são criadas na subida (CR-032) e siga o `docs/DEPLOYMENT.md` §7. O `bin/start_local.sh` sobe o `web0001` (outro nome com `SSS_WEB_NAME`) e carrega `instance/web0001/web.env` (`SSS_DEV_SEED_PASSWORD` e `SSS_TZ`; `0600`, fora do git). Não há config padrão (CR-029): as ferramentas de banco rodam com `--name agente0001` (`init_db.py`, `generate_sql.py`, `check_env.py`), e a bateria Oracle lê `instance/agente0001/` (config e segredos).
+**Estrutura por processo (CR-028):** o DEV tem a mesma estrutura do PROD (DEPLOYMENT §1; não há HOM, CR-030), com `<RAIZ>` = `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`: `instance/web0001/` e `instance/agente0001/` a `instance/agente0005/` (cada um com o seu `config.ini`; o `[oracle]` num único `instance/common.ini` e os segredos num único `instance/secrets.cfg` `0600`, os dois fora do git), logs do web em `var/web0001/logs` e as pastas de cada agente em `var/agente000N/` (`logs`, `works`, `outputs`, `inputs`, `script_works`, `files`). Para criar do zero, copie os modelos de `instance/exemplos/` (o `[oracle]` com owner, prefixo e DSN; não há `sss_env` desde o CR-032: o ambiente mostrado vem da pasta `DEV`), as pastas são criadas na subida (CR-032) e siga o `docs/DEPLOYMENT.md` §7. O `bin/start_local.sh` sobe o `web0001` (outro nome com `SSS_WEB_NAME`) e carrega `instance/web0001/web.env` (`SSS_DEV_SEED_PASSWORD` e `SSS_TZ`; `0600`, fora do git). Não há config padrão (CR-029): as ferramentas de banco rodam com `--name agente0001` (`init_db.py`, `generate_sql.py`, `check_env.py`), e a bateria Oracle lê `instance/agente0001/` (config e segredos).
 
 A aplicação fica no endereço local `127.0.0.1:8000/script_scheduling_service` (porta 8000, caminho `/script_scheduling_service`).
 
@@ -141,7 +141,7 @@ bin/stop_local.sh               # SIGTERM; SIGKILL só se não parar em 40 s (SS
 O `start_local.sh` recusa subir se o `run_web.py --check` falhar ou se o Python escolhido não tiver o driver Oracle. A tela mostra `[DEV]` no título da aba e o cabeçalho em outra cor (além da faixa), porque a pasta acima da raiz é `DEV` (CR-032).
 
 Para subir como nos servidores via launcher oficial:
-`bin/sss-web.sh "$(command -v python3)" --host 127.0.0.1 --port 8000` (o launcher só aceita interpretador chamado `python3` ou `python3.X` e só inicia o `run_web.py`): ele recusa root, aplica `umask 077`, exporta `TZ` a partir de `SSS_TZ` e `LANG`/`LC_ALL` a partir de `SSS_LOCALE` (padrão `C.UTF-8`) (`docs/DEPLOYMENT.md` §10.1 e Apêndice A).
+`bin/sss-web.sh "$(command -v python3)" web0001 --host 127.0.0.1 --port 8000` (o launcher só aceita interpretador chamado `python3` ou `python3.X` e só inicia o `run_web.py`): ele recusa root, aplica `umask 077`, exporta `TZ` a partir de `SSS_TZ` e `LANG`/`LC_ALL` a partir de `SSS_LOCALE` (padrão `C.UTF-8`) (`docs/DEPLOYMENT.md` §10.1 e Apêndice A).
 
 **Codificação (CR-007):** o processo web aborta se a codificação do sistema de arquivos não for UTF-8 (`sys.getfilesystemencoding()`). Subindo sem o launcher, exporte antes `LANG=C.UTF-8` e `LC_ALL=C.UTF-8` (ou outro locale UTF-8 da máquina, `locale -a`).
 
@@ -220,6 +220,7 @@ A pasta `dev/scripts/` contém scripts de exemplo **sem lógica perigosa**, usad
 | `carga_diaria.py`, `relatorio_mensal.py`, `validacao_fiscal.py`, `cleanup_tmp.sh`, `sync_tabelas.sh`, `backup_extra.sh` | Correspondem aos `path_file` do seed FAKE e imprimem os argumentos |
 | `utilitarios/*.py` e `utilitarios/*.sh` | 14 scripts utilitários de arquivos (zip, tar.gz, divisão, concatenação, encoding, substituição, deduplicação, hash, contagem, filtros, ordenação e limpeza). Detalhes em `docs/UTILITY_SCRIPTS.md` |
 | `diagnostico/pasta_trabalho.sh` | Diagnóstico do CR-019: confere `SSS_WORK_DIR`, grava `diagnostico.txt` e `sub/arquivo.txt` na pasta de trabalho e lista o que gravou. Sai com 1 sem a variável e com 2 se a pasta não existir |
+| `diagnostico/interp_shebang_ausente.py` | Diagnóstico do CT-32 (CR-025 a CR-027): o `#!` aponta para um executável que não existe; o agente o ignora (linha `[SSS]` no log) e usa o interpretador digitado no disparo ou o do cadastro |
 | `diagnostico/pasta_arquivos.sh` | Diagnóstico do CR-037 (CT-33): confere `SSS_FILES_INPUTS_DIR` e `SSS_FILES_OUTPUTS_DIR`, copia os arquivos de `inputs` para `outputs/ticket_<id>/copias/` e grava `resumo.txt`. Sai com 1 sem as variáveis |
 | `diagnostico/gerar_saida.sh` | Diagnóstico do CR-020a: grava `resumo.txt` e `detalhes/relatório de testes.csv` em `SSS_OUTPUT_DIR`, para gerar uma saída real e testar a tela de Saídas. Sai com 1 sem a variável |
 | `diagnostico/interp_info.py` | Diagnóstico do CR-025: imprime o interpretador que rodou o script (`sys.executable`, versão e `sys.prefix`), para o interpretador digitado no disparo e o virtualenv |
@@ -234,7 +235,7 @@ O script fica num **caminho absoluto** em qualquer lugar do servidor ou num cami
 * **No agente**, a cada execução:
   * o relativo é juntado à `script_base_dir` (sem ela, `NO_BASE_DIR`);
   * o caminho pode ser link simbólico, inclusive para fora da pasta base; o agente resolve o caminho real e executa o arquivo real;
-  * o caminho, juntado ou real, não fica em pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`), nem dentro de `log_dir`, `work_dir`, `output_dir`, `input_dir` ou `script_work_dir`, nem na pasta da aplicação (`dev/` é a exceção onde existe, o repositório);
+  * o caminho, juntado ou real, não fica em pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`), nem dentro de `log_dir`, `work_dir`, `output_dir`, `input_dir`, `script_work_dir` ou `files_dir`, nem na pasta da aplicação (`dev/` é a exceção onde existe, o repositório);
   * o arquivo real existe, é arquivo regular e não tem escrita para grupo nem para outros (`st_mode & 0o022 == 0`); as pastas do caminho não são conferidas.
 
 **No DEV:** o seed (Oracle e FAKE) e os diagnósticos da homologação usam caminho relativo (`utilitarios/zipar_arquivos.py`, `carga_diaria.py`, `diagnostico/gerar_saida.sh`), e o `instance/agente0001/config.ini` aponta a pasta base para os scripts do repositório:
@@ -255,7 +256,7 @@ Os arquivos precisam de modo `0644` ou `0755` (`chmod -R go-w dev/scripts`). Uma
 * **Log da aplicação:** `log_dir/internal/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (CR-009; até o F8.2 era `log_dir/app/...`, que pode ser apagada à mão). O arquivo nasce na pasta do minuto em que o processo sobe e troca para um novo, na pasta do minuto atual, ao atingir `app_log_max_bytes`. Nada é apagado pelo processo (CR-030; limpeza manual, README §11.3). Para seguir o arquivo mais recente:
 
   ```bash
-  LOG_DIR=/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/logs     # o [logging] log_dir do seu config.ini
+  LOG_DIR=/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/var/web0001/logs   # derivado do nome (CR-032)
   tail -f "$(find "$LOG_DIR/internal/app" -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)"
   ```
 
@@ -283,8 +284,9 @@ O backend FAKE não precisa de banco. Para o backend ORACLE (README §2.3, CR-00
 * **Credencial:** só no `secrets.cfg` (`0600`, dono = usuário do processo), nunca no `config.ini`.
 * **Inicialização e DDL/DML:**
   * Via Python: `python3 scripts/init_db.py --name agente0001`
-  * Via SQL*Plus (autônomo): `sqlplus usuario/senha@//host:porta/servico @docs/sql/01_deploy_sss_openrisow_tbsss.sql`
-  * Rollback total: `sqlplus usuario/senha@//host:porta/servico @docs/sql/02_rollback_sss_openrisow_tbsss.sql`
+  * Via SQL*Plus (autônomo): `sqlplus usuario/senha@//host:porta/servico @docs/sql/01_deploy_sss_openrisow_ssdev.sql`
+  * Rollback total: `sqlplus usuario/senha@//host:porta/servico @docs/sql/02_rollback_sss_openrisow_ssdev.sql`
+  * **No DEV, só os `*_ssdev.sql`.** Os `*_tbsss.sql` são as tabelas do PROD, no mesmo owner: o `02_rollback_sss_openrisow_tbsss.sql` apagaria o PROD.
 * **Testes contra banco real:** só `SSS_TEST_ORACLE=1` (README §2.5). Owner, prefixo, DSN e conta vêm do `[oracle]` do `instance/common.ini` (CR-032, D18; lido pelo `instance/agente0001/config.ini`), e os segredos do `instance/secrets.cfg` único (CR-032).
   * **No `GFPR`** (owner `openrisow`, modo compartilhado), o driver Oracle só está instalado no Python 3.6.15 desta máquina. Exemplo para um agregado do F7.3:
     ```bash

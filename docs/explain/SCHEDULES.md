@@ -1,8 +1,8 @@
 # SSS — Explain Plan: Agregado AGENDAMENTOS (F7.3)
 
-Consultas SQL estáticas do `RepoSchedulesOracle` (`modules/repo_oracle/schedules.py`) no Oracle 11gR2+.
+Consultas SQL estáticas do `RepoSchedulesOracle` (`src/sss/persistence/oracle/schedules.py`) no Oracle 11gR2+.
 
-> **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` de `[oracle] table_prefix` (padrão `tbsss_`). Os dois são validados por `sql_ident` e qualificados **uma vez**, na criação do repositório. Todo valor entra por bind; as datas usam `TIPO_DATE` (README §7.5) e o `params_json`, bind CLOB.
+> **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` de `[oracle] table_prefix` (ex.: `tbsss_` no PROD, `ssdev_` no DEV). Os dois são validados por `sql_ident` e qualificados **uma vez**, na criação do repositório. Todo valor entra por bind; as datas usam `TIPO_DATE` (README §7.5) e o `params_json`, bind CLOB.
 >
 > **`params_json` na listagem (exceção documentada, README §2.5):** o service avalia cada regra com as respostas gravadas (tela de regras e Agenda), então `list` traz esse CLOB pequeno. O `log_output` nunca entra em listagem.
 

@@ -4,8 +4,8 @@
 Uso (da pasta tools/, Python 3 com python-docx):
     SSS_EVIDENCE_DATE=AAAAMMDD [SSS_EVIDENCE_ROUND=n] python3 build_evidence_docx.py [pasta_evidencias] [saida.docx]
 Rodadas conhecidas em RODADAS (20261022: CR-016; 20261023: CR-017; 20261023_r2: CR-018; 20261023_r3: CR-019
-e CR-020; 20261024_r2: CR-021a-c; 20261024_r4: CR-021e; 20261024_r6: CR-021f). Padrao: a rodada de
-20261023, ../evidence_<data>[_r<n>] -> ../../../docs/homologation/SSS_Homologation_Evidence_<AAAA-MM-DD>[_r<n>].docx
+e CR-020; 20261024_r2: CR-021a-c; 20261024_r4: CR-021e; 20261024_r6: CR-021f). Padrao: a data do
+dia (como o capture_evidence.js), ../evidence_<data>[_r<n>] -> ../../../docs/homologation/SSS_Homologation_Evidence_<AAAA-MM-DD>[_r<n>].docx
 """
 import io
 import json
@@ -25,7 +25,8 @@ from docx.shared import Cm, Pt, RGBColor
 AQUI = os.path.dirname(os.path.abspath(__file__))
 HOMOLOG = os.path.dirname(AQUI)
 APP = os.path.dirname(os.path.dirname(os.path.dirname(HOMOLOG)))
-RUN_DATE = os.environ.get("SSS_EVIDENCE_DATE", "20261023")
+# Mesmo padrao do capture_evidence.js: a data do dia.
+RUN_DATE = os.environ.get("SSS_EVIDENCE_DATE") or time.strftime("%Y%m%d")
 DATE_ISO = "%s-%s-%s" % (RUN_DATE[:4], RUN_DATE[4:6], RUN_DATE[6:])
 DATE_BR = "%s/%s/%s" % (RUN_DATE[6:], RUN_DATE[4:6], RUN_DATE[:4])
 ROUND = os.environ.get("SSS_EVIDENCE_ROUND", "")
@@ -801,6 +802,23 @@ RODADAS["20261029_r5"] = dict(RODADAS["20261029_r3"], **{
         u"(healthy_agents=5). Marca %s." % STAMP,
         u"A rodada completa teve 349/351: as duas falhas eram do roteiro (acima). Depois do ajuste, CT-23, CT-33 "
         u"e CT-20 foram repetidos.",
+        u"O banco não foi recriado: o admin já estava com a senha escolhida (SSS_ADMIN_START=new).",
+    ],
+})
+RODADAS["20261029_r6"] = dict(RODADAS["20261029_r4"], **{
+    "commit": u"3b56cbd (CR-037c) no PROD, agora com um agente por ambiente (CR-039, só configuração); o roteiro "
+              u"no mesmo commit deste documento",
+    "nome_agente": u"agente0001 a agente0005 (um por ambiente)",
+    "ressalva": dict(RODADAS["20261029_r4"]["ressalva"], **{
+        "CT-20": RODADAS["20261029_r5"]["ressalva"]["CT-20"]}),
+    "defeitos": [],
+    "observacoes": [
+        u"Rodada do CR-039: PROD com um agente por ambiente, como o DEV: agente0001 = GFPREPROD, agente0002 = "
+        u"CLONE2, agente0003 = CLONE1, agente0004 = CLONE6 e agente0005 = CLONE7, todos subidos pelo "
+        u"bin/sss-keepalive.sh (healthy_agents=5). Marca %s." % STAMP,
+        u"No tbsss_tickets, cada ticket da rodada rodou no agente do seu ambiente (GFPREPROD no agente0001, "
+        u"CLONE2 no agente0002, CLONE6 no agente0004); os sem agente são os cancelados antes do claim.",
+        u"Rodada completa sem falha: 353/353 (o CT-01 tem no PROD a conferência do rodapé, que o DEV não tem).",
         u"O banco não foi recriado: o admin já estava com a senha escolhida (SSS_ADMIN_START=new).",
     ],
 })

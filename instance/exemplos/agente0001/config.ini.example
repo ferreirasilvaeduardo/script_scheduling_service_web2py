@@ -1,6 +1,6 @@
 ; config.ini do AGENTE (CR-028): copie para instance/agente0001/config.ini (o nome da pasta e o do processo).
 ; Sem [web] (README §12.1). O agent_id e o proprio nome, unico em toda a instalacao. As pastas saem de
-; var/agente0001/ (logs, works, outputs, inputs, script_works) e scripts_ambiente/, criadas na subida.
+; var/agente0001/ (logs, works, outputs, inputs, script_works, files) e scripts_ambiente/, criadas na subida.
 ; Os segredos ficam no instance/secrets.cfg unico do servidor (modelo: instance/exemplos/secrets.cfg.example).
 ; O banco ([oracle]) fica no instance/common.ini do servidor (modelo: instance/exemplos/common.ini.example).
 ; Suba com: bin/sss-scheduler.sh agente0001

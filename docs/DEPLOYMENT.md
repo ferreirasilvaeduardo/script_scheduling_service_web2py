@@ -165,6 +165,10 @@ R=/portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service
 @reboot      cd $R && bin/sss-keepalive.sh web0001:0.0.0.0:18000 agente0001
 */5 * * * *  cd $R && bin/sss-keepalive.sh web0001:0.0.0.0:18000 agente0001
 */5 * * * *  cd $R && $PYTHON scripts/health.py --name agente0001 > var/agente0001/logs/health.txt 2>&1
+# Com um agente por ambiente (§7.1; ensaiado no CR-039), os cinco nomes nas duas linhas do keepalive; um
+# health.py basta (ele olha todos os agentes e todos os ambientes):
+# @reboot     cd $R && bin/sss-keepalive.sh web0001:0.0.0.0:18000 agente0001 agente0002 agente0003 agente0004 agente0005
+# */5 * * * * cd $R && bin/sss-keepalive.sh web0001:0.0.0.0:18000 agente0001 agente0002 agente0003 agente0004 agente0005
 15 2 * * *   cd $R && find var/*/logs var/*/outputs var/*/script_works -mindepth 7 -maxdepth 7 -type d -mtime +30 -exec rm -rf {} + ; find var/*/logs var/*/outputs var/*/script_works -mindepth 3 -type d -empty -delete
 ```
 
@@ -244,7 +248,7 @@ Os três scripts saem do mesmo registro de identificadores, com o owner e o pref
 # na máquina de desenvolvimento ou num servidor com o pacote
 cd <RAIZ>
 python3 scripts/generate_sql.py --config instance/web0001/config.ini --grants-to web=sss_web,agent=sss_agente
-# gera docs/sql/01_deploy_sss_openrisow_tbsss.sql, 02_rollback_sss_<owner>_<prefixo>.sql, 99_validate_deploy_<owner>_<prefixo>.sql e 03_grants_sss_<owner>_<prefixo>.sql
+# gera docs/sql/01_deploy_sss_<owner>_<prefixo>.sql, 02_rollback_sss_<owner>_<prefixo>.sql, 99_validate_deploy_<owner>_<prefixo>.sql e 03_grants_sss_<owner>_<prefixo>.sql
 ```
 
 O DBA revisa o `01` (ou a saída de `python3 scripts/init_db.py --name agente0001 --dry-run`, que imprime o DDL sem conectar) **antes** de executar. Depois:
@@ -259,7 +263,7 @@ SPOOL /tmp/sss_99_validate.log
 SPOOL OFF
 ```
 
-* O `01` termina com "concluída com sucesso!" mesmo que um comando falhe (`WHENEVER SQLERROR CONTINUE`). Procure `ORA-` e `SP2-` nos dois logs antes de dar a implantação por concluída.
+* O `01` para no primeiro erro (`WHENEVER SQLERROR EXIT FAILURE ROLLBACK`): sai com código diferente de zero e sem a mensagem "concluída com sucesso!". Com o `01` interrompido, rode o `02` antes de aplicá-lo de novo. O `02` e o `99` seguem com `WHENEVER SQLERROR CONTINUE`: procure `ORA-` e `SP2-` nos logs deles.
 * O `99` só lê. As duas linhas de resumo precisam dizer `OK: nenhuma falha`.
 * Com contas separadas, `sss_web` e `sss_agente` são criadas antes do `01`; com a conta única (§4.0), nenhuma conta nova. Nenhum GRANT vai para PUBLIC.
 * **Rollback total** (só em instalação nova ou com autorização): `@docs/sql/02_rollback_sss_openrisow_tbsss.sql`. Ele apaga os dados.
@@ -329,7 +333,7 @@ As pastas (`log_dir`, `work_dir`, `output_dir`, `input_dir`, `script_work_dir`, 
 
 Confira que a linha é igual em todos. Se um agente subir com valores diferentes dos que já estão ativos, ele é recusado (código 16, §15).
 
-**Mais de um agente no mesmo servidor** (por exemplo, um por ambiente): um `instance/<nome>/` para cada um, com o seu `name`, e o nome de cada um na linha do keepalive. Em vários servidores com a mesma raiz, veja o §4.1. As pastas não se misturam, porque saem do nome. Para só rodar mais scripts ao mesmo tempo, basta aumentar `max_parallel_jobs` de um agente.
+**Mais de um agente no mesmo servidor** (por exemplo, um por ambiente) [ensaiado no CR-039]: um `instance/<nome>/` para cada um, criado como acima a partir do `instance/exemplos/agente0001/config.ini.example`, com o seu `name` e o seu `environments`, e o nome de cada um na linha do keepalive. Na primeira subida, cada agente cria as suas pastas em `var/<nome>/` e se cadastra sozinho na tabela de agentes (`AGENT_START` na auditoria); um agente que já atendia vários ambientes e passa a atender um só tem a linha atualizada na subida. Um agente que cai ou é parado não afeta os outros, mas deixa o ambiente dele sem atendimento: o `health.py` dá `CRITICAL: ambiente X ativo sem nenhum agente saudavel` enquanto ele estiver fora (numa parada planejada, avise o monitoramento). Em vários servidores com a mesma raiz, veja o §4.1. As pastas não se misturam, porque saem do nome. Para só rodar mais scripts ao mesmo tempo, basta aumentar `max_parallel_jobs` de um agente.
 
 ### 7.2 `secrets.cfg` [ensaiado]
 
@@ -477,7 +481,7 @@ curl -s -o /dev/null -w "admin: HTTP %{http_code}\n" http://127.0.0.1:18000/admi
 
 Depois:
 1. Entre com o `admin` e troque a senha inicial (§5.3).
-2. Em **Agentes**, confira que cada agente aparece como OK, com a plataforma e os interpretadores esperados.
+2. Em **Agentes**, confira que cada agente aparece como OK, com a plataforma, os ambientes e a pasta base esperados.
 3. Dispare um script simples num ambiente de teste. O ticket deve terminar em `SUCCESS`, e o log do agente mostra:
    ```text
    INFO ... [ticket=1000929] [action=SPAWN] script iniciado (pid 151505)
@@ -524,7 +528,7 @@ CRITICAL: ambiente CLONE1 ativo sem nenhum agente saudavel
 | `versao do esquema N, esperada M` | O banco e o pacote estão em versões diferentes: aplique a migração ou volte o pacote (§18) |
 | `agente X ATIVO sem heartbeat ha N s` | O agente caiu ou perdeu o banco: veja o log dele (§14) e o §15.3. Depois de `node_offline_timeout_s`, outro agente finaliza os tickets dele como `NODE_OFFLINE` |
 | `agente X em risco` | Heartbeat atrasado além do fence: o agente já deve ter se isolado (`FENCED`) |
-| `ambiente X ativo sem nenhum agente saudavel` | Nenhum agente saudável atende o ambiente: suba um agente com o ambiente em `environments`, ou desative o ambiente |
+| `ambiente X ativo sem nenhum agente saudavel` | Nenhum agente saudável atende o ambiente: suba um agente com o ambiente em `environments`, ou desative o ambiente. Com um agente por ambiente, é o que aparece logo que esse agente para (`sss-stop.sh`); um agente derrubado sem parar (`kill -9`, queda) continua contando como saudável até o heartbeat vencer |
 | `fila sem atendente: N tickets de AMB/INTERP` | Nenhum agente saudável atende o ambiente (CR-026: o interpretador não conta mais; INTERP é o do cadastro): suba um agente para o ambiente ou confira os agentes em risco |
 | `fila vencida: N tickets PENDING, espera maxima M min` | Agentes sem vaga: veja `max_parallel_jobs` e o teto por script, e os scripts presos em `RUNNING` |
 | `ticket N RUNNING sem PID` | O agente reservou e não iniciou: veja o log do agente para esse ticket |

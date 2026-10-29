@@ -1,8 +1,8 @@
 # SSS — Explain Plan: Agregado AUDITORIA_AGENTES (F7.3)
 
-Consultas SQL estáticas do `RepoAuditOracle` e do `RepoAgentsOracle` (`modules/repo_oracle/audit.py` e `agentes.py`) no Oracle 11gR2+.
+Consultas SQL estáticas do `RepoAuditOracle` e do `RepoAgentsOracle` (`src/sss/persistence/oracle/audit.py` e `agents.py`) no Oracle 11gR2+.
 
-> **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` de `[oracle] table_prefix` (padrão `tbsss_`). Os dois são validados por `sql_ident` e qualificados **uma vez**, na criação do repositório. Todo valor entra por bind, com as datas como `TIPO_DATE` (README §7.5).
+> **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` de `[oracle] table_prefix` (ex.: `tbsss_` no PROD, `ssdev_` no DEV). Os dois são validados por `sql_ident` e qualificados **uma vez**, na criação do repositório. Todo valor entra por bind, com as datas como `TIPO_DATE` (README §7.5).
 >
 > **Expressões dos índices por função (AGENTS §4.8):** `tickets_running`, `running_without_pid` e `unattended_queue` repetem as expressões de `ix_{prefixo}tck_run` (`CASE`) e `ix_{prefixo}tck_queue` (`GREATEST(scheduled_at, created_at)`, CR-013), importadas do `sql_ident`. Nenhuma das três lê CLOB.
 
@@ -12,7 +12,7 @@ Consultas SQL estáticas do `RepoAuditOracle` e do `RepoAgentsOracle` (`modules/
 
 | Método | Consulta | Acesso esperado |
 |---|---|---|
-| `auditoria.list` | `COUNT(*)` com `ROWNUM <= 10001` e página `ROWNUM`, ordem `created_at DESC, id DESC`. O service sempre envia o período (`created_at >= :start_date AND created_at <= :end_date`, sem `TRUNC`, até 31 dias, ou 366 com filtro seletivo); filtros de ator e IP por trecho, ação, entidade, `entity_id` e `id_max` | `ix_{prefixo}aud_crt` no período; `ix_{prefixo}aud_ent` com entidade + id |
+| `auditoria.list` | `COUNT(*)` com `ROWNUM <= 10001` e página `ROWNUM`, ordem `created_at DESC, id DESC`. O service sempre envia o período (`created_at >= :start_date AND created_at <= :end_date`, sem `TRUNC`, até 90 dias, ou 366 com filtro seletivo); filtros de ator e IP por trecho, ação, entidade, `entity_id` e `id_max` | `ix_{prefixo}aud_crt` no período; `ix_{prefixo}aud_ent` com entidade + id |
 | `auditoria.iterate` | Os mesmos filtros e ordem, `ROWNUM <= :cutoff`, cursor com `arraysize` (exportação, sem offset) | idem |
 | `auditoria.register` / `reserve_id` | `INSERT` pela PK; `NEXTVAL` da sequence | — |
 | `agentes.list` | Todos os agentes por `codigo, id` (dezenas de linhas) | `TABLE ACCESS FULL` aceitável em `tbsss_agents` |

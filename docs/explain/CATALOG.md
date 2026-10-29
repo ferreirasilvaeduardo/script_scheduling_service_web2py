@@ -1,8 +1,8 @@
 # SSS — Explain Plan: Agregado CATALOGO (F7.3)
 
-Consultas SQL estáticas do `RepoCatalogOracle` (`modules/repo_oracle/catalog.py`) no Oracle 11gR2, com o acesso esperado de cada uma.
+Consultas SQL estáticas do `RepoCatalogOracle` (`src/sss/persistence/oracle/catalog.py`) no Oracle 11gR2, com o acesso esperado de cada uma.
 
-> **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` de `[oracle] table_prefix` (padrão `tbsss_`). Os dois são validados por `sql_ident` e qualificados **uma vez**, na criação do repositório. Todo valor entra por bind.
+> **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` de `[oracle] table_prefix` (ex.: `tbsss_` no PROD, `ssdev_` no DEV). Os dois são validados por `sql_ident` e qualificados **uma vez**, na criação do repositório. Todo valor entra por bind.
 >
 > **Escopo do critério "sem `TABLE ACCESS FULL`":** o critério vale para `{prefixo}tickets` e `{prefixo}audit` (AGENTS §4.12). O catálogo não lê nenhuma das duas, salvo a gravação da auditoria pela PK. As listagens de cadastro (ambientes, scripts e parâmetros) são tabelas pequenas, de administração. Nelas, `TABLE ACCESS FULL` com `COUNT STOPKEY` é aceitável e esperado.
 >

@@ -69,7 +69,7 @@ const AGENT_CFG = readAgentConfig(path.join(APP, 'instance', AGENT_NAME, 'config
 const AGENT_VAR = path.join(APP, 'var', AGENT_CFG.name || AGENT_NAME);
 const AGENT_ID = AGENT_CFG.agent_id || AGENT_CFG.name;
 // Um agente por ambiente no DEV (2026-10-29): o agente de cada ambiente, lido de instance/*/config.ini
-// (so os que tem [agent]); sem config para o ambiente, o AGENT_ID (o PROD tem um agente para todos).
+// (so os que tem [agent]); sem config para o ambiente, o AGENT_ID (instalacao com um agente para todos).
 const AGENT_BY_ENV = {};
 for (const dir of fs.readdirSync(path.join(APP, 'instance'))) {
     const file = path.join(APP, 'instance', dir, 'config.ini');
