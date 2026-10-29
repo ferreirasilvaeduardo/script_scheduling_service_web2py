@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-"""scripts/check_env.py: sondagem do driver com os segredos do papel do processo (CR-031)."""
+"""scripts/check_env.py: sondagem do driver com os segredos do papel do processo (CR-031),
+sempre (CR-033, D6)."""
 import io
 import os
 import types
@@ -13,18 +14,21 @@ from sss.config import sss_config
 from sss.persistence import db_conn
 
 
-def _cfg(role):
-    return types.SimpleNamespace(app=types.SimpleNamespace(role=role),
-                                 oracle=types.SimpleNamespace(driver_mode="thick"))
+def _cfg(role, dsn="servidor:1521/servico"):
+    oracle = types.SimpleNamespace(driver_mode="thick", dsn=dsn, call_timeout_ms=30000)
+    return types.SimpleNamespace(app=types.SimpleNamespace(role=role), oracle=oracle)
 
 
 class TestCheckEnvDriver(unittest.TestCase):
 
-    def _run(self, role, probe):
+    def _run(self, role, probe, dsn="servidor:1521/servico"):
         out = io.StringIO()
         secrets = mock.Mock(return_value=object())
-        with mock.patch.dict(os.environ, {"SSS_TEST_ORACLE": "1"}), \
-                mock.patch.object(sss_config, "get_config", return_value=_cfg(role)), \
+        # CR-033 (D6): a sondagem nao depende mais do SSS_TEST_ORACLE (a variavel dos testes)
+        env = dict((k, v) for k, v in os.environ.items() if k != "SSS_TEST_ORACLE")
+        with mock.patch.dict(os.environ, env, clear=True), \
+                mock.patch.object(sss_config, "config_path", return_value="config-de-teste.ini"), \
+                mock.patch.object(sss_config, "get_config", return_value=_cfg(role, dsn)), \
                 mock.patch.object(sss_config, "get_secrets", secrets), \
                 mock.patch.object(db_conn, "select_driver", probe), redirect_stdout(out):
             try:
@@ -47,6 +51,44 @@ class TestCheckEnvDriver(unittest.TestCase):
         line = [r for r in text.splitlines() if "Driver Oracle" in r][0]
         self.assertIn("FALHA", line)
         self.assertIn("sondagem falhou: sem banco", line)
+
+    def test_orcamento_da_conexao(self):
+        # README §2.3 (CR-008, R-17): acima do call_timeout_s, AVISO com CONEXAO_ACIMA_DO_PRAZO,
+        # sem reprovar
+        sel = types.SimpleNamespace(candidate="thick", server_version="19", driver_version="1",
+                                    client_version="19")
+        _secrets, text = self._run("agent", mock.Mock(return_value=sel))
+        line = [r for r in text.splitlines() if "Orcamento da conexao" in r][0]
+        self.assertIn("| OK ", line)
+        self.assertIn("30s (call_timeout_s 30s)", line)
+        dsn = ("(DESCRIPTION=(CONNECT_TIMEOUT=20)(RETRY_COUNT=1)(ADDRESS_LIST="
+               "(ADDRESS=(HOST=a)(PORT=1521))(ADDRESS=(HOST=b)(PORT=1521)))"
+               "(CONNECT_DATA=(SERVICE_NAME=s)))")
+        with mock.patch.object(db_conn, "_BUDGET_WARNING_EMITTED", False), \
+                self.assertLogs(db_conn.logger, "WARNING") as logs:
+            _secrets, text = self._run("agent", mock.Mock(return_value=sel), dsn=dsn)
+        line = [r for r in text.splitlines() if "Orcamento da conexao" in r][0]
+        self.assertIn("AVISO", line)
+        self.assertIn("80s (call_timeout_s 30s): CONEXAO_ACIMA_DO_PRAZO", line)
+        self.assertIn("CONEXAO_ACIMA_DO_PRAZO", logs.output[0])
+        self.assertIn("Todos os pre-requisitos", text, "AVISO nao reprova o ambiente")
+
+    def test_sem_processo_sai_com_2(self):
+        # README §12.1: sem --name nem --config (CR-029, sem config padrao), codigo 2 antes
+        # da tabela
+        err = io.StringIO()
+        probe = mock.Mock()
+        with mock.patch.object(sss_config, "config_path",
+                               side_effect=sss_config.ConfigError("informe o processo")), \
+                mock.patch.object(db_conn, "select_driver", probe), \
+                mock.patch("sys.stderr", err), \
+                redirect_stdout(io.StringIO()) as out:
+            with self.assertRaises(SystemExit) as ctx:
+                check_env.main([])
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn("Configuracao invalida: informe o processo", err.getvalue())
+        self.assertEqual(out.getvalue(), "", "nada da tabela antes da recusa")
+        probe.assert_not_called()
 
 
 if __name__ == "__main__":

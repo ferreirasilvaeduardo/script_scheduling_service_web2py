@@ -156,7 +156,9 @@ def main(argv=None, connect=None, output=None):
     output = output or sys.stdout
     args = _arguments(argv)
     try:
-        cfg = sss_config.get_config(log_name="health", path=args.config)
+        # CR-033 (D7): sem log_name, a configuracao invalida nao grava health_<PID>.log (a cada passada do cron,
+        # uma pasta de minuto nova); o motivo sai no UNKNOWN do plugin (README §13).
+        cfg = sss_config.get_config(path=args.config)
         # CR-026f: sem log da aplicacao aqui; o aviso do config.ini vai para o stderr (o stdout e do Nagios).
         for message in sss_config.pending_warnings():
             print(message, file=sys.stderr)

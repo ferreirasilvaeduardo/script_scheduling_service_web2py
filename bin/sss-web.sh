@@ -42,9 +42,9 @@ PYTHON="${PYTHON:-python3}"
 SERVER="scripts/run_web.py"
 
 # 5. Executar SOMENTE o servidor web do SSS (README §12.2): nunca um comando arbitrario.
-#    Formas aceitas (as opcoes sao as do run_web.py: --config, --host, --port, --check):
-#      sss-web.sh                         -> run_web.py em 127.0.0.1:8000
-#      sss-web.sh --opcoes...             -> run_web.py com as opcoes
+#    Formas aceitas (as opcoes sao as do run_web.py: --name, --config, --host, --port, --check):
+#      sss-web.sh                         -> run_web.py sai com 2 e lista os processos (CR-029: sem config padrao)
+#      sss-web.sh --opcoes...             -> run_web.py com as opcoes (padrao 127.0.0.1:8000)
 #      sss-web.sh <python3[.x]> [--opcoes...]  -> o mesmo, com o interpretador escolhido
 #      sss-web.sh [<python3[.x]>] <nome> [--opcoes...]  -> CR-028: --name <nome> (instance/<nome>/config.ini)
 if [ "$#" -gt 0 ]; then

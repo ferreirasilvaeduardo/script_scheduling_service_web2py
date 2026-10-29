@@ -719,6 +719,15 @@ class TestConfigCR007(unittest.TestCase):
 
     _ORACLE = "[oracle]\nuser = sss_app\ndsn = x:1/y\nowner = own\ntable_prefix = tbsss_\n"
 
+    def test_cr034_nome_reservado_tambem_no_web(self):
+        """CR-034 (D9): init_db, seed e purge recusados como name de qualquer processo, nao so do agente."""
+        for reserved in ("init_db", "seed", "purge"):
+            with self.assertRaises(sss_config.ConfigError) as ctx:
+                sss_config.load(self._ini_text("[app]\nname = %s\n" % reserved + self._ORACLE +
+                                               "[web]\nallowed_origins = https://x\n"))
+            self.assertEqual(ctx.exception.key, "name")
+            self.assertIn("Nome reservado", str(ctx.exception))
+
     def test_cr028_papel_pelo_arquivo_e_pastas_pelo_nome(self):
         """CR-028 (D4, D5, D6): web sem [agent], agente sem [web]; pastas de var/<nome>/; agent_id = nome."""
         web = sss_config.load(self._ini_text("[app]\nsss_env = PROD\nname = web0001\n" + self._ORACLE +

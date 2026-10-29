@@ -229,6 +229,25 @@ class TestMain(unittest.TestCase):
         self.assertEqual(self.load.call_args[1]["role"], "agent")
         self.assertTrue(conn.closed)
 
+    def test_configuracao_invalida_nao_grava_arquivo(self):
+        """CR-033 (D7): o health.py nunca grava log em arquivo (README §13), nem com a configuracao invalida."""
+        tmp = tempfile.mkdtemp(prefix="sss_health_cfg_")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        config = os.path.join(tmp, "instance", "agente0001", "config.ini")
+        os.makedirs(os.path.dirname(config))
+        log_dir = os.path.join(tmp, "logs")
+        os.makedirs(log_dir)
+        with open(config, "w", encoding="utf-8") as f:
+            f.write("[app]\nname = agente0001\n[agent]\nlog_dir = %s\n" % log_dir)
+        output = io.StringIO()
+        sss_config.reset_config_cache()
+        self.addCleanup(sss_config.reset_config_cache)
+        with mock.patch.object(sss_config, "_raw_log_dir", return_value=log_dir):
+            code = saude_cli.main(["--config", config], output=output)
+        self.assertEqual(code, 3)
+        self.assertTrue(output.getvalue().startswith("SSS UNKNOWN - configuracao invalida"))
+        self.assertEqual([n for _r, _d, names in os.walk(log_dir) for n in names], [])
+
     def test_unknown(self):
         self.assertEqual(self._main(cfg_error=True), (3, "SSS UNKNOWN - configuracao invalida: faltou dsn\n"))
         code, text = self._main(secrets_error=True)

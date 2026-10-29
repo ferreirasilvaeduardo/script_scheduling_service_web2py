@@ -286,7 +286,7 @@ O seed cria os usuários de homologação `admin`, `op.prod`, `op.hml` e `consul
 * **Linha da combinação escolhida**, no log da aplicação de cada processo (ensaio, banco 19c):
   `INFO ... [action=INICIO] driver=oracledb modo=thin servidor=19.24.0.0.0 cliente=-`
   Com Thick ou cx_Oracle, `cliente=` mostra a versão do Instant Client (precisa ser 19). Registre essa linha no checklist (§19).
-* **Conferência antes de subir:** `python3 scripts/check_env.py --name <nome>`, a partir de `W`. Ela confere os pré-requisitos (código 0 = tudo OK, 1 = falta arquivo, 2 = Python menor que 3.6.0).
+* **Conferência antes de subir:** `python3 scripts/check_env.py --name <nome>`, a partir de `W`. Ela confere os arquivos e **conecta ao banco** com a conta e os segredos do processo, mostrando o driver, o modo e as versões (CR-033, D6), e o orçamento da abertura da conexão (`AVISO` com `CONEXAO_ACIMA_DO_PRAZO` quando passa do `call_timeout_s`, §5.4). Código 0 = tudo OK (avisos não reprovam), 1 = falta arquivo ou o banco não conectou (linha `FALHA`, com o motivo), 2 = sem processo (`--name` nem `--config`) ou Python menor que 3.6.0.
 * **Quando forçar:**
   * `driver_mode = thick` quando o banco é 11g. O Thin recusa com `DPY-3010` e a cadeia já pula para o Thick, mas forçar evita a sondagem a cada subida.
   * `driver_mode = cx_oracle` quando o `python-oracledb` não estiver disponível ou falhar nesse servidor.

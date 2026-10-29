@@ -224,7 +224,7 @@ _LOGGERS_LOCK = threading.Lock()
 def log_initial_critical(log_name, message, log_dir=None, stream=None):
     """CRITICAL de falha na subida, antes de haver configuracao valida (README §12.1).
 
-    Grava no log da aplicacao do minuto atual (log_dir/app/AAAA/MM/DD/HH/MI/<log_name>_<PID>.log,
+    Grava no log da aplicacao do minuto atual (log_dir/internal/app/AAAA/MM/DD/HH/MI/<log_name>_<PID>.log,
     README §13) quando log_dir existe e aceita escrita; senao, no stderr, sempre no formato do
     README §13. Retorna o destino usado ('arquivo' ou 'stderr').
     """

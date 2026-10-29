@@ -5,7 +5,7 @@ Antes de planejar ou executar qualquer tarefa, você DEVE seguir rigorosamente:
 2. `README.md` na raiz (a aplicação é a raiz do repositório desde o CR-022a) (especificação de arquitetura e regras de negócio).
 
 ## Regras Críticas de Execução:
-- **Compatibilidade:** Python 3.6 estrito. Não use sintaxes modernas proibidas (f-strings, dataclasses, walrus operator, pos-only args).
+- **Compatibilidade:** Python 3.6 estrito. Não use sintaxes modernas proibidas (dataclasses, walrus operator, pos-only args, f-string com `=` do 3.8). F-strings simples são permitidas, porque existem no 3.6 (AGENTS §2.1; CR-034, D8).
 - **Segurança & CSP:** Ambiente hermético. Nunca inclua scripts/estilos inline, CDNs externas ou URLs remotas. Todos os assets devem ser locais.
 - **Relatórios:** Toda entrega deve finalizar com o relatório estrito no padrão de `AGENTS.md` §9, com veredito (PASS/FAIL) e checklist do §8.
 - **Modo de Trabalho:** Primeiro apresente o plano completo de execução e aguarde aprovação antes de modificar arquivos críticos.

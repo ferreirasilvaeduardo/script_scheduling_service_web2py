@@ -160,6 +160,19 @@ class TestLaunchers(unittest.TestCase):
         self.assertIn("diferente da pasta", error)
         self.assertFalse(os.path.exists(os.path.join(self.root, "var", "agente0001", "works", "sss-agente0001.stop")))
 
+    def test_cr034_stop_com_config_usa_a_regra_do_name(self):
+        """CR-034 (D10): com --config, o name segue ^[a-z][a-z0-9_-]{0,29}$ (README §12.1); '..' nao sai de var/."""
+        os.makedirs(os.path.join(self.root, "works"))
+        for name in ("..", "Agente1", "agente.1", "seed"):
+            config = os.path.join(self.root, "outro", "config.ini")
+            os.makedirs(os.path.dirname(config), exist_ok=True)
+            with open(config, "w") as f:
+                f.write("[app]\nname = %s\n[agent]\nenvironments = PRODUCAO\n" % name)
+            code, _r, error = self._run_loop("sss-stop.sh", "--config", config, PYTHON=sys.executable)
+            self.assertEqual(code, 2, (name, error))
+            self.assertIn("name invalido", error, name)
+        self.assertEqual(os.listdir(os.path.join(self.root, "works")), [], "nada fora de var/")
+
     def test_instant_client_so_sem_ldconfig(self):
         self._executable("ldconfig", "#!/bin/sh\necho '\tlibclntsh.so.19.1 (libc6,x86-64) => /opt/ic/libclntsh.so'\n")
         for name in ("sss-web.sh", "sss-scheduler.sh"):

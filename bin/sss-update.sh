@@ -5,7 +5,7 @@
 #
 # Uso: sss-update.sh <sss-<versao>.tar.gz> [<SHA256SUMS>]   (padrao: o SHA256SUMS ao lado do pacote)
 #
-# Com o web e todos os agentes PARADOS (sss-stop.sh / systemctl stop). Codigos de saida: 0 ok; 1 root;
+# Com o web e todos os agentes PARADOS (sss-keepalive.sh --pause, sss-stop.sh e SIGTERM no web; DEPLOYMENT §10.6). Codigos de saida: 0 ok; 1 root;
 # 2 uso ou pacote invalido (nada mudou); 3 processo do SSS em execucao nesta pasta (nada mudou);
 # 4 falha no meio da troca (o codigo anterior fica em <raiz>/.update-<data>/anterior/; ver DEPLOYMENT §18).
 set -euo pipefail

@@ -103,7 +103,7 @@ cd /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
 python scripts/check_env.py --name web0001
 ```
 
-O script é somente leitura e exibirá uma tabela detalhada com o status `OK` ou `FALHA` de cada item. O código de retorno será `0` se todos os pré-requisitos forem atendidos, `1` em caso de falha de ativos/estrutura, e `2` se a versão do Python for anterior à 3.6.0. O `check_env.py` confere só o mínimo; o projeto é validado da 3.6.0 à 3.13 (a sintaxe do código continua restrita à 3.6, AGENTS §2.1).
+O script é somente leitura e exibirá uma tabela detalhada com o status `OK`, `AVISO` ou `FALHA` de cada item, inclusive a conexão ao banco do processo, que ele sempre tenta (CR-033, D6; antes, só com `SSS_TEST_ORACLE=1`), e o orçamento da abertura da conexão. O código de retorno será `0` se todos os pré-requisitos forem atendidos (avisos não reprovam), `1` em caso de falha de ativos, de estrutura ou de conexão, e `2` sem processo (`--name` nem `--config`) ou se a versão do Python for anterior à 3.6.0. O `check_env.py` confere só o mínimo; o projeto é validado da 3.6.0 à 3.13 (a sintaxe do código continua restrita à 3.6, AGENTS §2.1).
 
 ---
 

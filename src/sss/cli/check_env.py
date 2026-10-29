@@ -2,6 +2,8 @@
 """Verificador de ambiente e pre-requisitos do SSS.
 
 CLI de verificacao de ambiente sem efeitos colaterais (somente leitura).
+Confere os arquivos da aplicacao e sonda o banco do processo (--name ou --config) com a conta e os segredos
+do papel dele (CR-033, D6: a sondagem sempre roda; antes, so com SSS_TEST_ORACLE=1). Sem processo, sai com 2.
 Executa fail-fast caso a versao do Python seja anterior a 3.6.0 ou caso algum
 recurso obrigatorio esteja ausente ou invalido (AGENTS §2.1: sintaxe 3.6, execucao em >= 3.6.0).
 """
@@ -23,6 +25,13 @@ def main(argv=None):
     parser.add_argument("--config", default=None, help="config.ini (ou --name)")
     parser.add_argument("--name", default=None, help="processo: instance/<nome>/config.ini (CR-029)")
     args = parser.parse_args(argv)
+    from sss.config import sss_config
+    try:
+        config_file = sss_config.config_path(args.config, args.name)
+    except sss_config.ConfigError as exc:
+        # README §12.1: sem processo (ou nome invalido), codigo 2 com a lista do instance/, como o run_web
+        print("Configuracao invalida: %s" % exc, file=sys.stderr)
+        sys.exit(2)
     # src/sss/cli/ -> raiz da aplicacao (CR-022b8); o comando continua sendo scripts/<nome>.py
     app_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
     # Servidor web proprio (CR-021e); o web2py saiu do repositorio no CR-021f.
@@ -59,32 +68,37 @@ def main(argv=None):
 
     # Item 5: Driver Oracle (driver_mode e cadeia adaptativa)
     try:
-        from sss.config import sss_config
-        cfg = sss_config.get_config(path=sss_config.config_path(args.config, args.name))
+        cfg = sss_config.get_config(path=config_file)
         mode = getattr(cfg.oracle, "driver_mode", "auto")
         chain_desc = "auto (Thin -> Thick -> cx_Oracle)" if mode == "auto" else mode
 
-        sel_desc = None
         status = "OK"
-        # Sondagem real do driver so com os testes Oracle ligados (SSS_TEST_ORACLE=1, README §2.5).
-        if os.environ.get("SSS_TEST_ORACLE") == "1":
-            try:
-                from sss.persistence import db_conn
-                # CR-031: os segredos do papel do proprio processo (o agente nao tem [web]).
-                role = "agent" if getattr(cfg.app, "role", "all") == "agent" else "web"
-                secrets_value = sss_config.get_secrets(role=role)
-                sel = db_conn.select_driver(cfg, secrets_value)
-                sel_desc = "modo=%s (servidor=%s driver=%s cliente=%s)" % (
-                    sel.candidate, sel.server_version or "-", sel.driver_version or "-", sel.client_version or "-"
-                )
-            except Exception as and_probe:
-                sel_desc = "sondagem falhou: %s" % and_probe
-                status = "FALHA"
+        # Sondagem real do driver e da conexao (CR-033, D6), com os segredos do papel do proprio processo
+        # (CR-031: o agente nao tem [web]).
+        try:
+            from sss.persistence import db_conn
+            role = "agent" if getattr(cfg.app, "role", "all") == "agent" else "web"
+            secrets_value = sss_config.get_secrets(role=role)
+            sel = db_conn.select_driver(cfg, secrets_value)
+            sel_desc = "modo=%s (servidor=%s driver=%s cliente=%s)" % (
+                sel.candidate, sel.server_version or "-", sel.driver_version or "-", sel.client_version or "-"
+            )
+        except Exception as and_probe:  # a falha vira a linha FALHA da tabela (sem valor de segredo)
+            sel_desc = "sondagem falhou: %s" % and_probe
+            status = "FALHA"
 
         detail_driver = chain_desc
         if sel_desc:
             detail_driver = "%s | Selecionado: %s" % (chain_desc, sel_desc)
         results.append(("Driver Oracle (driver_mode)", status, detail_driver))
+        # Item 6: orcamento da abertura da conexao (README §2.3, CR-008 R-17): acima do call_timeout_s e AVISO,
+        # com o WARN CONEXAO_ACIMA_DO_PRAZO, sem reprovar o ambiente.
+        from sss.persistence import db_conn
+        call_s = sss_config.call_timeout_s(cfg.oracle.call_timeout_ms)
+        budget = db_conn.connection_budget_s(cfg.oracle.dsn, call_s)
+        results.append(("Orcamento da conexao", "OK" if budget <= call_s else "AVISO",
+                        "%ds (call_timeout_s %ds)%s" % (budget, call_s,
+                                                        "" if budget <= call_s else ": CONEXAO_ACIMA_DO_PRAZO")))
     except Exception as exc:
         results.append(("Driver Oracle (driver_mode)", "FALHA", "Erro ao carregar configuracao: %s" % exc))
 
@@ -105,7 +119,7 @@ def main(argv=None):
     print(sep)
     all_ok = True
     for item, status, detail in results:
-        if status != "OK":
+        if status not in ("OK", "AVISO"):
             all_ok = False
         print("| %-*s | %-*s | %-*s |" % (
             col1_w - 2, item,

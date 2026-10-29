@@ -8,10 +8,10 @@ Ferramenta de build (CR-022b2): fica em tools/, fora do pacote que ela mesma ger
 Gera <saida>/sss-<versao>.tar.gz (tudo sob sss-<versao>/, com um SHA256SUMS de cada arquivo) e <saida>/SHA256SUMS
 com o hash do tar.gz. A versao e sss_config.SSS_VERSION. O tar e deterministico (ordem, dono, data e modos fixos).
 
-Entram: os launchers de producao e o helper do bin/ e a aplicacao (APP_DIRS e APP_FILES da raiz, que e a propria
+Entram: os launchers de producao do bin/ (sem helper desde o CR-032) e a aplicacao (APP_DIRS e APP_FILES da raiz, que e a propria
 aplicacao desde o CR-022a) sem codigo de DEV, sem testes e sem pastas de runtime. Desde o CR-021f nao ha web2py: o servidor web e o scripts/run_web.py da propria aplicacao.
 Falha (codigo 1, sem gravar nada) se o pacote tiver secrets.cfg real, *.pyc, __pycache__, controllers/dev.py,
-o FAKE (src/sss/persistence/fake), /admin/, resto do web2py (gluon/, web2py.py, anyserver.py, routes.py ou pasta de runtime dele), link
+o FAKE (src/sss/persistence/fake), applications/, resto do web2py (gluon/, web2py.py, anyserver.py, routes.py ou pasta de runtime dele), link
 simbolico ou credencial que nao seja o CHANGE_ME de um */secrets.cfg.example (instance/exemplos/). A mensagem cita o arquivo e a
 linha, nunca o valor.
 """

@@ -21,8 +21,8 @@ from sss.persistence import db_conn
 
 KEY = "SSS_TEST_ORACLE"
 RESERVED_OWNER_PREFIX = "SSS_TEST_"
-# CR-029: sem instance/config.ini; o banco, as contas e os segredos vem do agente do DEV (no DEV, o secrets.cfg
-# dele tambem tem [web] cookie_key, para conectar como web; opcao C).
+# CR-029: sem instance/config.ini; o banco e as contas vem do agente do DEV (com o [oracle] do instance/common.ini,
+# CR-032 D18) e a senha do instance/secrets.cfg unico (D14), que no DEV tem tambem [web] cookie_key.
 _APP = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 ORACLE_CONFIG = os.path.join(_APP, "instance", "agente0001", "config.ini")
 DISPOSABLE_MODE = "DESCARTAVEL"

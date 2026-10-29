@@ -638,7 +638,9 @@ def load(ini_path: str) -> "Config":
     data_sections["logging"]["log_dir"] = os.path.join(base, "logs")
     data_sections["agent"]["agent_id"] = app_name if role == "agent" else None
     data_sections["agent"]["work_dir"] = os.path.join(base, "works") if role == "agent" else None
-    if role == "agent" and app_name in RESERVED_AGENT_IDS:
+    # CR-034 (D9): reservado em todo papel (antes so no agente, cujo nome vai ao banco como ator), como diz o
+    # README §12.1: uma regra so para o nome do processo.
+    if app_name in RESERVED_AGENT_IDS:
         raise ConfigError(section="app", key="name",
                           reason="Nome reservado do sistema: %s (README §4.4 e §8.12)" % app_name)
     data_sections["app"]["role"] = role

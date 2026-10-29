@@ -55,7 +55,8 @@ try:
 except (OSError, KeyError, configparser.Error) as exc:
     sys.stderr.write("Erro: config.ini invalido (%s): %s\n" % (caminho, exc.__class__.__name__))
     sys.exit(2)
-if not re.match(r"^(?!(?:init_db|seed|purge)$)[A-Za-z0-9._-]{1,30}$", agente):
+# CR-034 (D10): a mesma regra do [app] name (README §12.1); a antiga aceitava ponto (name = .. saia de var/).
+if not re.match(r"^(?!(?:init_db|seed|purge)$)[a-z][a-z0-9_-]{0,29}$", agente):
     sys.stderr.write("Erro: [app] name invalido\n")
     sys.exit(2)
 if not os.path.isabs(work) or not os.path.isdir(work):

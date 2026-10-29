@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 """Testes de verificacao do esqueleto do repositorio e ambiente (F0.1)."""
 import os
+import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 
 from tests.support import _testenv
@@ -115,12 +118,18 @@ class TestEnvSkeleton(unittest.TestCase):
         self.assertEqual(urls, [], "URLs externas encontradas em DEV_ENVIRONMENT.md: %s" % urls)
 
     def test_check_env_success(self):
-        """Executa check_env.py e verifica retorno 0 e presenca de OK."""
-        # CR-029: sem config padrao; o exemplo do formato unico dos testes.
-        cmd = [sys.executable, os.path.join(self.app_dir, "scripts", "check_env.py"),
-               "--config", os.path.join(self.app_dir, "tests", "support", "agente0001", "config.ini.example")]
-        # CR-031: teste de estrutura, sem a sondagem do driver (o exemplo nao tem segredos; com
-        # SSS_TEST_ORACLE=1 a sondagem falharia e, desde o CR-031, a linha sai como FALHA).
+        """Executa check_env.py: os itens de estrutura OK e a sondagem do banco sempre tentada (CR-033, D6)."""
+        # CR-029: sem config padrao; o exemplo do formato unico dos testes, com um DSN que recusa na hora
+        # (porta 1 do proprio host): a sondagem roda sem SSS_TEST_ORACLE e falha sem tocar em banco nenhum.
+        tmp = tempfile.mkdtemp(prefix="sss_check_env_")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        with open(os.path.join(self.app_dir, "tests", "support", "agente0001", "config.ini.example"),
+                  encoding="utf-8") as f:
+            text = re.sub(r"(?m)^dsn = .*$", "dsn = 127.0.0.1:1/sss_teste_inexistente", f.read())
+        config = os.path.join(tmp, "config.ini")
+        with open(config, "w", encoding="utf-8") as f:
+            f.write(text)
+        cmd = [sys.executable, os.path.join(self.app_dir, "scripts", "check_env.py"), "--config", config]
         env = dict((k, v) for k, v in os.environ.items() if k != "SSS_TEST_ORACLE")
         proc = subprocess.Popen(
             cmd,
@@ -129,12 +138,24 @@ class TestEnvSkeleton(unittest.TestCase):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        out, err = proc.communicate()
-        self.assertEqual(proc.returncode, 0, "check_env.py falhou: %s" % err.decode("utf-8", "replace"))
+        out, err = proc.communicate(timeout=120)
         out_str = out.decode("utf-8", "replace")
-        self.assertIn("Versao do Python (>= 3.6.0)", out_str)
-        self.assertIn("bootstrap.bundle.min.js", out_str)
-        self.assertNotIn("FALHA", out_str)
+        self.assertEqual(proc.returncode, 1, "a sondagem sem banco e FALHA: %s" % err.decode("utf-8", "replace"))
+        for item in ("Versao do Python (>= 3.6.0)", "scripts/run_web.py", "bootstrap.min.css",
+                     "bootstrap.bundle.min.js"):
+            line = [r for r in out_str.splitlines() if item in r][0]
+            self.assertIn("| OK ", line, line)
+        driver = [r for r in out_str.splitlines() if "Driver Oracle" in r][0]
+        self.assertIn("FALHA", driver)
+        self.assertIn("sondagem falhou", driver)
+
+    def test_check_env_sem_processo(self):
+        """Sem --name nem --config, codigo 2 (README §12.1; CR-033, D6)."""
+        proc = subprocess.Popen([sys.executable, os.path.join(self.app_dir, "scripts", "check_env.py")],
+                                cwd=self.app_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        _out, err = proc.communicate(timeout=60)
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("Configuracao invalida", err.decode("utf-8", "replace"))
 
 
 if __name__ == "__main__":
