@@ -388,7 +388,10 @@ cat > ~/sss_pacote/${P}_00_vazio.sql <<EOF
 SELECT COUNT(*) FROM all_tables WHERE owner = UPPER('$SSS_OWNER') AND table_name LIKE UPPER('$P') || '\_%' ESCAPE '\';
 EXIT
 EOF
-sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_pacote/${P}_00_vazio.sql
+```
+
+```bash
+sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_pacote/${P}_00_vazio.sql   # sozinha: pede a senha
 ```
 
 Conferência de que a DDL do pacote é a do código instalado (só leitura, sem senha): os três `sha256` aparecem duas vezes, iguais aos do passo 4.1.
@@ -397,28 +400,42 @@ Conferência de que a DDL do pacote é a do código instalado (só leitura, sem 
 "$PYTHON" scripts/generate_sql.py --owner "$SSS_OWNER" --prefix "$PREFIX" --out-dir /tmp/sql_conferencia_$$ >/dev/null && sha256sum /tmp/sql_conferencia_$$/*_${P}.sql docs/sql/*_${O}_${P}.sql; rm -rf /tmp/sql_conferencia_$$
 ```
 
-Depois, a implantação. O `01` termina com `EXIT`, por isso a validação (`99`) roda numa segunda chamada. A saída vai para um arquivo: o `Enter password:` não aparece na tela, mas o `sqlplus` espera a senha (digite e aperte Enter):
+Depois, a implantação. O `01` termina com `EXIT`, por isso a validação (`99`) roda numa segunda chamada. **Cole a linha do `sqlplus` sozinha:** ele lê a senha do terminal, e uma linha colada junto depois dela seria lida como senha (`SP2-0306: Invalid option`, sem conectar). A saída fica só no `SPOOL` (`SET TERMOUT OFF`); o pedido de senha continua visível:
 
 ```bash
 cat > ~/sss_pacote/${P}_01.sql <<EOF
+SET TERMOUT OFF
 SPOOL $HOME/sss_pacote/${P}_01_deploy.log
 @$R/docs/sql/01_deploy_sss_${O}_${P}.sql
 EOF
-sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_pacote/${P}_01.sql > ~/sss_pacote/${P}_01_sqlplus.out 2>&1; echo "codigo $?"   # esperado: 0
+```
+
+```bash
+sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_pacote/${P}_01.sql; echo "codigo $?"   # sozinha; esperado: 0
+```
+
+```bash
 grep -c -E 'ORA-|SP2-' ~/sss_pacote/${P}_01_deploy.log       # esperado: 0
 grep -i 'concluida com sucesso' ~/sss_pacote/${P}_01_deploy.log
 ```
 
-Com código diferente de 0, veja `tail -20 ~/sss_pacote/${P}_01_sqlplus.out` (senha errada aparece como `ORA-01017`) e `tail -25 ~/sss_pacote/${P}_01_deploy.log` (o comando que falhou) antes de qualquer outra coisa.
+Com código diferente de 0, leia a tela (senha errada: `ORA-01017`) e `tail -25 ~/sss_pacote/${P}_01_deploy.log` (o comando que falhou) antes de qualquer outra coisa. Sem o log, o login falhou e nada foi criado.
 
 A validação, só leitura:
 
 ```bash
 cat > ~/sss_pacote/${P}_99.sql <<EOF
+SET TERMOUT OFF
 SPOOL $HOME/sss_pacote/${P}_99_validate.log
 @$R/docs/sql/99_validate_deploy_${O}_${P}.sql
 EOF
-sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_pacote/${P}_99.sql > ~/sss_pacote/${P}_99_sqlplus.out 2>&1; echo "codigo $?"
+```
+
+```bash
+sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_pacote/${P}_99.sql; echo "codigo $?"   # sozinha
+```
+
+```bash
 grep -c -E 'ORA-|SP2-' ~/sss_pacote/${P}_99_validate.log     # esperado: 0
 grep -c 'FALHA' ~/sss_pacote/${P}_99_validate.log             # esperado: 0
 grep 'OK: nenhuma falha' ~/sss_pacote/${P}_99_validate.log     # esperado: as duas linhas de resumo
