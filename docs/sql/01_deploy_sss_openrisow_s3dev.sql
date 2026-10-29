@@ -5500,8 +5500,8 @@ COMMIT;
 -- GRANTS POR PAPEL (README §11.1); nenhum GRANT a PUBLIC
 -- ==============================================================================
 
--- papel web: usa a conta dona do esquema (OPENRISOW); nenhum GRANT necessario
--- papel agent: usa a conta dona do esquema (OPENRISOW); nenhum GRANT necessario
+-- papel web: conta nao informada; nenhum GRANT gerado
+-- papel agent: conta nao informada; nenhum GRANT gerado
 
 PROMPT Implantacao do SSS concluida com sucesso!
 EXIT;

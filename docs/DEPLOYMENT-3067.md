@@ -41,59 +41,78 @@ O pedido foi escrito para uma versão anterior do SSS. Este roteiro segue o cód
 ## 1. Antes de começar
 
 * Janela combinada e acesso ao cofre com: a senha da conta `openrisow` no GFPR e as contas (usuário e senha) dos bancos dos cinco ambientes (GFPREPROD, CLONE2, CLONE1, CLONE6, CLONE7).
-* Na máquina de origem: a pasta da aplicação `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`, **que é a versão de referência**: o pacote sai dos arquivos dela como estão, sem git. Ela precisa ter o `instance/agente0001/config.ini` do DEV da origem (usado só para gerar os scripts SQL), Python 3.6 ou superior, `make`, `rsync`, `ssh` e `scp`.
+* Na máquina de origem: a pasta da aplicação de referência (nesta máquina, `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`). O pacote sai dos arquivos dela como estão, sem git, sem config e sem senha locais. Também: Python 3.6 ou superior, `make`, `rsync`, `tar` e OpenSSH 7.3 ou superior (`ProxyJump`).
 * Abra um registro da execução (passo 17) e anote cada conferência com o resultado.
 
 ---
 
 ## 2. Acesso SSH pelo bastion
 
-### 2.1 `~/.ssh/config` na máquina de origem
+Tudo o que o acesso usa fica numa pasta própria, `~/.ssh/sss_3067/`: o config, uma chave dedicada, os `known_hosts` e a conexão mestra. O roteiro não depende do `~/.ssh/config` nem das chaves de quem executa, e não precisa de `sudo`. Todo `ssh`, `scp` e `rsync` deste documento usa `-F "$SSH_CFG"`, e o OpenSSH repassa o `-F` ao salto do `ProxyJump`.
 
-O bastion só aceita os algoritmos `ssh-rsa` antigos. A conexão mestra (`ControlMaster`) faz a senha do bastion ser pedida uma vez por sessão:
+### 2.1 Pasta, config e chave na máquina de origem
 
-```text
+```bash
+S=$HOME/.ssh/sss_3067; mkdir -m 0700 -p "$S"
+cat > "$S/config" <<EOF
 Host sss-bastion
     HostName 10.238.10.109
     User mastersafgf
-    HostKeyAlgorithms +ssh-rsa
-    PubkeyAcceptedAlgorithms +ssh-rsa
-    ControlMaster auto
-    ControlPath ~/.ssh/cm-%r@%h-%p
-    ControlPersist 30m
-
 Host sss-3067
     HostName 10.129.164.55
     User mastersafgf
     ProxyJump sss-bastion
+Host sss-bastion sss-3067
+    IdentityFile $S/id_rsa
+    IdentitiesOnly yes
+    UserKnownHostsFile $S/known_hosts
     HostKeyAlgorithms +ssh-rsa
     PubkeyAcceptedAlgorithms +ssh-rsa
+    ServerAliveInterval 30
+    ControlMaster auto
+    ControlPath $S/cm-%r@%h-%p
+    ControlPersist 30m
+EOF
+chmod 0600 "$S/config"
+[ -f "$S/id_rsa" ] || ssh-keygen -t rsa -b 3072 -N '' -f "$S/id_rsa" -C "sss-3067-$(whoami)@$(hostname)"
+ssh-keygen -lf "$S/id_rsa.pub"                # registre a impressão digital (passo 17)
+export SSH_CFG=$S/config                     # em toda sessão nova que for usar o acesso
 ```
 
+A chave é RSA porque o 3067 e o bastion só aceitam os algoritmos `ssh-rsa`. Ela fica sem frase-senha só para esta implantação, protegida pela pasta `0700`, e é removida no fim (passo 2.3). Quem preferir frase-senha troca o `-N ''` por `-N '<frase>'` e usa `ssh-agent`.
+
+Primeira conexão ao bastion: o `ssh` mostra a impressão digital da chave do servidor e pede confirmação. Confira-a com a equipe do bastion antes de responder `yes`. Depois, ele pede a senha do bastion:
+
 ```bash
-chmod 0600 ~/.ssh/config
-ssh sss-bastion 'hostname; whoami'          # pede a senha do bastion; esperado: brtlvlts1216pl / mastersafgf
+ssh -F "$SSH_CFG" sss-bastion 'hostname; whoami'   # esperado: brtlvlts1216pl / mastersafgf
 ```
 
-### 2.2 Chave da origem autorizada no destino (uma vez)
+### 2.2 Chave autorizada no destino (uma vez)
 
-O `ProxyJump` (`-J`) só repassa a conexão TCP: quem se autentica no 3067 é a máquina de origem, com a chave **dela**. Hoje o 3067 só confia na chave do bastion. Autorize a chave pública da origem uma vez, pelo próprio bastion:
+O `ProxyJump` só repassa a conexão TCP. Quem se autentica no 3067 é a máquina de origem, com a chave dela, e hoje o 3067 só confia na chave do bastion. Autorize a chave dedicada pelo próprio bastion:
 
 ```bash
-# na origem; gere a chave só se ainda não existir
-[ -f ~/.ssh/id_ed25519.pub ] || ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -C "sss-implantacao-$(whoami)"
-cat ~/.ssh/id_ed25519.pub | ssh sss-bastion \
+cat "$S/id_rsa.pub" | ssh -F "$SSH_CFG" sss-bastion \
   'ssh -o BatchMode=yes mastersafgf@10.129.164.55 "umask 077; mkdir -p ~/.ssh; cat >> ~/.ssh/authorized_keys"'
-ssh -o BatchMode=yes sss-3067 'hostname; whoami'    # esperado: brtlvlty3067sl / mastersafgf, sem pedir senha do destino
+ssh -F "$SSH_CFG" -o BatchMode=yes sss-3067 'hostname; whoami'   # esperado: brtlvlty3067sl / mastersafgf
 ```
 
-Registre no passo 17 a impressão digital da chave (`ssh-keygen -lf ~/.ssh/id_ed25519.pub`). Ao fim do trabalho, se a chave não deve ficar, remova a linha dela do `~/.ssh/authorized_keys` do 3067.
+Na primeira conexão ao `sss-3067`, o `ssh` pede para confirmar a chave do 3067. A senha do bastion só é pedida de novo se a conexão mestra tiver expirado (30 min sem uso).
+
+### 2.3 Fim do trabalho
+
+Se o acesso não deve ficar, tire a chave do 3067 e apague a pasta:
+
+```bash
+ssh -F "$SSH_CFG" sss-3067 "sed -i '/sss-3067-$(whoami)@$(hostname)/d' ~/.ssh/authorized_keys"
+ssh -F "$SSH_CFG" -O exit sss-bastion 2>/dev/null; rm -rf "$HOME/.ssh/sss_3067"
+```
 
 ---
 
 ## 3. Pré-checagem no 3067 (só leitura)
 
-Nada é criado nem alterado neste passo. Rode numa sessão `ssh sss-3067`.
+Nada é criado nem alterado neste passo. Rode numa sessão `ssh -F "$SSH_CFG" sss-3067`.
 
 ### 3.1 Conta, disco e sistema
 
@@ -162,15 +181,15 @@ crontab -l 2>/dev/null | grep -n -i sss || echo "crontab sem SSS"
 Os scripts saem do registro de identificadores do código, com o owner e o prefixo de cada instalação (DEPLOYMENT §5.2). A conta única é a dona do esquema: nenhum GRANT é gerado (`--grants-to` não se aplica).
 
 ```bash
-ORIGEM=/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
+ORIGEM=/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service   # a pasta da aplicação de referência, onde ela estiver
 cd "$ORIGEM"
 for PFX in s3dev_ s3prd_; do
-  python3 scripts/generate_sql.py --name agente0001 --owner OPENRISOW --prefix $PFX --out-dir docs/sql
+  python3 scripts/generate_sql.py --owner OPENRISOW --prefix $PFX --out-dir docs/sql
 done
 ls -l docs/sql/*_s3dev.sql docs/sql/*_s3prd.sql               # esperado: 01_deploy, 02_rollback e 99_validate de cada um
 ```
 
-O `--name agente0001` só fornece a conta (`openrisow`, a dona do esquema). O owner e o prefixo vêm da linha de comando, e o arquivo não conecta ao banco. Sem esse config, o resultado só difere no comentário dos GRANTs.
+O owner e o prefixo vêm da linha de comando: não é preciso config, banco nem senha, e o comando não conecta. Como nenhuma conta de papel é informada, o fim do `01` diz "conta nao informada; nenhum GRANT gerado": é o esperado com a conta única, dona do esquema.
 
 Conferências, antes de seguir:
 
@@ -188,7 +207,7 @@ sha256sum docs/sql/*_s3dev.sql docs/sql/*_s3prd.sql          # registre no passo
 
 * As citações de `tbsss_` no `01` ficam só nos `COMMENT ON COLUMN` das FKs (texto fixo do dicionário, sem efeito).
 * As impressões digitais (`sha256sum`) dos seis arquivos vão para o registro (passo 17). O passo 5 confere que os arquivos que chegam ao 3067 são esses.
-* O DBA pode revisar o `01` antes da janela. Ele também pode ser gerado de novo no 3067, depois do passo 8, pelo mesmo comando com `--name agente0001`, para conferir que sai idêntico ao do pacote.
+* O DBA pode revisar o `01` antes da janela. No 3067, o mesmo comando, rodado na `<RAIZ>` com `--out-dir /tmp/sql_conferencia`, gera arquivos idênticos aos do pacote (mesmo `sha256`).
 
 ### 4.2 Pacote
 
@@ -218,14 +237,14 @@ tar -tzf "$PKG/utilitarios.tar.gz" | grep -c '\.\(py\|sh\)$'          # esperado
 Direto da origem para o 3067, pelo `ProxyJump`. Nada fica gravado no bastion.
 
 ```bash
-ssh sss-3067 'mkdir -m 0700 -p ~/sss_pacote'
-scp -J sss-bastion "$PKG"/sss-*.tar.gz "$PKG"/utilitarios.tar.gz "$PKG"/SHA256SUMS "$PKG"/ORIGEM sss-3067:sss_pacote/
+ssh -F "$SSH_CFG" sss-3067 'mkdir -m 0700 -p ~/sss_pacote'
+scp -F "$SSH_CFG" "$PKG"/sss-*.tar.gz "$PKG"/utilitarios.tar.gz "$PKG"/SHA256SUMS "$PKG"/ORIGEM sss-3067:sss_pacote/
 # equivalente com rsync (retoma uma cópia interrompida):
-# rsync -av --partial -e "ssh -J sss-bastion" "$PKG"/ sss-3067:sss_pacote/
-ssh sss-3067 'cd ~/sss_pacote && sha256sum -c SHA256SUMS && cat ORIGEM'
+# rsync -av --partial -e "ssh -F $SSH_CFG" "$PKG"/ sss-3067:sss_pacote/
+ssh -F "$SSH_CFG" sss-3067 'cd ~/sss_pacote && sha256sum -c SHA256SUMS && cat ORIGEM'
 ```
 
-Esperado: `OK` em cada arquivo e o mesmo `ORIGEM` do passo 4.2. Com o `~/.ssh/config` do passo 2, `scp sss-3067:...` já usa o salto. O `-J sss-bastion` acima é a forma explícita, e `-o ProxyCommand="ssh -W %h:%p sss-bastion"` é a equivalente para um cliente sem `-J`.
+Esperado: `OK` em cada arquivo e o mesmo `ORIGEM` do passo 4.2. O salto pelo bastion vem do `ProxyJump` do config (passo 2.1). Sem o config, a forma explícita é `scp -J mastersafgf@10.238.10.109 ... mastersafgf@10.129.164.55:sss_pacote/`, ou `-o ProxyCommand="ssh -W %h:%p mastersafgf@10.238.10.109"` num cliente sem `-J`.
 
 ---
 
@@ -489,7 +508,7 @@ curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origi
 Na estação do usuário, por túnel (o web atende só em `127.0.0.1`):
 
 ```bash
-ssh -N -L 18000:127.0.0.1:18000 -L 18001:127.0.0.1:18001 sss-3067
+ssh -F "$SSH_CFG" -N -L 18000:127.0.0.1:18000 -L 18001:127.0.0.1:18001 sss-3067   # o config e a chave do passo 2 nessa estação
 # navegador: http://127.0.0.1:18000/ (DEV, faixa amarela "AMBIENTE DEV") e http://127.0.0.1:18001/ (PROD, sem faixa)
 ```
 
@@ -571,7 +590,8 @@ Copie esta tabela para o registro da janela e preencha cada linha:
 
 | Passo | Conferência | Esperado | Resultado (data, hora, quem) |
 |---|---|---|---|
-| 2.2 | Impressão digital da chave autorizada no 3067 | anotada | |
+| 2.1 | Impressão digital da chave dedicada; chaves do bastion conferidas | anotada; conferidas | |
+| 2.2 | `ssh -o BatchMode=yes sss-3067` sem senha do destino | `brtlvlty3067sl` | |
 | 3.2 | Python escolhido e versão; `stdlib OK`; tempo da PBKDF2 | ≥ 3.6.0; OK; ≤ 3 s | |
 | 3.3 | Driver e Instant Client; `sqlplus` | um driver; cliente presente | |
 | 3.4 | GFPR 1521 alcançável; portas 18000/18001 | alcançável; livres após o passo 6 | |
