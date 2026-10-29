@@ -41,7 +41,7 @@ O pedido foi escrito para uma versão anterior do SSS. Este roteiro segue o cód
 ## 1. Antes de começar
 
 * Janela combinada e acesso ao cofre com: a senha da conta `openrisow` no GFPR e as contas (usuário e senha) dos bancos dos cinco ambientes (GFPREPROD, CLONE2, CLONE1, CLONE6, CLONE7).
-* Na máquina de origem: o repositório git do SSS (com o `instance/agente0001/config.ini` do DEV da origem, usado só para gerar os scripts SQL), Python 3.6 ou superior, `git`, `make`, `ssh`, `scp` e `rsync`.
+* Na máquina de origem: a pasta da aplicação `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`, **que é a versão de referência**: o pacote sai dos arquivos dela como estão, sem git. Ela precisa ter o `instance/agente0001/config.ini` do DEV da origem (usado só para gerar os scripts SQL), Python 3.6 ou superior, `make`, `rsync`, `ssh` e `scp`.
 * Abra um registro da execução (passo 17) e anote cada conferência com o resultado.
 
 ---
@@ -162,8 +162,8 @@ crontab -l 2>/dev/null | grep -n -i sss || echo "crontab sem SSS"
 Os scripts saem do registro de identificadores do código, com o owner e o prefixo de cada instalação (DEPLOYMENT §5.2). A conta única é a dona do esquema: nenhum GRANT é gerado (`--grants-to` não se aplica).
 
 ```bash
-cd <repositório>
-git pull --ff-only && git log --oneline -1                    # o commit da janela (registre no passo 17)
+ORIGEM=/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
+cd "$ORIGEM"
 for PFX in s3dev_ s3prd_; do
   python3 scripts/generate_sql.py --name agente0001 --owner OPENRISOW --prefix $PFX --out-dir docs/sql
 done
@@ -183,31 +183,31 @@ for P in s3dev s3prd; do
   grep -oE "[a-z_0-9]*${P}_[a-z_0-9]*" docs/sql/01_deploy_sss_openrisow_$P.sql | awk '{ if (length($0) > m) m = length($0) } END { print "maior identificador:", m }'   # esperado: até 30
   grep -ic "GRANT .* TO PUBLIC" docs/sql/01_deploy_sss_openrisow_$P.sql                              # esperado: 0
 done
-git status --short docs/sql
+sha256sum docs/sql/*_s3dev.sql docs/sql/*_s3prd.sql          # registre no passo 17
 ```
 
 * As citações de `tbsss_` no `01` ficam só nos `COMMENT ON COLUMN` das FKs (texto fixo do dicionário, sem efeito).
-* `git status` vazio: os scripts versionados já estavam iguais. Se aparecerem arquivos novos ou alterados, revise o `git diff` e faça o commit antes do pacote: `git add docs/sql/*_s3dev.sql docs/sql/*_s3prd.sql && git commit -m "SQL do 3067 (s3dev_, s3prd_)"`. O pacote só leva o que está no commit.
+* As impressões digitais (`sha256sum`) dos seis arquivos vão para o registro (passo 17). O passo 5 confere que os arquivos que chegam ao 3067 são esses.
 * O DBA pode revisar o `01` antes da janela. Ele também pode ser gerado de novo no 3067, depois do passo 8, pelo mesmo comando com `--name agente0001`, para conferir que sai idêntico ao do pacote.
 
 ### 4.2 Pacote
 
 ```bash
-cd <repositório>                              # árvore limpa no commit a implantar
-git status --short                            # esperado: vazio (o make package recusa alterações)
-make package                                  # grava .bkp/pacote_<data>/sss-<versao>.tar.gz, SHA256SUMS e COMMIT
-PKG=$(ls -d .bkp/pacote_2* | tail -1); ls -l "$PKG"; cat "$PKG/COMMIT"
+cd "$ORIGEM"
+make package-local                            # grava .bkp/pacote_local_<data>/sss-<versao>.tar.gz, SHA256SUMS e ORIGEM
+PKG=$(ls -d .bkp/pacote_local_* | tail -1); ls -l "$PKG"; cat "$PKG/ORIGEM"
 (cd "$PKG" && sha256sum -c SHA256SUMS)        # esperado: sss-<versao>.tar.gz: OK
 tar -tzf "$PKG"/sss-*.tar.gz | grep -E '__pycache__|secrets\.cfg$|common\.ini$|config\.ini$' || echo "sem cache e sem segredos"
 tar -tzf "$PKG"/sss-*.tar.gz | grep -E 's3(dev|prd)\.sql'   # esperado: os seis scripts SQL dos prefixos novos
 ```
 
-O pacote é feito por `git archive` (só arquivos versionados) e pelo `tools/package.py`, que só usa a biblioteca padrão e recusa `__pycache__` e segredos.
+O `make package-local` copia só o que vai para o servidor (`bin`, `docs`, `instance/exemplos`, `scripts`, `src`, `AGENTS.md`, `README.md`), sem caches e sem `docs/homologation`, e passa a cópia pelo `tools/package.py`. Esse script só usa a biblioteca padrão e recusa o pacote se encontrar `__pycache__`, `*.pyc`, `secrets.cfg` real, senha fora do `CHANGE_ME` dos modelos, código de DEV, testes ou link simbólico. Os `instance/<nome>/` desta máquina (com as senhas reais) nunca entram. O arquivo `ORIGEM` registra a pasta e a hora do pacote. Se a pasta tiver um `.git`, ele também cita o commit de base e as mudanças locais, só como informação: a referência são os arquivos.
 
 Os scripts de exemplo do seed (`utilitarios/*`) ficam em `dev/scripts/`, que o pacote não leva. Gere um tar separado só com eles:
 
 ```bash
-git archive --format=tar HEAD dev/scripts/utilitarios | gzip -9 > "$PKG/utilitarios.tar.gz"
+tar -czf "$PKG/utilitarios.tar.gz" --exclude=__pycache__ --exclude='*.pyc' dev/scripts/utilitarios
+tar -tzf "$PKG/utilitarios.tar.gz" | grep -c '\.\(py\|sh\)$'          # esperado: 14
 (cd "$PKG" && sha256sum utilitarios.tar.gz >> SHA256SUMS && sha256sum -c SHA256SUMS)
 ```
 
@@ -219,13 +219,13 @@ Direto da origem para o 3067, pelo `ProxyJump`. Nada fica gravado no bastion.
 
 ```bash
 ssh sss-3067 'mkdir -m 0700 -p ~/sss_pacote'
-scp -J sss-bastion "$PKG"/sss-*.tar.gz "$PKG"/utilitarios.tar.gz "$PKG"/SHA256SUMS "$PKG"/COMMIT sss-3067:sss_pacote/
+scp -J sss-bastion "$PKG"/sss-*.tar.gz "$PKG"/utilitarios.tar.gz "$PKG"/SHA256SUMS "$PKG"/ORIGEM sss-3067:sss_pacote/
 # equivalente com rsync (retoma uma cópia interrompida):
 # rsync -av --partial -e "ssh -J sss-bastion" "$PKG"/ sss-3067:sss_pacote/
-ssh sss-3067 'cd ~/sss_pacote && sha256sum -c SHA256SUMS && cat COMMIT'
+ssh sss-3067 'cd ~/sss_pacote && sha256sum -c SHA256SUMS && cat ORIGEM'
 ```
 
-Esperado: `OK` em cada arquivo e o mesmo commit do passo 4. Com o `~/.ssh/config` do passo 2, `scp sss-3067:...` já usa o salto. O `-J sss-bastion` acima é a forma explícita, e `-o ProxyCommand="ssh -W %h:%p sss-bastion"` é a equivalente para um cliente sem `-J`.
+Esperado: `OK` em cada arquivo e o mesmo `ORIGEM` do passo 4.2. Com o `~/.ssh/config` do passo 2, `scp sss-3067:...` já usa o salto. O `-J sss-bastion` acima é a forma explícita, e `-o ProxyCommand="ssh -W %h:%p sss-bastion"` é a equivalente para um cliente sem `-J`.
 
 ---
 
@@ -575,8 +575,8 @@ Copie esta tabela para o registro da janela e preencha cada linha:
 | 3.2 | Python escolhido e versão; `stdlib OK`; tempo da PBKDF2 | ≥ 3.6.0; OK; ≤ 3 s | |
 | 3.3 | Driver e Instant Client; `sqlplus` | um driver; cliente presente | |
 | 3.4 | GFPR 1521 alcançável; portas 18000/18001 | alcançável; livres após o passo 6 | |
-| 4.1 | Scripts SQL gerados; `WHENEVER` 1; outros prefixos 0; maior identificador; `git status` | 1; 0; ≤ 30; vazio ou commit feito | |
-| 4.2 | Commit do pacote; `sha256sum -c` na origem; seis SQL no pacote | o commit da janela; OK; 6 | |
+| 4.1 | Scripts SQL gerados; `WHENEVER` 1; outros prefixos 0; maior identificador; `sha256sum` dos seis | 1; 0; ≤ 30; anotados | |
+| 4.2 | `ORIGEM` e `SHA256SUMS` do pacote; `sha256sum -c` na origem; seis SQL e 14 utilitários | anotados; OK; 6 e 14 | |
 | 5 | `sha256sum -c` no 3067 | OK nos três arquivos | |
 | 6 | Instalação antiga parada; `crontab` antigo salvo | nada no ar; arquivo salvo | |
 | 7 | `conteudo confere` em DEV e PROD | as duas | |
