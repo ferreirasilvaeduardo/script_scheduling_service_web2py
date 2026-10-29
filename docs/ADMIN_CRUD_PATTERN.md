@@ -13,10 +13,10 @@ As regras de negócio estão no README §4.4 e §10 (padrões globais e tabela 1
 
 | Camada | Arquivo | Responsabilidade |
 |---|---|---|
-| Controller | `src/sss/web/controllers/admin_<entidade>.py` | Aplica o guarda `_require_func('<FUNC>')`, restringe o método HTTP, lê `request.vars` com um teto defensivo por campo (sempre **acima** do limite do campo, para que o service veja o excesso e o recuse; nada é cortado sem aviso), chama o service, define o flash e renderiza ou redireciona. Não contém regra de negócio. |
-| Service | `src/sss/services/admin_<entity>_service.py` | Não importa `gluon` e recebe `ctx` e `ip` como parâmetros. Reconfirma a funcionalidade com `admin_crud.require_feature`, valida os campos, calcula a versão e o detalhe de auditoria e chama o repositório. O serviço padrão do processo é obtido sob demanda (`_service()`). |
+| Controller | `src/sss/web/controllers/admin_<entidade>.py` | Aplica o guarda `_require_func('<FUNC>')`, restringe o método HTTP, lê `request.post_vars` (e o id em `request.args`) com um teto defensivo por campo (sempre **acima** do limite do campo, para que o service veja o excesso e o recuse; nada é cortado sem aviso), chama o service, define o flash e renderiza ou redireciona. Não contém regra de negócio. |
+| Service | `src/sss/services/admin_<entity>_service.py` | Não importa a camada web (o web2py e o `gluon` saíram no CR-021) e recebe `ctx` e `ip` como parâmetros. Reconfirma a funcionalidade com `admin_crud.require_feature`, valida os campos, calcula a versão e o detalhe de auditoria e chama o repositório. O serviço padrão do processo é obtido sob demanda (`_service()`). |
 | Base comum | `src/sss/services/admin_crud.py` | Fornece `version` (com `sensitive=`), `expected`, `text`, `identifier`, `free_text`, `changes_detail`, `insert_detail`, `free_detail`, `audit_entry`, `require_feature`, `require_admin`, `AccessDenied`, `OperationDenied` e as mensagens padrão (`MSG_CONFLICT` vem de `ui_helpers.MESSAGES`). |
-| Repositório | `repo_<agregado>` | A inclusão e a alteração recebem `audit=` e gravam a linha de `tbsss_audit` na **mesma** operação. A alteração recebe `esperado=` e faz um `UPDATE` condicional. O ator da auditoria também preenche as colunas de registro (`created_*` na inclusão, `updated_*` na alteração; CR-006, README §10); sem ator, a gravação é recusada. |
+| Repositório | `repo_<agregado>` | A inclusão e a alteração recebem `audit=` e gravam a linha de `tbsss_audit` na **mesma** operação. A alteração recebe `expected=` e faz um `UPDATE` condicional. O ator da auditoria também preenche as colunas de registro (`created_*` na inclusão, `updated_*` na alteração; CR-006, README §10); sem ator, a gravação é recusada. |
 
 ## Telas e ações
 
@@ -39,9 +39,9 @@ As entidades mestras nunca são excluídas, apenas desativadas (README §10).
 
 ## Concorrência na edição (sem coluna nova)
 
-1. O `form` envia em campo oculto a `version`: o sha256 dos campos editáveis (`active` incluído) no momento da leitura. As colunas de registro (CR-006) não entram na versão nem no `esperado`. Campo sensível entra no hash como marcador fixo (`<sensivel:preenchido>` ou `<sensivel:vazio>`, `admin_crud.FILLED_MARKER` e `EMPTY_MARKER`), nunca pelo valor. Uma troca concorrente feita só no valor sensível não gera conflito (README §10, "Consequência aceita").
+1. O `form` envia em campo oculto a `version`: o sha256 dos campos editáveis (`active` incluído) no momento da leitura. As colunas de registro (CR-006) não entram na versão nem no `expected`. Campo sensível entra no hash como marcador fixo (`<sensivel:preenchido>` ou `<sensivel:vazio>`, `admin_crud.FILLED_MARKER` e `EMPTY_MARKER`), nunca pelo valor. Uma troca concorrente feita só no valor sensível não gera conflito (README §10, "Consequência aceita").
 2. O `save` ou o `toggle_active` do service relê o registro. Se a `version` enviada for diferente da atual, o resultado é conflito.
-3. O service repassa os valores lidos como `esperado=`. O repositório executa `UPDATE ... WHERE id = :id AND <coluna = valor lido ...>` e checa o `rowcount`. No ORACLE, cada comparação é nula-segura na forma ANSI `(c = :v OR (c IS NULL AND :v IS NULL))` (README §10). Se o `rowcount` for 0, o repositório lança `RepoConflict` e não altera nada. Com isso, não sobra janela entre a leitura e a escrita.
+3. O service repassa os valores lidos como `expected=`. O repositório executa `UPDATE ... WHERE id = :id AND <coluna = valor lido ...>` e checa o `rowcount`. No ORACLE, cada comparação é nula-segura na forma ANSI `(c = :v OR (c IS NULL AND :v IS NULL))` (README §10). Se o `rowcount` for 0, o repositório lança `RepoConflict` e não altera nada. Com isso, não sobra janela entre a leitura e a escrita.
 4. Mensagem exibida (README §2.4.2): "Outra pessoa mudou este registro enquanto você editava. Recarregue a página para ver a versão nova e faça a sua alteração de novo." O formulário volta com os dados atuais e uma nova versão.
 
 ## Erros
@@ -75,7 +75,7 @@ O detalhe passa sempre pelo `masking` (segredos registrados e senha em connect s
 * campos inválidos, inclusive espaços em volta de identificador e caractere de controle em texto livre;
 * valor acima do limite recusado, sem truncar;
 * chave natural imutável;
-* edição concorrente, tanto pela versão quanto pelo `esperado` entre a leitura e a escrita;
+* edição concorrente, tanto pela versão quanto pelo `expected` entre a leitura e a escrita;
 * desativação com impacto;
 * auditoria;
 * colunas de registro: `created_*` com o ator na inclusão, `updated_*` nulos até a primeira alteração e preenchidos com o ator depois dela, inclusive na desativação (CR-006);

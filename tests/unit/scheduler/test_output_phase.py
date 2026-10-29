@@ -139,17 +139,18 @@ class TestStateMachine(unittest.TestCase):
         s.reason = "FILES"
         self.assertIn("1000 arquivos", output_phase.log_line(s, AGENT, 1000, 20 * 1024 * 1024))
 
-    def test_prazo_encerra_o_helper_sem_esperar(self):
+    def test_prazo_so_alerta_e_espera_o_fim(self):
+        # CR-036 (D4): passou do PACK_DEADLINE_S, um WARNING so; nenhum sinal; o zip que termina vale.
         plat = _Plat(b"")
-        output_phase.start_pack(self.output, plat, 1048576, 10, 0.0)
-        with self.assertLogs("sss_scheduler", "WARNING"):
+        output_phase.start_pack(self.output, plat, 0, 0, 0.0)
+        with self.assertLogs("sss_scheduler", "WARNING") as logs:
             self.assertFalse(output_phase.advance_pack(self.output, plat, output_phase.PACK_DEADLINE_S + 1))
-        self.assertEqual(plat.signals, [signal.SIGKILL])
+        self.assertIn("alerta, continua", logs.output[0])
         self.assertFalse(output_phase.advance_pack(self.output, plat, output_phase.PACK_DEADLINE_S + 2))
-        self.assertEqual(plat.signals, [signal.SIGKILL], "um sinal so")
-        plat.proc.popen.rc = -9
-        self.assertTrue(output_phase.advance_pack(self.output, plat, output_phase.PACK_DEADLINE_S + 3))
-        self.assertEqual((self.output.result, self.output.reason), (output_phase.FAILED, "DEADLINE"))
+        self.assertEqual(plat.signals, [], "nenhum sinal: o empacotamento segue")
+        self.assertTrue(self.output.slow)
+        self.assertIn("levou mais de %d s" % output_phase.PACK_DEADLINE_S,
+                      output_phase.log_line(self.output, AGENT, 0, 0))
 
     def test_zip_ilegivel_e_falha_ao_iniciar(self):
         with self.assertLogs("sss_scheduler", "WARNING"):

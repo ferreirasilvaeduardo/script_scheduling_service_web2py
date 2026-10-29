@@ -34,9 +34,10 @@ OUTPUT_TOO_MANY_FILES = 7
 OUTPUT_TOO_MANY_BYTES = 8
 # Ambiente minimo das operacoes de arquivo e dos comandos curtos: nada herdado do agente (AGENTS §3.2).
 _ENV_MINIMAL = {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"}
-# Politica fixa de limites do filho (README §8.4): sem core dump e com descritores limitados, aplicada no
-# preexec_fn.
-DEFAULT_RLIMITS = {"RLIMIT_CORE": (0, 0), "RLIMIT_NOFILE": (1024, 1024)}
+# Politica fixa de limites do filho (README §8.4): sem core dump (os demais limites sao os da conta, CR-036),
+# aplicada no preexec_fn.
+# CR-036 (D2): so o core dump desligado; o limite de arquivos abertos (antes fixo em 1024) e o da conta.
+DEFAULT_RLIMITS = {"RLIMIT_CORE": (0, 0)}
 _ALLOWED_RLIMITS = ("RLIMIT_CORE", "RLIMIT_NOFILE", "RLIMIT_CPU", "RLIMIT_AS", "RLIMIT_FSIZE",
                        "RLIMIT_NPROC", "RLIMIT_DATA", "RLIMIT_STACK")
 # Pastas do sistema (README §8.5): nem script nem log_dir/work_dir podem ficar nelas.

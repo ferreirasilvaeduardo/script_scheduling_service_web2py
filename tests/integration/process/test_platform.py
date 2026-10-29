@@ -185,13 +185,16 @@ class TestProcesses(_WithProcesses):
         self.assertTrue(_alive(outside.pid), "processo do mesmo usuario fora da pasta do ticket")
 
     def test_iniciar_processo_aplica_umask_limites_e_entrada_nula(self):
+        # CR-036 (D2): o RLIMIT_NOFILE e o herdado do agente (antes, fixo em 1024)
+        import resource
+        inherited = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
         output = os.path.join(self.root, "saida.txt")
         proc = self.start("import os,resource,sys\nm = os.umask(0)\n"
                             "open(%r,'w').write('%%o %%d %%d %%r' %% (m, resource.getrlimit(resource.RLIMIT_CORE)[0],"
                             " resource.getrlimit(resource.RLIMIT_NOFILE)[0], sys.stdin.read()))\n" % output)
         proc.popen.wait(10)
         with open(output) as f:
-            self.assertEqual(f.read(), "77 0 1024 ''")
+            self.assertEqual(f.read(), "77 0 %d ''" % inherited)
         self.assertFalse(os_platform.group_alive(proc))
 
 

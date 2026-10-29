@@ -31,8 +31,10 @@ _FIXED_PREFIXES = ("LC_", "SSS_", "PYTHON")
 # Versao do SSS: unico lugar (tbsss_agentes.versao e SSS_VERSION do script, CR-010). Trocada a cada release.
 SSS_VERSION = "1.0.0-dev"
 
-# Chaves que existiram e foram retiradas: recusadas com orientacao, para nao serem ignoradas em silencio.
-REMOVED_KEYS = {
+# Chaves que existiram e foram retiradas: ignoradas com aviso "apague a linha", nunca em silencio.
+# CR-036 (D6): as chaves retiradas antes do CR-032 tambem so geram aviso (antes recusavam a subida): uma regra
+# so para chave que saiu. As renomeadas (RENAMED_KEYS) continuam recusadas, para o valor nao se perder.
+_OLD_REMOVED = {
     ("app", "data_backend"): "a aplicacao usa sempre o Oracle do [oracle] (owner e table_prefix) (F7.3)",
     ("agent", "script_owner_uids"): "o SSS nao confere mais o dono dos scripts; o ambiente controla o conteudo (CR-011)",
     ("agent", "ambientes_exigem_hash"): "o SSS nao confere mais o hash dos scripts (CR-011)",
@@ -40,7 +42,8 @@ REMOVED_KEYS = {
 
 # Chaves que deixaram de existir e sao so ignoradas, com aviso (a subida segue).
 _NO_PURGE = "o purge e a retencao automatica foram retirados; a limpeza e manual (README §11.3, CR-030)"
-IGNORED_KEYS = {
+IGNORED_KEYS = dict(_OLD_REMOVED)
+IGNORED_KEYS.update({
     ("agent", "interpreters"): "o interpretador vem do script (#!), do disparo ou do cadastro (CR-026)",
     ("agent", "interpretadores"): "o interpretador vem do script (#!), do disparo ou do cadastro (CR-026)",
     ("logging", "app_log_retention_days"): _NO_PURGE,
@@ -48,7 +51,7 @@ IGNORED_KEYS = {
     ("logging", "output_retention_days"): _NO_PURGE,
     ("logging", "script_work_retention_days"): _NO_PURGE,
     ("logging", "saida_retention_days"): _NO_PURGE,
-}
+})
 # CR-032 (D2, D3, D9): ajustes finos com valor fixo no codigo. Continuam atributos do Config (quem le nao
 # muda); a linha no config.ini so gera aviso. D1: chaves sem efeito, retiradas.
 FIXED = {
@@ -61,10 +64,15 @@ FIXED = {
     ("agent", "cron_horizon_days"): 1461, ("agent", "queue_aging_min"): 60,
     ("agent", "child_locale"): "C.UTF-8",
     ("web", "log_poll_interval_s"): 3, ("web", "max_threads"): 16, ("web", "socket_timeout_s"): 30,
+    # CR-036 (D3): sem limite de tamanho nem de quantidade na saida (0 = sem limite); todo zip vai ao banco.
+    ("agent", "output_max_bytes"): 0, ("agent", "output_max_files"): 0,
 }
 _FIXED_REASON = "valor fixo no codigo desde o CR-032"
 _REMOVED_REASON = "sem efeito, retirada no CR-032"
 IGNORED_KEYS.update(dict((key, "%s (%s)" % (_FIXED_REASON, value)) for key, value in FIXED.items()))
+_NO_OUTPUT_LIMIT = "a saida nao tem mais limite de tamanho nem de arquivos desde o CR-036 (todo zip vai ao banco)"
+IGNORED_KEYS.update(dict((("agent", key), _NO_OUTPUT_LIMIT)
+                         for key in ("output_max_bytes", "output_max_files", "saida_max_bytes", "saida_max_arquivos")))
 # CR-032 (D4, D14): sempre do [app] name; o secrets.cfg e o unico da pasta de cima (instance/secrets.cfg).
 _DERIVED_REASON = "derivada do [app] name desde o CR-032"
 IGNORED_KEYS.update({("agent", "agent_id"): _DERIVED_REASON, ("agent", "work_dir"): _DERIVED_REASON,
@@ -103,8 +111,6 @@ def pending_warnings() -> List[str]:
 # Chaves com nome novo (CR-015a): o config.ini antigo e recusado com o nome a usar, sem aceitar o antigo.
 RENAMED_KEYS = {
     ("agent", "saida_dir"): "output_dir",
-    ("agent", "saida_max_bytes"): "output_max_bytes",
-    ("agent", "saida_max_arquivos"): "output_max_files",
     ("agent", "entrada_dir"): "input_dir",
     # CR-016b: configuracao e operacao em ingles
     ("oracle", "modo_driver"): "driver_mode",
@@ -205,10 +211,8 @@ SCHEMA = collections.OrderedDict([
         ("misfire_policy", FieldDef("enum", required=False, allowed_values=("RUN_ONCE", "SKIP"), default="RUN_ONCE")),
         # CR-008, R-25: espaco minimo do log_dir.
         ("log_dir_min_free_mb", FieldDef("int", required=False, min_val=0, max_val=1048576, default=1024)),
-        # CR-012: pasta de saida dos scripts (vazio desliga) e limites do zip (README §8.13).
+        # CR-012: pasta de saida dos scripts (vazio desliga; o zip nao tem limite desde o CR-036, README §8.13).
         ("output_dir", FieldDef("path", required=False, default=None)),
-        ("output_max_bytes", FieldDef("int", required=False, min_val=1048576, max_val=209715200, default=20971520)),
-        ("output_max_files", FieldDef("int", required=False, min_val=1, max_val=10000, default=1000)),
         # CR-014: pasta de entrada dos scripts, permanente, uma por ambiente e script (vazio desliga; README §8.14).
         ("input_dir", FieldDef("path", required=False, default=None)),
         # CR-019: pasta de trabalho dos scripts, por ticket, com as partes da pasta de saida (vazio desliga; README §8.15).
@@ -593,9 +597,6 @@ def load(ini_path: str) -> "Config":
                 _PENDING_WARNINGS.append("config.ini: chave [%s] %s ignorada: %s; apague a linha"
                                          % (sec_name, k, IGNORED_KEYS[(sec_name, k)]))
                 continue
-            if (sec_name, k) in REMOVED_KEYS:
-                raise ConfigError(section=sec_name, key=k, reason="Chave removida: %s; apague a linha %s" % (
-                    REMOVED_KEYS[(sec_name, k)], k))
             if (sec_name, k) in RENAMED_KEYS:
                 raise ConfigError(section=sec_name, key=k, reason="Chave renomeada: %s passou a se chamar %s (CR-015a)"
                                  % (k, RENAMED_KEYS[(sec_name, k)]))

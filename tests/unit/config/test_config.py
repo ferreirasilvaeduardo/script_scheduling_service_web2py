@@ -263,12 +263,12 @@ class TestConfig(unittest.TestCase):
         with self.assertRaises(sss_config.ConfigError):
             sss_config.load(ini_enum)
 
-        # Chaves removidas no CR-011: recusadas com orientacao, nunca ignoradas.
+        # Chaves removidas no CR-011: so aviso, com orientacao (CR-036, D6; antes recusavam a subida).
         for key in ("script_owner_uids", "ambientes_exigem_hash"):
-            ini = self._copy_and_edit_ini(changes={"agent": {key: "0"}})
-            with self.assertRaises(sss_config.ConfigError) as ctx:
-                sss_config.load(ini)
-            self.assertIn("apague a linha %s" % key, str(ctx.exception))
+            sss_config.pending_warnings()
+            sss_config.load(self._copy_and_edit_ini(changes={"agent": {key: "0"}}))
+            self.assertTrue(any("%s ignorada" % key in m and "apague a linha" in m
+                                for m in sss_config.pending_warnings()), key)
 
         # CR-015a: chaves com nome em ingles; a antiga e recusada com o nome novo, nunca aceita.
         for (section, old), new in sss_config.RENAMED_KEYS.items():
@@ -329,13 +329,13 @@ class TestConfig(unittest.TestCase):
         self.assertIn("sem efeito, retirada no CR-032", warnings)
 
     def test_data_backend_removida(self):
-        """F7.3: a aplicacao usa sempre o Oracle; a chave antiga e recusada com mensagem clara."""
+        """F7.3: a aplicacao usa sempre o Oracle; a chave antiga so gera aviso, que diz isso (CR-036, D6)."""
         for value in ("FAKE", "ORACLE"):
-            ini = self._copy_and_edit_ini(changes={"app": {"data_backend": value}})
-            with self.assertRaises(sss_config.ConfigError) as ctx:
-                sss_config.load(ini)
-            self.assertEqual(ctx.exception.key, "data_backend")
-            self.assertIn("apague a linha data_backend", str(ctx.exception))
+            sss_config.pending_warnings()
+            cfg = sss_config.load(self._copy_and_edit_ini(changes={"app": {"data_backend": value}}))
+            self.assertFalse(hasattr(cfg.app, "data_backend"))
+            self.assertTrue(any("data_backend ignorada" in m and "sempre o Oracle" in m
+                                for m in sss_config.pending_warnings()), value)
 
     def test_prefixo_comeca_com_letra(self):
         """CR-003 P2: prefixo iniciado por digito ou _ geraria nome Oracle invalido."""
@@ -954,7 +954,7 @@ class TestConfigCR007(unittest.TestCase):
         # CR-012 (README §8.13): opcional, com limites e sem sobrepor as pastas do SSS.
         cfg = self._load()
         self.assertIsNone(cfg.agent.output_dir)
-        self.assertEqual((cfg.agent.output_max_bytes, cfg.agent.output_max_files), (20971520, 1000))
+        self.assertEqual((cfg.agent.output_max_bytes, cfg.agent.output_max_files), (0, 0), "CR-036: sem limite")
         base = os.path.dirname(cfg.agent.work_dir)
         ok = self._load(agent={"output_dir": os.path.join(base, "saida_teste")})
         self.assertEqual(ok.agent.output_dir, os.path.join(base, "saida_teste"))
@@ -1004,12 +1004,12 @@ class TestConfigCR007(unittest.TestCase):
         # CR-021e (D5): servidor web proprio.
         web_cfg = self._load().web
         self.assertEqual((web_cfg.max_threads, web_cfg.socket_timeout_s), (16, 30), "CR-032: fixos")
-        for key, bad, good in (("output_max_bytes", ("1048575", "209715201"), ("1048576", "209715200")),
-                                   ("output_max_files", ("0", "10001"), ("1", "10000"))):
-            for v in bad:
-                self._refusal(key, agent={key: v})
-            for v in good:
-                self.assertEqual(getattr(self._load(agent={key: v}).agent, key), int(v))
+        # CR-036 (D3): a linha antiga do limite da saida so gera aviso e o valor fica 0 (sem limite)
+        for key in ("output_max_bytes", "output_max_files", "saida_max_bytes", "saida_max_arquivos"):
+            sss_config.pending_warnings()
+            cfg_key = self._load(agent={key: "5"})
+            self.assertEqual((cfg_key.agent.output_max_bytes, cfg_key.agent.output_max_files), (0, 0), key)
+            self.assertTrue(any(key in m and "CR-036" in m for m in sss_config.pending_warnings()), key)
 
     def test_invariantes_i3_e_i4(self):
         # CR-032 (D3): com heartbeat 10, fence 90, offline 180 e kill 5 fixos, I3 limita o call_timeout_ms a 40 s.

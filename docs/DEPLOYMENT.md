@@ -277,7 +277,7 @@ O seed cria os usuários de homologação `admin`, `op.prod`, `op.hml` e `consul
 ### 5.5 Dimensionamento dos LOBs (CR-007, R-29; CR-012)
 
 * **Log no banco:** num banco AL32UTF8, o CLOB guarda cerca de **2 bytes por caractere**. Estimativa do segmento LOB de `tbsss_tickets`: `tickets por dia × caracteres médios do log × 2 × dias guardados até a limpeza × 1,3`. Exemplo: 2.000 × 50.000 × 2 × 180 × 1,3 ≈ 47 GB. O teto por ticket é `max_log_size_bytes` (até 64 MiB).
-* **Saída dos scripts:** o zip fica no BLOB de `tbsss_ticket_output` até o ticket sair na limpeza manual: `tickets com saída por dia × zip médio × dias guardados × 1,3`. O teto por ticket é `output_max_bytes` (até 200 MiB).
+* **Saída dos scripts:** o zip fica no BLOB de `tbsss_ticket_output` até o ticket sair na limpeza manual: `tickets com saída por dia × zip médio × dias guardados × 1,3`. **Não há teto por ticket** desde o CR-036 (D3): uma saída grande (vários GB) vai inteira para o BLOB. Acompanhe o tablespace do esquema e combine com o DBA um alerta de espaço.
 * Depois da limpeza manual (§12), o espaço volta ao segmento, não ao tablespace. Para devolvê-lo, o DBA usa `ALTER TABLE ... MOVE LOB` ou redefinição online numa janela.
 
 ---
@@ -562,7 +562,7 @@ grep -h "Subida abortada" $(find var/*/logs/internal/app -name '*.log')
 
 ### 14.3 Linhas `[SSS]` no log do ticket
 
-Toda finalização sem execução (pré-validação, falha ao iniciar, cancelamento antes do início) grava no log do ticket uma linha `[SSS] <evento>: <código> (agente <id>)`, visível na tela do ticket. Exemplo: `[SSS] pre-validacao recusada: GROUP_OTHER_WRITABLE (agente srv-linux-prod-01)`.
+Linhas de alerta (CR-036), no arquivo de log local do ticket e na tela (a do log grande vai depois do marcador de truncado, D8): `[SSS] log local acima de <n> MB (alerta; o script continua)` e `[SSS] empacotamento da saida levou mais de 120 s (alerta; agente <id>)`; e, na saída, `[SSS] saida nao empacotada: falha (agente <id>)`. Toda finalização sem execução (pré-validação, falha ao iniciar, cancelamento antes do início) grava no log do ticket uma linha `[SSS] <evento>: <código> (agente <id>)`, visível na tela do ticket. Exemplo: `[SSS] pre-validacao recusada: GROUP_OTHER_WRITABLE (agente srv-linux-prod-01)`.
 
 ### 14.4 Saída padrão do nó web
 
@@ -581,7 +581,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | 1 (launcher) | `Erro: execucao como root nao e permitida.` (stderr) | Executado como root | Suba com a conta do SSS |
 | 10 | `o agente nao pode rodar como root (README §8.12 passo 1)` | Idem, sem o launcher | Idem |
 | 11 | `configuracao invalida: Arquivo de configuracao nao encontrado: <caminho>` | `config.ini` ausente ou `--config` errado | §7.1 |
-| 11 | `configuracao invalida: [secao] chave: <motivo>` | Chave ausente, desconhecida ou fora da faixa | Compare com o modelo de `instance/exemplos/`; uma chave removida pede "apague a linha" |
+| 11 | `configuracao invalida: [secao] chave: <motivo>` | Chave ausente, desconhecida ou fora da faixa | Compare com o modelo de `instance/exemplos/`; uma chave retirada só gera aviso "apague a linha" (CR-036, D6) |
 | 11 | `child_locale <x> nao consta em locale -a (CR-007, R-17)` | Locale do filho não instalado | Instale o locale `C.UTF-8` (fixo desde o CR-032) |
 | 12 | `secrets.cfg invalido: <reason>` (ex.: `Arquivo de segredos possui permissoes inseguras (mode 644, ...)`, `... deve pertencer ao usuario corrente`, `Ambientes atendidos sem credencial em secrets.cfg: X`) | Modo, dono ou seções do `secrets.cfg` | `chmod 0600` e dono a conta do SSS (§7.2); com a raiz compartilhada, o mesmo UID em todos os servidores (§4.1) |
 | 13 | `work_dir <pasta> recusado: <motivo>` (ou `output_dir`, `input_dir`, `script_work_dir`) | A pasta existe mas não pode ser usada (arquivo no lugar, sem escrita, pasta do sistema); a que falta é criada na subida (CR-032, D12) | Corrija ou apague o que está no caminho e suba de novo |
@@ -637,7 +637,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | ↳ `REGISTRATION_CHANGED`, `SCRIPT_INACTIVE`, `NOT_HOMOLOGATED`, `ENVIRONMENT_INACTIVE`, `NO_PERMISSION` | | O cadastro mudou entre o disparo e a execução | Confira o cadastro e dispare de novo |
 | ↳ `DB_ERROR: ORA-nnnnn` | `falha antes do spawn: DB_ERROR: ...` | Erro de banco na pré-validação | Veja o código ORA |
 | `FAILED` / `SPAWN_ERROR` | `falha antes do spawn: <erro>` e `[SSS] falha ao iniciar: <erro> (agente X)` | Não foi possível criar o log ou o processo (disco, permissão) | Veja o erro; confira o §8 |
-| `FAILED` / `LOG_LIMIT` | `encerramento pedido: LOG_LIMIT` | O log local passou de `max_local_log_size_bytes` | Reduza a saída do script ou aumente o limite |
+| `FAILED` / `LOG_LIMIT` (só tickets anteriores ao CR-036) | `encerramento pedido: LOG_LIMIT` | O log local passou de `max_local_log_size_bytes`; desde o CR-036 isso só gera o alerta `log local acima de <n> MB` e o script continua | Reduza a saída do script ou aumente o limite de alerta |
 | `FAILED` / `TIMEOUT` | `encerramento pedido: TIMEOUT` | Passou do `timeout_s` do script (ou `script_timeout_s`) | Ajuste o cadastro |
 | `FAILED` / `FENCED` | `FENCED: ...` (§15.3) | O agente perdeu o banco durante a execução | §15.3 |
 | `FAILED` / `NODE_OFFLINE` | No **outro** agente: `NODE_OFFLINE: ticket(s) N marcado(s) (heartbeat de outro agente vencido ha mais de 180 s)` | O agente dono caiu (ex.: `kill -9`, servidor desligado) | Religue o agente; o filho que ficou vivo é encerrado na religação |
@@ -728,6 +728,13 @@ O código é trocado **no lugar** pelo `bin/sss-update.sh`. `instance/`, `var/` 
 
 Do mais novo para o mais antigo. Quem vem de uma versão anterior aplica na ordem cronológica. As notas da instalação anterior ao CR-028 (`/opt/sss/app`) estão em `docs/architecture/DEPLOYMENT-history.md`.
 
+* **CR-036: alertas no lugar de bloqueios (sem mudança de esquema).**
+  * Log local do ticket acima de `max_local_log_size_bytes`: só alerta (`[SSS] log local acima de <n> MB`); o script continua. Novos tickets não terminam mais em `FAILED/LOG_LIMIT`.
+  * Os scripts herdam o limite de arquivos abertos da conta (antes, fixo em 1024); o *core dump* continua desligado.
+  * A saída não tem mais limite de tamanho nem de arquivos: todo zip vai ao banco (§5.5; acompanhe o tablespace). `output_max_bytes` e `output_max_files` no `config.ini` só geram aviso; apague as linhas.
+  * O prazo de 120 s do empacotamento e o da entrega de um arquivo da tela Entrada só alertam; o zip e a gravação terminam. Uma entrega travada (disco ou NFS pendurado) segura as seguintes até a parada do agente: o WARNING `entrega <id> passou de 120 s` é o sinal para investigar.
+  * `[app] data_backend`, `[agent] script_owner_uids` e `ambientes_exigem_hash` só geram aviso (antes, recusavam a subida).
+  * **Retorno:** o pacote de retorno. A versão anterior volta aos limites dela (20 MiB e 1.000 arquivos por saída, ou as linhas de `output_max_*`, se ainda estiverem no `config.ini`): uma saída maior volta a ficar `EXCEEDED`, e um log acima do limite volta a encerrar o script.
 * **CR-033 e CR-034 (sem mudança de esquema nem de config).** Ensaiados no PROD de `5c0383d` para `e0030e7`, com retorno (CR-035).
   * O pacote não leva mais `docs/homologation/` (CR-033, D3): a pasta some do servidor na atualização.
   * `check_env.py --name <nome>` passa a **conectar ao banco** sempre (CR-034, D6), com uma linha do orçamento da conexão (`AVISO` não reprova); sem processo, sai com 2. Use-o antes da subida (§6).
@@ -764,7 +771,8 @@ Do mais novo para o mais antigo. Quem vem de uma versão anterior aplica na orde
 - [ ] Estrutura por processo (CR-028): `<RAIZ>` = `/portaloptrib/TESHUVA/SSS/PROD/script_scheduling_service`, um `instance/<nome>/` por processo com `[app] name` igual ao nome da pasta, e nomes únicos em toda a instalação
 - [ ] `instance/common.ini` com o `[oracle]` (CR-032, D18) e nenhum `config.ini` de processo repetindo o `[oracle]` sem motivo
 - [ ] `instance/secrets.cfg` único, com `0600` e dono a conta do SSS, com o `[environment:*]` de todo ambiente atendido
-- [ ] Nenhuma linha `[app] sss_env`, `exec_users`, `exec_work_dir`, `helper_path`, `[retention]`, `*_retention_days`, `[purge]` nem `[monitor]` (só geram aviso)
+- [ ] Nenhuma linha `[app] sss_env`, `data_backend`, `exec_users`, `exec_work_dir`, `helper_path`, `script_owner_uids`, `ambientes_exigem_hash`, `output_max_bytes`, `output_max_files`, `[retention]`, `*_retention_days`, `[purge]` nem `[monitor]` (só geram aviso)
+- [ ] Alerta de espaço do tablespace do esquema combinado com o DBA: o zip da saída vai inteiro para o banco, sem teto por ticket (§5.5, CR-036)
 - [ ] Na tela, sem a faixa de ambiente e com o rodapé `Ambiente PROD`; no log de subida, `ambiente da instalacao: PROD`
 - [ ] Limpeza manual combinada: quem roda o SQL do banco e o `find` dos arquivos, e com que frequência (§12, README §11.3)
 - [ ] `[web] allowed_origins` com a URL que os usuários digitam (§10.4)

@@ -19,7 +19,7 @@ from sss.persistence.oracle import scheduler_output
 
 _log = logging.getLogger("sss_scheduler")
 
-PACK_DEADLINE_S = 120
+PACK_DEADLINE_S = 120  # CR-036 (D4): so alerta; o empacotamento segue ate o fim (a parada do agente o abandona)
 PARTS_PER_ROUND = 4
 PART_SIZE = scheduler_output.PART_MAX
 ZIP_NAME = "output.zip"
@@ -47,7 +47,7 @@ class Output(object):
         self.zip_path = os.path.join(work_dir_ticket, ZIP_NAME)
         self.process = None
         self.deadline = None
-        self.dead = False
+        self.slow = False  # CR-036 (D4): passou do PACK_DEADLINE_S (alerta)
         self.result = None
         self.reason = None
         self.file_count = None
@@ -89,15 +89,12 @@ def advance_pack(output, plat, now):
         return True
     rc = output.process.popen.poll()
     if rc is None:
-        if now >= output.deadline and not output.dead:
-            output.dead = True
-            plat.signal_group(output.process, signal.SIGKILL)
-            _log.warning("empacotamento da saida passou de %d s: encerrado", PACK_DEADLINE_S,
+        if now >= output.deadline and not output.slow:
+            output.slow = True
+            _log.warning("empacotamento da saida passou de %d s: alerta, continua", PACK_DEADLINE_S,
                          extra={"ticket": output.ticket_id, "action": "SAIDA"})
         return False
-    if output.dead:
-        output.result, output.reason = FAILED, "DEADLINE"
-    elif rc == 0:
+    if rc == 0:
         _check_zip(output)
     elif rc == plat.OUTPUT_EMPTY:
         output.result = EMPTY
@@ -143,8 +140,9 @@ def log_line(output, agent_id, max_files, max_bytes):
             ("%d MiB" % (max_bytes // (1024 * 1024)))
         return "saida nao empacotada: excede o limite de %s (agente %s)" % (limit, agent_id)
     if output.result == FAILED:
-        return "saida nao empacotada: %s (agente %s)" % (
-            "prazo de %d s esgotado" % PACK_DEADLINE_S if output.reason == "DEADLINE" else "falha", agent_id)
+        return "saida nao empacotada: falha (agente %s)" % agent_id
+    if output.slow:
+        return "empacotamento da saida levou mais de %d s (alerta; agente %s)" % (PACK_DEADLINE_S, agent_id)
     return None
 
 

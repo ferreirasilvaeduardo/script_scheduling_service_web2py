@@ -75,6 +75,32 @@ class TestInputPhase(unittest.TestCase):
             self.assertEqual(f.read(), DATA)
         self.assertFalse(os.path.exists(d.part_path), "temporario apagado")
 
+    def test_prazo_so_alerta_e_a_entrega_termina(self):
+        # CR-036 (D7): passou do PUT_DEADLINE_S, um WARNING so, sem sinal; a gravacao termina e vale.
+        repo = _Repo(DATA)
+        d = input_phase.Delivery(_row(DATA), self.work)
+        while d.step == input_phase.DOWNLOAD:
+            input_phase.download(d, None, repo)
+        input_phase.start_write(d, os_platform, self.base, "carga_diaria",
+                                time.monotonic() - input_phase.PUT_DEADLINE_S - 1)
+        real_poll = d.process.popen.poll
+        calls = []
+
+        def poll():
+            # a primeira consulta ve o helper ainda gravando, mesmo que ele seja mais rapido que o teste
+            calls.append(1)
+            return None if len(calls) == 1 else real_poll()
+        d.process.popen.poll = poll
+        limit = time.monotonic() + 30
+        with self.assertLogs("sss_scheduler", "WARNING") as logs:
+            while not input_phase.advance_write(d, os_platform, time.monotonic()):
+                self.assertLess(time.monotonic(), limit)
+                time.sleep(0.05)
+        self.assertEqual(len([m for m in logs.output if "alerta, continua" in m]), 1, logs.output)
+        self.assertEqual((d.state, d.step), ("DELIVERED", input_phase.MARK))
+        self.assertTrue(d.slow)
+        input_phase.discard(d, os_platform)
+
     def test_ja_existe_sem_substituir(self):
         self._run(input_phase.Delivery(_row(b"um"), self.work), _Repo(b"um"))
         repo = _Repo(b"dois")

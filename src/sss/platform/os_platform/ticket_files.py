@@ -49,6 +49,7 @@ _RE_MINUTE_RELATIVE = re.compile(r"^\d{4}/\d{2}/\d{2}/\d{2}/\d{2}$")
 _RE_TICKET = re.compile(r"^ticket_[1-9]\d{0,9}$")
 _CHUNK = 64 * 1024
 _MAX_OUTPUT_BYTES = 209715200
+_ZIP64_FROM = 1 << 30  # 1 GiB: folga para o deflate de conteudo que nao comprime (limite do zip: 2 GiB)
 _MAX_OUTPUT_FILES = 10000
 _MTIME_MIN = 315705600  # 1980-01-03 UTC: o zip nao aceita datas anteriores a 1980 em nenhum fuso
 
@@ -148,7 +149,8 @@ def _output_dir(base: str, relative: str, create: bool = False) -> Optional[str]
 
 class _CountedOutput(object):
     """Saida padrao sem seek. Ao passar de max_bytes, marca excedeu e descarta o resto: o laco para e o zip
-    fecha normalmente (o zipfile da 3.6 nao fecha com um handle de escrita aberto apos erro)."""
+    fecha normalmente (o zipfile da 3.6 nao fecha com um handle de escrita aberto apos erro).
+    max_bytes 0: sem limite (CR-036, D3; o agente passa sempre 0)."""
 
     def __init__(self, destination: BinaryIO, max_bytes: int) -> None:
         self.destination = destination
@@ -159,7 +161,7 @@ class _CountedOutput(object):
     def write(self, date: bytes) -> int:
         if not self.exceeded:
             self.written += len(date)
-            if self.written > self.max_bytes:
+            if self.max_bytes and self.written > self.max_bytes:
                 self.exceeded = True
             else:
                 self.destination.write(date)
@@ -170,7 +172,8 @@ class _CountedOutput(object):
 
 
 def _output_files(folder: str, max_files: int) -> List[Tuple[str, str]]:
-    """[(caminho, nome_relativo)] dos arquivos regulares, sem seguir links; acima do limite: codigo 7."""
+    """[(caminho, nome_relativo)] dos arquivos regulares, sem seguir links; acima do limite: codigo 7
+    (max_files 0: sem limite, CR-036)."""
     files = []
     for root, dirs, names in os.walk(folder, followlinks=False):
         dirs.sort()
@@ -182,7 +185,7 @@ def _output_files(folder: str, max_files: int) -> List[Tuple[str, str]]:
             except OSError:  # o script apagou o arquivo durante a varredura
                 continue
             files.append((path, os.path.relpath(path, folder)))
-            if len(files) > max_files:
+            if max_files and len(files) > max_files:
                 _error(OUTPUT_TOO_MANY_FILES, "saida acima do limite de arquivos")
     return files
 
@@ -211,7 +214,9 @@ def _pack(base: str, relative: str, max_bytes: int, max_files: int,
                     info = zipfile.ZipInfo(name, time.localtime(max(st.st_mtime, _MTIME_MIN))[:6])
                     info.compress_type = zipfile.ZIP_DEFLATED
                     info.external_attr = 0o600 << 16
-                    with z.open(info, "w") as dst:
+                    # CR-036 (D3): sem limite, um arquivo pode passar de 2 GiB; o zip64 vem antes do conteudo
+                    # (a saida padrao nao tem seek para corrigir o cabecalho depois).
+                    with z.open(info, "w", force_zip64=st.st_size >= _ZIP64_FROM) as dst:
                         while not output.exceeded:
                             chunk = f.read(_CHUNK)
                             if not chunk:
@@ -368,8 +373,8 @@ def run_main(argv: List[str]) -> int:
         _error(INVALID_USAGE, "subcomando ausente")
     sub, args = argv[0], argv[1:]
     if sub == "pack" and len(args) == 4:
-        return _pack(args[0], args[1], _integer(args[2], "max_bytes", minimum=1, maximum=_MAX_OUTPUT_BYTES),
-                          _integer(args[3], "max_arquivos", minimum=1, maximum=_MAX_OUTPUT_FILES))
+        return _pack(args[0], args[1], _integer(args[2], "max_bytes", minimum=0, maximum=_MAX_OUTPUT_BYTES),
+                          _integer(args[3], "max_arquivos", minimum=0, maximum=_MAX_OUTPUT_FILES))
     if sub == "clean-output" and len(args) == 2:
         return _clean_output(args[0], args[1])
     if sub == "put-input" and len(args) == 7:

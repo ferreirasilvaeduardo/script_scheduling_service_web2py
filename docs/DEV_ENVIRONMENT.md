@@ -241,7 +241,7 @@ script_base_dir = /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/dev/sc
 
 Os arquivos precisam de modo `0644` ou `0755` (`chmod -R go-w dev/scripts`). Uma pasta do seu `$HOME` também serve, com caminho absoluto.
 
-* As chaves `script_owner_uids` e `ambientes_exigem_hash` foram retiradas (CR-011). Se ainda estiverem no seu `config.ini`, a subida aborta com "Chave removida: ...; apague a linha". Apague a linha.
+* As chaves `script_owner_uids` e `ambientes_exigem_hash` foram retiradas (CR-011). Se ainda estiverem no seu `config.ini`, a subida segue com o aviso "... ignorada: ...; apague a linha" (CR-036, D6). Apague a linha.
 * As chaves `base_script_dirs` e a antiga `base_script_dir` foram retiradas (CR-005). Se ainda estiverem no seu `config.ini`, a subida aborta com "Chave desconhecida na secao [agent]". Apague a linha.
 * `app_log_backups` saiu no CR-005, e a retenção do log da aplicação (`app_log_retention_days`) saiu no CR-030: nada é apagado sozinho (limpeza manual, README §11.3).
 

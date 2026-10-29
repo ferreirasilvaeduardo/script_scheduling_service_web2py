@@ -21,7 +21,7 @@ _log = logging.getLogger("sss_scheduler")
 
 PARTS_PER_ROUND = 4
 PART_SIZE = repo_inputs.PART_MAX
-PUT_DEADLINE_S = 120
+PUT_DEADLINE_S = 120  # CR-036 (D7): so alerta; a gravacao segue ate o fim (a parada do agente a descarta)
 INPUT_DIR = "input"
 
 # Etapas
@@ -66,7 +66,7 @@ class Delivery(object):
         self.offset = 0
         self.process = None
         self.deadline = None
-        self.dead = False
+        self.slow = False  # CR-036 (D7): passou do PUT_DEADLINE_S (alerta)
         self.state = None
         self.reason = None
         self.next_attempt = 0.0
@@ -132,15 +132,13 @@ def advance_write(delivery, plat, now):
     """Acompanha o put-input sem esperar. True quando ha resultado (DELIVERED ou FAILED com motivo)."""
     rc = delivery.process.popen.poll()
     if rc is None:
-        if now >= delivery.deadline and not delivery.dead:
-            delivery.dead = True
-            plat.signal_group(delivery.process, signal.SIGKILL)
-            _log.warning("entrega %s passou de %d s: encerrada", delivery.id, PUT_DEADLINE_S,
-                         extra={"action": "ENTRADA"})
+        if now >= delivery.deadline and not delivery.slow:
+            # CR-036 (D7): so alerta; as entregas seguintes esperam esta terminar (uma por vez)
+            delivery.slow = True
+            _log.warning("entrega %s passou de %d s: alerta, continua (as proximas esperam)", delivery.id,
+                         PUT_DEADLINE_S, extra={"action": "ENTRADA"})
         return False
-    if delivery.dead:
-        delivery.fail("ERROR")
-    elif rc == 0:
+    if rc == 0:
         delivery.state, delivery.reason, delivery.step = "DELIVERED", None, MARK
     elif rc == plat.INPUT_EXISTS:
         delivery.fail("EXISTS")

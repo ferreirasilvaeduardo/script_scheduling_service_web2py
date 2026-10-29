@@ -221,8 +221,10 @@ class TestTicketFiles(unittest.TestCase):
         code, _zip, error = self._helper_output("pack", base, "carga/2026/10/20/14/05/ticket_10", 1048576, 10)
         self.assertEqual(code, 8, error)
         self.assertIn("bytes", error)
-        for args in (("pack", base, rel, 0, 10), ("pack", base, rel, 1048576, 0),
-                     ("pack", base, rel, 209715201, 10), ("pack", base, rel, 1, 10001),
+        # CR-036 (D3): 0 = sem limite (o agente passa sempre 0); as mesmas pastas viram zip
+        self.assertEqual(self._helper_output("pack", base, "carga/2026/10/20/14/05/ticket_9", 0, 0)[0], 0)
+        self.assertEqual(self._helper_output("pack", base, "carga/2026/10/20/14/05/ticket_10", 0, 0)[0], 0)
+        for args in (("pack", base, rel, 209715201, 10), ("pack", base, rel, 1, 10001),
                      ("pack", base, "../x/2026/10/20/14/05/ticket_8", 1048576, 10),
                      ("pack", base, rel, 1048576), ("clean-output", base), ("purge-output", base, "0"),
                      ("purge-output", base, "7", "remover")):

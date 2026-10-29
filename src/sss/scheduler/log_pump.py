@@ -91,6 +91,7 @@ class Pump(object):
         self._held = ""
         self.truncated = False
         self.truncated_written = False
+        self._notes = []  # CR-036 (D8): linhas [SSS] de alerta que ainda nao chegaram ao banco
         # Envio: fila mascarada ainda nao confirmada e no maximo um bloco em voo.
         self._queue = ""
         self._in_flight = None
@@ -161,14 +162,15 @@ class Pump(object):
     # -- limites -------------------------------------------------------------
 
     def local_exceeded(self):
-        """Arquivo local acima de max_local_log_size_bytes (LOG_LIMIT, README §8.10)."""
+        """Arquivo local acima de max_local_log_size_bytes (alerta, README §8.10; CR-036, D1)."""
         try:
             return os.path.getsize(self.log_path) > self.max_local_log_size_bytes
         except OSError:  # arquivo ausente: nada a medir; a leitura registra o WARN
             return False
 
     def apply_db_cap(self, text):
-        """(texto para enviar, truncou). O total no CLOB, marcador incluido, nunca passa do teto.
+        """(texto para enviar, truncou). O total no CLOB, marcador incluido, nunca passa do teto, salvo as linhas
+        [SSS] de alerta do add_note (CR-036, D8), que vao depois do marcador.
 
         Enquanto cabe, envia ate max - os bytes do marcador e retem o resto (no maximo o tamanho do marcador),
         para decidir no fim entre o conteudo integral e o corte com marcador. Ao exceder, envia o prefixo que
@@ -183,14 +185,28 @@ class Pump(object):
         if _bytes(buf) <= available:
             self._held = buf[len(prefix):]
             self._accepted_bytes += _bytes(prefix)
+            self._notes = [n for n in self._notes if n not in prefix]
             return prefix, False
-        send = prefix + MARKER
+        self._notes = [n for n in self._notes if n not in prefix]
+        send = prefix + MARKER + "".join("\n%s\n" % n for n in self._notes)
+        self._notes = []
         self._held = ""
         self._accepted_bytes += _bytes(send)
         self.truncated = True
         _log.warning("log truncado no banco (max_log_size_bytes)", extra={"ticket": self.ticket_id,
                                                                           "action": "LOG"})
         return send, True
+
+    def add_note(self, text):
+        """CR-036 (D8): linha [SSS] de alerta (tambem gravada no arquivo local) que precisa chegar a tela mesmo
+        com o log do banco truncado. Ja truncado: entra na fila por fora do teto, depois do marcador. Ainda
+        nao: fica pendente; se a coleta normal a levar ao banco, sai da lista (sem duplicar); se o teto vier
+        antes dela, vai junto com o marcador."""
+        line = "[SSS] %s" % text
+        if self.truncated:
+            self._queue += "\n%s\n" % line
+        else:
+            self._notes.append(line)
 
     # -- envio ---------------------------------------------------------------
 

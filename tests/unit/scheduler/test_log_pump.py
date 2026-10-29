@@ -267,6 +267,36 @@ class TestLimits(_Base):
             self.assertGreater(len(body.encode("utf-8")), cap - len(MARKER.encode("utf-8")) - 4)
             self.assertEqual(clob.truncated, "Y")
 
+    def test_nota_de_alerta_depois_do_marcador(self):
+        """CR-036 (D8): a nota chega ao banco por fora do teto, nos tres caminhos, uma vez so."""
+        note = "log local acima de 2 KB (alerta; o script continua)"
+        line = "[SSS] " + note
+        # 1. o teto ja venceu: a nota entra na fila depois do marcador
+        b = self.pump(self.file(b"a" * 5000), cap=2048)
+        with self.assertLogs("sss_scheduler", "WARNING"):
+            b.collect()
+        b.add_note(note)
+        text = self.drain(b).text
+        self.assertTrue(text.index(line) > text.index(MARKER) and text.count(line) == 1, text[-200:])
+        # 2. a nota vem antes do teto e a linha do arquivo nao chega a ser coletada: vai junto com o marcador
+        path = self.file(b"a" * 5000)
+        b = self.pump(path, cap=2048)
+        b.add_note(note)
+        self.append_bytes(path, (line + "\n").encode("utf-8"))
+        with self.assertLogs("sss_scheduler", "WARNING"):
+            b.collect()
+        text = self.drain(b).text
+        self.assertTrue(text.index(line) > text.index(MARKER) and text.count(line) == 1, text[-200:])
+        # 3. sem teto: a linha do arquivo chega pela coleta e a nota nao duplica
+        path = self.file(b"inicio\n")
+        b = self.pump(path, cap=LARGE)
+        b.add_note(note)
+        self.append_bytes(path, (line + "\nfim\n").encode("utf-8"))
+        b.collect()
+        text = self.drain(b).text
+        self.assertEqual(text.count(line), 1, text)
+        self.assertNotIn(MARKER, text)
+
     def test_aplicar_teto_banco_direto(self):
         cap = 1100
         marker = len(MARKER.encode("utf-8"))

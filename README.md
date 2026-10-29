@@ -167,7 +167,7 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
 ### 2.5 Backend de dados (estratégia UI-first)
 
 * Toda persistência passa por **contratos de repositório** em `src/sss/persistence/contracts/repo_*.py`: classes abstratas por agregado, sem SQL.
-* O contrato tem duas implementações, escolhidas pela `src/sss/persistence/repo_factory.py`. **A aplicação usa sempre o Oracle** do `[oracle]` do config (owner e prefixo). A chave `[app] data_backend` foi removida no F7.3, e um config que ainda a tenha é recusado com a instrução de apagar a linha. O FAKE só existe quando um **teste** o injeta pelo gancho `repo_factory.configure(...)`, e só onde a pasta `dev/` existe (o repositório; o pacote não a leva, CR-032 D11):
+* O contrato tem duas implementações, escolhidas pela `src/sss/persistence/repo_factory.py`. **A aplicação usa sempre o Oracle** do `[oracle]` do config (owner e prefixo). A chave `[app] data_backend` foi removida no F7.3, e um config que ainda a tenha só gera aviso para apagar a linha (CR-036, D6; o processo usa o Oracle). O FAKE só existe quando um **teste** o injeta pelo gancho `repo_factory.configure(...)`, e só onde a pasta `dev/` existe (o repositório; o pacote não a leva, CR-032 D11):
 
 | Backend | Uso | Implementação |
 |---|---|---|
@@ -239,7 +239,7 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
 ### 2.7 SQL Oracle 11gR2 (CR-002)
 
 * O SQL é escrito diretamente na sintaxe aceita pelo **Oracle 11gR2**, em `src/sss/persistence/oracle/`. O CR-002 revogou a camada de dialeto e o SQL ANSI do CR-001.
-* **Permitido:** `ROWNUM`, `SYSDATE`, `seq.NEXTVAL FROM DUAL`, `FOR UPDATE WAIT n` (n ≤ 5), `DBMS_LOB.WRITEAPPEND`, `DBMS_LOB.SUBSTR`, `EMPTY_CLOB()`, `MERGE`, `CASE`, `NVL` e `DECODE`. A comparação nula-segura continua `(c = :v OR (c IS NULL AND :v IS NULL))`.
+* **Permitido:** `ROWNUM`, `SYSDATE`, `seq.NEXTVAL FROM DUAL`, `FOR UPDATE WAIT n` (n ≤ 5), `DBMS_LOB.WRITEAPPEND`, `DBMS_LOB.SUBSTR`, `DBMS_LOB.APPEND`, `DBMS_LOB.GETLENGTH`, `DBMS_LOB.COMPARE` (saída, BLOB), `EMPTY_CLOB()`, `EMPTY_BLOB()`, `MERGE`, `CASE`, `NVL` e `DECODE`. A comparação nula-segura continua `(c = :v OR (c IS NULL AND :v IS NULL))`.
 * **Proibido (12c+):** ver AGENTS §4.3. A varredura `test_sql_oracle11g.py` rejeita essa sintaxe em `src/sss/persistence/oracle/` e em `src/sss/cli/init_db.py`.
 * A aplicação **sempre informa o `id`** na inclusão (`seq.NEXTVAL` lido antes do `INSERT`). A trigger condicional do §10 continua existindo como defesa.
 * Os blocos SQL deste README estão na forma que vai para o código.
@@ -779,7 +779,7 @@ Os estados `SUCCESS`, `FAILED` e `CANCELLED` são **terminais e imutáveis**. To
 | `FAILED` | `FENCED` | `-2` |
 | `FAILED` | `PRECHECK_FAILED` | `-4` |
 | `FAILED` | `SPAWN_ERROR` | `-4` |
-| `FAILED` | `LOG_LIMIT` | `-5` |
+| `FAILED` | `LOG_LIMIT` | `-5` (só tickets anteriores ao CR-036: desde então o log grande só alerta) |
 | `FAILED` | `SHUTDOWN` | `-6` |
 | `CANCELLED` | `CANCEL_USER` | `-1` |
 
@@ -822,7 +822,7 @@ Os filtros da lista de tickets usam os mesmos nomes. A auditoria, o CSV e o banc
 | `FENCED` | "O servidor perdeu contato com o banco de dados e parou o script por segurança." | "Tente de novo em alguns minutos." |
 | `PRECHECK_FAILED` | "O script não pôde começar: o servidor não encontrou o arquivo (ou, com caminho relativo, não tem a pasta base), ou ele não está liberado." | "Avise o administrador com o número deste ticket." (o código do motivo fica no fim do log) |
 | `SPAWN_ERROR` | "O servidor não conseguiu iniciar o script." | "Avise o administrador com o número deste ticket." |
-| `LOG_LIMIT` | "O script escreveu mensagens demais e foi parado, para não lotar o disco." | "Avise o responsável pelo script." |
+| `LOG_LIMIT` (tickets anteriores ao CR-036) | "O script escreveu mensagens demais e foi parado, para não lotar o disco." | "Avise o responsável pelo script." |
 | `SHUTDOWN` | "O servidor foi desligado enquanto o script rodava." | "Tente de novo." |
 | `CANCEL_USER` | "A execução foi cancelada a pedido." | — |
 | Motivo desconhecido | "Terminou com um motivo que o sistema não conhece ({código})." | "Avise o suporte com o número deste ticket." |
@@ -1030,7 +1030,7 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
 **Saídas** (`outputs/index`, exige `DOWNLOAD_OUTPUT`, item "Saídas" do menu Operação): navegação pelas saídas dos tickets com a estrutura da pasta de saída (§8.13), montada a partir do banco, porque o web não enxerga o disco dos agentes.
 
 * **Níveis:** Ambientes → Scripts → Dias → Tickets → Arquivos, com o caminho percorrido no topo e a quantidade de saídas em cada nível. Os dias vêm do `started_at` do ticket, o mesmo minuto da pasta.
-* **Só `AVAILABLE`:** as saídas `EXCEEDED` e `FAILED` estão só no disco do agente e não aparecem; o detalhe do ticket explica cada caso (§8.13).
+* **Só `AVAILABLE`:** as saídas `FAILED` (e as `EXCEEDED` antigas, anteriores ao CR-036) estão só no disco do agente e não aparecem; o detalhe do ticket explica cada caso (§8.13).
 * **Escopo:** os ambientes do perfil (admin: todos), com tickets de outras pessoas; o solicitante aparece mascarado como no resto do sistema (`ui_helpers.visible_actor`). Ambiente, ticket ou arquivo fora do escopo, sem saída disponível ou com parâmetro fora do formato: **404**, nunca 403.
 * **Tickets:** número, início, solicitante, quantidade de arquivos e tamanho, paginados de 20 em 20, com "Ver arquivos" e "Baixar zip".
 * **Arquivos** (`outputs/files?ticket=<id>`): o índice do zip guardado no banco, sem as pastas, com pasta, nome, tamanho e data, de 100 em 100, e o botão "Baixar" em cada um.
@@ -1536,7 +1536,7 @@ O daemon chama apenas a interface abaixo, implementada em `posix.py` (Linux e de
 
 | Operação | Implementação POSIX |
 |---|---|
-| `start_process` (§8.4) | `Popen(argv, start_new_session=True, close_fds=True, stdin=DEVNULL, cwd=work_dir/ticket_<id>/exec, preexec_fn=_child_limits)`, com o log como stdout/stderr, `umask(0o077)` e `setrlimit`, com a conta do agente (CR-032, D7: o mesmo em DEV e PROD; sem `sudo` nem helper) |
+| `start_process` (§8.4) | `Popen(argv, start_new_session=True, close_fds=True, stdin=DEVNULL, cwd=work_dir/ticket_<id>/exec, preexec_fn=_child_limits)`, com o log como stdout/stderr, `umask(0o077)` e `setrlimit` só do *core dump* (0; o limite de arquivos abertos é o da conta desde o CR-036, D2), com a conta do agente (CR-032, D7: o mesmo em DEV e PROD; sem `sudo` nem helper) |
 | `signal_group(execution, signal_value)` (não bloqueante) | `os.killpg`, com a identidade do líder conferida contra PID reciclado. **Nunca espera:** a escalada SIGTERM → `kill_grace_s` → SIGKILL → coleta é uma máquina de estados do laço (§8.1, §8.9) |
 | `executor.check(execution)` (fora da plataforma) | `Popen.poll()` para o filho direto, sem esperar. Grupo que **não** é filho do daemon (startup check) é acompanhado por `process_exists` + identidade, sem `wait()` |
 | `process_identity(pid)` (contra PID reciclado) | Linux: `starttime` de `/proc/<pid>/stat` (campo 22, após o último `)`). Outros Unix: `None` (identidade desconhecida), porque `/proc/<pid>/psinfo` e `sysctl KERN_PROC` exigiriam ler estruturas binárias de cada sistema, sem `ctypes` (AGENTS §3.2) |
@@ -1555,9 +1555,9 @@ O daemon chama apenas a interface abaixo, implementada em `posix.py` (Linux e de
 **`ticket_files.py` (CR-032, D7; antes, o helper `sss-helper` do CR-007).** As operações de arquivo das pastas do ticket rodam num processo próprio, para o laço não esperar (o daemon não pode ter threads):
 
 * Fica em `src/sss/platform/os_platform/ticket_files.py`, dentro da camada de plataforma; Python 3.6 só com a biblioteca padrão, sem importar a aplicação nem ler o `config.ini`. O agente o chama com `sys.executable -I <arquivo> <subcomando>` e a própria conta; valida os próprios argumentos e recusa qualquer outro uso com código 2.
-* **`pack <base> <relativo> <max_bytes> <max_arquivos>` e `clean-output <base> <relativo>` (CR-012):** zip da pasta de saída na saída padrão e remoção da pasta do ticket. A `base` (`output_dir/<ambiente>`) é absoluta, normalizada, sem link e do próprio usuário. Detalhes no §8.13. O subcomando `purge-output` saiu no CR-030 (limpeza manual, §11.3).
+* **`pack <base> <relativo> <max_bytes> <max_arquivos>` e `clean-output <base> <relativo>` (CR-012):** limites de 0 a 209.715.200 bytes e de 0 a 10.000 arquivos, com 0 = sem limite (o agente passa sempre 0, CR-036); zip da pasta de saída na saída padrão e remoção da pasta do ticket. A `base` (`output_dir/<ambiente>`) é absoluta, normalizada, sem link e do próprio usuário. Detalhes no §8.13. O subcomando `purge-output` saiu no CR-030 (limpeza manual, §11.3).
 * **`put-input <base> <script> <subpasta|-> <nome> <Y|N> <sha256> <bytes>` e `list-input <base> <script> <max_itens>` (CR-020c):** gravação de um arquivo enviado pela tela na pasta de entrada do script e o retrato dela (§8.14). A `base` é `input_dir/<ambiente>`, com a mesma validação; a subpasta e o nome são conferidos nível a nível (sem `..`, `/` no nome, item começando com `.` ou caractere de controle; até 255 caracteres por nível e 10 níveis), e as subpastas são criadas com `0700` sem seguir link.
-* Códigos de saída: 0 sucesso, 2 uso inválido, 4 erro do sistema, 6 pasta de saída vazia ou inexistente, 7 saída acima do limite de arquivos e 8 acima do limite de bytes (`pack`, CR-012), 9 arquivo já existe, 10 sem espaço e 11 tamanho ou hash divergente (`put-input`, CR-020c). As mensagens vão para o stderr, sem valores sensíveis.
+* Códigos de saída: 0 sucesso, 2 uso inválido, 4 erro do sistema, 6 pasta de saída vazia ou inexistente, 7 saída acima do limite de arquivos e 8 acima do limite de bytes (`pack`, CR-012; só com um limite passado direto: o agente passa 0, sem limite, desde o CR-036), 9 arquivo já existe, 10 sem espaço e 11 tamanho ou hash divergente (`put-input`, CR-020c). As mensagens vão para o stderr, sem valores sensíveis.
 * Os subcomandos `run`, `term`, `kill`, `clean` e `stop-ticket` saíram no CR-032: o script é iniciado e sinalizado direto pelo agente, a pasta `exec/` some com `work_dir/ticket_<id>/` e o "talvez iniciado" é encerrado por `os_platform.stop_ticket` (§8.7).
 * **O que o agente acompanha:** o `Popen` do script, filho direto do agente e líder do grupo; morte por sinal vira `returncode` negativo, convertido como no §5.2. O PID registrado (`process_id`, nome do log) é o do script, e `process_start` é a identidade dele.
 
@@ -1850,12 +1850,12 @@ SELECT id, cancel_requested
   * **roda sempre**, mesmo sem tickets: o `executemany` vazio é pulado, o `UPDATE` do agente não (R-28);
   * o heartbeat é rotina técnica: não grava `updated_*` no ticket nem no agente (§10, CR-006).
 * **Timeout:** `timeout = tbsss_scripts.timeout_s` ou, se nulo, `script_timeout_s`. Ao expirar, o agente inicia o encerramento escalonado do grupo (máquina de estados, §8.9) e, quando ele termina, finaliza com `FAILED`, `TIMEOUT` e `-3`.
-* **Finalização** (processo terminado, detectado por `Popen.poll()`, ou encerramento concluído por timeout, cancelamento, `LOG_LIMIT` ou `SHUTDOWN`):
+* **Finalização** (processo terminado, detectado por `Popen.poll()`, ou encerramento concluído por timeout, cancelamento ou `SHUTDOWN`; o `LOG_LIMIT` não encerra mais, CR-036):
   1. **encerrar o grupo** do ticket (CR-007, R-02): mesmo que o processo principal tenha saído sozinho, o agente sinaliza o grupo (SIGTERM, prazo, SIGKILL) antes do flush. Havendo processos remanescentes, WARN `NETOS_ENCERRADOS`. `ESRCH` (grupo vazio) é o caso normal;
-  1a. **empacotar a saída** (CR-012, §8.13, etapa 1), só com `output_dir`: o ticket continua `RUNNING` e no heartbeat por até 120 s; a linha `[SSS]` de excesso ou falha vai para o arquivo de log local e chega ao banco no flush seguinte. Não acontece em `OWNERSHIP_LOST` nem em `SHUTDOWN`;
+  1a. **empacotar a saída** (CR-012, §8.13, etapa 1), só com `output_dir`: o ticket continua `RUNNING`, no heartbeat e **ocupando a vaga** (`max_parallel_jobs`) até o zip terminar (aos 120 s, só alerta, CR-036 D4; um zip travado prende a vaga até a parada do agente, §14); a linha `[SSS]` de alerta ou falha vai para o arquivo de log local e chega ao banco no flush seguinte. Não acontece em `OWNERSHIP_LOST` nem em `SHUTDOWN`;
   2. flush final do log;
   3. gravar `.sss_result` (`status`, `status_reason`, `return_code`) no `work_dir/ticket_<id>/` (R-01);
-  4. `UPDATE ... SET status, status_reason, return_code, finished_at = SYSDATE, updated_at = SYSDATE, updated_by = :actor WHERE id = :id AND agent_id = :agent_id AND status = 'RUNNING'`, com `:actor = 'SYSTEM:<agent_id>'`. Toda finalização de ticket pelo agente (timeout, `LOG_LIMIT`, `SHUTDOWN`, `ORPHAN_PROCESS`, `SPAWN_ERROR`, `PRECHECK_FAILED`) grava `updated_*` do mesmo jeito (§10, CR-006);
+  4. `UPDATE ... SET status, status_reason, return_code, finished_at = SYSDATE, updated_at = SYSDATE, updated_by = :actor WHERE id = :id AND agent_id = :agent_id AND status = 'RUNNING'`, com `:actor = 'SYSTEM:<agent_id>'`. Toda finalização de ticket pelo agente (timeout, `SHUTDOWN`, `ORPHAN_PROCESS`, `SPAWN_ERROR`, `PRECHECK_FAILED`) grava `updated_*` do mesmo jeito (§10, CR-006);
   5. `COMMIT`. Com erro de banco no passo 4 ou 5, o ticket fica em **finalização pendente** (R-03): continua no heartbeat, e o `UPDATE` é tentado de novo a cada `cancel_poll_interval_s` até `rowcount = 1` (concluído) ou `0` (`OWNERSHIP_LOST`; o resultado local fica só no log). `finished_at` é o `SYSDATE` do `UPDATE` bem-sucedido; o instante real do fim fica na linha `[SSS] terminou às <hora local>` do log;
   6. **gravar a saída** (CR-012, §8.13, etapa 2), com o ticket já finalizado e fora do mapa de execuções (não ocupa vaga de claim): a linha de `tbsss_ticket_output`, o zip em partes e a remoção da pasta. Não altera o resultado do ticket;
   7. limpeza de `work_dir/ticket_<id>/`, com a pasta `exec/` do script dentro. A limpeza acontece em **todo** encerramento (inclusive `OWNERSHIP_LOST` e `FENCED`), e o startup check limpa o que sobrar (R-32).
@@ -1971,7 +1971,7 @@ END;
 * **Limites:**
   * O teto do CLOB é medido em **bytes UTF-8 do texto já enviado** (`len(texto.encode('utf-8'))` acumulado pelo agente), e o corte é feito em fronteira de caractere.
   * `max_log_size_bytes` limita o total de bytes UTF-8 no CLOB, **incluindo** o marcador final `[SSS] log truncado no banco; arquivo integral no agente`. Ao detectar conteúdo além do teto, o agente conserva um prefixo que caiba em `max_log_size_bytes - bytes_do_marcador`, grava `log_truncated = 'Y'` e anexa o marcador uma única vez; o total, marcador incluído, nunca excede o teto. O pump mantém em buffer o sufixo necessário para decidir entre enviar o conteúdo integral (se o processo terminar sem exceder o teto) e truncar com marcador.
-  * O arquivo local tem teto `max_local_log_size_bytes`. Ao excedê-lo, o processo é encerrado (SIGTERM → SIGKILL) com `FAILED`, `LOG_LIMIT` e `-5`, protegendo o disco. O tamanho é conferido a cada `cancel_poll_interval_s`; contra um script que escreva mais rápido que isso, só a cota de disco da conta do agente protege (`DEPLOYMENT.md`).
+  * O arquivo local tem um limite de alerta, `max_local_log_size_bytes` (CR-036, D1): ao passar dele, o agente grava uma vez no log do ticket `[SSS] log local acima de <n> MB (alerta; o script continua)` (em KB com limite abaixo de 1 MB) e um WARNING no log do agente; **o script continua** até terminar. A linha também chega à tela quando o log no banco já foi truncado (`max_log_size_bytes`, 5 MB no padrão, vence antes dos 50 MB): ela vai depois do marcador de truncado, por fora do teto (CR-036, D8). O disco fica protegido pelo `log_dir_min_free_mb`, que segura os tickets novos na fila (§8.2), e pela partição própria do `var/` (DEPLOYMENT §4.3). O status `LOG_LIMIT` só existe em tickets anteriores ao CR-036.
   * **Arquivo local sem máscara:** o arquivo é escrito pelo próprio script e não é mascarado. Ele pertence ao usuário do agente (`0600`), fica só no agente e é apagado na limpeza manual (§11.3).
 * **UI `VIEW_LOGS`:** polling a cada `log_poll_interval_s`.
   * O cliente envia o offset já recebido, e o servidor lê pelo locator (`lob.read(offset, amount)`).
@@ -2040,15 +2040,15 @@ Canal opcional para o script devolver arquivos ao usuário. O zip vai para o ban
 * **Ligado por agente:** `[agent] output_dir` vazio desliga o recurso naquele agente (sem `SSS_OUTPUT_DIR`, sem zip).
 * **Pasta do ticket:** `output_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, com as partes do caminho do log (§8.4, passo 3). Usa o número do ticket, e não o PID.
 * **Dono:** a conta do agente (CR-032, D7). O agente cria o caminho nível a nível com `os.mkdir(..., 0o700)` (`os_platform.create_output_dir`), recusando link ou item que não seja diretório dele. Uma falha aqui é `SPAWN_ERROR`, antes de executar o script. O agente não lê o conteúdo.
-* **Fase de saída**, máquina de estados do laço (`src/sss/scheduler/output_phase.py`), sem espera, em todo fim de ticket (sucesso, erro, timeout, cancelamento, `LOG_LIMIT`), em duas etapas: **empacotar** depois do grupo encerrado e antes do flush final (§8.7, passo 1a: o ticket segue `RUNNING`, e a linha `[SSS]` entra no log) e **gravar** depois da finalização (§8.7, passo 6):
-  1. o agente inicia o `pack` (`ticket_files.py`, pela `platform`) com a saída padrão no arquivo `work_dir/ticket_<id>/output.zip` e acompanha com `poll()`. Prazo fixo de 120 s: ao vencer, o processo é encerrado e a saída fica `FAILED` (`DEADLINE`);
-  2. o `pack` percorre a pasta sem seguir links; só entram arquivos regulares, com o nome relativo à pasta do ticket. Conta os arquivos antes de compactar (`ZIP_DEFLATED`) e interrompe ao passar de `output_max_bytes`. **Não há zip parcial**;
+* **Fase de saída**, máquina de estados do laço (`src/sss/scheduler/output_phase.py`), sem espera, em todo fim de ticket (sucesso, erro, timeout, cancelamento), em duas etapas: **empacotar** depois do grupo encerrado e antes do flush final (§8.7, passo 1a: o ticket segue `RUNNING`, e a linha `[SSS]` entra no log) e **gravar** depois da finalização (§8.7, passo 6):
+  1. o agente inicia o `pack` (`ticket_files.py`, pela `platform`) com a saída padrão no arquivo `work_dir/ticket_<id>/output.zip` e acompanha com `poll()`. Aos 120 s, só alerta (CR-036, D4): WARNING no log do agente e, no fim, `[SSS] empacotamento da saida levou mais de 120 s (alerta; agente <a>)`; o agente espera o zip terminar, sem esperar no laço. A parada do agente abandona o empacotamento em andamento, como antes. `FAILED`/`DEADLINE` só existe em saídas anteriores ao CR-036;
+  2. o `pack` percorre a pasta sem seguir links; só entram arquivos regulares, com o nome relativo à pasta do ticket. Compacta (`ZIP_DEFLATED`) sem limite de tamanho nem de quantidade desde o CR-036 (D3): todo zip vai ao banco (DEPLOYMENT §5.5). Arquivos a partir de 1 GiB entram com zip64;
   3. código 6 (pasta vazia ou inexistente): a pasta é removida e nada é gravado;
-  4. código 7 ou 8 (limite de arquivos ou de bytes): grava a linha `EXCEEDED` (motivo `FILES` ou `BYTES`) e anexa ao log local `[SSS] saida nao empacotada: excede o limite de <n> arquivos (ou de <n> MiB) (agente <agent_id>)`, que o flush final leva ao banco. A pasta fica no disco;
-  5. código 0: grava a linha `WRITING` com `EMPTY_BLOB()`, envia o zip em partes de 1 MiB (`DBMS_LOB.WRITEAPPEND`, até 4 partes por volta do laço) e, no fim, grava `AVAILABLE` com `size_bytes` e `file_count`. Depois, remove a pasta (`clean-output`);
+  4. código 7 ou 8 (limite de arquivos ou de bytes): não acontece desde o CR-036, porque o agente passa sempre 0 (sem limite) ao `pack`; a linha `EXCEEDED` (motivo `FILES` ou `BYTES`) só existe em saídas anteriores. O `pack` ainda aceita um limite, para uso direto;
+  5. código 0: grava a linha `WRITING` com `EMPTY_BLOB()`, envia o zip em partes de 1 MiB (`DBMS_LOB.APPEND`, conferido por `GETLENGTH` e `COMPARE`, até 4 partes por volta do laço) e, no fim, grava `AVAILABLE` com `size_bytes` e `file_count`. Depois, remove a pasta (`clean-output`);
   6. todo `INSERT` e `UPDATE` exige que o ticket ainda seja deste agente (`agent_id = :agent_id`); `rowcount = 0` abandona a fase com ERROR `OWNERSHIP_LOST`, e a pasta fica no disco;
   7. erro de banco: a fase é refeita a cada `cancel_poll_interval_s`, como a finalização pendente (§8.7). No `SHUTDOWN`, é abandonada: a linha fica `WRITING` e a pasta fica no disco;
-  8. outro código, zip ilegível ou falha local: linha `FAILED` (`ERROR`), com `[SSS] saida nao empacotada: falha (agente <agent_id>)` no log; prazo esgotado: `FAILED` (`DEADLINE`). A pasta fica no disco;
+  8. outro código, zip ilegível ou falha local: linha `FAILED` (`ERROR`), com `[SSS] saida nao empacotada: falha (agente <agent_id>)` no log (`DEADLINE` só em saídas anteriores ao CR-036, quando o prazo de 120 s abortava o zip). A pasta fica no disco;
   9. no `SHUTDOWN` ou em `OWNERSHIP_LOST` antes do flush, o `pack` em andamento é encerrado e nada é gravado; a pasta fica no disco.
 * **O resultado do ticket nunca muda** por causa da saída.
 * **Startup check (§8.12, passo 9):** linhas `WRITING` de tickets deste agente viram `FAILED`.
@@ -2062,7 +2062,7 @@ Canal opcional para o script devolver arquivos ao usuário. O zip vai para o ban
   | sem linha | nada |
   | `WRITING` | "A saída está em preparação. Atualize a página em alguns instantes." Com mais de 1 hora: "A saída não foi concluída. Os arquivos ficaram temporariamente no servidor do agente `<agente>`. Peça a quem administra o servidor." |
   | `AVAILABLE` | "O script deixou N arquivos na pasta de saída (X KB). Use o botão Baixar para salvar o zip." e o botão **Baixar** |
-  | `EXCEEDED` | "A saída passou do limite de quantidade de arquivos (ou de tamanho) e não foi empacotada. Os arquivos ficaram temporariamente no servidor do agente `<agente>`. Peça a quem administra o servidor." |
+  | `EXCEEDED` (saídas anteriores ao CR-036) | "A saída passou do limite de quantidade de arquivos (ou de tamanho) e não foi empacotada. Os arquivos ficaram temporariamente no servidor do agente `<agente>`. Peça a quem administra o servidor." |
   | `FAILED` | "A saída não foi gravada. Os arquivos ficaram temporariamente no servidor do agente `<agente>`. Peça a quem administra o servidor." |
 
 ### 8.14 Pasta de entrada do script (CR-014)
@@ -2080,7 +2080,7 @@ Pasta permanente onde o script encontra os arquivos de que precisa (lotes, plani
 * Web e agentes podem estar em servidores diferentes: a pasta existe só no servidor de cada agente. Com mais de um agente atendendo o mesmo ambiente, cada um tem a sua `input_dir` (ou um compartilhamento de rede comum, montado pela infraestrutura).
 * **Envio pela tela (CR-020):** o arquivo chega pelo banco (§10, tabelas 19 a 21) e cada agente vivo do ambiente o grava na sua pasta (`src/sss/scheduler/input_phase.py`, máquina de estados do laço, sem espera, uma entrega por vez; persistência do agente por `src/sss/persistence/oracle/scheduler_input`, fora da camada web, com a conexão do daemon):
   1. **baixar:** no ciclo rápido, o agente pega a próxima entrega `PENDING` dele e, a cada volta do laço, lê até 4 partes de 1 MiB do banco para `work_dir/input/delivery_<id>.part` (do agente, `0600`). No fim, tamanho e SHA-256 são conferidos; divergência é `FAILED`/`HASH` sem chamar o `put-input`;
-  2. **gravar:** o `put-input` (`ticket_files.py`, num processo próprio, com o temporário na entrada padrão, prazo de 120 s) grava `.sss_upload_<pid>.tmp` no destino com `O_EXCL`, confere tamanho e hash enquanto grava e publica de forma atômica: **sem substituir**, `link` + `unlink`, e um item já existente é `EXISTS`; **substituindo**, `replace`, recusado se o destino não for arquivo regular (`NAME`). Disco cheio é `SPACE`; outro erro, `ERROR`;
+  2. **gravar:** o `put-input` (`ticket_files.py`, num processo próprio, com o temporário na entrada padrão; aos 120 s só alerta e a gravação termina, CR-036 D7, com as entregas seguintes esperando, porque o agente faz uma por vez) grava `.sss_upload_<pid>.tmp` no destino com `O_EXCL`, confere tamanho e hash enquanto grava e publica de forma atômica: **sem substituir**, `link` + `unlink`, e um item já existente é `EXISTS`; **substituindo**, `replace`, recusado se o destino não for arquivo regular (`NAME`). Disco cheio é `SPACE`; outro erro, `ERROR`;
   3. **marcar:** `DELIVERED` ou `FAILED` com o motivo, só pelo próprio agente, com `INPUT_DELIVERY` na mesma transação; o temporário é apagado e o retrato daquela pasta é refeito.
   * Agente sem `[agent] input_dir`, ou que não atende o ambiente da entrega: `FAILED`/`ERROR` com log claro.
   * Subida: os temporários `.part` que sobraram são apagados e as entregas continuam `PENDING`. Parada: a entrega em andamento é abandonada sem marcar nada.
@@ -2873,7 +2873,6 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[agent]` | `misfire_policy` | não | `RUN_ONCE` | `RUN_ONCE` ou `SKIP` (no config do web, num `[agent]` parcial, §12.1) |
 | `[agent]` | `log_dir_min_free_mb` (CR-008) | não | `1024` | 0 a 1.048.576; 0 desliga a checagem |
 | `[agent]` | `output_dir` (CR-012) | não | `var/<nome>/outputs` (escrita vazia desliga) | caminho absoluto e normalizado, fora das pastas do sistema, sem sobreposição com `log_dir` e `work_dir` |
-| `[agent]` | `output_max_bytes`, `output_max_files` (CR-012) | não | `20971520`, `1000` | 1.048.576 a 209.715.200; 1 a 10.000 |
 | `[agent]` | `input_dir` (CR-014) | não | `var/<nome>/inputs` (escrita vazia desliga) | como `output_dir`, e também sem sobreposição com ele |
 | `[agent]` | `script_work_dir` (CR-019) | não | `var/<nome>/script_works` (escrita vazia desliga) | como `input_dir`, e também sem sobreposição com ele |
 | `[agent]` | `script_base_dir` (CR-023) | não | `scripts_ambiente/` da raiz (escrita vazia: só caminho absoluto) | caminho absoluto e normalizado, fora das pastas do sistema, das pastas do SSS e da pasta da aplicação (salvo `scripts_ambiente/` e `dev/`, onde existe) |
@@ -2881,7 +2880,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[logging]` | `level` | não | `INFO` | `DEBUG`, `INFO`, `WARN`, `ERROR` |
 | `[logging]` | `app_log_max_bytes` | não | `10485760` | 1.024 a 1.073.741.824 (troca de arquivo do log da aplicação, §13) |
 | `[logging]` | `max_log_size_bytes` | não | `5242880` | 1.024 a 67.108.864 (64 MiB, CR-007, R-29: teto do log de um ticket no banco) |
-| `[logging]` | `max_local_log_size_bytes` | não | `52428800` | 1.024 a 10.737.418.240 |
+| `[logging]` | `max_local_log_size_bytes` | não | `52428800` | 1.024 a 10.737.418.240; limite de **alerta** do log local do ticket (CR-036, D1: o script continua) |
 | `[web]` | `allowed_origins` | sim | — | lista CSV de URLs, validada contra `Origin`/`Referer` |
 | `[web]` | `session_idle_timeout_s`, `login_lockout_s` | não | `1800`, `900` | 1 a 86.400 |
 | `[web]` | `session_max_hours` (CR-008) | não | `12` | 1 a 168 |
@@ -2906,7 +2905,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 * O CRITICAL vai para o log da aplicação do minuto atual (§13, `<log_name>` `sss_web` ou `sss_scheduler`) sempre que o `log_dir` do processo (`var/<nome>/logs`, tirado do `[app] name` mesmo que outras chaves estejam inválidas) existe e aceita escrita. Falhas repetidas no mesmo minuto e no mesmo processo vão para o mesmo arquivo (sem sufixo `_<n>`). Sem `log_dir` utilizável, vai para o stderr do processo, no mesmo formato do §13.
 * No nó web, a requisição recebe a página de erro genérica (500), sem o detalhe.
 
-Chaves que saíram ou mudaram de nome são recusadas na subida: uma chave removida (`[app] data_backend`, `[agent] script_owner_uids` e `[agent] ambientes_exigem_hash`) é recusada com a mensagem "apague a linha"; uma chave renomeada (§2.8, `sss_config.RENAMED_KEYS`), com o nome novo; e qualquer outra chave desconhecida, como chave desconhecida da seção. A exceção são as chaves retiradas sem substituta: `[agent] interpreters` (e o nome antigo `interpretadores`), no CR-026, e as de retenção e a seção `[retention]`, no CR-030. Elas são **ignoradas** com um aviso, para que a atualização não derrube um processo com a linha antiga (`sss_config.IGNORED_KEYS` e `IGNORED_SECTIONS`). O aviso (`WARNING ... [action=INICIO] config.ini: chave [agent] interpreters ignorada ...`) vai para o log da aplicação do web e do agente (CR-026f: guardado pelo `load()` e gravado quando o log é configurado); no `health.py`, para o stderr. O histórico das chaves por CR fica nos documentos de `docs/architecture/`.
+**Chave que saiu nunca impede a subida** (CR-036, D6): toda chave retirada é **ignorada** com um aviso "apague a linha", inclusive as mais antigas (`[app] data_backend`, `[agent] script_owner_uids` e `[agent] ambientes_exigem_hash`), as de retenção e a seção `[retention]` (CR-030), `[agent] interpreters` (CR-026), as do CR-032 e `output_max_bytes`/`output_max_files` (CR-036, D3). Continuam recusadas na subida a chave **renomeada** (§2.8, `sss_config.RENAMED_KEYS`), com o nome novo, para o valor não se perder, e qualquer chave desconhecida da seção. Assim, a atualização não derruba um processo com a linha antiga (`sss_config.IGNORED_KEYS` e `IGNORED_SECTIONS`). O aviso (`WARNING ... [action=INICIO] config.ini: chave [agent] interpreters ignorada ...`) vai para o log da aplicação do web e do agente (CR-026f: guardado pelo `load()` e gravado quando o log é configurado); no `health.py`, para o stderr. O histórico das chaves por CR fica nos documentos de `docs/architecture/`.
 
 ### 12.2 Launchers
 
@@ -3034,11 +3033,12 @@ O `sss-scheduler.sh` aceita só a linha do daemon: o nome do processo, `--config
 | Sair em um navegador encerra todas as sessões do mesmo usuário (§4.2) | Consequência declarada da revogação por `session_epoch` (CR-008, E2) |
 | Tempos de fencing diferentes entre agentes anulam a garantia do §8.9 | Conferência automática de `critical_config` entre os agentes (recusa na subida, ERROR no ciclo e quadro na tela de agentes, §8.12, R-23), além das invariantes I1 a I4 |
 | Conteúdo da pasta de saída sem mascaramento (CR-012, §8.13): um segredo gravado pelo script vai para o zip | Escrito pelo próprio script; download só para quem lê o log do ticket; homologação e revisão do script |
-| Zip da saída ocupa o banco até a limpeza dos tickets; excesso ou falha deixam arquivos no disco do agente (CR-012) | `output_max_bytes` com teto de 200 MiB; LOB dimensionado na implantação; limpeza manual do disco (§11.3) |
+| Zip da saída ocupa o banco até a limpeza dos tickets, sem teto por ticket desde o CR-036 (D3, decisão do responsável): uma saída de vários GB vai inteira para o BLOB | LOB e tablespace dimensionados e acompanhados na implantação (DEPLOYMENT §5.5); limpeza manual (§11.3) |
 | A pasta de trabalho não tem limite de tamanho e fica no disco do agente até a limpeza manual (CR-019, CR-030) | limpeza manual (§11.3); o espaço do disco é da operação (sem trava de claim, ao contrário da saída) |
 | Arquivo local do log de execução sem máscara (§8.10) | Escrito pelo próprio script; arquivo do usuário do agente (`0600`), só no agente, até a limpeza manual (§11.3) |
 | Processo órfão com identidade desconhecida (Unix sem leitura de identidade) não é encerrado automaticamente (§8.12) | WARN `ORFAO_SEM_IDENTIDADE` para intervenção; o ticket é finalizado `ORPHAN_PROCESS` |
-| Script que escreve mais rápido que a checagem do teto do log local (§8.10) | `log_dir` em partição própria (`DEPLOYMENT.md` §4.3), checagem do teto a cada `cancel_poll_interval_s` e claim suspenso com pouco espaço livre (`log_dir_min_free_mb`, CR-008 R-25). Uma cota de disco da conta do agente vale para tudo o que ela grava, inclusive o `log_dir` (CR-032: não há mais usuário de execução com cota própria) |
+| Script que escreve log sem parar (§8.10): desde o CR-036 (D1) o teto do log local só alerta, e um script pode encher o `log_dir` | `log_dir` em partição própria com alerta de uso (`DEPLOYMENT.md` §4.3), claim suspenso com pouco espaço livre (`log_dir_min_free_mb`, CR-008 R-25; só segura os tickets novos) e o WARNING `log local acima de <n> MB` para o monitoramento |
+| Empacotamento da saída ou entrega da Entrada travados (CR-036, D4 e D7: o prazo de 120 s só alerta) | WARNING aos 120 s; o zip travado prende a vaga do ticket e a entrega travada segura as seguintes, até a parada do agente (`bin/sss-stop.sh`), que os abandona |
 | Regex gravada antes do CR-007 fora do subconjunto seguro (§6.2) | Continua valendo até a próxima gravação do parâmetro, que exige a correção; a revisão dos parâmetros com regex faz parte da implantação do CR-007 |
 | Banco com charset `AL32UTF8`: o CLOB conta um caractere fora do BMP (emoji) como 2 posições, e a leitura da tela (`VIEW_LOGS`, offset em caracteres) ainda não foi validada nesse charset (revisão F8.0–F8.2). O GFPR é `WE8ISO8859P15` (o caractere vira `¿` e conta 1) | O agente mede a unidade no banco (`RepoSchedulerLog.supplementary_unit`) e o pump grava no offset certo; validar a tela num banco `AL32UTF8` antes de produção nesse charset |
 | Host do agente fora do ar sem religar: o startup check não roda e um processo que tenha sobrevivido nele não é encerrado | O ticket vira `NODE_OFFLINE`; a operação recupera o host antes de religá-lo, e o startup check limpa na religação |

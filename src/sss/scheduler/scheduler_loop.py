@@ -1009,8 +1009,28 @@ class Agent(object):
                 continue
             if item.timeout_s and now - item.start > item.timeout_s:
                 self._stop(item, "TIMEOUT")
-            elif item.pump is not None and item.pump.local_exceeded():
-                self._stop(item, "LOG_LIMIT")
+            elif item.pump is not None and not item.log_limit_warned and item.pump.local_exceeded():
+                self._warn_log_limit(item)
+
+    def _warn_log_limit(self, item):
+        """CR-036 (D1): log local acima de max_local_log_size_bytes so alerta, uma vez por ticket; o script
+        continua (antes, FAILED/LOG_LIMIT). O disco segue protegido pelo log_dir_min_free_mb do claim."""
+        item.log_limit_warned = True
+        limit_bytes = self.cfg.logging.max_local_log_size_bytes
+        # abaixo de 1 MB (o minimo da chave e 1.024 bytes), em KB, para nao sair "acima de 0 MB"
+        limit = ("%d MB" % (limit_bytes // (1024 * 1024)) if limit_bytes >= 1024 * 1024
+                 else "%d KB" % (limit_bytes // 1024))
+        item.log.warning("log local acima de %s (max_local_log_size_bytes): alerta, o script continua",
+                         limit, extra={"action": "LOG"})
+        note = "log local acima de %s (alerta; o script continua)" % limit
+        # CR-036 (D8): com o log do banco ja truncado, a linha tambem vai para la, depois do marcador
+        if item.pump is not None:
+            item.pump.add_note(note)
+        try:
+            executor.append_local_line(item.execution, note)
+        except OSError as exc:  # a linha e informativa; o ticket segue
+            item.log.warning("linha [SSS] do alerta de log nao gravada (%s)", exc.__class__.__name__,
+                             extra={"action": "LOG"})
 
     def _reconcile(self, tid):
         """Ticket RUNNING deste agente fora do mapa local (CR-007 R-03; CR-008 R-01, R-02): mesmo tratamento do
@@ -1466,6 +1486,7 @@ class _Item(object):
         self.flush_ok = False
         self.pid_pending = False
         self.pid_warned = False
+        self.log_limit_warned = False  # CR-036 (D1): alerta do log local acima do limite, uma vez
         self.finalize_pending = False
         self.output = None  # CR-012: output_phase.Saida quando o agente tem output_dir
         self.script_path = None  # CR-023 (D6): caminho real executado, gravado junto com o PID

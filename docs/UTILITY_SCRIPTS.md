@@ -24,20 +24,20 @@ Para atender aos cenários operacionais frequentes de manipulação de arquivos 
 
 | # | Nome da Rotina | Interpretador | Tipo Param | Grupo / Categoria / Etapa | Timeout (s) | Max Paralelo | Arquivo Físico |
 |:---:|:---|:---:|:---:|:---|:---:|:---:|:---|
-| 1 | `zipar_arquivos` | `python3` | `NAMED` | `UTILITARIOS` / `FILES` / `COMPACTACAO` | 1800 | 2 | `zipar_arquivos.py` |
-| 2 | `descompactar_zip` | `python3` | `NAMED` | `UTILITARIOS` / `FILES` / `DESCOMPACTACAO` | 1800 | 2 | `descompactar_zip.py` |
-| 3 | `quebrar_arquivo` | `python3` | `NAMED` | `UTILITARIOS` / `FILES` / `DIVISAO` | 1800 | 2 | `quebrar_arquivo.py` |
-| 4 | `juntar_arquivos` | `python3` | `NAMED` | `UTILITARIOS` / `FILES` / `CONCATENACAO` | 1800 | 2 | `juntar_arquivos.py` |
-| 5 | `converter_encoding` | `python3` | `NAMED` | `UTILITARIOS` / `FILES` / `CONVERSAO` | 1800 | 2 | `converter_encoding.py` |
-| 6 | `substituir_texto` | `python3` | `NAMED` | `UTILITARIOS` / `FILES` / `TRANSFORMACAO` | 1800 | 2 | `substituir_texto.py` |
-| 7 | `remover_duplicadas` | `python3` | `NAMED` | `UTILITARIOS` / `FILES` / `HIGIENIZACAO` | 1800 | 2 | `remover_duplicadas.py` |
-| 8 | `gerar_hash_arquivo` | `python3` | `NAMED` | `UTILITARIOS` / `FILES` / `AUDITORIA` | 1800 | 2 | `gerar_hash_arquivo.py` |
-| 9 | `compactar_targz` | `bash` | `NAMED` | `UTILITARIOS` / `FILES` / `COMPACTACAO` | 1800 | 2 | `compactar_targz.sh` |
-| 10 | `descompactar_targz` | `bash` | `NAMED` | `UTILITARIOS` / `FILES` / `DESCOMPACTACAO` | 1800 | 2 | `descompactar_targz.sh` |
-| 11 | `contar_linhas_arquivo` | `sh` | `POSITIONAL` | `UTILITARIOS` / `FILES` / `ANALISE` | 600 | 2 | `contar_linhas_arquivo.sh` |
-| 12 | `filtrar_linhas` | `bash` | `NAMED` | `UTILITARIOS` / `FILES` / `FILTRAGEM` | 1800 | 2 | `filtrar_linhas.sh` |
-| 13 | `ordenar_arquivo` | `sh` | `NAMED` | `UTILITARIOS` / `FILES` / `ORGANIZACAO` | 1800 | 2 | `ordenar_arquivo.sh` |
-| 14 | `limpar_linhas_vazias` | `bash` | `NAMED` | `UTILITARIOS` / `FILES` / `HIGIENIZACAO` | 1800 | 2 | `limpar_linhas_vazias.sh` |
+| 1 | `zipar_arquivos` | `python3` | `NAMED` | `UTILITARIOS` / `ARQUIVOS` / `COMPACTACAO` | 1800 | 2 | `zipar_arquivos.py` |
+| 2 | `descompactar_zip` | `python3` | `NAMED` | `UTILITARIOS` / `ARQUIVOS` / `DESCOMPACTACAO` | 1800 | 2 | `descompactar_zip.py` |
+| 3 | `quebrar_arquivo` | `python3` | `NAMED` | `UTILITARIOS` / `ARQUIVOS` / `DIVISAO` | 1800 | 2 | `quebrar_arquivo.py` |
+| 4 | `juntar_arquivos` | `python3` | `NAMED` | `UTILITARIOS` / `ARQUIVOS` / `CONCATENACAO` | 1800 | 2 | `juntar_arquivos.py` |
+| 5 | `converter_encoding` | `python3` | `NAMED` | `UTILITARIOS` / `ARQUIVOS` / `CONVERSAO` | 1800 | 2 | `converter_encoding.py` |
+| 6 | `substituir_texto` | `python3` | `NAMED` | `UTILITARIOS` / `ARQUIVOS` / `TRANSFORMACAO` | 1800 | 2 | `substituir_texto.py` |
+| 7 | `remover_duplicadas` | `python3` | `NAMED` | `UTILITARIOS` / `ARQUIVOS` / `HIGIENIZACAO` | 1800 | 2 | `remover_duplicadas.py` |
+| 8 | `gerar_hash_arquivo` | `python3` | `NAMED` | `UTILITARIOS` / `ARQUIVOS` / `AUDITORIA` | 1800 | 2 | `gerar_hash_arquivo.py` |
+| 9 | `compactar_targz` | `bash` | `NAMED` | `UTILITARIOS` / `ARQUIVOS` / `COMPACTACAO` | 1800 | 2 | `compactar_targz.sh` |
+| 10 | `descompactar_targz` | `bash` | `NAMED` | `UTILITARIOS` / `ARQUIVOS` / `DESCOMPACTACAO` | 1800 | 2 | `descompactar_targz.sh` |
+| 11 | `contar_linhas_arquivo` | `sh` | `POSITIONAL` | `UTILITARIOS` / `ARQUIVOS` / `ANALISE` | 600 | 2 | `contar_linhas_arquivo.sh` |
+| 12 | `filtrar_linhas` | `bash` | `NAMED` | `UTILITARIOS` / `ARQUIVOS` / `FILTRAGEM` | 1800 | 2 | `filtrar_linhas.sh` |
+| 13 | `ordenar_arquivo` | `sh` | `NAMED` | `UTILITARIOS` / `ARQUIVOS` / `ORGANIZACAO` | 1800 | 2 | `ordenar_arquivo.sh` |
+| 14 | `limpar_linhas_vazias` | `bash` | `NAMED` | `UTILITARIOS` / `ARQUIVOS` / `HIGIENIZACAO` | 1800 | 2 | `limpar_linhas_vazias.sh` |
 
 ---
 
@@ -45,7 +45,9 @@ Para atender aos cenários operacionais frequentes de manipulação de arquivos 
 
 Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de dados e vinculados a cada rotina conforme as necessidades de entrada:
 
-| Código | Flag Nomeada | Rótulo (Label) | Tipo | Opções / Validação | Valor Padrão |
+Na coluna "Orientação", o que se espera do valor: o seed não grava regex nem faixa, e quem valida o conteúdo é o próprio script (o SSS confere o tipo, as opções de `SELECT` e o tamanho, README §6).
+
+| Código | Flag Nomeada | Rótulo (Label) | Tipo | Orientação | Valor Padrão |
 |:---|:---:|:---|:---:|:---|:---:|
 | `arq_origem` | `--origem` | Arquivo ou Pasta de Origem | `TEXT` | Caminho absoluto normalizado | — |
 | `arq_destino` | `--destino` | Arquivo ou Pasta de Destino | `TEXT` | Caminho absoluto normalizado | — |

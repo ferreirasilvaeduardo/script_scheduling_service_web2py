@@ -364,8 +364,9 @@ class _Base(unittest.TestCase):
                     cancel_poll_interval_s=0.05, orchestrator_interval_s=0.05, max_parallel_jobs=4,
                     log_dir_min_free_mb=1, script_timeout_s=60, env_passthrough=())
         local = changes.pop("max_local_log_size_bytes", 10 * 1024 * 1024)
+        db_cap = changes.pop("max_log_size_bytes", 5 * 1024 * 1024)
         base.update(changes)
-        return _Cfg(_Agent(**base), _Log(self.logs, 5 * 1024 * 1024, local), _App("srv-t"),
+        return _Cfg(_Agent(**base), _Log(self.logs, db_cap, local), _App("srv-t"),
                     _Oracle("db:1521/x", 30000, "OWN_X", "pfx_"), None)
 
     def start_agent(self, **changes):
@@ -568,11 +569,32 @@ class TestExecution(_Base):
         self.assertIsNone(item.reason)
         self.assertEqual(self.ag._result(item), ("SUCCESS", "EXIT_OK", 0))
 
-    def test_log_limit(self):
-        tid = self.db.ticket(self.db.script("head -c 5000 /dev/zero | tr '\\000' x\nsleep 300\n"))
+    def test_log_limit_so_alerta(self):
+        # CR-036 (D1): acima de max_local_log_size_bytes o script continua ate o fim; uma linha [SSS] e um
+        # WARNING, uma vez (antes: FAILED/LOG_LIMIT).
+        tid = self.db.ticket(self.db.script("head -c 5000 /dev/zero | tr '\\000' x\nsleep 1\n"
+                                            "head -c 5000 /dev/zero | tr '\\000' y\necho fim-do-script\n"))
         self.start_agent(max_local_log_size_bytes=2048)
-        self.run_loop(self.finished(tid))
-        self.assertEqual(self.final(tid), ("FAILED", "LOG_LIMIT", -5))
+        with self.assertLogs("sss_scheduler", "WARNING") as logs:
+            self.run_loop(self.finished(tid))
+        self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
+        alerts = [m for m in logs.output if "log local acima de" in m]
+        self.assertEqual(len(alerts), 1, logs.output)
+        self.assertIn("fim-do-script", self.db.tickets[tid]["log"])
+        self.assertIn("[SSS] log local acima de 2 KB (alerta; o script continua)", self.db.tickets[tid]["log"])
+
+    def test_log_limit_chega_a_tela_com_o_log_do_banco_truncado(self):
+        # CR-036 (D8): o teto do banco (1 KB) vence antes do alerta (2 KB); a linha do alerta vai depois do marcador
+        tid = self.db.ticket(self.db.script("head -c 5000 /dev/zero | tr '\\000' x\nsleep 1\necho fim\n"))
+        self.start_agent(max_log_size_bytes=1024, max_local_log_size_bytes=2048)
+        with self.assertLogs("sss_scheduler", "WARNING"):
+            self.run_loop(self.finished(tid))
+        self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
+        log = self.db.tickets[tid]["log"]
+        self.assertIn(log_pump.MARKER, log)
+        self.assertIn("[SSS] log local acima de 2 KB (alerta; o script continua)", log)
+        self.assertGreater(log.index("log local acima de"), log.index(log_pump.MARKER), "depois do marcador")
+        self.assertEqual(log.count("log local acima de"), 1, "uma vez so")
 
     def test_ownership_lost_na_varredura(self):
         ready = os.path.join(self.root, "pronto")
