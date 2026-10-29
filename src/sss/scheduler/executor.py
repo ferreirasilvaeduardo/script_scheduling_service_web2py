@@ -174,7 +174,7 @@ def failure_before_spawn(log_fd, ticket_id, error, label, work_dir_ticket=None):
 
 
 def start(ticket_id, argv, log_fd, env, work_dir_ticket, rlimits, label,
-          output=None, input_value=None, work=None):
+          output=None, input_value=None, work=None, files=None):
     """Inicia o script e devolve a Execucao (README §8.4 passos 3 a 5; CR-008 R-01).
 
     Ordem: .sss_spawn -> os_platform.start_process -> rename do log para ticket_<id>_<PID>.log ->
@@ -185,6 +185,7 @@ def start(ticket_id, argv, log_fd, env, work_dir_ticket, rlimits, label,
     saida: (base, relativo) da pasta de saida (CR-012), criada pela plataforma antes do script.
     entrada: (base, relativo) da pasta de entrada (CR-014), permanente: idem, so se nao existir.
     work: (base, relativo) da pasta de trabalho (CR-019): como a saida, mas fica no disco depois do ticket.
+    files: (base, relativo) da pasta de arquivos (CR-037): inputs e outputs permanentes, so se nao existirem.
     """
     agent = _agent_from_label(label)
     execution = Execution(int(ticket_id), work_dir_ticket, _open_logs.pop(log_fd, None))
@@ -201,6 +202,8 @@ def start(ticket_id, argv, log_fd, env, work_dir_ticket, rlimits, label,
             os_platform.create_input_dir(input_value[0], input_value[1])
         if work is not None:
             os_platform.create_script_work_dir(work[0], work[1])
+        if files is not None:
+            os_platform.create_files_dirs(files[0], files[1])
         os_platform.write_state(os.path.join(work_dir_ticket, SPAWN), {
             "ticket_id": int(ticket_id),
             "monotonic": time.monotonic(), "wall": time.time()})

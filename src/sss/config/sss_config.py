@@ -76,6 +76,7 @@ IGNORED_KEYS.update(dict((("agent", key), _NO_OUTPUT_LIMIT)
 # CR-032 (D4, D14): sempre do [app] name; o secrets.cfg e o unico da pasta de cima (instance/secrets.cfg).
 _DERIVED_REASON = "derivada do [app] name desde o CR-032"
 IGNORED_KEYS.update({("agent", "agent_id"): _DERIVED_REASON, ("agent", "work_dir"): _DERIVED_REASON,
+                     ("agent", "files_dir"): "derivada do [app] name desde o CR-037 (var/<nome>/files)",
                      ("logging", "log_dir"): _DERIVED_REASON,
                      ("secrets", "secrets_file"): "o secrets.cfg e o unico de instance/ desde o CR-032"})
 IGNORED_KEYS.update({("agent", "claim_batch_size"): _REMOVED_REASON,
@@ -285,7 +286,7 @@ class AgentConfig(_ItemAccessMixin, collections.namedtuple("AgentConfig", [
     "misfire_tolerance_s", "cron_horizon_days", "child_locale",
     "env_passthrough", "queue_aging_min",
     "log_dir_min_free_mb", "output_dir", "output_max_bytes", "output_max_files", "input_dir",
-    "script_work_dir", "script_base_dir"
+    "script_work_dir", "script_base_dir", "files_dir"
 ])):
     __slots__ = ()
 
@@ -639,6 +640,8 @@ def load(ini_path: str) -> "Config":
     data_sections["logging"]["log_dir"] = os.path.join(base, "logs")
     data_sections["agent"]["agent_id"] = app_name if role == "agent" else None
     data_sections["agent"]["work_dir"] = os.path.join(base, "works") if role == "agent" else None
+    # CR-037 (D2): pasta de arquivos so em disco, sempre do nome (var/<agente>/files), sem chave no config.
+    data_sections["agent"]["files_dir"] = os.path.join(base, "files") if role == "agent" else None
     # CR-034 (D9): reservado em todo papel (antes so no agente, cujo nome vai ao banco como ator), como diz o
     # README §12.1: uma regra so para o nome do processo.
     if app_name in RESERVED_AGENT_IDS:

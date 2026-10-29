@@ -18,6 +18,7 @@ CATALOG = {
     "MANAGE_SCRIPTS": u"Gestão de Scripts", "MANAGE_PARAMETERS": u"Dicionário de Parâmetros",
     "MANAGE_SCHEDULES": u"Regras de Agendamento", "VIEW_AUDIT": u"Auditoria",
     "DOWNLOAD_OUTPUT": u"Baixar Saídas", "UPLOAD_INPUT": u"Enviar Arquivos",
+    "FILES_UPLOAD": u"Enviar para Pasta de Arquivos", "FILES_DOWNLOAD": u"Baixar da Pasta de Arquivos",  # CR-037
 }
 _CREDENTIAL_WORDS = ("senha", "password", "token", "chave", "api", "secret", "credencial")
 

@@ -42,10 +42,10 @@ _Agent = collections.namedtuple("_Agent", (
     "cancel_poll_interval_s", "orchestrator_interval_s", "max_parallel_jobs",
     "log_dir_min_free_mb", "script_timeout_s", "env_passthrough", "output_dir", "output_max_bytes",
     "output_max_files", "schedule_batch_size", "shutdown_mode", "shutdown_grace_s", "input_dir",
-    "script_base_dir"))
+    "script_base_dir", "files_dir"))
 # CR-012: sem output_dir por padrao; F8.4b: lote do desdobro; F8.4d: parada TERMINATE; CR-014: sem input_dir;
-# CR-023: sem script_base_dir.
-_Agent.__new__.__defaults__ = (None, 20971520, 1000, 50, "TERMINATE", 30, None, None)
+# CR-023: sem script_base_dir; CR-037: sem files_dir.
+_Agent.__new__.__defaults__ = (None, 20971520, 1000, 50, "TERMINATE", 30, None, None, None)
 _Log = collections.namedtuple("_Log", "log_dir max_log_size_bytes max_local_log_size_bytes")
 _Cfg = collections.namedtuple("_Cfg", "agent logging app oracle secrets")
 _App = collections.namedtuple("_App", "name")
@@ -513,6 +513,25 @@ class TestExecution(_Base):
         self.assertEqual(sorted(os.listdir(dir_value)), ["lote_%d.txt" % first, "lote_%d.txt" % second],
                          "o SSS nao limpa a pasta de entrada")
         self.assertEqual(os.stat(dir_value).st_mode & 0o777, 0o700)
+
+    def test_cr037_pasta_de_arquivos_permanente_com_as_variaveis(self):
+        # CR-037 (D5): o script le de SSS_FILES_INPUTS_DIR e grava em SSS_FILES_OUTPUTS_DIR; nada e apagado.
+        files = os.path.join(self.root, "files")
+        os.mkdir(files, 0o700)
+        sid = self.db.script('echo "in=$SSS_FILES_INPUTS_DIR out=$SSS_FILES_OUTPUTS_DIR"\n'
+                             'echo "t$SSS_TICKET_ID" > "$SSS_FILES_OUTPUTS_DIR/resultado_$SSS_TICKET_ID.txt"\n')
+        first = self.db.ticket(sid)
+        self.start_agent(files_dir=files)
+        self.run_loop(self.finished(first))
+        second = self.db.ticket(sid)
+        self.run_loop(self.finished(second))
+        folder = os.path.join(files, "dev", "script_%d" % sid)
+        for tid in (first, second):
+            self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
+            self.assertIn("in=%s/inputs out=%s/outputs" % (folder, folder), self.db.tickets[tid]["log"])
+        self.assertEqual(sorted(os.listdir(os.path.join(folder, "outputs"))),
+                         ["resultado_%d.txt" % first, "resultado_%d.txt" % second], "o SSS nao limpa a pasta")
+        self.assertEqual(os.listdir(os.path.join(folder, "inputs")), [])
 
     def test_cr014_sem_entrada_dir_sem_variavel(self):
         tid = self.db.ticket(self.db.script('echo "entrada=[${SSS_INPUT_DIR:-}]"\n'))

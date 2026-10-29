@@ -239,7 +239,7 @@ def load_seed(store, force=False, dev_password=None):
                                 store.seqs["tbsss_environments"] = 8
 
                                 # ---------------------------------------------------------
-                                # 2. Funcionalidades canonicas (12) - README §4.3.D; DOWNLOAD_OUTPUT (CR-020a) e UPLOAD_INPUT (CR-020d) no fim
+                                # 2. Funcionalidades canonicas (14) - README §4.3.D; DOWNLOAD_OUTPUT (CR-020a), UPLOAD_INPUT (CR-020d), FILES_UPLOAD e FILES_DOWNLOAD (CR-037) no fim
                                 # ---------------------------------------------------------
                                 features = [
                                     {"id": 1, "code": "EXEC_SCRIPT", "name": "Rodar Scripts", "module": "OPERATION", "description": "Preencher questionários e abrir tickets", "active": "Y"},
@@ -254,10 +254,12 @@ def load_seed(store, force=False, dev_password=None):
                                     {"id": 10, "code": "VIEW_AUDIT", "name": "Auditoria", "module": "ADMIN", "description": "Consultar a trilha de auditoria e os agentes", "active": "Y"},
                                     {"id": 12, "code": "UPLOAD_INPUT", "name": "Enviar Arquivos", "module": "OPERATION", "description": "Enviar arquivos para a pasta de entrada dos scripts do perfil, nos ambientes do perfil", "active": "Y"},
                                     {"id": 11, "code": "DOWNLOAD_OUTPUT", "name": "Baixar Saídas", "module": "OPERATION", "description": "Navegar pelas saídas dos tickets nos ambientes do perfil e baixar o zip ou um arquivo", "active": "Y"},
+                                    {"id": 13, "code": "FILES_UPLOAD", "name": "Enviar para Pasta de Arquivos", "module": "OPERATION", "description": "Enviar arquivos para a pasta inputs dos scripts do perfil, sem gravar no banco", "active": "Y"},
+                                    {"id": 14, "code": "FILES_DOWNLOAD", "name": "Baixar da Pasta de Arquivos", "module": "OPERATION", "description": "Navegar e baixar a pasta outputs dos scripts do perfil, sem gravar no banco", "active": "Y"},
                                 ]
                                 for f in features:
                                     store.features[f["id"]] = f
-                                store.seqs["tbsss_features"] = 12
+                                store.seqs["tbsss_features"] = 14
 
                                 # ---------------------------------------------------------
                                 # 3. Perfis (4)
@@ -335,8 +337,8 @@ def load_seed(store, force=False, dev_password=None):
                                     nid = store.next_id("tbsss_profile_script")
                                     store.profile_script[nid] = {"id": nid, "profile_id": 1, "script_id": s["id"]}
 
-                                # OPERATOR_PROD (id 2) -> EXEC_SCRIPT(1), VIEW_LOGS(2), CANCEL_TICKET(3), DOWNLOAD_OUTPUT(11), UPLOAD_INPUT(12)
-                                for fid in (1, 2, 3, 11, 12):
+                                # OPERATOR_PROD (id 2) -> EXEC_SCRIPT(1), VIEW_LOGS(2), CANCEL_TICKET(3), DOWNLOAD_OUTPUT(11), UPLOAD_INPUT(12), FILES_UPLOAD(13), FILES_DOWNLOAD(14)
+                                for fid in (1, 2, 3, 11, 12, 13, 14):
                                     nid = store.next_id("tbsss_profile_feature")
                                     store.profile_feature[nid] = {"id": nid, "profile_id": 2, "feature_id": fid}
                                 for aid in (1, 2):
@@ -346,8 +348,8 @@ def load_seed(store, force=False, dev_password=None):
                                     nid = store.next_id("tbsss_profile_script")
                                     store.profile_script[nid] = {"id": nid, "profile_id": 2, "script_id": sid}
 
-                                # OPERATOR_HML (id 3) -> EXEC_SCRIPT(1), VIEW_LOGS(2), CANCEL_TICKET(3), DOWNLOAD_OUTPUT(11), UPLOAD_INPUT(12)
-                                for fid in (1, 2, 3, 11, 12):
+                                # OPERATOR_HML (id 3) -> EXEC_SCRIPT(1), VIEW_LOGS(2), CANCEL_TICKET(3), DOWNLOAD_OUTPUT(11), UPLOAD_INPUT(12), FILES_UPLOAD(13), FILES_DOWNLOAD(14)
+                                for fid in (1, 2, 3, 11, 12, 13, 14):
                                     nid = store.next_id("tbsss_profile_feature")
                                     store.profile_feature[nid] = {"id": nid, "profile_id": 3, "feature_id": fid}
                                 for aid in (2, 3):

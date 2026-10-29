@@ -27,6 +27,7 @@ from sss.platform.os_platform.posix import (  # noqa: E402,F401
                                             create_input_dir,
                                             create_output_dir,
                                             create_script_work_dir,
+                                            create_files_dirs,
                                             stop_ticket,
                                             free_space_mb,
                                             write_state,

@@ -21,6 +21,9 @@ FEATURE_CATALOG = (
     ("OPERATION", "CANCEL_TICKET", "Cancelar Tickets", "Cancelar tickets de terceiros nos ambientes consultados (com Consultar Tickets)"),
     ("OPERATION", "DOWNLOAD_OUTPUT", "Baixar Saídas", "Navegar pelas saídas dos tickets nos ambientes do perfil e baixar o zip ou um arquivo"),
     ("OPERATION", "UPLOAD_INPUT", "Enviar Arquivos", "Enviar arquivos para a pasta de entrada dos scripts do perfil, nos ambientes do perfil"),
+    # CR-037 (D3): pasta de arquivos so em disco (var/<agente>/files/<ambiente>/<script>/inputs e outputs)
+    ("OPERATION", "FILES_UPLOAD", "Enviar para Pasta de Arquivos", "Enviar arquivos para a pasta inputs dos scripts do perfil, sem gravar no banco"),
+    ("OPERATION", "FILES_DOWNLOAD", "Baixar da Pasta de Arquivos", "Navegar e baixar a pasta outputs dos scripts do perfil, sem gravar no banco"),
     ("ADMIN", "MANAGE_USERS", "Gestão de Usuários", "Gerenciar operadores e credenciais"),
     ("ADMIN", "MANAGE_PROFILES", "Gestão de Perfis", "Gerenciar perfis e matrizes de permissão"),
     ("ADMIN", "MANAGE_ENVIRONMENTS", "Gestão de Ambientes", "Gerenciar ambientes e DSNs"),
@@ -43,14 +46,15 @@ DEFAULT_ENVIRONMENTS = (
 # Catalogo padrao de perfis operacionais e administrativos (nome, descricao, is_admin, funcionalidades, ambientes)
 DEFAULT_PROFILES = (
     ("ADMINISTRATOR", "Acesso irrestrito a todas as funcionalidades e ambientes", "Y", (
-        "EXEC_SCRIPT", "VIEW_LOGS", "CANCEL_TICKET", "DOWNLOAD_OUTPUT", "UPLOAD_INPUT", "MANAGE_USERS", "MANAGE_PROFILES",
-        "MANAGE_ENVIRONMENTS", "MANAGE_SCRIPTS", "MANAGE_PARAMETERS", "MANAGE_SCHEDULES", "VIEW_AUDIT"
+        "EXEC_SCRIPT", "VIEW_LOGS", "CANCEL_TICKET", "DOWNLOAD_OUTPUT", "UPLOAD_INPUT", "FILES_UPLOAD", "FILES_DOWNLOAD",
+        "MANAGE_USERS", "MANAGE_PROFILES", "MANAGE_ENVIRONMENTS", "MANAGE_SCRIPTS", "MANAGE_PARAMETERS", "MANAGE_SCHEDULES",
+        "VIEW_AUDIT"
     ), ("CLONE2", "CLONE1", "CLONE6", "CLONE7", "GFPREPROD")),
     ("OPERATOR_PROD", "Operador de Ambientes de Producao", "N", (
-        "EXEC_SCRIPT", "VIEW_LOGS", "CANCEL_TICKET", "DOWNLOAD_OUTPUT", "UPLOAD_INPUT"
+        "EXEC_SCRIPT", "VIEW_LOGS", "CANCEL_TICKET", "DOWNLOAD_OUTPUT", "UPLOAD_INPUT", "FILES_UPLOAD", "FILES_DOWNLOAD"
     ), ("CLONE2", "CLONE1", "CLONE6", "CLONE7", "GFPREPROD")),
     ("OPERATOR_HML", "Operador de Ambientes de Homologacao", "N", (
-        "EXEC_SCRIPT", "VIEW_LOGS", "CANCEL_TICKET", "DOWNLOAD_OUTPUT", "UPLOAD_INPUT"
+        "EXEC_SCRIPT", "VIEW_LOGS", "CANCEL_TICKET", "DOWNLOAD_OUTPUT", "UPLOAD_INPUT", "FILES_UPLOAD", "FILES_DOWNLOAD"
     ), ("CLONE6", "CLONE7", "GFPREPROD")),
     ("READ_ONLY", "Perfil de Apenas Leitura e Consulta", "N", (
         "VIEW_LOGS",

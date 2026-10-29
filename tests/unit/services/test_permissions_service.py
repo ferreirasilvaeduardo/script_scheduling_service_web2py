@@ -50,7 +50,7 @@ class TestPermissions(unittest.TestCase):
     def test_admin_ve_frase_e_todas_as_telas(self):
         d = self.svc.build(self.ctx["admin"])
         self.assertEqual(d["admin_phrase"], svc_mod.ADMIN_PHRASE)
-        self.assertEqual(len(d["screens"]), 12)
+        self.assertEqual(len(d["screens"]), 14, "CR-037: com as duas funcionalidades da pasta de arquivos")
         self.assertEqual(d["absent"], [])
         routes = dict((t["code"], t["route"]) for t in d["screens"])
         self.assertEqual(routes["DOWNLOAD_OUTPUT"], ("outputs", "index"), "Saidas no menu (CR-020a)")

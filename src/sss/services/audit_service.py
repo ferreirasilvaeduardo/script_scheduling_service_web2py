@@ -29,6 +29,7 @@ ACTIONS = (
     "CREATE", "UPDATE", "DEACTIVATE", "PERM_UPDATE",
     "SCHEDULE_PAUSE", "AGENT_START", "AGENT_STOP", "PURGE",
     "AUDIT_EXPORT", "SCHEMA_MIGRATE", "OUTPUT_DOWNLOAD", "INPUT_UPLOAD", "INPUT_DELIVERY",
+    "FILES_UPLOAD", "FILES_DOWNLOAD",  # CR-037: pasta de arquivos so em disco
 )
 # Nomes simples das acoes e entidades na tela (CR-018b); o CSV e o banco continuam com os codigos.
 ACTION_LABELS = {
@@ -40,6 +41,7 @@ ACTION_LABELS = {
     "AUDIT_EXPORT": u"Exportação da auditoria", "SCHEMA_MIGRATE": u"Atualização do esquema",
     "OUTPUT_DOWNLOAD": u"Download de saída", "INPUT_UPLOAD": u"Envio para a entrada",
     "INPUT_DELIVERY": u"Entrega na entrada",
+    "FILES_UPLOAD": u"Envio para a pasta de arquivos", "FILES_DOWNLOAD": u"Download da pasta de arquivos",
 }
 ENTITY_LABELS = {
     "tbsss_schedules": u"Regras de agendamento", "tbsss_agents": u"Agentes", "tbsss_environments": u"Ambientes",

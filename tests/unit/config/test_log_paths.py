@@ -81,6 +81,14 @@ class TestLogDirs(unittest.TestCase):
                          ("/e/hml", "extrator_de_relatorios_v2"))
         self.assertEqual(log_paths.input_dir("/e", "HML", u"!!!", script_id=3), ("/e/hml", "script_3"))
 
+    def test_cr037_pasta_de_arquivos_por_ambiente_e_script(self):
+        # CR-037 (D2, D5): files/<ambiente>/<script>/inputs e outputs, com a regra da pasta de entrada.
+        self.assertEqual(log_paths.files_dirs("/v/agente0001/files", "PRODUCAO", u"Carga Diária"),
+                         ("/v/agente0001/files/producao", "carga_diaria",
+                          "/v/agente0001/files/producao/carga_diaria/inputs",
+                          "/v/agente0001/files/producao/carga_diaria/outputs"))
+        self.assertEqual(log_paths.files_dirs("/f", "HML", u"!!!", script_id=3)[1], "script_3")
+
     def test_ambiente_no_topo_obrigatorio_e_normalizado(self):
         # CR-009: pasta do ambiente antes de qualquer outra; minusculo, sem espaco nem especial.
         dt = datetime.datetime(2026, 4, 5, 8, 9, 30)

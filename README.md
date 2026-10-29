@@ -392,6 +392,7 @@ docs/
 var/                          # [CR-028] dados, fora do git e preservados pela atualização:
   <nome>/logs/                #   log_dir de cada processo (web e agentes)
   <agente>/works/ outputs/ inputs/ script_works/   # pastas de cada agente (CR-032: no plural)
+  <agente>/files/<ambiente>/<script>/inputs/ outputs/   # pasta de arquivos, só em disco (CR-037, §8.16)
   update/<data>/              #   pacotes de retorno do sss-update.sh
 scripts_ambiente/             # [CR-028] scripts dos ambientes (script_base_dir padrão); fora do git e preservada
 ```
@@ -612,6 +613,8 @@ Responde às duas perguntas mais comuns do administrador, sem abrir perfil por p
 | `CANCEL_TICKET` | Cancelar ticket de terceiro em ambiente autorizado, **junto com** `VIEW_LOGS` (CR-018a): só cancela quem enxerga o ticket na lista e no detalhe. Sem `VIEW_LOGS`, `CANCEL_TICKET` não vale para tickets de terceiros. A decisão é de `rbac.can_cancel`. **Sem** esta funcionalidade, o solicitante com `EXEC_SCRIPT` pode cancelar apenas os próprios tickets, mesmo que tenha perdido o acesso ao ambiente |
 | `DOWNLOAD_OUTPUT` (CR-020a) | Navegar pelas saídas `AVAILABLE` dos tickets de ambientes autorizados ao perfil (admin: todos), inclusive de outras pessoas, e baixar o zip ou um arquivo dele (§5.9). O download pelo detalhe do ticket continua com a regra do log |
 | `UPLOAD_INPUT` (CR-020d) | Ver a pasta de entrada e enviar arquivos para ela, só em script **e** ambiente do perfil (admin: todos), script ativo homologado em ambiente ativo (§5.10) |
+| `FILES_UPLOAD` (CR-037) | Ver a pasta `inputs` da pasta de arquivos (§8.16) e enviar ou substituir arquivos nela, só em script **e** ambiente do perfil (admin: todos). O conteúdo nunca vai ao banco |
+| `FILES_DOWNLOAD` (CR-037) | Navegar pela pasta `outputs` da pasta de arquivos (§8.16) e baixar um arquivo ou a pasta em zip, só em script **e** ambiente do perfil (admin: todos). O conteúdo nunca vai ao banco |
 | `MANAGE_SCHEDULES` | Criar e editar regras. O `user_id` da regra é o criador, e cada desdobro roda sob os privilégios vigentes desse usuário |
 
 #### D. Catálogo canônico de funcionalidades (seed)
@@ -623,6 +626,8 @@ Responde às duas perguntas mais comuns do administrador, sem abrir perfil por p
 | `OPERATION` | `CANCEL_TICKET` | Cancelar Tickets | Cancelar tickets de terceiros nos ambientes consultados (com Consultar Tickets) |
 | `OPERATION` | `UPLOAD_INPUT` | Enviar Arquivos | Enviar arquivos para a pasta de entrada dos scripts do perfil, nos ambientes do perfil (CR-020d; no seed, com ADMINISTRATOR, OPERATOR_PROD e OPERATOR_HML) |
 | `OPERATION` | `DOWNLOAD_OUTPUT` | Baixar Saídas | Navegar pelas saídas dos tickets nos ambientes do perfil e baixar o zip ou um arquivo (CR-020a; no seed, com ADMINISTRATOR, OPERATOR_PROD e OPERATOR_HML) |
+| `OPERATION` | `FILES_UPLOAD` | Enviar para Pasta de Arquivos | Enviar arquivos para a pasta inputs dos scripts do perfil, sem gravar no banco (CR-037; no seed, com ADMINISTRATOR, OPERATOR_PROD e OPERATOR_HML) |
+| `OPERATION` | `FILES_DOWNLOAD` | Baixar da Pasta de Arquivos | Navegar e baixar a pasta outputs dos scripts do perfil, sem gravar no banco (CR-037; no seed, com ADMINISTRATOR, OPERATOR_PROD e OPERATOR_HML) |
 | `ADMIN` | `MANAGE_USERS` | Gestão de Usuários | Gerenciar operadores e credenciais |
 | `ADMIN` | `MANAGE_PROFILES` | Gestão de Perfis | Gerenciar perfis e matrizes de permissão |
 | `ADMIN` | `MANAGE_ENVIRONMENTS` | Gestão de Ambientes | Gerenciar ambientes e DSNs |
@@ -640,9 +645,9 @@ Responde às duas perguntas mais comuns do administrador, sem abrir perfil por p
 O processo de inicialização do banco (`init_db.py` e script SQL de implantação) cadastra de forma idempotente a matriz operacional inicial e os usuários para demonstração e homologação das telas (UI Freeze):
 
 1. **Perfis de Acesso (`tbsss_profiles`):**
-   * **`ADMINISTRATOR`:** Super Administrador (`is_admin = 'Y'`). Acesso total a todas as 12 funcionalidades, a todos os ambientes atendidos e a todas as rotinas homologadas.
-   * **`OPERATOR_PROD`:** Operacional de Produção (`is_admin = 'N'`). Acesso a `EXEC_SCRIPT`, `VIEW_LOGS` e `CANCEL_TICKET` em todos os ambientes operacionais (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`).
-   * **`OPERATOR_HML`:** Operacional de Homologação (`is_admin = 'N'`). Acesso a `EXEC_SCRIPT`, `VIEW_LOGS` e `CANCEL_TICKET` restrito aos ambientes de teste e validação (`CLONE6`, `CLONE7`, `GFPREPROD`).
+   * **`ADMINISTRATOR`:** Super Administrador (`is_admin = 'Y'`). Acesso total a todas as 14 funcionalidades, a todos os ambientes atendidos e a todas as rotinas homologadas.
+   * **`OPERATOR_PROD`:** Operacional de Produção (`is_admin = 'N'`). Acesso a `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD` e `FILES_DOWNLOAD` em todos os ambientes operacionais (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`).
+   * **`OPERATOR_HML`:** Operacional de Homologação (`is_admin = 'N'`). Acesso a `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD` e `FILES_DOWNLOAD` restrito aos ambientes de teste e validação (`CLONE6`, `CLONE7`, `GFPREPROD`).
    * **`READ_ONLY`:** Auditoria e Consulta (`is_admin = 'N'`). Perfil de somente leitura, restrito a `VIEW_LOGS` em todos os ambientes, sem permissão de disparo ou alteração de cadastros.
 
 2. **Usuários Padrão Homologados (`tbsss_users`):**
@@ -1806,6 +1811,7 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
 | `SSS_SCRIPT_LINK` | o `path_file` cadastrado, já junto da pasta base quando é relativo (CR-023), só quando ele difere do real (há link simbólico no caminho; CR-011) |
 | `SSS_OUTPUT_DIR` | pasta de saída do ticket (§8.13, CR-012), só quando o agente tem `output_dir` |
 | `SSS_INPUT_DIR` | pasta de entrada do script no ambiente (§8.14, CR-014), permanente, só quando o agente tem `input_dir` |
+| `SSS_FILES_INPUTS_DIR`, `SSS_FILES_OUTPUTS_DIR` | pastas `inputs` e `outputs` da pasta de arquivos do script no ambiente (§8.16, CR-037), permanentes, em todo ticket |
 | `SSS_WORK_DIR` | pasta de trabalho do ticket (§8.15, CR-019), mantida depois do ticket até a limpeza manual (§11.3), só quando o agente tem `script_work_dir`. Não é o `HOME` nem o `cwd`, que continuam na pasta descartável do passo 2 do §8.4 |
 | `SSS_LOG_DIR`, `SSS_LOG_FILE` | pasta do log da execução (§8.4, passo 3) e o nome do arquivo no início (`ticket_<id>.log.parcial`, renomeado para `ticket_<id>_<PID>.log` logo depois do spawn). Informativas: a saída do script já é o log (CR-010) |
 | `SSS_AGENT_ID`, `SSS_AGENT_HOST`, `SSS_PLATFORM`, `SSS_VERSION` | agente que executa, hostname, `LINUX` ou `UNIX` e versão do SSS (CR-010) |
@@ -2103,6 +2109,16 @@ Pasta de cada ticket onde o script grava o que precisa durante a execução e qu
 * **Não é o `work_dir` do agente:** o `work_dir` guarda o estado local de cada ticket (§8.7) e nunca é entregue ao script; as duas pastas não podem ficar uma dentro da outra (§12.1).
 
 ---
+
+### 8.16 Pasta de arquivos, só em disco (CR-037)
+
+Pasta permanente por ambiente e script, independente de ticket, para trocar arquivos entre as pessoas e os scripts **sem gravar o conteúdo no banco** (o banco guarda só a auditoria). Convive com a pasta de entrada (§8.14) e a de saída (§8.13), que continuam pelo banco.
+
+* **Local (D2):** `var/<agente>/files/<ambiente>/<pasta do script>/`, com `inputs/` (as pessoas enviam pela tela, o script lê) e `outputs/` (o script grava, as pessoas baixam pela tela). `files_dir` sai sempre do nome do agente (`sss_config`, sem chave no `config.ini`); `<ambiente>` e `<pasta do script>` seguem a regra da pasta do log (`log_paths.files_dirs`).
+* **Criação:** `var/<agente>/files` na subida, se faltar (`0755`, linha `pasta criada: files_dir`, §8.12 passo 4); a pasta do script e as duas subpastas antes de cada execução, com `0700`, sem seguir link e recusando item que não seja diretório do agente (`os_platform.create_files_dirs`). Uma falha impede a execução (`SPAWN_ERROR`).
+* **Variáveis (D5):** `SSS_FILES_INPUTS_DIR` e `SSS_FILES_OUTPUTS_DIR`, em todo ticket (§8.6).
+* **Permanente:** o agente não lê, não compacta, não envia ao banco e não apaga nada aqui; a pasta cresce até alguém limpar à mão (D8; risco no §14). Nenhum script pode ficar dentro de `files_dir` (`SSS_DIR`, §8.5).
+* **Permissões (D3, D4):** `FILES_UPLOAD` e `FILES_DOWNLOAD` (§4.3), nos ambientes e scripts do perfil.
 
 ## 9. Convenção de Identificadores (Oracle 11g ≤ 30 caracteres)
 
@@ -2709,7 +2725,7 @@ END;
   * **Nome dos arquivos (CR-024):** `<base>_<owner>_<prefixo>.sql`, com o owner em minúsculas e o prefixo sem o `_` final (ex.: owner `OPENRISOW` e prefixo `tbsss_` geram `01_deploy_sss_openrisow_tbsss.sql`, `02_rollback_sss_openrisow_tbsss.sql`, `99_validate_deploy_openrisow_tbsss.sql` e, com `--grants-to`, `03_grants_sss_openrisow_tbsss.sql`). Esquemas diferentes ficam lado a lado na mesma pasta; gerar de novo para o mesmo owner e prefixo sobrescreve. O deploy cita o nome do rollback correspondente. Os arquivos versionados em `docs/sql/` são os do DEV (`openrisow`, `tbsss_`).
   * não há opção de `DROP` nem `--recreate`, inclusive em DEV. Objetos existentes nunca são removidos automaticamente por `init_db.py`.
 * **Seed Completo** via `MERGE` (idempotente):
-  * **Funcionalidades e Controle:** catálogo canônico de 12 funcionalidades (§4.3.D) e a linha de `tbsss_control` (versão do esquema e auditoria de versão).
+  * **Funcionalidades e Controle:** catálogo canônico de 14 funcionalidades (§4.3.D) e a linha de `tbsss_control` (versão do esquema e auditoria de versão).
   * **Ambientes Padrão (`tbsss_environments`):** os 5 ambientes homologados (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`), todos com `is_production = 'Y'` (CR-017). A marcação só é gravada na inclusão: o `MERGE` não desfaz uma alteração feita no cadastro.
   * **Dicionário de Parâmetros (`tbsss_parameters`):** 19 parâmetros reutilizáveis (`TEXT`, `NUMBER`, `SELECT`).
   * **Catálogo de Scripts Utilitários (`tbsss_scripts`):** 14 rotinas de manipulação de arquivos em Python 3 e Shell POSIX (`zipar_arquivos`, `descompactar_zip`, `quebrar_arquivo`, `juntar_arquivos`, `converter_encoding`, `substituir_texto`, `remover_duplicadas`, `gerar_hash_arquivo`, `compactar_targz`, `descompactar_targz`, `contar_linhas_arquivo`, `filtrar_linhas`, `ordenar_arquivo`, `limpar_linhas_vazias`). Especificação completa em `docs/UTILITY_SCRIPTS.md`.

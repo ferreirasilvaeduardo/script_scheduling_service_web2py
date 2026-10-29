@@ -114,6 +114,16 @@ def input_dir(input_dir, environment, script_name, script_id=None):
     return os.path.join(input_dir, environment_dir(environment)), script_dir(script_name, script_id)
 
 
+def files_dirs(files_dir, environment, script_name, script_id=None):
+    """Pasta de arquivos do script (CR-037, so em disco): permanente, uma por ambiente e script, como a de
+    entrada. Devolve (base, relativo, inputs, outputs): base = files_dir/<ambiente>, relativo = <pasta do script>
+    (a regra da pasta do log) e os caminhos completos das subpastas inputs e outputs."""
+    base = os.path.join(files_dir, environment_dir(environment))
+    relative = script_dir(script_name, script_id)
+    folder = os.path.join(base, relative)
+    return base, relative, os.path.join(folder, "inputs"), os.path.join(folder, "outputs")
+
+
 def ensure_directory(directory, warnings=None):
     """Cria diretorio nivel a nivel com 0o750 em cada pasta nova (README §8.4 passo 3 e §13).
 

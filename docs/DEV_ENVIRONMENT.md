@@ -298,9 +298,9 @@ Para testes interativos na interface web (a aplicação usa sempre o Oracle; o F
 
 | Login | Perfil | Permissões Principais | Escopo de Ambientes |
 |---|---|---|---|
-| `admin` | `ADMINISTRATOR` | Acesso irrestrito a todas as 12 funcionalidades | Todos os 5 ambientes |
-| `op.prod` | `OPERATOR_PROD` | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT` | Todos os 5 ambientes |
-| `op.hml` | `OPERATOR_HML` | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT` | `CLONE6`, `CLONE7`, `GFPREPROD` |
+| `admin` | `ADMINISTRATOR` | Acesso irrestrito a todas as 14 funcionalidades | Todos os 5 ambientes |
+| `op.prod` | `OPERATOR_PROD` | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD` | Todos os 5 ambientes |
+| `op.hml` | `OPERATOR_HML` | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD` | `CLONE6`, `CLONE7`, `GFPREPROD` |
 | `consulta` | `READ_ONLY` | Apenas consulta (`VIEW_LOGS`) | Todos os 5 ambientes |
 
 * **Senha Inicial Padrão:** `Sss@Homolog2026!` (hash PBKDF2-SHA256 com 200.000 iterações).

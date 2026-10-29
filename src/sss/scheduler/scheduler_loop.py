@@ -103,7 +103,7 @@ def _sss_dirs(cfg):
     agent = cfg.agent
     return tuple(d for d in (cfg.logging.log_dir, agent.work_dir,
                              getattr(agent, "output_dir", None), getattr(agent, "input_dir", None),
-                             getattr(agent, "script_work_dir", None)) if d)
+                             getattr(agent, "script_work_dir", None), getattr(agent, "files_dir", None)) if d)
 
 
 def _read_state(folder, name, plat):
@@ -273,7 +273,7 @@ class Agent(object):
                 self._fail(EXIT_DIRECTORIES, "%s %s recusado: %s", name, path, code)
         # CR-026: sem [agent] interpreters; o interpretador e conferido a cada ticket (#!, digitado, cadastro).
         # CR-032 (D7): sem usuario de execucao nem helper; tudo roda com a conta do agente.
-        for key in ("output_dir", "input_dir", "script_work_dir"):
+        for key in ("output_dir", "input_dir", "script_work_dir", "files_dir"):
             self._check_user_dir(key)
         self._check_script_base_dir()
 
@@ -1348,7 +1348,12 @@ class Agent(object):
         output = None
         input_value = None
         work = None
+        files = None
         try:
+            if getattr(agent, "files_dir", None):
+                # CR-037 (D5): inputs e outputs permanentes do script no ambiente, criados antes do script.
+                files = log_paths.files_dirs(agent.files_dir, ticket["environment"], snap["script_name"],
+                                             snap.get("script_id"))
             if agent.input_dir:
                 # CR-014 (README §8.14): pasta permanente do script no ambiente, com o nome do snapshot.
                 input_value = log_paths.input_dir(agent.input_dir, ticket["environment"], snap["script_name"],
@@ -1369,14 +1374,16 @@ class Agent(object):
                                         timeout_sec=timeout, hostname=self.hostname, version=sss_config.SSS_VERSION,
                                         output_dir=output.folder if output else None,
                                         input_dir=os.path.join(*input_value) if input_value else None,
-                                        work_folder=os.path.join(*work) if work else None)
+                                        work_folder=os.path.join(*work) if work else None,
+                                        files_inputs=files[2] if files else None,
+                                        files_outputs=files[3] if files else None)
             connection = env.get(env_builder.CONNECTION_VAR)
         except Exception as exc:  # noqa: BLE001 - CR-007 R-17: SPAWN_ERROR
             ex = executor.failure_before_spawn(fd, item.tid, exc, label, work_dir_ticket)
             return self._after_start(item, ex, snap, connection)
         ex = executor.start(item.tid, argv, fd, env, work_dir_ticket, dict(self.plat.DEFAULT_RLIMITS), label,
                               output=(output.base, output.relative) if output else None, input_value=input_value,
-                              work=work)
+                              work=work, files=files[:2] if files else None)
         if not ex.spawn_error:
             item.output = output
         item.timeout_s = timeout

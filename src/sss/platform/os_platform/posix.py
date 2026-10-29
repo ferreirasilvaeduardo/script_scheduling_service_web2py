@@ -440,6 +440,25 @@ def create_input_dir(base, relative):
     return dir_value
 
 
+def create_files_dirs(base, relative):
+    """Pasta de arquivos (CR-037): base, a pasta do script e as subpastas inputs e outputs, com 0700 se nao
+    existirem, recusando link ou item que nao seja diretorio do proprio usuario. Permanentes, como a de entrada:
+    o agente nunca apaga nem empacota nada aqui. Devolve (inputs, outputs)."""
+    folder = create_input_dir(base, relative)
+    created = []
+    for name in ("inputs", "outputs"):
+        sub = os.path.join(folder, name)
+        try:
+            os.mkdir(sub, 0o700)
+        except FileExistsError:  # fluxo previsto: as subpastas ja existem (tickets anteriores)
+            pass
+        st = os.lstat(sub)
+        if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid():
+            raise RuntimeError("pasta de arquivos com item que nao e diretorio do agente")
+        created.append(sub)
+    return created[0], created[1]
+
+
 def start_pack(base, relative, max_bytes, max_files, destination_fd):
     """Inicia o pack num grupo proprio, com o zip no descritor destination_fd; nao espera.
 

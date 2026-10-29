@@ -243,9 +243,9 @@ Foram configurados **4 perfis de acesso** com escopos operacionais e administrat
 
 | Perfil | Tipo | Funcionalidades Autorizadas (`tbsss_profile_feature`) | Ambientes Autorizados (`tbsss_profile_env`) |
 |:---|:---:|:---|:---|
-| `ADMINISTRATOR` | Super Administrador (`is_admin = 'Y'`) | Todas as 12 funcionalidades (`EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `MANAGE_USERS`, `MANAGE_PROFILES`, `MANAGE_ENVIRONMENTS`, `MANAGE_SCRIPTS`, `MANAGE_PARAMETERS`, `MANAGE_SCHEDULES`, `VIEW_AUDIT`) | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
-| `OPERATOR_PROD` | Operacional Produção (`is_admin = 'N'`) | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT` | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
-| `OPERATOR_HML` | Operacional Homologação (`is_admin = 'N'`) | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT` | Ambientes não produtivos (`CLONE6`, `CLONE7`, `GFPREPROD`) |
+| `ADMINISTRATOR` | Super Administrador (`is_admin = 'Y'`) | Todas as 14 funcionalidades (`EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD`, `MANAGE_USERS`, `MANAGE_PROFILES`, `MANAGE_ENVIRONMENTS`, `MANAGE_SCRIPTS`, `MANAGE_PARAMETERS`, `MANAGE_SCHEDULES`, `VIEW_AUDIT`) | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
+| `OPERATOR_PROD` | Operacional Produção (`is_admin = 'N'`) | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD` | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
+| `OPERATOR_HML` | Operacional Homologação (`is_admin = 'N'`) | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD` | Ambientes não produtivos (`CLONE6`, `CLONE7`, `GFPREPROD`) |
 | `READ_ONLY` | Auditoria / Leitura (`is_admin = 'N'`) | Apenas leitura de logs e tickets (`VIEW_LOGS`) | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
 
 ### 5.3 Liberação de Scripts por Perfil (`tbsss_profile_script`)

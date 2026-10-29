@@ -271,6 +271,24 @@ class TestOutputDir(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             os_platform.create_input_dir(base, "ligada")
 
+    def test_cr037_cria_inputs_e_outputs_e_preserva_o_conteudo(self):
+        base = os.path.join(self.root, "files", "producao")
+        inputs, outputs = os_platform.create_files_dirs(base, "carga")
+        self.assertEqual((inputs, outputs), (os.path.join(base, "carga", "inputs"), os.path.join(base, "carga", "outputs")))
+        for folder in (inputs, outputs):
+            self.assertEqual(os.stat(folder).st_mode & 0o777, 0o700)
+        with open(os.path.join(outputs, "resultado.csv"), "w") as f:
+            f.write("1;2\n")
+        self.assertEqual(os_platform.create_files_dirs(base, "carga"), (inputs, outputs), "idempotente")
+        self.assertEqual(os.listdir(outputs), ["resultado.csv"], "o agente nunca apaga a pasta de arquivos")
+        outside = os.path.join(self.root, "fora_files")
+        os.mkdir(outside)
+        os.symlink(outside, os.path.join(base, "carga", "ligada_inputs"))
+        os.makedirs(os.path.join(base, "outro"))
+        os.symlink(outside, os.path.join(base, "outro", "inputs"))
+        with self.assertRaises(RuntimeError):
+            os_platform.create_files_dirs(base, "outro")
+
     def test_cr019_dev_cria_a_pasta_de_trabalho(self):
         base = os.path.join(self.root, "work_scripts", "producao")
         dir_value = os_platform.create_script_work_dir(base, self.rel)

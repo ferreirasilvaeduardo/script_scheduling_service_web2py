@@ -72,7 +72,7 @@ def _set(env, name, value):
 
 def build(cfg, secrets, ticket, environment, script_real, work_dir_ticket, environ_daemon, platform_name,
               snapshot=None, schedule=None, log_path=None, timeout_sec=None, hostname=None, version=None,
-              output_dir=None, input_dir=None, work_folder=None):
+              output_dir=None, input_dir=None, work_folder=None, files_inputs=None, files_outputs=None):
     """Ambiente exato do filho (README §8.6, tabela POSIX; CR-010). Variavel bloqueada: ValueError.
 
     ticket: dict com id, ambiente e, quando houver, parent_ticket_id, schedule_id, prioridade, started_at
@@ -146,6 +146,9 @@ def build(cfg, secrets, ticket, environment, script_real, work_dir_ticket, envir
     _set(env, "SSS_OUTPUT_DIR", output_dir)
     _set(env, "SSS_INPUT_DIR", input_dir)
     _set(env, "SSS_WORK_DIR", work_folder)
+    # CR-037 (D5): pasta de arquivos so em disco, permanente por ambiente e script
+    _set(env, "SSS_FILES_INPUTS_DIR", files_inputs)
+    _set(env, "SSS_FILES_OUTPUTS_DIR", files_outputs)
     _set(env, "SSS_AGENT_HOST", hostname)
     _set(env, "SSS_VERSION", version)
     # Ambiente: descricao, DSN (sem credencial), usuario e a connect string (mascarada em todo log).
