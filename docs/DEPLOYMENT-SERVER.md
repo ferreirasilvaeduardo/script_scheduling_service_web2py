@@ -630,7 +630,7 @@ O resto do arquivo (a parte "derivados" e a função `sss_tipo`) é o do passo 0
 | 3 A | O DEV usa o DSN direto do GFPR (o `localhost:2424` do pedido é um túnel da máquina de desenvolvimento) |
 | 4 B, 5 A | Prefixos novos, `s3dev_` e `s3prd_`, independentes do `tbsss_` e do `ssdev_` |
 | — | Transferência manual pela equipe; pacote dos arquivos locais (sem git); acesso pelo meio habitual; `driver_mode = auto` |
-| 7 | SSS antigo da porta 8000: **pendente** (recomendado: parar, sem apagar) |
+| 7 A | SSS antigo (web2py, porta 8000, `/home/mastersafgf/sss/web2py`): parado no passo 6, sem apagar nada; a pasta `~/sss` fica como histórico |
 
 ### A.4 Diferenças em relação ao pedido original
 
