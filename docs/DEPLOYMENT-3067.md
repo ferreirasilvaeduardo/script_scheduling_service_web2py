@@ -99,12 +99,14 @@ export PYTHON=<caminho escolhido>             # ex.: /usr/bin/python3
 "$PYTHON" -c "import oracledb; print('oracledb', oracledb.__version__)" 2>&1 | tail -1
 "$PYTHON" -c "import cx_Oracle; print('cx_Oracle', cx_Oracle.version)" 2>&1 | tail -1
 "$PYTHON" -c "import ssl" 2>/dev/null && echo "ssl OK (modo thin possivel)" || echo "SEM ssl: so thick ou cx_oracle"
-ldconfig -p 2>/dev/null | grep -c libclntsh; ls -d ${ORACLE_HOME:-/nao}/lib /opt/oracle/instantclient* 2>/dev/null
+ldconfig -p 2>/dev/null | grep -c libclntsh; echo "ORACLE_HOME=$ORACLE_HOME"; ls "$ORACLE_HOME"/lib/libclntsh.so* /opt/oracle/instantclient*/libclntsh.so* 2>/dev/null
+LD_LIBRARY_PATH="$ORACLE_HOME/lib" "$PYTHON" -c "import cx_Oracle; print('cx_Oracle cliente', cx_Oracle.clientversion())" 2>&1 | tail -1
 command -v sqlplus && sqlplus -V
 ```
 
 * Precisa de `oracledb` ou `cx_Oracle`. Sem nenhum dos dois, **pare**: a instalação do driver é da infraestrutura (DEPLOYMENT §2, sem `pip install` no servidor).
-* Sem `ssl`, o modo Thin não funciona: o Instant Client precisa existir (no `ldconfig` ou numa pasta, que vira `SSS_IC_DIR`, passo 12). O `driver_mode` fica `thick` (ou `cx_oracle`, se só houver o cx_Oracle).
+* Sem `ssl`, o modo Thin não funciona: o cliente Oracle precisa existir, no `ldconfig` ou numa pasta, que vira o `SSS_IC_DIR` (passos 11, 12 e 14).
+* **Encontrado no 3067 (29/10):** CentOS 6 (glibc 2.12), Python 3.8.5 do Sparta sem `ssl` e sem `_hashlib` (PBKDF2 em 0,3 s), **só o `cx_Oracle` 8.3.0**, e o cliente completo 12.2 em `ORACLE_HOME=/opt/oracle/product/12c/client`, fora do `ldconfig`. Por isso, `SSS_IC_DIR=/opt/oracle/product/12c/client/lib`. O `sqlplus` 12.2 existe.
 * Sem `sqlplus`, o banco é criado pelo `init_db.py` (passo 9, alternativa).
 
 ### 3.4 Banco, portas e instalação anterior
@@ -261,12 +263,12 @@ user = openrisow
 dsn = (DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=10.129.177.188)(PORT=1521))(CONNECT_DATA=(SID=GFPR)))
 owner = openrisow
 table_prefix = $PREFIX
-driver_mode = thick
+driver_mode = auto
 EOF
 chmod 0640 instance/common.ini; grep -n "table_prefix" instance/common.ini
 ```
 
-Com só o cx_Oracle no passo 3.3, troque para `driver_mode = cx_oracle`.
+Com `auto`, cada processo testa Thin → Thick → cx_Oracle na subida e fica com o primeiro que conectar (DEPLOYMENT §6). No 3067, sem o `oracledb`, os dois primeiros falham na hora e o log de cada subida traz, como esperado, duas linhas `WARNING ... Sondagem do candidato Oracle 'thin'` (e `'thick'`) `falhou: codigo=IMPORT_ERROR categoria=LIBRARY`, seguidas da linha `driver=cx_oracle`. Se o `oracledb` for instalado um dia, o `auto` passa a usá-lo sem mudar o arquivo. Para não sondar, use `driver_mode = cx_oracle`.
 
 ### 8.2 `instance/secrets.cfg` (senhas e chave da sessão)
 
@@ -417,17 +419,20 @@ Para trocar um script depois: `chmod u+w` na pasta e no arquivo, troque, e volte
 Em cada raiz:
 
 ```bash
+export PYTHON=/portaloptrib/TESHUVA/sparta/python3.8/bin/python3   # o do passo 3.2
+export ORACLE_HOME=/opt/oracle/product/12c/client SSS_IC_DIR=/opt/oracle/product/12c/client/lib
+export LD_LIBRARY_PATH="$SSS_IC_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 cd "$R"
 for n in web0001 agente0001 agente0002 agente0003 agente0004 agente0005; do
   echo "== $n"; "$PYTHON" scripts/check_env.py --name $n; echo "codigo $?"
 done
-"$PYTHON" scripts/probe_driver.py thick --config instance/agente0001/config.ini   # ou cx_oracle
+"$PYTHON" scripts/probe_driver.py cx_oracle --config instance/agente0001/config.ini
 bin/sss-web.sh "$PYTHON" web0001 --check                       # esperado: CONFIG_OK ambiente=<TIPO>
 ```
 
 * `check_env`: código 0 em todos (avisos não reprovam). A saída mostra o driver, o modo e a versão do servidor. Registre-a.
 * Código 1: falta arquivo ou o banco não conectou (veja a linha `FALHA`). Código 2: Python menor que 3.6.0 ou nome errado.
-* Instant Client fora do `ldconfig`: `export SSS_IC_DIR=<pasta do Instant Client>` antes destes comandos e no `crontab` (passo 14).
+* O `check_env.py`, o `probe_driver.py` e o `health.py` rodam direto no Python, sem launcher: com o cliente fora do `ldconfig`, eles precisam do `LD_LIBRARY_PATH` exportado (acima). Os launchers (`sss-web.sh`, `sss-scheduler.sh`, pelo keepalive) o montam sozinhos a partir do `SSS_IC_DIR`.
 
 ---
 
@@ -435,7 +440,8 @@ bin/sss-web.sh "$PYTHON" web0001 --check                       # esperado: CONFI
 
 ```bash
 cd "$R"
-export PYTHON=<o Python do passo 3.2> SSS_TZ=America/Sao_Paulo   # e SSS_IC_DIR, se for o caso
+export PYTHON=/portaloptrib/TESHUVA/sparta/python3.8/bin/python3 SSS_TZ=America/Sao_Paulo
+export ORACLE_HOME=/opt/oracle/product/12c/client SSS_IC_DIR=/opt/oracle/product/12c/client/lib
 bin/sss-keepalive.sh web0001:$PORT agente0001 agente0002 agente0003 agente0004 agente0005; echo "codigo $?"
 sleep 15
 tail -n 3 var/*/logs/keepalive.log
@@ -485,9 +491,11 @@ Em cada tipo:
 Uma linha de keepalive por raiz (`@reboot` e a cada 5 minutos), um `health.py` por raiz e a limpeza manual dos logs (DEPLOYMENT §4.0 e §12). Abra com `crontab -e` e acrescente:
 
 ```text
-PYTHON=<o Python do passo 3.2>
+PYTHON=/portaloptrib/TESHUVA/sparta/python3.8/bin/python3
 SSS_TZ=America/Sao_Paulo
-# SSS_IC_DIR=<pasta do Instant Client>    # so se ele nao estiver no ldconfig
+ORACLE_HOME=/opt/oracle/product/12c/client
+SSS_IC_DIR=/opt/oracle/product/12c/client/lib
+LD_LIBRARY_PATH=/opt/oracle/product/12c/client/lib
 D=/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
 P=/portaloptrib/TESHUVA/SSS/PROD/script_scheduling_service
 @reboot      cd $D && bin/sss-keepalive.sh web0001:18000 agente0001 agente0002 agente0003 agente0004 agente0005
@@ -552,7 +560,7 @@ Copie esta tabela para o registro da janela e preencha cada linha:
 |---|---|---|---|
 | 2 | Sessão no 3067 | `brtlvlty3067sl` / `mastersafgf` | |
 | 3.2 | Python escolhido e versão; `stdlib OK`; tempo da PBKDF2 | ≥ 3.6.0; OK; ≤ 3 s | |
-| 3.3 | Driver e Instant Client; `sqlplus` | um driver; cliente presente | |
+| 3.3 | Driver e cliente Oracle; `sqlplus` | `cx_Oracle` 8.3.0 com cliente 12.2; `sqlplus` 12.2 (29/10: OK) | |
 | 3.4 | GFPR 1521 alcançável; portas 18000/18001 | alcançável; livres após o passo 6 | |
 | 4.1 | Scripts SQL gerados; `WHENEVER` 1; outros prefixos 0; maior identificador; `sha256sum` dos seis | 1; 0; ≤ 30; anotados | |
 | 4.2 | `ORIGEM` e `SHA256SUMS` do pacote; `sha256sum -c` na origem; seis SQL e 14 utilitários | anotados; OK; 6 e 14 | |
