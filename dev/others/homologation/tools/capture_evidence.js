@@ -68,6 +68,18 @@ const AGENT_NAME = process.env.SSS_AGENT_NAME || 'agente0001';
 const AGENT_CFG = readAgentConfig(path.join(APP, 'instance', AGENT_NAME, 'config.ini'));
 const AGENT_VAR = path.join(APP, 'var', AGENT_CFG.name || AGENT_NAME);
 const AGENT_ID = AGENT_CFG.agent_id || AGENT_CFG.name;
+// Um agente por ambiente no DEV (2026-10-29): o agente de cada ambiente, lido de instance/*/config.ini
+// (so os que tem [agent]); sem config para o ambiente, o AGENT_ID (o PROD tem um agente para todos).
+const AGENT_BY_ENV = {};
+for (const dir of fs.readdirSync(path.join(APP, 'instance'))) {
+    const file = path.join(APP, 'instance', dir, 'config.ini');
+    if (dir === 'exemplos' || !fs.existsSync(file)) continue;
+    const text = fs.readFileSync(file, 'utf8');
+    const envs = (text.match(/^environments\s*=\s*([^;\n]+)/m) || [])[1];
+    const name = (text.match(/^name\s*=\s*(\S+)/m) || [])[1];
+    if (envs && name) envs.split(',').map((e) => e.trim()).forEach((e) => { if (e) AGENT_BY_ENV[e] = name; });
+}
+const agentOf = (env) => AGENT_BY_ENV[env] || AGENT_ID;
 const INPUT = AGENT_CFG.input_dir !== undefined ? AGENT_CFG.input_dir : path.join(AGENT_VAR, 'inputs');
 const SCRIPT_WORK = AGENT_CFG.script_work_dir !== undefined ? AGENT_CFG.script_work_dir
     : path.join(AGENT_VAR, 'script_works');
@@ -1286,8 +1298,9 @@ CTS['CT-20'] = async () => {
     await login('admin');
     await go('/audit/agents');
     // CR-026: o agente nao tem mais lista de interpretadores; o cartao mostra a pasta base dos scripts.
-    await expectText(`Agente real ${AGENT_ID} com saúde, heartbeat, ambientes e pasta base`,
-        AGENT_ID, 'GFPREPROD', 'Pasta base dos scripts');
+    const agentNames = Array.from(new Set(Object.values(AGENT_BY_ENV).concat([AGENT_ID]))).sort();
+    await expectText(`Agentes reais (${agentNames.join(', ')}) com saúde, heartbeat, ambientes e pasta base`,
+        ...agentNames, 'GFPREPROD', 'Pasta base dos scripts');
     await expectText('Legenda de saúde e limiares', 'Legenda');
     check('Título Agentes e item Agentes ativo no menu (CR-017c)', await page.evaluate(() =>
         document.querySelector('h1').innerText.trim() === 'Agentes' &&
@@ -1295,7 +1308,9 @@ CTS['CT-20'] = async () => {
     await sleep(17000);
     await expectText('A tela se atualiza sozinha ("Atualizado às …")', 'Atualizado às');
     await snap('Painel de agentes', { full: true });
-    note('No DEV há um único agente real; os estados Atrasado, Em risco e Offline do manual vinham de agentes simulados pelo FAKE.');
+    note(agentNames.length > 1
+        ? `No DEV há ${agentNames.length} agentes reais, um por ambiente (${Object.entries(AGENT_BY_ENV).map(([e, a]) => a + ' = ' + e).join(', ')}); os estados Atrasado, Em risco e Offline do manual vinham de agentes simulados pelo FAKE.`
+        : 'Há um único agente real; os estados Atrasado, Em risco e Offline do manual vinham de agentes simulados pelo FAKE.');
 };
 
 CTS['CT-21'] = async () => {
@@ -1361,7 +1376,8 @@ CTS['CT-23'] = async () => {
     }
     await go(`/tickets/detail/${state.tickets.ok_prod}`);
     const r3 = await registroTexto();
-    check('Ticket: criado por op.prod; última alteração pelo agente que finalizou', r3.includes('op.prod') && r3.includes(AGENT_ID), r3);
+    check(`Ticket: criado por op.prod; última alteração pelo agente que finalizou (${agentOf('CLONE2')}, o do CLONE2)`,
+        r3.includes('op.prod') && r3.includes(agentOf('CLONE2')), r3);
     await snap('Quadro Registro no detalhe do ticket', { selector: 'section[aria-labelledby="title-record"]' });
     await go('/admin_environments/form');
     check('Inclusão não mostra o quadro Registro', !(await registroTexto()));
@@ -2085,6 +2101,8 @@ CTS['CT-33'] = async () => {
     await snap('Pasta de Arquivos: antes de substituir');
     await send(true);
     check('Substituído: o arquivo no disco é o novo', fs.readFileSync(disk).equals(fs.readFileSync(local)));
+    // A pasta inputs e permanente (CR-037, D8): o script copia tudo o que houver, inclusive de rodadas anteriores.
+    const inputsNow = fs.readdirSync(path.join(folderDisk, 'inputs')).filter((n) => !n.startsWith('.')).length;
     const tid = await runDirect(sid, 'GFPREPROD', {});
     state.tickets.ct33 = tid;
     saveState();
@@ -2092,8 +2110,10 @@ CTS['CT-33'] = async () => {
     await sleep(3000);
     await go(`/tickets/detail/${tid}`);
     check(`Ticket #${tid} (diag_pasta_arquivos) deu certo`, fim.includes('Deu certo'));
-    await expectText('Log: o script recebeu as duas pastas e copiou o arquivo', 'inputs: ', 'outputs: ',
-        'diag_pasta_arquivos/inputs', 'arquivos copiados de inputs para outputs: 1');
+    await expectText(`Log: o script recebeu as duas pastas e copiou os ${inputsNow} arquivo(s) de inputs`, 'inputs: ',
+        'outputs: ', 'diag_pasta_arquivos/inputs', `arquivos copiados de inputs para outputs: ${inputsNow}`);
+    check('O arquivo enviado nesta rodada está entre as cópias em outputs', fs.existsSync(
+        path.join(folderDisk, 'outputs', `ticket_${tid}`, 'copias', name)));
     await snap('Log do ticket com as pastas de arquivos', { full: true });
     await go(`${base}&area=outputs`);
     await expectText('Pasta outputs: o que o script gravou, com o botão do zip', `ticket_${tid}`, 'Baixar a pasta em zip');

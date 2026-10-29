@@ -781,6 +781,29 @@ RODADAS["20261029_r4"] = dict(RODADAS["20261029"], **{
         u"O banco não foi recriado: o admin já estava com a senha escolhida (SSS_ADMIN_START=new).",
     ],
 })
+RODADAS["20261029_r5"] = dict(RODADAS["20261029_r3"], **{
+    "commit": u"9b22a91 (CR-038) mais o ajuste do roteiro para um agente por ambiente, no mesmo commit deste "
+              u"documento",
+    "nome_agente": u"agente0001 a agente0005 (um por ambiente)",
+    "ressalva": dict(RODADAS["20261029_r3"]["ressalva"], **{
+        "CT-20": u"Estados Atrasado/Em risco/Offline e quadros de atenção não reproduzíveis com os cinco agentes "
+                 u"saudáveis (um por ambiente)."}),
+    "defeitos": [
+        (u"Roteiro: dependia de um agente só", u"capture_evidence.js (CT-20, CT-23, CT-33)",
+         u"CT-23 esperava o agente0001 no ticket do CLONE2, que agora é do agente0002; CT-33 esperava 1 arquivo "
+         u"copiado, mas a pasta inputs é permanente e tinha o da rodada anterior; a nota do CT-20 dizia agente único.",
+         u"O roteiro lê o agente de cada ambiente em instance/*/config.ini e conta os arquivos de inputs; CT-23 e "
+         u"CT-33 repetidos (24/24). Não é defeito do produto."),
+    ],
+    "observacoes": [
+        u"Primeira rodada do DEV com um agente por ambiente: agente0001 = GFPREPROD, agente0002 = CLONE2, "
+        u"agente0003 = CLONE1, agente0004 = CLONE6 e agente0005 = CLONE7, todos subidos pelo bin/sss-keepalive.sh "
+        u"(healthy_agents=5). Marca %s." % STAMP,
+        u"A rodada completa teve 349/351: as duas falhas eram do roteiro (acima). Depois do ajuste, CT-23, CT-33 "
+        u"e CT-20 foram repetidos.",
+        u"O banco não foi recriado: o admin já estava com a senha escolhida (SSS_ADMIN_START=new).",
+    ],
+})
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]
