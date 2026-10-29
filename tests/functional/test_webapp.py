@@ -205,11 +205,24 @@ class SecurityHooksTest(unittest.TestCase):
         self.assertEqual(security.body_limit("files", "upload"), 5000 + margin)
         self.assertEqual(security.body_limit("inputs", "upload"), 1000 + margin)
         self.assertEqual(security.body_limit("default", "login"), 1000 + margin)
+        self.assertEqual(security.body_limit("files", "upload", logged=False), 1000 + margin,
+                         "sem login, o envio grande nem chega a ser lido (revisao do CR-037)")
         ctx = _context(controller="default", function="login", method="POST",
                        CONTENT_LENGTH=str(1000 + margin + 1))
         with self.assertRaises(HTTP) as raised:
             security.before_request(ctx)
         self.assertEqual(raised.exception.status, 413, "login nao herda o limite grande")
+        ctx = _context(controller="files", function="upload", method="POST",
+                       CONTENT_LENGTH=str(1000 + margin + 1))
+        with self.assertRaises(HTTP) as raised:
+            security.before_request(ctx)
+        self.assertEqual(raised.exception.status, 413, "sem sessao logada: o limite da Entrada")
+        logged = _context(controller="files", function="upload", method="POST",
+                          CONTENT_LENGTH=str(1000 + margin + 1))
+        logged.session.user_id = 7
+        with mock.patch.object(security, "_revalidate"), self.assertRaises(HTTP) as raised:
+            security.before_request(logged)
+        self.assertEqual(raised.exception.status, 403, "logado: passa do tamanho e para no CSRF")
         ctx = _context(controller="files", function="upload", method="POST",
                        CONTENT_LENGTH=str(5000 + margin + 1))
         with self.assertRaises(HTTP) as raised:

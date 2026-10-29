@@ -54,6 +54,9 @@ class _Log(object):
     def warning(self, *a, **k):
         self.lines.append(("WARNING",) + a)
 
+    def error(self, *a, **k):
+        self.lines.append(("ERROR",) + a)
+
 
 def _ctx(features=("FILES_UPLOAD", "FILES_DOWNLOAD"), envs=("PRODUCAO",), scripts=(1,)):
     return {"login": "op.prod", "is_admin": False, "active_user": True, "active_profile": True,
@@ -172,6 +175,25 @@ class TestFilesService(unittest.TestCase):
         self.assertEqual(os.listdir(outside), ["segredo.txt"], "nada gravado fora da pasta")
         self.assertEqual(self.audit.lines, [], "nada auditado nas recusas")
 
+    def test_link_acima_de_inputs_e_outputs_tambem_e_recusado(self):
+        """Revisao do CR-037: files/<ambiente> trocado por link nao leva a tela para fora dela."""
+        outside = tempfile.mkdtemp(prefix="sss_fora_amb_")
+        self.addCleanup(shutil.rmtree, outside, True)
+        os.makedirs(os.path.join(outside, "carga_diaria", "outputs"))
+        with open(os.path.join(outside, "carga_diaria", "outputs", "x.txt"), "w") as f:
+            f.write("fora")
+        os.symlink(outside, os.path.join(self.var, "agente0001", "files", "producao"))
+        for call in (lambda: self.svc.folder(_ctx(), "PRODUCAO", 1, "outputs", None),
+                     lambda: self.svc.download(_ctx(), "10.0.0.1", "PRODUCAO", 1, None, "x.txt"),
+                     lambda: self.svc.download_zip(_ctx(), "10.0.0.1", "PRODUCAO", 1, None, ""),
+                     lambda: self.svc.upload(_ctx(), "10.0.0.1", "PRODUCAO", 1, None, "", "a.txt",
+                                             io.BytesIO(b"1"), False)):
+            with self.assertRaises(RepoNotFound):
+                call()
+        self.assertEqual(sorted(os.listdir(os.path.join(outside, "carga_diaria"))), ["outputs"],
+                         "nada criado fora da pasta")
+        self.assertEqual(self.audit.lines, [])
+
     # ------------------------------------------------------------------ envio
 
     def test_envio_grava_audita_e_nao_deixa_temporario(self):
@@ -179,8 +201,8 @@ class TestFilesService(unittest.TestCase):
         result, errors = self.svc.upload(_ctx(), "10.0.0.1", "PRODUCAO", 1, None, "lote/2026",
                                          browser_name, io.BytesIO(b"a;b\n"), False)
         self.assertEqual(errors, {})
-        self.assertEqual(result, {"path": u"lote/2026/relatório.csv",
-                         "size": 4, "agent": "agente0001"})
+        self.assertEqual(result, {"path": u"lote/2026/relatório.csv", "size": 4,
+                                  "agent": "agente0001", "audit_failed": False})
         folder = os.path.join(self.base, "inputs", "lote", "2026")
         self.assertEqual(os.listdir(folder), [u"relatório.csv"], "sem temporario")
         with open(os.path.join(folder, u"relatório.csv"), "rb") as f:
@@ -190,23 +212,43 @@ class TestFilesService(unittest.TestCase):
         self.assertEqual((actor, ip, action, entity),
                          ("op.prod", "10.0.0.1", "FILES_UPLOAD", "files"))
         self.assertIn(hashlib.sha256(b"a;b\n").hexdigest(), detail)
-        self.assertIn(u"PRODUCAO/Carga Diária/inputs/lote/2026/relatório.csv (4 bytes", detail)
+        self.assertIn(u"PRODUCAO/Carga Diária/inputs/lote/2026/relatório.csv (4 bytes; agente "
+                      u"agente0001", detail)
 
     def test_ja_existe_substituir_e_limite(self):
         args = (_ctx(), "10.0.0.1", "PRODUCAO", 1, None, "")
+        self.assertEqual(self.svc.upload(*args, "novo.txt", io.BytesIO(b"n"), True)[1], {})
+        self.assertFalse(self.audit.lines[-1][4].startswith(u"substituído"),
+                         "caixa marcada num arquivo novo: nada foi substituido")
         self.assertEqual(self.svc.upload(*args, "a.txt", io.BytesIO(b"um"), False)[1], {})
         result, errors = self.svc.upload(*args, "a.txt", io.BytesIO(b"dois"), False)
         self.assertEqual((result, errors), (None, {"file": fs.MSG_EXISTS}))
         self.assertEqual(self.svc.upload(*args, "a.txt", io.BytesIO(b"dois"), True)[1], {})
         with open(os.path.join(self.base, "inputs", "a.txt"), "rb") as f:
             self.assertEqual(f.read(), b"dois")
-        self.assertIn(u"substituído", self.audit.lines[-1][4])
+        self.assertTrue(self.audit.lines[-1][4].startswith(u"substituído: PRODUCAO/"),
+                        self.audit.lines[-1][4])
         result, errors = self.svc.upload(*args, "grande.bin", io.BytesIO(b"x" * 1025), False)
         self.assertIsNone(result)
         self.assertIn("tamanho máximo", errors["file"])
-        self.assertEqual(sorted(os.listdir(os.path.join(self.base, "inputs"))), ["a.txt"],
-                         "acima do limite: nada fica, nem o temporario")
-        self.assertEqual(len(self.audit.lines), 2, "so os envios gravados sao auditados")
+        self.assertEqual(sorted(os.listdir(os.path.join(self.base, "inputs"))),
+                         ["a.txt", "novo.txt"], "acima do limite: nada fica, nem o temporario")
+        self.assertEqual(len(self.audit.lines), 3, "so os envios gravados sao auditados")
+
+    def test_auditoria_que_falha_mantem_o_arquivo_e_avisa(self):
+        """Revisao do CR-037 (decisao B): o arquivo fica, o resultado avisa e o log detalha."""
+        from sss.persistence.repo_errors import RepoUnavailable
+
+        def failing(*_a, **_k):
+            raise RepoUnavailable("banco fora")
+        self.audit.register = failing
+        result, errors = self.svc.upload(_ctx(), "10.0.0.1", "PRODUCAO", 1, None, "", "a.txt",
+                                         io.BytesIO(b"x"), False)
+        self.assertEqual(errors, {})
+        self.assertTrue(result["audit_failed"])
+        self.assertTrue(os.path.isfile(os.path.join(self.base, "inputs", "a.txt")))
+        errors_logged = [line for line in self.log.lines if line[0] == "ERROR"]
+        self.assertTrue(any("sem auditoria" in line[1] for line in errors_logged), self.log.lines)
 
     def test_envio_com_nome_ou_subpasta_invalidos(self):
         args = (_ctx(), "10.0.0.1", "PRODUCAO", 1, None)

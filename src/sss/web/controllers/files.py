@@ -140,7 +140,11 @@ def upload() -> None:
     else:
         path, agent_code = result["path"], result["agent"]
         message = u"Arquivo gravado em inputs/%s (servidor %s)." % (path, agent_code)
-        session.flash = {"kind": "success", "message": message}
+        if result.get("audit_failed"):
+            warn = message + u" Mas a auditoria falhou; avise o administrador."
+            session.flash = {"kind": "warning", "message": warn}
+        else:
+            session.flash = {"kind": "success", "message": message}
     _back(environment, script_id, agent, current)
 
 

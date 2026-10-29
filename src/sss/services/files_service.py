@@ -17,7 +17,7 @@ from typing import IO, Any, BinaryIO, Dict, Iterator, List, Optional, Tuple, cas
 
 from sss.config import log_paths
 from sss.core import rbac
-from sss.persistence.repo_errors import RepoNotFound
+from sss.persistence.repo_errors import RepoError, RepoNotFound
 from sss.platform import files_area
 from sss.services import admin_crud
 from sss.services.input_browse_service import normalize_folder, upload_name, valid_part
@@ -44,7 +44,8 @@ MSG_EXISTS = (u"Já existe um arquivo com esse nome nessa pasta. Marque \"Substi
 MSG_NO_AGENT = u"Nenhum servidor deste ambiente tem a pasta de arquivos neste servidor web."
 
 Ctx = Dict[str, Any]
-Area = Tuple[Dict[str, Any], str, str, List[str]]
+# (script, agente, var/<agente>/files, [<ambiente>, <script>, <area>], agentes)
+Area = Tuple[Dict[str, Any], str, str, List[str], List[str]]
 
 
 class InvalidRequest(Exception):
@@ -138,7 +139,9 @@ class FilesService(object):
 
     def _area(self, ctx: Ctx, environment: str, script_id: Any, area: str,
               agent: Optional[str]) -> Area:
-        """(script, agente, raiz da area, agentes), conferidos permissao, escopo e agente."""
+        """(script, agente, files_dir, niveis ate a area, agentes), conferidos permissao, escopo e
+        agente. Os niveis partem de var/<agente>/files: nenhum (nem <ambiente> nem <script>) segue
+        link."""
         if area not in AREAS:
             raise InvalidRequest("area invalida")
         if area not in self.areas(ctx):
@@ -151,9 +154,9 @@ class FilesService(object):
         if chosen is None or chosen not in agents:
             raise InvalidRequest("agente nao escolhido ou fora do ambiente")
         files_dir = os.path.join(self._var_dir, chosen, "files")
-        _base, _rel, inputs, outputs = log_paths.files_dirs(files_dir, environment, script["name"],
+        base, rel, _inputs, _outputs = log_paths.files_dirs(files_dir, environment, script["name"],
                                                             script["id"])
-        return script, chosen, inputs if area == "inputs" else outputs, agents
+        return script, chosen, files_dir, [os.path.basename(base), rel, area], agents
 
     def _audit_line(self, ctx: Ctx, ip: str, action: str, detail: str) -> None:
         self._audit.register(ctx.get("login"), ip, action, AUDIT_ENTITY, None,
@@ -164,10 +167,10 @@ class FilesService(object):
     def folder(self, ctx: Ctx, environment: str, script_id: Any, area: str, agent: Optional[str],
                folder: Optional[str] = "") -> Dict[str, Any]:
         """Conteudo da pasta (subpastas e arquivos). Pasta que ainda nao existe aparece vazia."""
-        script, chosen, root, agents = self._area(ctx, environment, script_id, area, agent)
+        script, chosen, root, prefix, agents = self._area(ctx, environment, script_id, area, agent)
         current = _folder(folder)
         try:
-            path = files_area.walk_dirs(root, _parts(current))
+            path = files_area.walk_dirs(root, prefix + _parts(current))
         except files_area.AreaError:
             raise RepoNotFound("pasta fora do formato")
         folders, files = files_area.list_dir(path) if path else ([], [])
@@ -175,11 +178,11 @@ class FilesService(object):
         for part in _parts(current):
             acc.append(part)
             crumbs.append({"name": part, "path": "/".join(acc)})
-        prefix = current + "/" if current else ""
+        lead = current + "/" if current else ""
         return {"script": script, "environment": environment, "area": area, "agent": chosen,
                 "agents": agents, "areas": self.areas(ctx), "folder": current, "crumbs": crumbs,
-                "subfolders": [{"name": n, "path": prefix + n} for n in folders],
-                "files": [{"name": f.name, "path": prefix + f.name, "size": f.size,
+                "subfolders": [{"name": n, "path": lead + n} for n in folders],
+                "files": [{"name": f.name, "path": lead + f.name, "size": f.size,
                            "mtime": time.strftime("%d/%m/%Y %H:%M", time.localtime(f.mtime))}
                           for f in files],
                 "max_bytes": self.max_bytes}
@@ -190,7 +193,8 @@ class FilesService(object):
                folder: Optional[str], file_name: Optional[str], stream: Optional[BinaryIO],
                replace: bool) -> Tuple[Optional[Dict[str, Any]], Dict[str, str]]:
         """Grava o arquivo em inputs. Devolve (resultado {path, size, agent} ou None, erros)."""
-        script, chosen, root, _agents = self._area(ctx, environment, script_id, "inputs", agent)
+        script, chosen, root, prefix, _agents = self._area(
+            ctx, environment, script_id, "inputs", agent)
         errors = {}
         current = normalize_folder(folder)
         if current is None:
@@ -205,9 +209,9 @@ class FilesService(object):
         if errors or stream is None or current is None:
             return None, errors
         try:
-            target = files_area.walk_dirs(root, _parts(current), create=True)
-            size, digest = files_area.write_file(str(target), name, stream, self.max_bytes,
-                                                 replace)
+            target = files_area.walk_dirs(root, prefix + _parts(current), create=True)
+            size, digest, replaced = files_area.write_file(str(target), name, stream,
+                                                           self.max_bytes, replace)
         except files_area.FileExists:
             return None, {"file": MSG_EXISTS}
         except files_area.TooLarge:
@@ -215,27 +219,39 @@ class FilesService(object):
         except files_area.AreaError:
             raise RepoNotFound("pasta fora do formato")
         path = "/".join(p for p in (current, name) if p)
-        detail = u"%s/%s/inputs/%s (%d bytes, sha256 %s%s; agente %s)" % (
-            environment, script["name"], path, size, digest, u", substituído" if replace else u"",
-            chosen)
-        self._audit_line(ctx, ip, "FILES_UPLOAD", detail)
+        # O que importa primeiro (a lista da auditoria mostra so os 80 primeiros caracteres): a
+        # substituicao no inicio, o sha256 no fim.
+        detail = u"%s%s/%s/inputs/%s (%d bytes; agente %s; sha256 %s)" % (
+            u"substituído: " if replaced else u"", environment, script["name"], path, size, chosen,
+            digest)
+        audit_failed = False
+        try:
+            self._audit_line(ctx, ip, "FILES_UPLOAD", detail)
+        except RepoError as exc:
+            # Revisao do CR-037 (decisao B): o arquivo ja esta no lugar e fica; o ERROR guarda o
+            # que a auditoria guardaria, e a tela avisa que o envio ficou sem registro.
+            audit_failed = True
+            self._log.error("envio gravado sem auditoria (%s; login=%s ip=%s): %s",
+                            exc.__class__.__name__, ctx.get("login"), ip, detail,
+                            extra=_LOG_ACTION)
         self._log.info("envio para a pasta de arquivos (login=%s ambiente=%s script=%s arquivo=%s "
                        "bytes=%d agente=%s)", ctx.get("login"), environment, script["name"], path,
                        size, chosen, extra=_LOG_ACTION)
-        return {"path": path, "size": size, "agent": chosen}, {}
+        return {"path": path, "size": size, "agent": chosen, "audit_failed": audit_failed}, {}
 
     # ------------------------------------------------------------------ download (outputs)
 
     def download(self, ctx: Ctx, ip: str, environment: str, script_id: Any, agent: Optional[str],
                  path: Optional[str]) -> Tuple[str, int, Iterator[bytes]]:
         """(nome, tamanho, fatias) de um arquivo de outputs; audita antes do envio."""
-        script, chosen, root, _agents = self._area(ctx, environment, script_id, "outputs", agent)
+        script, chosen, root, prefix, _agents = self._area(
+            ctx, environment, script_id, "outputs", agent)
         current = _folder(path)
         parts = _parts(current)
         if not parts:
             raise InvalidRequest("arquivo nao informado")
         try:
-            folder = files_area.walk_dirs(root, parts[:-1])
+            folder = files_area.walk_dirs(root, prefix + parts[:-1])
             if folder is None:
                 raise RepoNotFound("arquivo inexistente")
             handle, size = files_area.open_file(folder, parts[-1])
@@ -248,10 +264,11 @@ class FilesService(object):
     def download_zip(self, ctx: Ctx, ip: str, environment: str, script_id: Any,
                      agent: Optional[str], folder: Optional[str]) -> Tuple[str, Iterator[bytes]]:
         """(nome do zip, fatias) da pasta de outputs, montado em fluxo; audita antes do envio."""
-        script, chosen, root, _agents = self._area(ctx, environment, script_id, "outputs", agent)
+        script, chosen, root, prefix, _agents = self._area(
+            ctx, environment, script_id, "outputs", agent)
         current = _folder(folder)
         try:
-            path = files_area.walk_dirs(root, _parts(current))
+            path = files_area.walk_dirs(root, prefix + _parts(current))
         except files_area.AreaError:
             raise RepoNotFound("pasta fora do formato")
         if path is None:

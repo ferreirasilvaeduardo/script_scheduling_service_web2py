@@ -1,0 +1,2669 @@
+{
+  "CT-01": {
+    "title": "Login, sessão e troca de senha",
+    "checks": [
+      {
+        "desc": "Endereço raiz redireciona para Entrar",
+        "ok": true,
+        "detail": "/default/login?next=%2Fscript_scheduling_service%2F"
+      },
+      {
+        "desc": "Faixa amarela do ambiente DEV no topo",
+        "ok": true
+      },
+      {
+        "desc": "Senha incorreta não entra",
+        "ok": true
+      },
+      {
+        "desc": "Mensagem genérica, sem dizer se o erro foi no login ou na senha",
+        "ok": true
+      },
+      {
+        "desc": "Login com espaços em volta entra (o login é limpo antes da validação)",
+        "ok": true,
+        "detail": "/default/index"
+      },
+      {
+        "desc": "Confirmação divergente: campo destacado com mensagem em português",
+        "ok": true
+      },
+      {
+        "desc": "Confirmação divergente marca o campo como inválido",
+        "ok": true
+      },
+      {
+        "desc": "Troca válida: mensagem de sucesso e a sessão continua ativa",
+        "ok": true,
+        "detail": "/default/index"
+      },
+      {
+        "desc": "GET em /default/logout não faz logout (405)",
+        "ok": true,
+        "detail": "status 405"
+      },
+      {
+        "desc": "Sair volta ao login com \"Você saiu do sistema.\"",
+        "ok": true
+      },
+      {
+        "desc": "Depois de Sair a página é a de login",
+        "ok": true
+      },
+      {
+        "desc": "admin entra com a senha nova",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-01_1.png",
+        "caption": "Tela de login",
+        "url": "/default/login?next=%2Fscript_scheduling_service%2F",
+        "at": "2026-10-29T14:24:36.046Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-01_2.png",
+        "caption": "Mensagem após senha incorreta",
+        "url": "/default/login",
+        "at": "2026-10-29T14:24:39.279Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-01_3.png",
+        "caption": "Tela Minha senha com a confirmação divergente",
+        "url": "/default/my_password",
+        "at": "2026-10-29T14:24:49.412Z"
+      }
+    ],
+    "notes": [
+      "A senha do admin passou a ser a senha escolhida pelo responsável pela homologação (os demais usuários continuam com a senha inicial)."
+    ],
+    "started_at": "2026-10-29T14:24:34.814Z",
+    "finished_at": "2026-10-29T14:24:57.320Z"
+  },
+  "CT-02": {
+    "title": "Painel inicial por perfil",
+    "checks": [
+      {
+        "desc": "admin: cartões de tickets 24 h, meus tickets, agendamentos e saúde dos agentes",
+        "ok": true
+      },
+      {
+        "desc": "admin: menu com Rodar um script, Tickets, Agenda, Agentes e Administração",
+        "ok": true
+      },
+      {
+        "desc": "Painel sem atalho de disparo e sem o menu repetido (CR-017b)",
+        "ok": true
+      },
+      {
+        "desc": "op.prod: Rodar um script no menu, tickets 24 h e meus tickets",
+        "ok": true
+      },
+      {
+        "desc": "op.prod: sem agendamentos, agentes e Administração",
+        "ok": true
+      },
+      {
+        "desc": "op.hml: Rodar um script no menu, tickets 24 h e meus tickets",
+        "ok": true
+      },
+      {
+        "desc": "op.hml: sem Administração",
+        "ok": true
+      },
+      {
+        "desc": "consulta: tickets 24 h e meus tickets",
+        "ok": true
+      },
+      {
+        "desc": "consulta: sem Rodar um script",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-02_1.png",
+        "caption": "Painel inicial do admin",
+        "url": "/default/index",
+        "at": "2026-10-29T14:25:03.970Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-02_2.png",
+        "caption": "Painel inicial do op.prod",
+        "url": "/default/index",
+        "at": "2026-10-29T14:25:09.184Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-02_3.png",
+        "caption": "Painel inicial do op.hml",
+        "url": "/default/index",
+        "at": "2026-10-29T14:25:14.059Z"
+      },
+      {
+        "n": 4,
+        "file": "CT-02_4.png",
+        "caption": "Painel inicial do consulta",
+        "url": "/default/index",
+        "at": "2026-10-29T14:25:19.068Z"
+      }
+    ],
+    "notes": [],
+    "started_at": "2026-10-29T14:24:57.321Z",
+    "finished_at": "2026-10-29T14:25:19.068Z"
+  },
+  "CT-03": {
+    "title": "O que eu posso fazer",
+    "checks": [
+      {
+        "desc": "Quadros do perfil e a frase de mais acesso",
+        "ok": true
+      },
+      {
+        "desc": "op.hml: ambientes do perfil (CLONE6, CLONE7 e GFPREPROD)",
+        "ok": true
+      },
+      {
+        "desc": "op.hml: CLONE1 e CLONE2 (fora do perfil) não aparecem",
+        "ok": true
+      },
+      {
+        "desc": "Telas com os nomes do menu: Rodar Scripts e Consultar Tickets (CR-018b)",
+        "ok": true
+      },
+      {
+        "desc": "Scripts que posso rodar: só a contagem e o link para os cartões (CR-018b)",
+        "ok": true
+      },
+      {
+        "desc": "Sem os botões Rodar em… que repetiam os cartões (CR-018b)",
+        "ok": true
+      },
+      {
+        "desc": "Abrir Rodar um script leva aos cartões",
+        "ok": true,
+        "detail": "/tickets/catalog"
+      },
+      {
+        "desc": "consulta: ainda não pode rodar scripts",
+        "ok": true
+      },
+      {
+        "desc": "consulta: sem o nome antigo Disparar Scripts",
+        "ok": true
+      },
+      {
+        "desc": "admin: frase de administrador",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-03_1.png",
+        "caption": "O que eu posso fazer (op.hml)",
+        "url": "/default/permissions",
+        "at": "2026-10-29T14:25:23.843Z"
+      }
+    ],
+    "notes": [],
+    "started_at": "2026-10-29T14:25:19.070Z",
+    "finished_at": "2026-10-29T14:25:45.625Z"
+  },
+  "MASSA": {
+    "title": "Preparação da massa: tickets reais criados pelas telas e executados pelo agente",
+    "checks": [
+      {
+        "desc": "Scripts do seed nos cartões de Rodar um script do admin",
+        "ok": true,
+        "detail": "compactar_targz, contar_linhas_arquivo, converter_encoding, descompactar_targz, descompactar_zip, filtrar_linhas, gerar_hash_arquivo, juntar_arquivos, limpar_linhas_vazias, ordenar_arquivo, quebrar_arquivo, remover_duplicadas, substituir_texto, zipar_arquivos"
+      },
+      {
+        "desc": "Ticket ok_hml criado por op.hml (contar_linhas_arquivo em GFPREPROD)",
+        "ok": true,
+        "detail": "#1"
+      },
+      {
+        "desc": "Ticket erro_hml criado por op.hml (contar_linhas_arquivo em GFPREPROD)",
+        "ok": true,
+        "detail": "#2"
+      },
+      {
+        "desc": "Ticket ok_clone6 criado por op.hml (contar_linhas_arquivo em CLONE6)",
+        "ok": true,
+        "detail": "#3"
+      },
+      {
+        "desc": "Ticket ok_prod criado por op.prod (gerar_hash_arquivo em CLONE2)",
+        "ok": true,
+        "detail": "#4"
+      },
+      {
+        "desc": "Ticket ok_admin criado por admin (gerar_hash_arquivo em CLONE2)",
+        "ok": true,
+        "detail": "#5"
+      },
+      {
+        "desc": "Ticket #1 (ok_hml) executado pelo agente: Deu certo",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #2 (erro_hml) executado pelo agente: Deu erro",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #3 (ok_clone6) executado pelo agente: Deu certo",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #4 (ok_prod) executado pelo agente: Deu certo",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #5 (ok_admin) executado pelo agente: Deu certo",
+        "ok": true
+      }
+    ],
+    "figures": [],
+    "notes": [],
+    "started_at": "2026-10-29T14:25:45.625Z",
+    "finished_at": "2026-10-29T14:27:03.083Z"
+  },
+  "CT-04": {
+    "title": "Rodar um script (cartões) e histórico do script",
+    "checks": [
+      {
+        "desc": "Cartões com perguntas, última execução e botões",
+        "ok": true
+      },
+      {
+        "desc": "op.hml (sem Regras de Agendamento): sem o botão Agendar",
+        "ok": true
+      },
+      {
+        "desc": "A busca filtra na hora",
+        "ok": true,
+        "detail": "gerar_hash_arquivo"
+      },
+      {
+        "desc": "Sem resultado: \"Nenhuma rotina corresponde à busca.\"",
+        "ok": true
+      },
+      {
+        "desc": "admin: botão Agendar em cada cartão (CR-017c)",
+        "ok": true,
+        "detail": "14 botão(ões)"
+      },
+      {
+        "desc": "Histórico: resumo, gráfico de 30 dias e números",
+        "ok": true
+      },
+      {
+        "desc": "consulta: acesso negado (403)",
+        "ok": true
+      },
+      {
+        "desc": "Status HTTP 403",
+        "ok": true,
+        "detail": "status 403"
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-04_1.png",
+        "caption": "Rodar um script (op.hml)",
+        "url": "/tickets/catalog",
+        "at": "2026-10-29T14:27:10.989Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-04_2.png",
+        "caption": "Histórico do contar_linhas_arquivo",
+        "url": "/tickets/history/11",
+        "at": "2026-10-29T14:27:19.772Z"
+      }
+    ],
+    "notes": [],
+    "started_at": "2026-10-29T14:27:03.088Z",
+    "finished_at": "2026-10-29T14:27:23.592Z"
+  },
+  "CT-05": {
+    "title": "Disparo de script (criação de ticket)",
+    "checks": [
+      {
+        "desc": "Disparo sem script abre Rodar um script, onde o script é escolhido (CR-017b)",
+        "ok": true,
+        "detail": "/tickets/catalog"
+      },
+      {
+        "desc": "Etapa 1: só scripts ativos autorizados ao perfil e homologados (os 14 utilitários)",
+        "ok": true,
+        "detail": "compactar_targz, contar_linhas_arquivo, converter_encoding, descompactar_targz, descompactar_zip, filtrar_linhas, gerar_hash_arquivo, juntar_arquivos, limpar_linhas_vazias, ordenar_arquivo, quebrar_arquivo, remover_duplicadas, substituir_texto, zipar_arquivos"
+      },
+      {
+        "desc": "Etapa 2: ambientes ativos do perfil em que o script está homologado, com o selo Produção",
+        "ok": true,
+        "detail": "CLONE1 Produção, CLONE2 Produção, CLONE6 Produção, CLONE7 Produção, GFPREPROD Produção"
+      },
+      {
+        "desc": "A lista de prioridades do op.prod começa em 2 (a 1 é só de administradores)",
+        "ok": true,
+        "detail": "2,3,4"
+      },
+      {
+        "desc": "Ajuda da prioridade com o envelhecimento da fila",
+        "ok": true
+      },
+      {
+        "desc": "Sem o botão Pré-visualizar comando: o comando fica no modal (CR-017b)",
+        "ok": true
+      },
+      {
+        "desc": "Confirmação com a frase-resumo e o comando que será executado, com o arquivo do script (relativo, CR-023)",
+        "ok": true
+      },
+      {
+        "desc": "Ambiente de produção: alerta na confirmação (CR-017a)",
+        "ok": true
+      },
+      {
+        "desc": "Ambiente de produção: botão Criar ticket em vermelho",
+        "ok": true
+      },
+      {
+        "desc": "Mensagem \"Ticket #N criado com sucesso.\"",
+        "ok": true
+      },
+      {
+        "desc": "Detalhe com o que aconteceu, o que fazer agora, as etapas e o arquivo do script",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #6 executado pelo agente real até o fim",
+        "ok": true
+      },
+      {
+        "desc": "Aviso de respostas carregadas da última execução",
+        "ok": true
+      },
+      {
+        "desc": "Campos preenchidos com as respostas do ticket anterior",
+        "ok": true,
+        "detail": "/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/var/agente0001/inputs/clone2/gerar_hash_arquivo/extrato_20261022.csv"
+      },
+      {
+        "desc": "Nada é criado até confirmar (a página continua no disparo)",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-05_1.png",
+        "caption": "Etapa 1: escolha do script nos cartões",
+        "url": "/tickets/catalog",
+        "at": "2026-10-29T14:27:30.899Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-05_2.png",
+        "caption": "Etapa 2: escolha do ambiente",
+        "url": "/tickets/new?script_id=8",
+        "at": "2026-10-29T14:27:32.087Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-05_3.png",
+        "caption": "Etapa 3: questionário",
+        "url": "/tickets/new?environment=CLONE2&script_id=8",
+        "at": "2026-10-29T14:27:34.231Z"
+      },
+      {
+        "n": 4,
+        "file": "CT-05_4.png",
+        "caption": "Confirmação do disparo, com o resumo e o alerta de produção",
+        "url": "/tickets/new?environment=CLONE2&script_id=8",
+        "at": "2026-10-29T14:27:35.837Z"
+      },
+      {
+        "n": 5,
+        "file": "CT-05_5.png",
+        "caption": "Ticket criado (detalhe)",
+        "url": "/tickets/detail/6",
+        "at": "2026-10-29T14:27:39.615Z"
+      },
+      {
+        "n": 6,
+        "file": "CT-05_6.png",
+        "caption": "Questionário preenchido com a última execução",
+        "url": "/tickets/new?environment=CLONE2&last=1&script_id=8",
+        "at": "2026-10-29T14:27:57.797Z"
+      }
+    ],
+    "notes": [],
+    "started_at": "2026-10-29T14:27:23.592Z",
+    "finished_at": "2026-10-29T14:27:57.797Z"
+  },
+  "CT-06": {
+    "title": "Lista de tickets, filtros e escopo",
+    "checks": [
+      {
+        "desc": "Ticket longo #7 (zipar_arquivos, 3 GB de texto, nível 9) rodando no agente",
+        "ok": true
+      },
+      {
+        "desc": "admin vê tickets de vários ambientes",
+        "ok": true
+      },
+      {
+        "desc": "Coluna Situação no lugar de Status (CR-018b)",
+        "ok": true
+      },
+      {
+        "desc": "admin (vê logins): filtro Solicitante (login) presente (CR-018a)",
+        "ok": true
+      },
+      {
+        "desc": "Ticket com erro: motivo em nome simples na lista (CR-018b)",
+        "ok": true
+      },
+      {
+        "desc": "Sem o código técnico do motivo na lista",
+        "ok": true
+      },
+      {
+        "desc": "Filtro pela situação Rodando mostra só tickets rodando",
+        "ok": true,
+        "detail": "1 linha(s)"
+      },
+      {
+        "desc": "Atualização automática: \"Atualizada às HH:MM:SS\"",
+        "ok": true
+      },
+      {
+        "desc": "op.hml não vê tickets de CLONE1 e CLONE2",
+        "ok": true
+      },
+      {
+        "desc": "consulta (vê \"outra pessoa\"): sem o filtro Solicitante",
+        "ok": true
+      },
+      {
+        "desc": "consulta: requested_by=op.prod na URL é ignorado (mesma lista)",
+        "ok": true,
+        "detail": "7 linha(s) sem filtro, 7 com o login na URL"
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-06_1.png",
+        "caption": "Lista de tickets (admin)",
+        "url": "/tickets/index",
+        "at": "2026-10-29T14:28:25.464Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-06_2.png",
+        "caption": "Filtro pela situação Rodando",
+        "url": "/tickets/index?status=RUNNING",
+        "at": "2026-10-29T14:28:26.796Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-06_3.png",
+        "caption": "Lista de tickets do op.hml: só os ambientes do perfil",
+        "url": "/tickets/index",
+        "at": "2026-10-29T14:28:45.484Z"
+      },
+      {
+        "n": 4,
+        "file": "CT-06_4.png",
+        "caption": "Lista do consulta com o login alheio na URL (ignorado)",
+        "url": "/tickets/index?requested_by=op.prod",
+        "at": "2026-10-29T14:28:51.921Z"
+      }
+    ],
+    "notes": [],
+    "started_at": "2026-10-29T14:27:57.799Z",
+    "finished_at": "2026-10-29T14:28:51.922Z"
+  },
+  "CT-07": {
+    "title": "Detalhe do ticket e visualizador de log",
+    "checks": [
+      {
+        "desc": "Ticket rodando: frase \"Está rodando agora. Começou há …\" e as etapas",
+        "ok": true
+      },
+      {
+        "desc": "Rodando: \"Último sinal do servidor\" no resumo (CR-017b)",
+        "ok": true
+      },
+      {
+        "desc": "Sem a linha do tempo repetida (CR-017b)",
+        "ok": true
+      },
+      {
+        "desc": "Baixar log baixa ticket_<id>.log",
+        "ok": true,
+        "detail": "ticket_7.log"
+      },
+      {
+        "desc": "Marcação HTML do log aparece como texto",
+        "ok": true
+      },
+      {
+        "desc": "Nenhum script executado e nenhum negrito aplicado",
+        "ok": true
+      },
+      {
+        "desc": "Ticket com erro: o que aconteceu, o que fazer e o detalhe técnico",
+        "ok": true
+      },
+      {
+        "desc": "Ticket encerrado: o log termina com \"Log completo.\" (CR-018b)",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-07_1.png",
+        "caption": "Detalhe do ticket rodando, com log",
+        "url": "/tickets/detail/7",
+        "at": "2026-10-29T14:29:06.009Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-07_2.png",
+        "caption": "Detalhe de ticket que deu erro",
+        "url": "/tickets/detail/2",
+        "at": "2026-10-29T14:29:47.168Z"
+      }
+    ],
+    "notes": [
+      "Os scripts PYTHON3 rodam com -I e saída em buffer: o log de um script Python aparece quando o buffer descarrega (no fim); scripts SH/BASH escrevem na hora."
+    ],
+    "started_at": "2026-10-29T14:28:51.924Z",
+    "finished_at": "2026-10-29T14:29:47.169Z"
+  },
+  "CT-08": {
+    "title": "Cancelamento de ticket",
+    "checks": [
+      {
+        "desc": "Ticket longo #9 (zipar_arquivos, 3 GB de texto, nível 9) rodando no agente",
+        "ok": true
+      },
+      {
+        "desc": "A janela explica o efeito do cancelamento de um ticket rodando",
+        "ok": true
+      },
+      {
+        "desc": "Rodando: \"Cancelamento solicitado ao agente; ele vai encerrar a execução.\"",
+        "ok": true
+      },
+      {
+        "desc": "Segunda aba (aberta antes do pedido): \"O cancelamento já havia sido solicitado.\" ou \"O ticket já estava encerrado.\"",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #9 cancelado pelo agente real (processo encerrado)",
+        "ok": true
+      },
+      {
+        "desc": "O botão Cancelar este pedido some do ticket terminado",
+        "ok": true
+      },
+      {
+        "desc": "Ticket agendado fica Esperando",
+        "ok": true
+      },
+      {
+        "desc": "Esperando: o ticket fica Cancelado imediatamente",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-08_1.png",
+        "caption": "Confirmação de cancelamento",
+        "url": "/tickets/detail/9",
+        "at": "2026-10-29T14:30:37.787Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-08_2.png",
+        "caption": "Ticket após o pedido de cancelamento",
+        "url": "/tickets/detail/9",
+        "at": "2026-10-29T14:30:49.675Z"
+      }
+    ],
+    "notes": [
+      "Cada pedido de cancelamento gera TICKET_CANCEL na auditoria (conferido no CT-19)."
+    ],
+    "started_at": "2026-10-29T14:29:47.170Z",
+    "finished_at": "2026-10-29T14:31:05.413Z"
+  },
+  "CT-09": {
+    "title": "Reexecução de ticket",
+    "checks": [
+      {
+        "desc": "A janela explica que um novo pedido será criado com as mesmas respostas",
+        "ok": true
+      },
+      {
+        "desc": "\"Ticket #N criado como reexecução do ticket #orig.\"",
+        "ok": true
+      },
+      {
+        "desc": "O ticket original lista a reexecução",
+        "ok": true
+      },
+      {
+        "desc": "Vínculo obrigatório novo (termo_busca) salvo no gerar_hash_arquivo",
+        "ok": true
+      },
+      {
+        "desc": "Cadastro mudou: volta ao formulário com o aviso",
+        "ok": true
+      },
+      {
+        "desc": "Nenhum ticket criado (continua no disparo)",
+        "ok": true,
+        "detail": "/tickets/new?rerun=4"
+      },
+      {
+        "desc": "Vínculo desfeito ao final (cadastro restaurado)",
+        "ok": true,
+        "detail": "arq_origem,tipo_hash"
+      },
+      {
+        "desc": "Ticket de outro usuário: sem o botão Rodar de novo",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-09_1.png",
+        "caption": "Confirmação de reexecução",
+        "url": "/tickets/detail/4",
+        "at": "2026-10-29T14:31:11.278Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-09_2.png",
+        "caption": "Ticket criado por reexecução",
+        "url": "/tickets/detail/11",
+        "at": "2026-10-29T14:31:14.518Z"
+      }
+    ],
+    "notes": [],
+    "started_at": "2026-10-29T14:31:05.415Z",
+    "finished_at": "2026-10-29T14:31:57.223Z"
+  },
+  "CT-10": {
+    "title": "Perfil somente leitura (consulta)",
+    "checks": [
+      {
+        "desc": "A lista mostra tickets dos ambientes do perfil",
+        "ok": true
+      },
+      {
+        "desc": "Detalhe sem Cancelar e sem Rodar de novo",
+        "ok": true
+      },
+      {
+        "desc": "O log é visível",
+        "ok": true
+      },
+      {
+        "desc": "Disparo direto pela URL: acesso negado",
+        "ok": true
+      },
+      {
+        "desc": "Status HTTP 403",
+        "ok": true,
+        "detail": "status 403"
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-10_1.png",
+        "caption": "Lista de tickets do consulta",
+        "url": "/tickets/index",
+        "at": "2026-10-29T14:32:02.566Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-10_2.png",
+        "caption": "Detalhe sem ações para o consulta",
+        "url": "/tickets/detail/1",
+        "at": "2026-10-29T14:32:04.761Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-10_3.png",
+        "caption": "Página de acesso negado (403) no disparo",
+        "url": "/tickets/new",
+        "at": "2026-10-29T14:32:05.707Z"
+      }
+    ],
+    "notes": [],
+    "started_at": "2026-10-29T14:31:57.223Z",
+    "finished_at": "2026-10-29T14:32:05.708Z"
+  },
+  "CT-11": {
+    "title": "Gestão de Ambientes",
+    "checks": [
+      {
+        "desc": "Lista com os ambientes do DEV e a coluna Produção",
+        "ok": true
+      },
+      {
+        "desc": "Nome com espaços em volta recusado e aviso no topo",
+        "ok": true
+      },
+      {
+        "desc": "Inclusão válida: mensagem de sucesso",
+        "ok": true
+      },
+      {
+        "desc": "Ambiente HOMOLOG_20261029R3_1124 gravado",
+        "ok": true,
+        "detail": "#6"
+      },
+      {
+        "desc": "Ambiente novo nasce fora de produção (caixa desmarcada, CR-017a)",
+        "ok": true
+      },
+      {
+        "desc": "Alteração: mensagem de sucesso",
+        "ok": true
+      },
+      {
+        "desc": "Salvar sem mudança não grava nada (o quadro Registro não muda)",
+        "ok": true,
+        "detail": "Registro Criado em 29/10/2026 11:31:53 por admin Última alteração 29/10/2026 11:31:57 por admin"
+      },
+      {
+        "desc": "GFPREPROD marcado como ambiente de produção no cadastro (seed do CR-017a)",
+        "ok": true
+      },
+      {
+        "desc": "DSN do seed sem porta (host/serviço)",
+        "ok": true,
+        "detail": "formato host/serviço"
+      },
+      {
+        "desc": "GFPREPROD salvo com produção desmarcada (DSN sem porta aceito, CR-018g)",
+        "ok": true
+      },
+      {
+        "desc": "GFPREPROD salvo com produção remarcada (DSN sem porta aceito, CR-018g)",
+        "ok": true
+      },
+      {
+        "desc": "GFPREPROD volta a ser produção",
+        "ok": true
+      },
+      {
+        "desc": "A desativação mostra o impacto antes de confirmar",
+        "ok": true
+      },
+      {
+        "desc": "Ambiente HOMOLOG_20261029R3_1124 desativado ao final (não recebe execuções)",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-11_1.png",
+        "caption": "Lista de ambientes",
+        "url": "/admin_environments/index",
+        "at": "2026-10-29T14:32:10.701Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-11_2.png",
+        "caption": "Identificador com espaços recusado",
+        "url": "/admin_environments/save",
+        "at": "2026-10-29T14:32:12.813Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-11_3.png",
+        "caption": "Ambiente com a caixa Ambiente de produção",
+        "url": "/admin_environments/form/5",
+        "at": "2026-10-29T14:32:27.155Z"
+      },
+      {
+        "n": 4,
+        "file": "CT-11_4.png",
+        "caption": "Confirmação de desativação de ambiente",
+        "url": "/admin_environments/form/5",
+        "at": "2026-10-29T14:32:35.001Z"
+      }
+    ],
+    "notes": [
+      "O ambiente HOMOLOG_20261029R3_1124 fica cadastrado e inativo como evidência (inclusão, alteração e desativação na auditoria)."
+    ],
+    "started_at": "2026-10-29T14:32:05.710Z",
+    "finished_at": "2026-10-29T14:32:39.426Z"
+  },
+  "CT-12": {
+    "title": "Gestão de Perfis e matriz de permissões",
+    "checks": [
+      {
+        "desc": "Lista com os 4 perfis do seed",
+        "ok": true
+      },
+      {
+        "desc": "A confirmação diz o efeito e quem é afetado",
+        "ok": true
+      },
+      {
+        "desc": "Marcações feitas na matriz (−CLONE7, +VIEW_AUDIT)",
+        "ok": true
+      },
+      {
+        "desc": "Contador de alterações pendentes",
+        "ok": true
+      },
+      {
+        "desc": "Resumo da revisão no formato +código / -amb:nome",
+        "ok": true
+      },
+      {
+        "desc": "Desativar o próprio perfil é negado",
+        "ok": true
+      },
+      {
+        "desc": "Remover o acesso administrativo do próprio perfil é negado",
+        "ok": true
+      },
+      {
+        "desc": "Incluir perfil abre a matriz de permissões (CR-018b)",
+        "ok": true,
+        "detail": "/admin_profiles/matrix/5"
+      },
+      {
+        "desc": "Mensagem do perfil novo",
+        "ok": true
+      },
+      {
+        "desc": "Perfil HOMOLOG_20261029R3_P1124 desativado ao final",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-12_1.png",
+        "caption": "Lista de perfis",
+        "url": "/admin_profiles/index",
+        "at": "2026-10-29T14:32:45.578Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-12_2.png",
+        "caption": "Desativação de perfil com usuários afetados",
+        "url": "/admin_profiles/form/4",
+        "at": "2026-10-29T14:32:48.441Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-12_3.png",
+        "caption": "Matriz de permissões (aba Ambientes)",
+        "url": "/admin_profiles/matrix/3",
+        "at": "2026-10-29T14:32:52.885Z"
+      },
+      {
+        "n": 4,
+        "file": "CT-12_4.png",
+        "caption": "Revisão das alterações da matriz",
+        "url": "/admin_profiles/matrix/3",
+        "at": "2026-10-29T14:32:53.688Z"
+      },
+      {
+        "n": 5,
+        "file": "CT-12_5.png",
+        "caption": "Perfil incluído: matriz aberta na hora",
+        "url": "/admin_profiles/matrix/5",
+        "at": "2026-10-29T14:33:03.769Z"
+      }
+    ],
+    "notes": [
+      "A revisão foi cancelada: a matriz do OPERATOR_HML não foi alterada neste CT."
+    ],
+    "started_at": "2026-10-29T14:32:39.427Z",
+    "finished_at": "2026-10-29T14:33:08.371Z"
+  },
+  "CT-13": {
+    "title": "Quem pode o quê",
+    "checks": [
+      {
+        "desc": "Por script: perfis ativos, por quê, onde e usuários ativos",
+        "ok": true
+      },
+      {
+        "desc": "Motivo com o nome do cadastro: \"tem Rodar Scripts…\" (CR-018b)",
+        "ok": true
+      },
+      {
+        "desc": "Sem o nome antigo Disparar Scripts",
+        "ok": true
+      },
+      {
+        "desc": "Por ambiente: quem roda o quê no GFPREPROD",
+        "ok": true
+      },
+      {
+        "desc": "O nome do perfil leva à matriz de permissões",
+        "ok": true,
+        "detail": "/admin_profiles/matrix/3"
+      },
+      {
+        "desc": "op.prod: acesso negado (403)",
+        "ok": true,
+        "detail": "status 403"
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-13_1.png",
+        "caption": "Quem pode o quê: perfis que podem rodar o contar_linhas_arquivo",
+        "url": "/admin_profiles/who_can?script=11",
+        "at": "2026-10-29T14:33:15.864Z"
+      }
+    ],
+    "notes": [],
+    "started_at": "2026-10-29T14:33:08.373Z",
+    "finished_at": "2026-10-29T14:33:26.965Z"
+  },
+  "CT-14": {
+    "title": "Gestão de Usuários",
+    "checks": [
+      {
+        "desc": "Depois de 5 falhas a conta fica bloqueada",
+        "ok": true
+      },
+      {
+        "desc": "Lista com os 4 usuários do seed",
+        "ok": true
+      },
+      {
+        "desc": "Filtro Bloqueados mostra o consulta",
+        "ok": true
+      },
+      {
+        "desc": "Desativar mostra a confirmação",
+        "ok": true
+      },
+      {
+        "desc": "Senha fora da política é recusada com a explicação",
+        "ok": true
+      },
+      {
+        "desc": "Senha válida aceita (a senha nunca aparece na tela)",
+        "ok": true
+      },
+      {
+        "desc": "Texto livre com caractere de controle é recusado com explicação",
+        "ok": true
+      },
+      {
+        "desc": "Desbloquear: mensagem de sucesso",
+        "ok": true
+      },
+      {
+        "desc": "consulta volta a entrar depois do desbloqueio",
+        "ok": true
+      },
+      {
+        "desc": "O próprio usuário não oferece Desativar",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-14_1.png",
+        "caption": "Lista de usuários",
+        "url": "/admin_users/index",
+        "at": "2026-10-29T14:33:45.278Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-14_2.png",
+        "caption": "Edição de usuário",
+        "url": "/admin_users/form/2",
+        "at": "2026-10-29T14:34:03.560Z"
+      }
+    ],
+    "notes": [
+      "A redefinição do op.prod usou a própria senha inicial, para o usuário continuar com a senha documentada."
+    ],
+    "started_at": "2026-10-29T14:33:26.967Z",
+    "finished_at": "2026-10-29T14:34:17.632Z"
+  },
+  "CT-15": {
+    "title": "Dicionário de Parâmetros",
+    "checks": [
+      {
+        "desc": "Lista com os parâmetros do seed",
+        "ok": true
+      },
+      {
+        "desc": "Parâmetro sigiloso incluído",
+        "ok": true
+      },
+      {
+        "desc": "Parâmetro sigiloso com o aviso de credenciais",
+        "ok": true
+      },
+      {
+        "desc": "Testar: valor válido aceito e inválido recusado com mensagem",
+        "ok": true
+      },
+      {
+        "desc": "caminho_arquivo (usado por script ativo): aviso do que fazer antes de desativar",
+        "ok": true
+      },
+      {
+        "desc": "caminho_arquivo: sem o botão Desativar",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-15_1.png",
+        "caption": "Lista de parâmetros",
+        "url": "/admin_parameters/index?size=50",
+        "at": "2026-10-29T14:34:22.944Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-15_2.png",
+        "caption": "Parâmetro sigiloso",
+        "url": "/admin_parameters/form/20",
+        "at": "2026-10-29T14:34:32.441Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-15_3.png",
+        "caption": "Parâmetro usado por script ativo: sem Desativar, com o aviso",
+        "url": "/admin_parameters/form/19",
+        "at": "2026-10-29T14:34:34.595Z"
+      }
+    ],
+    "notes": [
+      "O parâmetro documento_cliente_hml fica cadastrado (sem vínculo com scripts) como evidência."
+    ],
+    "started_at": "2026-10-29T14:34:17.634Z",
+    "finished_at": "2026-10-29T14:34:34.596Z"
+  },
+  "CT-16": {
+    "title": "Gestão de Scripts, homologação e vínculo de parâmetros",
+    "checks": [
+      {
+        "desc": "Lista com o caminho de cada script (relativo à pasta base, CR-023)",
+        "ok": true
+      },
+      {
+        "desc": "Arquivo do script com o caminho relativo à pasta base (CR-023)",
+        "ok": true,
+        "detail": "utilitarios/contar_linhas_arquivo.sh"
+      },
+      {
+        "desc": "Ajuda do campo com os dois exemplos de caminho",
+        "ok": true
+      },
+      {
+        "desc": "Quadro Quem pode rodar: pronto, com os perfis (CR-017d)",
+        "ok": true
+      },
+      {
+        "desc": "Caminho \"./contar_linhas_arquivo.sh\" recusado",
+        "ok": true,
+        "detail": "Escreva o caminho sem // repetida, sem ./ e sem / no fim."
+      },
+      {
+        "desc": "Caminho \"/opt/automacoes/../scripts/contar.sh\" recusado",
+        "ok": true,
+        "detail": "O caminho não pode conter '..'."
+      },
+      {
+        "desc": "Caminho \"utilitarios/../contar.sh\" recusado",
+        "ok": true,
+        "detail": "O caminho não pode conter '..'."
+      },
+      {
+        "desc": "Caminho \"/etc/passwd\" recusado",
+        "ok": true,
+        "detail": "Scripts não podem ficar em pastas do sistema (/bin, /sbin, /usr, /lib, /etc, /boot, /proc, /sys, /dev, /root). Use outra pasta."
+      },
+      {
+        "desc": "Caminho \"/opt/automacoes/scripts/\" recusado",
+        "ok": true,
+        "detail": "Escreva o caminho sem // repetida, sem ./ e sem / no fim."
+      },
+      {
+        "desc": "Caminho \"/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/src/sss/x.py\" recusado",
+        "ok": true,
+        "detail": "Scripts não podem ficar na pasta da aplicação do SSS, que é trocada a cada atualização. Use outra pasta."
+      },
+      {
+        "desc": "Nome \"App\" recusado como reservado",
+        "ok": true,
+        "detail": "Este nome é reservado pelo sistema. Escolha outro."
+      },
+      {
+        "desc": "Arquivo que não existe neste servidor: salvo, com a nota de que o agente confere na execução",
+        "ok": true
+      },
+      {
+        "desc": "Caminho original restaurado",
+        "ok": true,
+        "detail": "utilitarios/contar_linhas_arquivo.sh"
+      },
+      {
+        "desc": "Homologação por ambiente com os 5 ambientes ativos",
+        "ok": true
+      },
+      {
+        "desc": "Vínculo de parâmetros com a prévia do comando",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-16_1.png",
+        "caption": "Lista de scripts",
+        "url": "/admin_scripts/index",
+        "at": "2026-10-29T14:34:39.448Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-16_2.png",
+        "caption": "Edição de script com o caminho completo e o quadro Quem pode rodar",
+        "url": "/admin_scripts/form/11",
+        "at": "2026-10-29T14:34:42.953Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-16_3.png",
+        "caption": "Script salvo com a nota de conferência pelo agente",
+        "url": "/admin_scripts/form/11",
+        "at": "2026-10-29T14:35:38.899Z"
+      },
+      {
+        "n": 4,
+        "file": "CT-16_4.png",
+        "caption": "Homologação por ambiente",
+        "url": "/admin_scripts/homologation/11",
+        "at": "2026-10-29T14:35:51.336Z"
+      },
+      {
+        "n": 5,
+        "file": "CT-16_5.png",
+        "caption": "Vínculo de parâmetros",
+        "url": "/admin_scripts/parameters/11",
+        "at": "2026-10-29T14:35:53.167Z"
+      }
+    ],
+    "notes": [],
+    "started_at": "2026-10-29T14:34:34.599Z",
+    "finished_at": "2026-10-29T14:35:53.167Z"
+  },
+  "CT-17": {
+    "title": "Regras de Agendamento",
+    "checks": [
+      {
+        "desc": "Nova regra: escolha do script em lista com busca, como no disparo (CR-017c)",
+        "ok": true
+      },
+      {
+        "desc": "Nova regra: ambientes em lista clicável",
+        "ok": true,
+        "detail": "5 ambiente(s)"
+      },
+      {
+        "desc": "CRON inválido recusado com explicação",
+        "ok": true,
+        "detail": "Campo minuto: 61 fora da faixa 0–59."
+      },
+      {
+        "desc": "Data inexistente (31/02 no CRON) recusada com explicação",
+        "ok": true,
+        "detail": "A expressão não ocorre nos próximos 1461 dias a partir do início."
+      },
+      {
+        "desc": "Prévia das próximas execuções coerente com a regra",
+        "ok": true
+      },
+      {
+        "desc": "Regra salva com sucesso",
+        "ok": true
+      },
+      {
+        "desc": "Regra HOMOLOG_20261029R3_DIARIA_1124 gravada (diária às 11:40)",
+        "ok": true,
+        "detail": "#1"
+      },
+      {
+        "desc": "Filtro de ambiente das regras em lista, não em texto livre (CR-018b)",
+        "ok": true,
+        "detail": "Todos, CLONE1, CLONE2, CLONE6, CLONE7, GFPREPROD, HOMOLOG_20261029R3_1124"
+      },
+      {
+        "desc": "Confirmação de pausa",
+        "ok": true
+      },
+      {
+        "desc": "Pausar: mensagem e situação Pausado",
+        "ok": true
+      },
+      {
+        "desc": "Retomar recalcula a próxima execução",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-17_1.png",
+        "caption": "Nova regra: escolha do script",
+        "url": "/schedules/form",
+        "at": "2026-10-29T14:35:59.318Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-17_2.png",
+        "caption": "Nova regra: escolha do ambiente",
+        "url": "/schedules/form?script_id=11",
+        "at": "2026-10-29T14:36:00.682Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-17_3.png",
+        "caption": "Edição de regra com prévia",
+        "url": "/schedules/form?script_id=11&environment=GFPREPROD",
+        "at": "2026-10-29T14:36:12.626Z"
+      },
+      {
+        "n": 4,
+        "file": "CT-17_4.png",
+        "caption": "Lista de regras de agendamento",
+        "url": "/schedules/index",
+        "at": "2026-10-29T14:36:19.795Z"
+      },
+      {
+        "n": 5,
+        "file": "CT-17_5.png",
+        "caption": "Confirmação de pausa",
+        "url": "/schedules/index?name=HOMOLOG_20261029R3_DIARIA_1124",
+        "at": "2026-10-29T14:36:22.555Z"
+      }
+    ],
+    "notes": [],
+    "started_at": "2026-10-29T14:35:53.171Z",
+    "finished_at": "2026-10-29T14:36:30.095Z"
+  },
+  "CT-18": {
+    "title": "Agenda dos próximos 7 dias",
+    "checks": [
+      {
+        "desc": "Agenda com a regra ativa, recorrência em palavras e o aviso de previsão",
+        "ok": true
+      },
+      {
+        "desc": "O nome da regra leva ao formulário dela",
+        "ok": true,
+        "detail": "/schedules/form/1"
+      },
+      {
+        "desc": "op.prod: acesso negado (403)",
+        "ok": true,
+        "detail": "status 403"
+      },
+      {
+        "desc": "Ticket criado pela regra às 11:40 aparece com o selo \"agend.\"",
+        "ok": true,
+        "detail": "12 contar_linhas_arquivo agend. GFPREPROD Deu certo 2 admin 29/10/2026 11:40:10 29/10/2026 11:40:10 4s Detalhes"
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-18_1.png",
+        "caption": "Agenda dos próximos 7 dias",
+        "url": "/schedules/agenda",
+        "at": "2026-10-29T14:36:36.726Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-18_2.png",
+        "caption": "Ticket criado pela regra de agendamento (selo agend.)",
+        "url": "/tickets/index?source=agendamento",
+        "at": "2026-10-29T14:40:44.424Z"
+      }
+    ],
+    "notes": [],
+    "started_at": "2026-10-29T14:36:30.096Z",
+    "finished_at": "2026-10-29T14:40:44.425Z"
+  },
+  "CT-19": {
+    "title": "Auditoria: trilha, filtros e exportação CSV",
+    "checks": [
+      {
+        "desc": "Trilha com o período padrão",
+        "ok": true
+      },
+      {
+        "desc": "Auditoria sem as abas: Agentes tem item próprio no menu (CR-017c)",
+        "ok": true
+      },
+      {
+        "desc": "Cancelamentos do CT-08 como TICKET_CANCEL, um por pedido",
+        "ok": true
+      },
+      {
+        "desc": "Ação e entidade com nomes simples, o código ao lado (CR-018b)",
+        "ok": true
+      },
+      {
+        "desc": "Filtro de ação com os nomes simples",
+        "ok": true,
+        "detail": "Todas, Agente iniciado, Agente parado, Alteração, Atualização do esquema, Cancelamento de ticket…"
+      },
+      {
+        "desc": "Período acima de 90 dias sem filtro seletivo é recusado",
+        "ok": true
+      },
+      {
+        "desc": "Com o ator informado, o período longo é aceito",
+        "ok": true
+      },
+      {
+        "desc": "CSV: nome auditoria_AAAAMMDD_HHMMSS.csv",
+        "ok": true,
+        "detail": "attachment; filename=\"auditoria_20261029_114036.csv\""
+      },
+      {
+        "desc": "CSV: separador ; e cabeçalho em português",
+        "ok": true,
+        "detail": "ID;Data/hora;Ator;IP de origem;Ação;Entidade;ID da entidade;Detalhe\r"
+      },
+      {
+        "desc": "CSV continua com os códigos das ações (CR-018b muda só a tela)",
+        "ok": true,
+        "detail": "LOGIN_OK"
+      },
+      {
+        "desc": "A exportação aparece na trilha como AUDIT_EXPORT, com filtros e linhas",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-19_1.png",
+        "caption": "Trilha de auditoria",
+        "url": "/audit/index",
+        "at": "2026-10-29T14:40:52.168Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-19_2.png",
+        "caption": "Filtro por ação TICKET_CANCEL",
+        "url": "/audit/index?action=TICKET_CANCEL",
+        "at": "2026-10-29T14:40:53.623Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-19_3.png",
+        "caption": "Período acima do limite",
+        "url": "/audit/index?date_from=2026-07-01",
+        "at": "2026-10-29T14:40:54.670Z"
+      },
+      {
+        "n": 4,
+        "file": "CT-19_4.png",
+        "caption": "Exportação registrada na trilha",
+        "url": "/audit/index?action=AUDIT_EXPORT",
+        "at": "2026-10-29T14:40:58.686Z"
+      }
+    ],
+    "notes": [],
+    "started_at": "2026-10-29T14:40:44.429Z",
+    "finished_at": "2026-10-29T14:40:58.690Z"
+  },
+  "CT-20": {
+    "title": "Painel de agentes",
+    "checks": [
+      {
+        "desc": "Agente real agente0001 com saúde, heartbeat, ambientes e pasta base",
+        "ok": true
+      },
+      {
+        "desc": "Legenda de saúde e limiares",
+        "ok": true
+      },
+      {
+        "desc": "Título Agentes e item Agentes ativo no menu (CR-017c)",
+        "ok": true
+      },
+      {
+        "desc": "A tela se atualiza sozinha (\"Atualizado às …\")",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-20_1.png",
+        "caption": "Painel de agentes",
+        "url": "/audit/agents",
+        "at": "2026-10-29T14:41:22.946Z"
+      }
+    ],
+    "notes": [
+      "No DEV há um único agente real; os estados Atrasado, Em risco e Offline do manual vinham de agentes simulados pelo FAKE."
+    ],
+    "started_at": "2026-10-29T14:40:58.695Z",
+    "finished_at": "2026-10-29T14:41:22.947Z"
+  },
+  "CT-21": {
+    "title": "Controle de acesso direto pela URL",
+    "checks": [
+      {
+        "desc": "op.prod em /admin_users/index: acesso negado (403)",
+        "ok": true,
+        "detail": "status 403"
+      },
+      {
+        "desc": "op.prod em /audit/index: acesso negado (403)",
+        "ok": true,
+        "detail": "status 403"
+      },
+      {
+        "desc": "op.prod em /schedules/agenda: acesso negado (403)",
+        "ok": true,
+        "detail": "status 403"
+      },
+      {
+        "desc": "op.prod em /admin_profiles/who_can: acesso negado (403)",
+        "ok": true,
+        "detail": "status 403"
+      },
+      {
+        "desc": "op.hml no ticket #4 (CLONE2, fora do escopo): 404",
+        "ok": true,
+        "detail": "status 404"
+      },
+      {
+        "desc": "Telas de consulta não vazam o catálogo (nem CLONE1/CLONE2 no HTML do op.hml)",
+        "ok": true
+      },
+      {
+        "desc": "consulta em /tickets/catalog: 403",
+        "ok": true,
+        "detail": "status 403"
+      },
+      {
+        "desc": "Login com next externo abre o Painel inicial, nunca o site externo",
+        "ok": true,
+        "detail": "http://127.0.0.1:18000/script_scheduling_service/default/index"
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-21_1.png",
+        "caption": "Erro 404 em ticket fora do escopo",
+        "url": "/tickets/detail/4",
+        "at": "2026-10-29T14:41:34.315Z"
+      }
+    ],
+    "notes": [],
+    "started_at": "2026-10-29T14:41:22.948Z",
+    "finished_at": "2026-10-29T14:41:43.256Z"
+  },
+  "CT-22": {
+    "title": "Tema escuro e uso em celular",
+    "checks": [
+      {
+        "desc": "360 px: painel inicial sem rolagem horizontal",
+        "ok": true,
+        "detail": "360 px"
+      },
+      {
+        "desc": "360 px: Rodar um script sem rolagem horizontal",
+        "ok": true,
+        "detail": "360 px"
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-22_1.png",
+        "caption": "Tema escuro (detalhe do ticket)",
+        "url": "/tickets/detail/6",
+        "at": "2026-10-29T14:41:50.456Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-22_2.png",
+        "caption": "Tema escuro (histórico com gráfico)",
+        "url": "/tickets/history/11",
+        "at": "2026-10-29T14:41:52.379Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-22_3.png",
+        "caption": "Painel inicial em 360 px",
+        "url": "/default/index",
+        "at": "2026-10-29T14:41:56.215Z"
+      },
+      {
+        "n": 4,
+        "file": "CT-22_4.png",
+        "caption": "Rodar um script em 360 px",
+        "url": "/tickets/catalog",
+        "at": "2026-10-29T14:42:02.182Z"
+      }
+    ],
+    "notes": [],
+    "started_at": "2026-10-29T14:41:43.258Z",
+    "finished_at": "2026-10-29T14:42:04.160Z"
+  },
+  "CT-23": {
+    "title": "Quadro Registro: quem criou e quem alterou",
+    "checks": [
+      {
+        "desc": "Perfil do seed: criado pelo Sistema (instalação) e nunca alterado",
+        "ok": true,
+        "detail": "Registro Criado em 29/10/2026 10:28:11 por Sistema (instalação) Última alteração Nunca alterado"
+      },
+      {
+        "desc": "Ambiente alterado pela tela: última alteração por admin",
+        "ok": true,
+        "detail": "Registro Criado em 29/10/2026 11:31:53 por admin Última alteração 29/10/2026 11:32:17 por admin"
+      },
+      {
+        "desc": "Ticket: criado por op.prod; última alteração pelo agente que finalizou",
+        "ok": true,
+        "detail": "Registro Criado em 29/10/2026 11:26:14 por op.prod Última alteração 29/10/2026 11:26:28 por Sistema (agente agente0001)"
+      },
+      {
+        "desc": "Inclusão não mostra o quadro Registro",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-23_1.png",
+        "caption": "Perfil nunca alterado",
+        "url": "/admin_profiles/form/4",
+        "at": "2026-10-29T14:42:11.712Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-23_2.png",
+        "caption": "Ambiente alterado pela tela",
+        "url": "/admin_environments/form/6",
+        "at": "2026-10-29T14:42:13.678Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-23_3.png",
+        "caption": "Quadro Registro no detalhe do ticket",
+        "url": "/tickets/detail/4",
+        "at": "2026-10-29T14:42:15.775Z"
+      }
+    ],
+    "notes": [
+      "READ_ONLY no lugar do OPERATOR_PROD do manual: a matriz do OPERATOR_PROD é alterada pelo CT-25 (MANAGE_USERS concedida e retirada), o que atualiza a última alteração do perfil."
+    ],
+    "started_at": "2026-10-29T14:42:04.163Z",
+    "finished_at": "2026-10-29T14:42:17.389Z"
+  },
+  "CT-24": {
+    "title": "Robustez do scheduler na interface",
+    "checks": [
+      {
+        "desc": "Regex (a|a)*b recusada no campo",
+        "ok": true,
+        "detail": "A expressão regular foi recusada: grupo entre parênteses repetido por quantificador (use só ? depois de parênteses) (README §6.2)."
+      },
+      {
+        "desc": "Regex ^(\\w|\\d)+$ recusada no campo",
+        "ok": true,
+        "detail": "A expressão regular foi recusada: grupo entre parênteses repetido por quantificador (use só ? depois de parênteses) (README §6.2)."
+      },
+      {
+        "desc": "Regex ^\\d+(\\.\\d{1,2})?$ aceita",
+        "ok": true
+      },
+      {
+        "desc": "Sigiloso não volta atrás",
+        "ok": true
+      },
+      {
+        "desc": "Data além de 366 dias recusada no campo Agendar para",
+        "ok": true,
+        "detail": "Escolha uma data até 30/10/2027."
+      },
+      {
+        "desc": "Primeira aba: regra pausada",
+        "ok": true
+      },
+      {
+        "desc": "Segunda aba: \"A regra já está pausada.\"",
+        "ok": true
+      },
+      {
+        "desc": "Formulário da regra pausada mostra quem pausou e o motivo",
+        "ok": true
+      },
+      {
+        "desc": "Regra retomada ao final",
+        "ok": true
+      },
+      {
+        "desc": "consulta: o criador aparece como \"outra pessoa\"",
+        "ok": true,
+        "detail": "Registro Criado em 29/10/2026 11:26:14 por outra pessoa Última alteração 29/10/2026 11:26:28 por Sistema (agente agente0001)"
+      },
+      {
+        "desc": "op.prod: \"por você\"",
+        "ok": true,
+        "detail": "Registro Criado em 29/10/2026 11:26:14 por você Última alteração 29/10/2026 11:26:28 por Sistema (agente agente0001)"
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-24_1.png",
+        "caption": "Regex recusada no Dicionário de Parâmetros",
+        "url": "/admin_parameters/save",
+        "at": "2026-10-29T14:42:24.367Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-24_2.png",
+        "caption": "Quadro Registro visto pelo perfil consulta",
+        "url": "/tickets/detail/4",
+        "at": "2026-10-29T14:42:52.896Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-24_3.png",
+        "caption": "Quadros de atenção da tela de agentes",
+        "url": "/audit/agents",
+        "at": "2026-10-29T14:43:04.610Z"
+      }
+    ],
+    "notes": [
+      "Responsável inativo: no DEV as regras são do admin (o op.hml não tem Regras de Agendamento), então o cenário do manual não se aplica sem mudar permissões; coberto pelos testes automatizados.",
+      "Caminho relativo (CR-023): os 14 scripts do seed são cadastrados como utilitarios/<arquivo> e o agente os junta à pasta base (dev/scripts); link simbólico continua aceito (CR-011), com o arquivo real executado."
+    ],
+    "started_at": "2026-10-29T14:42:17.390Z",
+    "finished_at": "2026-10-29T14:43:04.610Z"
+  },
+  "CT-25": {
+    "title": "Correções da auditoria final",
+    "checks": [
+      {
+        "desc": "Permissões salvas: +MANAGE_USERS",
+        "ok": true
+      },
+      {
+        "desc": "op.prod não vê ADMINISTRATOR entre os perfis",
+        "ok": true,
+        "detail": "Selecione…, OPERATOR_HML, OPERATOR_PROD, READ_ONLY"
+      },
+      {
+        "desc": "Redefinir a senha do admin é recusado para quem não é administrador",
+        "ok": true
+      },
+      {
+        "desc": "Permissão removida ao final: -MANAGE_USERS",
+        "ok": true
+      },
+      {
+        "desc": "Regex com mais de 2 quantificadores largos é recusada",
+        "ok": true,
+        "detail": "A expressão regular foi recusada: mais de 2 quantificadores ilimitados (*, +, {n,} ou {m,n} com mais de 10 de diferença) (README §6.2)."
+      },
+      {
+        "desc": "Cabeçalho do ticket: \"solicitado por outra pessoa\"",
+        "ok": true
+      },
+      {
+        "desc": "Nenhum login de terceiros no detalhe",
+        "ok": true
+      },
+      {
+        "desc": "Primeiro navegador: \"Você saiu do sistema.\"",
+        "ok": true
+      },
+      {
+        "desc": "Segundo navegador volta ao login com \"Seu acesso mudou e a sessão foi encerrada.\"",
+        "ok": true,
+        "detail": "/default/login"
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-25_1.png",
+        "caption": "Redefinição de senha de administrador recusada",
+        "url": "/admin_users/form/1",
+        "at": "2026-10-29T14:43:23.496Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-25_2.png",
+        "caption": "Solicitante mascarado para o perfil consulta",
+        "url": "/tickets/detail/4",
+        "at": "2026-10-29T14:43:40.568Z"
+      }
+    ],
+    "notes": [
+      "O campo SHA-256 do script foi retirado pelo CR-011 (20/10); o item E4 do manual não se aplica mais."
+    ],
+    "started_at": "2026-10-29T14:43:04.613Z",
+    "finished_at": "2026-10-29T14:43:49.349Z"
+  },
+  "CT-26": {
+    "title": "CR-017: menu de tickets, um ambiente só e Quem pode rodar",
+    "checks": [
+      {
+        "desc": "OPERATOR_HML sem VIEW_LOGS (temporário)",
+        "ok": true
+      },
+      {
+        "desc": "Só com Rodar Scripts: o item Tickets continua no menu (CR-017a)",
+        "ok": true
+      },
+      {
+        "desc": "A lista mostra só os tickets do próprio usuário",
+        "ok": true,
+        "detail": "4 linha(s)"
+      },
+      {
+        "desc": "VIEW_LOGS devolvido ao OPERATOR_HML",
+        "ok": true
+      },
+      {
+        "desc": "Disparo com um ambiente só abre direto nas perguntas (CR-017b)",
+        "ok": true,
+        "detail": "/tickets/new?script_id=14"
+      },
+      {
+        "desc": "Nova regra com um ambiente só abre direto na recorrência (CR-017c)",
+        "ok": true
+      },
+      {
+        "desc": "Sem homologação: \"Ainda não pode rodar.\" e o que falta, com o link (CR-017d)",
+        "ok": true
+      },
+      {
+        "desc": "Homologação restaurada nos 5 ambientes: pronto para rodar",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-26_1.png",
+        "caption": "Menu de quem só dispara scripts",
+        "url": "/default/index",
+        "at": "2026-10-29T14:44:06.391Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-26_2.png",
+        "caption": "Disparo direto nas perguntas (um ambiente só)",
+        "url": "/tickets/new?script_id=14",
+        "at": "2026-10-29T14:44:23.311Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-26_3.png",
+        "caption": "Quem pode rodar: script sem homologação",
+        "url": "/admin_scripts/form/14",
+        "at": "2026-10-29T14:44:31.642Z"
+      }
+    ],
+    "notes": [
+      "As mudanças temporárias (VIEW_LOGS do OPERATOR_HML e a homologação do limpar_linhas_vazias) foram desfeitas no próprio CT e ficam na auditoria."
+    ],
+    "started_at": "2026-10-29T14:43:49.352Z",
+    "finished_at": "2026-10-29T14:44:39.599Z"
+  },
+  "CT-27": {
+    "title": "CR-018: cancelar só quem enxerga, avisos ao mudar o cadastro e desempenho",
+    "checks": [
+      {
+        "desc": "Tickets esperando criados: um do admin e um do op.hml (GFPREPROD, daqui a 2 horas)",
+        "ok": true,
+        "detail": "#13 e #14"
+      },
+      {
+        "desc": "OPERATOR_HML sem Consultar Tickets (temporário)",
+        "ok": true
+      },
+      {
+        "desc": "Sem Consultar Tickets, o ticket #13 do admin não é achado (404), então não há como cancelá-lo",
+        "ok": true,
+        "detail": "status 404"
+      },
+      {
+        "desc": "O próprio ticket #14 continua cancelável com Rodar Scripts",
+        "ok": true
+      },
+      {
+        "desc": "Consultar Tickets devolvido ao OPERATOR_HML",
+        "ok": true
+      },
+      {
+        "desc": "Com Consultar Tickets de volta, o op.hml vê o ticket do admin e o botão Cancelar este pedido",
+        "ok": true,
+        "detail": "status 200"
+      },
+      {
+        "desc": "Cancelar Tickets com Consultar Tickets cancela o ticket #13 de outra pessoa",
+        "ok": true
+      },
+      {
+        "desc": "Formulário do caminho_arquivo diz quantas regras ativas o usam",
+        "ok": true
+      },
+      {
+        "desc": "Regex que invalida a resposta da regra: salva, com o aviso da regra que vai ser pausada",
+        "ok": true
+      },
+      {
+        "desc": "Regex desfeita: salva sem aviso",
+        "ok": true
+      },
+      {
+        "desc": "Sem regra a pausar depois de desfazer",
+        "ok": true
+      },
+      {
+        "desc": "Troca do arquivo salva, com o aviso do ticket #15 na fila que vai ser recusado",
+        "ok": true
+      },
+      {
+        "desc": "Arquivo original restaurado",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #15 da fila cancelado ao final",
+        "ok": true
+      },
+      {
+        "desc": "Rodar um script e O que eu posso fazer abrem (tempo registrado abaixo)",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-27_1.png",
+        "caption": "Ticket de outra pessoa sem Consultar Tickets: 404",
+        "url": "/tickets/detail/13",
+        "at": "2026-10-29T14:45:17.666Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-27_2.png",
+        "caption": "Próprio ticket cancelado sem Consultar Tickets",
+        "url": "/tickets/detail/14",
+        "at": "2026-10-29T14:45:22.141Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-27_3.png",
+        "caption": "Parâmetro usado por regra ativa: aviso no formulário",
+        "url": "/admin_parameters/form/19",
+        "at": "2026-10-29T14:45:47.756Z"
+      },
+      {
+        "n": 4,
+        "file": "CT-27_4.png",
+        "caption": "Aviso ao salvar: regra que vai ser pausada",
+        "url": "/admin_parameters/index",
+        "at": "2026-10-29T14:45:50.451Z"
+      },
+      {
+        "n": 5,
+        "file": "CT-27_5.png",
+        "caption": "Aviso ao trocar o arquivo do script: tickets na fila",
+        "url": "/admin_scripts/form/11",
+        "at": "2026-10-29T14:46:09.833Z"
+      }
+    ],
+    "notes": [
+      "Tempo de abertura (mediana de 3, admin, navegador incluído): Rodar um script 3.0 s; O que eu posso fazer 2.0 s. É só registro do CR-018c, sem limite de aprovação.",
+      "As mudanças temporárias (Consultar Tickets do OPERATOR_HML, regex do caminho_arquivo e arquivo do contar_linhas_arquivo) foram desfeitas no próprio CT e ficam na auditoria."
+    ],
+    "started_at": "2026-10-29T14:44:39.601Z",
+    "finished_at": "2026-10-29T14:46:37.404Z"
+  },
+  "CT-28": {
+    "title": "CR-020a: Saídas — navegação e download do zip ou de um arquivo",
+    "checks": [
+      {
+        "desc": "Ticket #16 (diag_gerar_saida) deu certo e a saída ficou disponível",
+        "ok": true
+      },
+      {
+        "desc": "Item Saídas no menu do op.prod (Baixar Saídas)",
+        "ok": true
+      },
+      {
+        "desc": "Nível Ambientes com o GFPREPROD",
+        "ok": true
+      },
+      {
+        "desc": "Nível Tickets com o #16, solicitante mascarado",
+        "ok": true
+      },
+      {
+        "desc": "Arquivos do zip: resumo.txt e o csv com acento na subpasta",
+        "ok": true
+      },
+      {
+        "desc": "Baixar zip: application/zip, começa com PK, nosniff",
+        "ok": true,
+        "detail": "200 369 bytes"
+      },
+      {
+        "desc": "Baixar um arquivo: conteúdo certo e nome UTF-8",
+        "ok": true,
+        "detail": "attachment; filename=\"relat_rio de testes.csv\"; filename*=UTF-8''relat%C3%B3rio%20de%20testes.csv"
+      },
+      {
+        "desc": "Nome fora do índice do zip: 404",
+        "ok": true
+      },
+      {
+        "desc": "Ticket inexistente: 404",
+        "ok": true
+      },
+      {
+        "desc": "consulta sem Baixar Saídas: 403",
+        "ok": true
+      },
+      {
+        "desc": "Auditoria: \"Download de saída\" do op.prod, zip e arquivo",
+        "ok": true
+      },
+      {
+        "desc": "Script de diagnóstico desativado ao final",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-28_1.png",
+        "caption": "Saídas: ambientes",
+        "url": "/outputs/index",
+        "at": "2026-10-29T14:47:11.973Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-28_2.png",
+        "caption": "Saídas: tickets do dia",
+        "url": "/outputs/index?day=2026-10-29&environment=GFPREPROD&script_id=15",
+        "at": "2026-10-29T14:47:14.808Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-28_3.png",
+        "caption": "Saídas: arquivos do zip",
+        "url": "/outputs/files?ticket=16",
+        "at": "2026-10-29T14:47:16.807Z"
+      },
+      {
+        "n": 4,
+        "file": "CT-28_4.png",
+        "caption": "Auditoria dos downloads de saída",
+        "url": "/audit/index?action=OUTPUT_DOWNLOAD",
+        "at": "2026-10-29T14:47:27.809Z"
+      }
+    ],
+    "notes": [
+      "Nenhum script do seed grava na pasta de saída: o diag_gerar_saida (dev/scripts/diagnostico) foi cadastrado pela tela, rodado e desativado no próprio caso."
+    ],
+    "started_at": "2026-10-29T14:46:37.405Z",
+    "finished_at": "2026-10-29T14:47:38.570Z"
+  },
+  "CT-29": {
+    "title": "CR-020b a 020d: Entrada — envio pela tela, entrega pelo agente e uso pelo script",
+    "checks": [
+      {
+        "desc": "Item Entrada no menu do op.hml (Enviar Arquivos)",
+        "ok": true
+      },
+      {
+        "desc": "Scripts do perfil liberados no ambiente",
+        "ok": true
+      },
+      {
+        "desc": "Envio aceito para o servidor no ar",
+        "ok": true
+      },
+      {
+        "desc": "Últimos envios: Entregue no agente0001",
+        "ok": true,
+        "detail": "tela_r3/remessa_homolog_20261029r3.csv você 29/10/2026 11:47:27 9,8 KB agente0001: Entregue"
+      },
+      {
+        "desc": "Arquivo na pasta de entrada do agente, igual ao enviado e com 0600",
+        "ok": true,
+        "detail": "/var/agente0001/inputs/gfpreprod/contar_linhas_arquivo/tela_r3/remessa_homolog_20261029r3.csv"
+      },
+      {
+        "desc": "Atualizar retrato: pedido ao servidor",
+        "ok": true
+      },
+      {
+        "desc": "O retrato mostra a subpasta nova",
+        "ok": true
+      },
+      {
+        "desc": "Na subpasta: o arquivo e o servidor em que está",
+        "ok": true
+      },
+      {
+        "desc": "Repetido sem substituir: Falhou — já existia",
+        "ok": true,
+        "detail": "tela_r3/remessa_homolog_20261029r3.csv você 29/10/2026 11:47:38 9,8 KB agente0001: Falhou — já existia um arquivo com esse nome (não foi substituído)"
+      },
+      {
+        "desc": "Substituir: a janela explica o efeito antes do envio",
+        "ok": true
+      },
+      {
+        "desc": "Com Substituir e a confirmação: Entregue",
+        "ok": true,
+        "detail": "tela_r3/remessa_homolog_20261029r3.csv (substituir) você 29/10/2026 11:47:45 9,8 KB agente0001: Entregue"
+      },
+      {
+        "desc": "Subpasta com .. recusada com explicação",
+        "ok": true
+      },
+      {
+        "desc": "Envio acima de 50 MiB: 413 antes de ler o corpo",
+        "ok": true,
+        "detail": "status 413"
+      },
+      {
+        "desc": "Ticket #17 do contar_linhas_arquivo sobre o arquivo enviado: Deu certo, 2001 linhas",
+        "ok": true
+      },
+      {
+        "desc": "consulta sem Enviar Arquivos: 403",
+        "ok": true
+      },
+      {
+        "desc": "Auditoria: \"Entrega na entrada\" pelo agente",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-29_1.png",
+        "caption": "Entrada: pasta do script",
+        "url": "/inputs/index?environment=GFPREPROD&script_id=11",
+        "at": "2026-10-29T14:47:47.406Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-29_2.png",
+        "caption": "Entrada: subpasta pelo retrato do agente",
+        "url": "/inputs/index?dir=tela_r3&environment=GFPREPROD&script_id=11",
+        "at": "2026-10-29T14:47:58.849Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-29_3.png",
+        "caption": "Entrada: confirmação antes de substituir",
+        "url": "/inputs/index?dir=tela_r3&environment=GFPREPROD&script_id=11",
+        "at": "2026-10-29T14:48:05.759Z"
+      },
+      {
+        "n": 4,
+        "file": "CT-29_4.png",
+        "caption": "Entrada: últimos envios e a subpasta recusada",
+        "url": "/inputs/index?dir=tela_r3&environment=GFPREPROD&script_id=11",
+        "at": "2026-10-29T14:48:13.511Z"
+      },
+      {
+        "n": 5,
+        "file": "CT-29_5.png",
+        "caption": "Ticket que leu o arquivo enviado pela tela",
+        "url": "/tickets/detail/17",
+        "at": "2026-10-29T14:48:40.744Z"
+      }
+    ],
+    "notes": [],
+    "started_at": "2026-10-29T14:47:38.573Z",
+    "finished_at": "2026-10-29T14:48:49.811Z"
+  },
+  "CT-30": {
+    "title": "CR-019: pasta de trabalho do script (SSS_WORK_DIR)",
+    "checks": [
+      {
+        "desc": "Ticket #18 (diag_pasta_trabalho) deu certo",
+        "ok": true
+      },
+      {
+        "desc": "Log: SSS_WORK_DIR na estrutura da saída e HOME na pasta descartável",
+        "ok": true
+      },
+      {
+        "desc": "A pasta de trabalho ficou no disco depois do ticket, com 0700 e o diagnostico.txt",
+        "ok": true,
+        "detail": "/var/agente0001/script_works/gfpreprod/diag_pasta_trabalho/2026/10/29/11/48/ticket_18"
+      },
+      {
+        "desc": "Script de diagnóstico desativado ao final",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-30_1.png",
+        "caption": "Log do ticket com a pasta de trabalho",
+        "url": "/tickets/detail/18",
+        "at": "2026-10-29T14:49:19.981Z"
+      }
+    ],
+    "notes": [
+      "A pasta de trabalho dos scripts sai do nome do agente (var/<nome>/script_works) e é criada pelo próprio agente, em DEV e PROD (CR-032, D12)."
+    ],
+    "started_at": "2026-10-29T14:48:49.813Z",
+    "finished_at": "2026-10-29T14:49:31.727Z"
+  },
+  "CT-31": {
+    "title": "CR-023: caminho relativo à pasta base do agente",
+    "checks": [
+      {
+        "desc": "Painel de agentes com a pasta base de cada agente",
+        "ok": true
+      },
+      {
+        "desc": "Ticket do CT-05: arquivo relativo e caminho executado, o real dentro da pasta base",
+        "ok": true
+      },
+      {
+        "desc": "Relativo para arquivo ausente: PRECHECK_FAILED, sem caminho executado",
+        "ok": true
+      },
+      {
+        "desc": "Log com o motivo NOT_FOUND",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #19 não executou (Deu erro)",
+        "ok": true,
+        "detail": "Deu erro"
+      },
+      {
+        "desc": "Script de diagnóstico desativado ao final",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-31_1.png",
+        "caption": "Painel de agentes com a pasta base dos scripts",
+        "url": "/audit/agents",
+        "at": "2026-10-29T14:49:40.446Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-31_2.png",
+        "caption": "Detalhe do ticket com o caminho executado",
+        "url": "/tickets/detail/6",
+        "at": "2026-10-29T14:49:42.592Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-31_3.png",
+        "caption": "Caminho relativo para arquivo ausente",
+        "url": "/tickets/detail/19",
+        "at": "2026-10-29T14:50:17.993Z"
+      }
+    ],
+    "notes": [
+      "Agente sem pasta base (NO_BASE_DIR) e link para fora da pasta base: cobertos pelos testes automatizados (o DEV tem um agente só, com pasta base)."
+    ],
+    "started_at": "2026-10-29T14:49:31.728Z",
+    "finished_at": "2026-10-29T14:50:29.566Z"
+  },
+  "CT-32": {
+    "title": "CR-025 a CR-027: interpretador do disparo, do #! e do cadastro",
+    "checks": [
+      {
+        "desc": "Cadastro com os quatro nomes de interpretador (CR-026)",
+        "ok": true,
+        "detail": "python3,python,bash,sh"
+      },
+      {
+        "desc": "Ajuda do cadastro com a ordem disparo, #! e cadastro (CR-027)",
+        "ok": true
+      },
+      {
+        "desc": "Campo Interpretador opcional com a ajuda da ordem (CR-027)",
+        "ok": true
+      },
+      {
+        "desc": "Confirmação mostra o interpretador informado e o comando com ele",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #20 (#! do Python 3.6, nada digitado) deu certo",
+        "ok": true,
+        "detail": "Deu certo"
+      },
+      {
+        "desc": "Detalhe do ticket #20: interpretador cadastrado, informado e usado",
+        "ok": true
+      },
+      {
+        "desc": "Log do ticket #20",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #21 (sem #!, caminho completo digitado (3.13)) deu certo",
+        "ok": true,
+        "detail": "Deu certo"
+      },
+      {
+        "desc": "Detalhe do ticket #21: interpretador cadastrado, informado e usado",
+        "ok": true
+      },
+      {
+        "desc": "Log do ticket #21",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #22 (sem #!, só o nome digitado) deu certo",
+        "ok": true,
+        "detail": "Deu certo"
+      },
+      {
+        "desc": "Detalhe do ticket #22: interpretador cadastrado, informado e usado",
+        "ok": true
+      },
+      {
+        "desc": "Log do ticket #22",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #23 (nome digitado que não existe: pulado, vale o cadastro (CR-027)) deu certo",
+        "ok": true,
+        "detail": "Deu certo"
+      },
+      {
+        "desc": "Detalhe do ticket #23: interpretador cadastrado, informado e usado",
+        "ok": true
+      },
+      {
+        "desc": "Log do ticket #23",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #24 (sem #! e sem digitado: o cadastro (sh)) deu certo",
+        "ok": true,
+        "detail": "Deu certo"
+      },
+      {
+        "desc": "Detalhe do ticket #24: interpretador cadastrado, informado e usado",
+        "ok": true
+      },
+      {
+        "desc": "Log do ticket #24",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #25 (#!/usr/bin/env python3) deu certo",
+        "ok": true,
+        "detail": "Deu certo"
+      },
+      {
+        "desc": "Detalhe do ticket #25: interpretador cadastrado, informado e usado",
+        "ok": true
+      },
+      {
+        "desc": "Log do ticket #25",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #26 (Python de virtualenv digitado (link)) deu certo",
+        "ok": true,
+        "detail": "Deu certo"
+      },
+      {
+        "desc": "Detalhe do ticket #26: interpretador cadastrado, informado e usado",
+        "ok": true
+      },
+      {
+        "desc": "Log do ticket #26",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #27 (o digitado vence o #! existente (CR-027)) deu certo",
+        "ok": true,
+        "detail": "Deu certo"
+      },
+      {
+        "desc": "Detalhe do ticket #27: interpretador cadastrado, informado e usado",
+        "ok": true
+      },
+      {
+        "desc": "Log do ticket #27",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #28 (#! inexistente ignorado, vale o cadastro (python3)) deu certo",
+        "ok": true,
+        "detail": "Deu certo"
+      },
+      {
+        "desc": "Detalhe do ticket #28: interpretador cadastrado, informado e usado",
+        "ok": true
+      },
+      {
+        "desc": "Log do ticket #28",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #29 (digitado inexistente, vale o #! (CR-027)) deu certo",
+        "ok": true,
+        "detail": "Deu certo"
+      },
+      {
+        "desc": "Detalhe do ticket #29: interpretador cadastrado, informado e usado",
+        "ok": true
+      },
+      {
+        "desc": "Log do ticket #29",
+        "ok": true
+      },
+      {
+        "desc": "Formato inválido recusado na confirmação",
+        "ok": true
+      },
+      {
+        "desc": "Auditoria do disparo com o interpretador informado (detalhe completo, em \"ver mais\")",
+        "ok": true,
+        "detail": "\n            Ticket criado para script 18 em GFPREPROD; interpretador informado: python9.99\n           | \n            Ticket criado para script 22 em GFPREPROD\n           | \n            \n            \n              Ticket criado para script 18 em GFPREPROD; interpretador informado: /home/eduar… ver m"
+      },
+      {
+        "desc": "Script de diagnóstico 18 desativado ao final",
+        "ok": true
+      },
+      {
+        "desc": "Script de diagnóstico 19 desativado ao final",
+        "ok": true
+      },
+      {
+        "desc": "Script de diagnóstico 20 desativado ao final",
+        "ok": true
+      },
+      {
+        "desc": "Script de diagnóstico 21 desativado ao final",
+        "ok": true
+      },
+      {
+        "desc": "Script de diagnóstico 22 desativado ao final",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-32_1.png",
+        "caption": "Disparo com o interpretador informado (caminho completo)",
+        "url": "/tickets/new?script_id=19&environment=GFPREPROD",
+        "at": "2026-10-29T14:51:59.106Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-32_2.png",
+        "caption": "Detalhe: #! do Python 3.6, nada digitado",
+        "url": "/tickets/detail/20",
+        "at": "2026-10-29T14:53:05.830Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-32_3.png",
+        "caption": "Detalhe: nome digitado que não existe: pulado, vale o cadastro (CR-027)",
+        "url": "/tickets/detail/23",
+        "at": "2026-10-29T14:53:15.693Z"
+      },
+      {
+        "n": 4,
+        "file": "CT-32_4.png",
+        "caption": "Detalhe: o digitado vence o #! existente (CR-027)",
+        "url": "/tickets/detail/27",
+        "at": "2026-10-29T14:53:29.629Z"
+      },
+      {
+        "n": 5,
+        "file": "CT-32_5.png",
+        "caption": "Detalhe: #! inexistente ignorado, vale o cadastro (python3)",
+        "url": "/tickets/detail/28",
+        "at": "2026-10-29T14:53:32.630Z"
+      },
+      {
+        "n": 6,
+        "file": "CT-32_6.png",
+        "caption": "Detalhe: digitado inexistente, vale o #! (CR-027)",
+        "url": "/tickets/detail/29",
+        "at": "2026-10-29T14:53:35.645Z"
+      }
+    ],
+    "notes": [
+      "Risco aceito pelo responsável (README §8.5): quem dispara escolhe o executável, e o digitado vence o #! (CR-027). A troca python <-> python3 do cadastro não é reproduzível aqui (o servidor tem os dois); está coberta pelos testes automatizados. No DEV, o agente herda o PATH do terminal que o subiu; os casos usam caminhos do pyenv e o python3.12 do sistema."
+    ],
+    "started_at": "2026-10-29T14:50:29.568Z",
+    "finished_at": "2026-10-29T14:54:37.854Z"
+  },
+  "CT-33": {
+    "title": "CR-037: Pasta de Arquivos — envio para inputs, uso pelo script e download de outputs, sem banco",
+    "checks": [
+      {
+        "desc": "Item Pasta de Arquivos no menu do op.prod (FILES_UPLOAD e FILES_DOWNLOAD)",
+        "ok": true
+      },
+      {
+        "desc": "Tela Pasta de Arquivos: ambientes do perfil",
+        "ok": true
+      },
+      {
+        "desc": "Pasta inputs do script, com a variável do script e o envio",
+        "ok": true
+      },
+      {
+        "desc": "Envio gravado direto na pasta inputs",
+        "ok": true
+      },
+      {
+        "desc": "Arquivo no disco do agente, igual ao enviado, sem temporário",
+        "ok": true,
+        "detail": "/var/agente0001/files/gfpreprod/diag_pasta_arquivos/inputs/arquivos_homolog_20261029r3.csv"
+      },
+      {
+        "desc": "Mesmo nome sem substituir: recusado com explicação",
+        "ok": true
+      },
+      {
+        "desc": "Substituir: a janela explica o efeito antes do envio",
+        "ok": true
+      },
+      {
+        "desc": "Substituído: o arquivo no disco é o novo",
+        "ok": true
+      },
+      {
+        "desc": "Ticket #33 (diag_pasta_arquivos) deu certo",
+        "ok": true
+      },
+      {
+        "desc": "Log: o script recebeu as duas pastas e copiou o arquivo",
+        "ok": true
+      },
+      {
+        "desc": "Pasta outputs: o que o script gravou, com o botão do zip",
+        "ok": true
+      },
+      {
+        "desc": "Subpasta do ticket com o resumo e as cópias",
+        "ok": true
+      },
+      {
+        "desc": "Baixar um arquivo: conteúdo do resumo, nosniff",
+        "ok": true,
+        "detail": "200 attachment; filename=\"resumo.txt\"; filename*=UTF-8''resumo.txt"
+      },
+      {
+        "desc": "Baixar a pasta em zip: application/zip, começa com PK",
+        "ok": true,
+        "detail": "200 396 bytes"
+      },
+      {
+        "desc": "Caminho com .. : 404",
+        "ok": true
+      },
+      {
+        "desc": "consulta sem as funcionalidades da pasta: 403",
+        "ok": true
+      },
+      {
+        "desc": "Auditoria: envio com sha256 e substituição",
+        "ok": true
+      },
+      {
+        "desc": "Auditoria: download do arquivo e do zip",
+        "ok": true
+      },
+      {
+        "desc": "Script de diagnóstico desativado ao final",
+        "ok": true
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "CT-33_1.png",
+        "caption": "Pasta de Arquivos: ambientes",
+        "url": "/files/index",
+        "at": "2026-10-29T15:55:30.679Z"
+      },
+      {
+        "n": 2,
+        "file": "CT-33_2.png",
+        "caption": "Pasta de Arquivos: inputs do script",
+        "url": "/files/index?environment=GFPREPROD&script_id=23&area=inputs",
+        "at": "2026-10-29T15:55:32.026Z"
+      },
+      {
+        "n": 3,
+        "file": "CT-33_3.png",
+        "caption": "Pasta de Arquivos: arquivo enviado",
+        "url": "/files/index?agent=agente0001&area=inputs&environment=GFPREPROD&script_id=23",
+        "at": "2026-10-29T15:55:33.980Z"
+      },
+      {
+        "n": 4,
+        "file": "CT-33_4.png",
+        "caption": "Pasta de Arquivos: já existe",
+        "url": "/files/index?agent=agente0001&area=inputs&environment=GFPREPROD&script_id=23",
+        "at": "2026-10-29T15:55:35.744Z"
+      },
+      {
+        "n": 5,
+        "file": "CT-33_5.png",
+        "caption": "Pasta de Arquivos: antes de substituir",
+        "url": "/files/index?agent=agente0001&area=inputs&environment=GFPREPROD&script_id=23",
+        "at": "2026-10-29T15:55:35.817Z"
+      },
+      {
+        "n": 6,
+        "file": "CT-33_6.png",
+        "caption": "Log do ticket com as pastas de arquivos",
+        "url": "/tickets/detail/33",
+        "at": "2026-10-29T15:55:57.348Z"
+      },
+      {
+        "n": 7,
+        "file": "CT-33_7.png",
+        "caption": "Pasta de Arquivos: outputs do ticket",
+        "url": "/files/index?agent=agente0001&area=outputs&dir=ticket_33&environment=GFPREPROD&script_id=23",
+        "at": "2026-10-29T15:56:01.062Z"
+      },
+      {
+        "n": 8,
+        "file": "CT-33_8.png",
+        "caption": "Auditoria dos envios para a pasta de arquivos",
+        "url": "/audit/index?action=FILES_UPLOAD",
+        "at": "2026-10-29T15:56:12.050Z"
+      }
+    ],
+    "notes": [
+      "A pasta de arquivos fica em var/<agente>/files/<ambiente>/<script>/ e nunca é apagada pelo sistema; o conteúdo não vai ao banco (só a auditoria)."
+    ],
+    "started_at": "2026-10-29T15:54:56.079Z",
+    "finished_at": "2026-10-29T15:56:23.650Z"
+  },
+  "ENCERRAMENTO": {
+    "title": "Encerramento: regras da homologação pausadas (ficam como evidência, sem rodar)",
+    "checks": [
+      {
+        "desc": "Regras HOMOLOG_20261029R3_* pausadas (1 nesta etapa)",
+        "ok": true,
+        "detail": "0 ativa(s) restante(s)"
+      }
+    ],
+    "figures": [
+      {
+        "n": 1,
+        "file": "ENCERRAMENTO_1.png",
+        "caption": "Regras da homologação pausadas ao final",
+        "url": "/schedules/index?name=HOMOLOG_20261029R3",
+        "at": "2026-10-29T14:56:15.892Z"
+      }
+    ],
+    "notes": [],
+    "started_at": "2026-10-29T14:56:03.170Z",
+    "finished_at": "2026-10-29T14:56:15.893Z"
+  }
+}

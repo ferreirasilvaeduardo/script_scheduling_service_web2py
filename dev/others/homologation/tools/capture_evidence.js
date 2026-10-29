@@ -2032,6 +2032,98 @@ CTS['CT-32'] = async () => {
     note('Risco aceito pelo responsável (README §8.5): quem dispara escolhe o executável, e o digitado vence o #! (CR-027). A troca python <-> python3 do cadastro não é reproduzível aqui (o servidor tem os dois); está coberta pelos testes automatizados. No DEV, o agente herda o PATH do terminal que o subiu; os casos usam caminhos do pyenv e o python3.12 do sistema.');
 };
 
+// CR-037: Pasta de Arquivos (inputs e outputs so em disco, var/<agente>/files/<ambiente>/<script>/).
+CTS['CT-33'] = async () => {
+    begin('CT-33', 'CR-037: Pasta de Arquivos — envio para inputs, uso pelo script e download de outputs, sem banco');
+    const sid = await diagScript('diag_pasta_arquivos', path.join(DIAG, 'pasta_arquivos.sh'),
+        'Diagnostico do CR-037: le a pasta inputs e grava na outputs');
+    const folderDisk = path.join(AGENT_VAR, 'files', 'gfpreprod', 'diag_pasta_arquivos');
+    const local = path.join(os.tmpdir(), `arquivos_${STAMP.toLowerCase()}.csv`);
+    fs.writeFileSync(local, 'conta;valor\n' + '7;70\n'.repeat(500));
+    const name = path.basename(local);
+    // Rodada repetida no mesmo dia: o arquivo da passada anterior sai, para o primeiro envio ser novo.
+    fs.rmSync(path.join(folderDisk, 'inputs', name), { force: true });
+    const base = `/files/index?environment=GFPREPROD&script_id=${sid}`;
+    const send = async (replace) => {
+        const input = await page.$('#field-file');
+        await input.uploadFile(local);
+        await fill('#field-relative_dir', '');
+        await page.$eval('#field-replace', (e, v) => { e.checked = v; }, replace);
+        if (!replace) {
+            await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }),
+                page.click('form[action*="/files/upload"] button[type="submit"]')]);
+            return;
+        }
+        await page.click('form[action*="/files/upload"] button[type="submit"]');
+        await sleep(600);
+        await expectText('Substituir: a janela explica o efeito antes do envio', 'Substituir o arquivo?');
+        await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), page.evaluate(() =>
+            Array.from(document.querySelectorAll('button')).find((b) => b.innerText.includes('Substituir e enviar')).click())]);
+    };
+    await login('op.prod');
+    await go('/default/index');
+    await expectTextCI('Item Pasta de Arquivos no menu do op.prod (FILES_UPLOAD e FILES_DOWNLOAD)', 'Pasta de Arquivos');
+    await login('admin');
+    await go('/files/index');
+    await expectText('Tela Pasta de Arquivos: ambientes do perfil', 'Pasta de Arquivos', 'GFPREPROD');
+    await snap('Pasta de Arquivos: ambientes');
+    await go(`${base}&area=inputs`);
+    await expectText('Pasta inputs do script, com a variável do script e o envio', 'diag_pasta_arquivos/inputs',
+        'SSS_FILES_INPUTS_DIR', 'Enviar arquivo');
+    await snap('Pasta de Arquivos: inputs do script', { full: true });
+    await send(false);
+    await expectText('Envio gravado direto na pasta inputs', `Arquivo gravado em inputs/${name}`);
+    const disk = path.join(folderDisk, 'inputs', name);
+    check('Arquivo no disco do agente, igual ao enviado, sem temporário', fs.existsSync(disk) &&
+        fs.readFileSync(disk).equals(fs.readFileSync(local)) &&
+        fs.readdirSync(path.dirname(disk)).every((n) => !n.startsWith('.sss_files_')), disk.replace(APP, ''));
+    await snap('Pasta de Arquivos: arquivo enviado', { full: true });
+    await send(false);
+    await expectText('Mesmo nome sem substituir: recusado com explicação', 'Já existe um arquivo com esse nome');
+    await snap('Pasta de Arquivos: já existe');
+    fs.appendFileSync(local, '8;80\n');
+    await snap('Pasta de Arquivos: antes de substituir');
+    await send(true);
+    check('Substituído: o arquivo no disco é o novo', fs.readFileSync(disk).equals(fs.readFileSync(local)));
+    const tid = await runDirect(sid, 'GFPREPROD', {});
+    state.tickets.ct33 = tid;
+    saveState();
+    const fim = await waitStatus(tid, ['Deu certo', 'Deu erro'], 120);
+    await sleep(3000);
+    await go(`/tickets/detail/${tid}`);
+    check(`Ticket #${tid} (diag_pasta_arquivos) deu certo`, fim.includes('Deu certo'));
+    await expectText('Log: o script recebeu as duas pastas e copiou o arquivo', 'inputs: ', 'outputs: ',
+        'diag_pasta_arquivos/inputs', 'arquivos copiados de inputs para outputs: 1');
+    await snap('Log do ticket com as pastas de arquivos', { full: true });
+    await go(`${base}&area=outputs`);
+    await expectText('Pasta outputs: o que o script gravou, com o botão do zip', `ticket_${tid}`, 'Baixar a pasta em zip');
+    await clickText('table a', `ticket_${tid}/`, { navigate: true });
+    await expectText('Subpasta do ticket com o resumo e as cópias', 'resumo.txt', 'copias/');
+    await snap('Pasta de Arquivos: outputs do ticket', { full: true });
+    const f = await fetchInfo(`/files/download?environment=GFPREPROD&script_id=${sid}&area=outputs&path=` +
+        encodeURIComponent(`ticket_${tid}/resumo.txt`));
+    check('Baixar um arquivo: conteúdo do resumo, nosniff', f.status === 200 && f.text.startsWith(`ticket=${tid}`) &&
+        f.nosniff === 'nosniff', `${f.status} ${f.cd}`);
+    const z = await fetchInfo(`/files/download_zip?environment=GFPREPROD&script_id=${sid}&area=outputs&dir=` +
+        encodeURIComponent(`ticket_${tid}`));
+    check('Baixar a pasta em zip: application/zip, começa com PK', z.status === 200 && z.ct === 'application/zip' &&
+        z.head[0] === 0x50 && z.head[1] === 0x4b, `${z.status} ${z.len} bytes`);
+    check('Caminho com .. : 404', (await fetchInfo(`/files/download?environment=GFPREPROD&script_id=${sid}&path=` +
+        encodeURIComponent('../inputs/' + name))).status === 404);
+    await login('consulta');
+    check('consulta sem as funcionalidades da pasta: 403', (await go('/files/index')) === 403);
+    await login('admin');
+    await go('/audit/index?action=FILES_UPLOAD');
+    await expectText('Auditoria: envio com sha256 e substituição', 'Envio para a pasta de arquivos', name, 'sha256',
+        'substituído');
+    await snap('Auditoria dos envios para a pasta de arquivos', { full: true });
+    await go('/audit/index?action=FILES_DOWNLOAD');
+    await expectText('Auditoria: download do arquivo e do zip', 'Download da pasta de arquivos', 'resumo.txt',
+        'zip da pasta');
+    check('Script de diagnóstico desativado ao final', await deactivateScript(sid));
+    note('A pasta de arquivos fica em var/<agente>/files/<ambiente>/<script>/ e nunca é apagada pelo sistema; o conteúdo não vai ao banco (só a auditoria).');
+};
+
 CTS['ENCERRAMENTO'] = async () => {
     begin('ENCERRAMENTO', 'Encerramento: regras da homologação pausadas (ficam como evidência, sem rodar)');
     await login('admin');
@@ -2049,7 +2141,8 @@ CTS['ENCERRAMENTO'] = async () => {
 
 const ORDER = ['CT-01', 'CT-02', 'CT-03', 'MASSA', 'CT-04', 'CT-05', 'CT-06', 'CT-07', 'CT-08', 'CT-09', 'CT-10',
     'CT-11', 'CT-12', 'CT-13', 'CT-14', 'CT-15', 'CT-16', 'CT-17', 'CT-18', 'CT-19', 'CT-20', 'CT-21', 'CT-22',
-    'CT-23', 'CT-24', 'CT-25', 'CT-26', 'CT-27', 'CT-28', 'CT-29', 'CT-30', 'CT-31', 'CT-32', 'ENCERRAMENTO'];
+    'CT-23', 'CT-24', 'CT-25', 'CT-26', 'CT-27', 'CT-28', 'CT-29', 'CT-30', 'CT-31', 'CT-32', 'CT-33',
+    'ENCERRAMENTO'];
 
 module.exports = { CTS };
 

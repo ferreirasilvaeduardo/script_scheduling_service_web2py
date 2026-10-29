@@ -48,6 +48,7 @@ ENTITY_LABELS = {
     "tbsss_audit": u"Auditoria", "tbsss_control": u"Controle do esquema", "tbsss_parameters": u"Parâmetros",
     "tbsss_profiles": u"Perfis", "tbsss_scripts": u"Scripts", "tbsss_tickets": u"Tickets",
     "tbsss_users": u"Usuários", "tbsss_input_upload": u"Envios para a entrada",
+    "files": u"Pasta de arquivos",
 }
 
 
@@ -67,6 +68,7 @@ AUDIT_ENTITY = "tbsss_audit"
 ENTITIES = (
     "tbsss_schedules", "tbsss_agents", "tbsss_environments", "tbsss_audit", "tbsss_control",
     "tbsss_parameters", "tbsss_profiles", "tbsss_scripts", "tbsss_tickets", "tbsss_users", "tbsss_input_upload",
+    "files",  # CR-037: Pasta de Arquivos (so em disco, sem tabela e sem entity_id)
 )
 
 # Rota da tela de cada entidade e funcionalidade exigida para exibir o link (decisao D6 do F6.1).

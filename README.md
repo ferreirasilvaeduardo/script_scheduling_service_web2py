@@ -321,6 +321,7 @@ bin/
     platform/                 # [CR-022b4] base: primitivas de SO (só POSIX) e validação de caminho; só biblioteca padrão
       os_platform/            # [F8.0] primitivas de SO, só POSIX (Linux/Unix) (§8.0, CR-005)
       path_guard.py           # validação de interpretador e script (§8.5)
+      files_area.py           # [CR-037] operações de arquivo da Pasta de Arquivos (sem seguir link), usadas pelo web
     persistence/              # [CR-022b4] conexão Oracle, DDL, contratos e as implementações Oracle e FAKE
       db_conn.py              # [F7.0/F7.2] seleção do driver (Thin → Thick → cx_Oracle), adaptador, binds, mapa de erros, pool, conexão dedicada do daemon
       ddl_builder.py          # [F7.1] DDL e seed Oracle 11gR2 a partir do registro de sql_ident
@@ -338,6 +339,7 @@ bin/
       admin_*_service.py      # cadastros (ADMIN_CRUD_PATTERN.md); admin_crud.py: validação comum
       schedules_service.py, agents_service.py, permissions_service.py  # regras, painel de agentes, O que eu posso fazer
       input_browse_service.py, output_browse_service.py  # telas Entrada e Saídas (CR-020)
+      files_service.py        # [CR-037] tela Pasta de Arquivos (§5.11)
       audit_service.py        # catálogo de ações, consulta e exportação da trilha (§4.4). A escrita de tbsss_audit
                               # é feita pelo próprio repositório, na operação que recebe audit= (não existe audit.py)
     scheduler/                # [CR-022b6] agente (daemon); não importa ui, services nem a camada web
@@ -350,7 +352,7 @@ bin/
     web/                      # [CR-022b7] camada web; as URLs não dependem destas pastas
       framework/              # [CR-021d1/d2] núcleo web próprio (WSGI, request, multipart, response, sessão assinada, rotas, templates); só biblioteca padrão
       app/                    # [CR-021e] montagem: requisição por thread e URL, sessão/CSRF/cabeçalhos/guardas, página de erro, registro dos controllers
-      controllers/            # default.py (login), tickets.py, logs.py, schedules.py, admin_*.py, audit.py, inputs.py, outputs.py, dev.py (somente DEV)
+      controllers/            # default.py (login), tickets.py, logs.py, schedules.py, admin_*.py, audit.py, inputs.py, outputs.py, files.py (CR-037), dev.py (somente DEV)
       templates/              # layout.html, components/*.html, <controller>/*.html e *.load (antes views/)
       static/                 # bootstrap/, js/app/ (dom.js primeiro), css/, img/, fonts/; servidos em /script_scheduling_service/static/
     cli/                      # [CR-022b8] código das ferramentas de operação; topo das camadas (pode usar todas)
@@ -392,6 +394,7 @@ docs/
   homologation/               # manual de homologação (UI Freeze, histórico) e evidências reais no DEV (2026-10-22)
 var/                          # [CR-028] dados, fora do git e preservados pela atualização:
   <nome>/logs/                #   log_dir de cada processo (web e agentes)
+  <web>/tmp/                  #   temporário dos envios do web (CR-037)
   <agente>/works/ outputs/ inputs/ script_works/   # pastas de cada agente (CR-032: no plural)
   <agente>/files/<ambiente>/<script>/inputs/ outputs/   # pasta de arquivos, só em disco (CR-037, §8.16)
   update/<data>/              #   pacotes de retorno do sss-update.sh
@@ -648,7 +651,7 @@ O processo de inicialização do banco (`init_db.py` e script SQL de implantaç�
 1. **Perfis de Acesso (`tbsss_profiles`):**
    * **`ADMINISTRATOR`:** Super Administrador (`is_admin = 'Y'`). Acesso total a todas as 14 funcionalidades, a todos os ambientes atendidos e a todas as rotinas homologadas.
    * **`OPERATOR_PROD`:** Operacional de Produção (`is_admin = 'N'`). Acesso a `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD` e `FILES_DOWNLOAD` em todos os ambientes operacionais (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`).
-   * **`OPERATOR_HML`:** Operacional de Homologação (`is_admin = 'N'`). Acesso a `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD` e `FILES_DOWNLOAD` restrito aos ambientes de teste e validação (`CLONE6`, `CLONE7`, `GFPREPROD`).
+   * **`OPERATOR_HML`:** Operacional de Homologação (`is_admin = 'N'`). Acesso a `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD` e `FILES_DOWNLOAD` restrito ao subconjunto `CLONE6`, `CLONE7` e `GFPREPROD` (no seed, todos os ambientes estão marcados como produção, CR-017a).
    * **`READ_ONLY`:** Auditoria e Consulta (`is_admin = 'N'`). Perfil de somente leitura, restrito a `VIEW_LOGS` em todos os ambientes, sem permissão de disparo ou alteração de cadastros.
 
 2. **Usuários Padrão Homologados (`tbsss_users`):**
@@ -686,6 +689,7 @@ Toda ação sensível grava uma linha em `tbsss_audit` **na mesma transação** 
 * criação, cancelamento e reexecução de ticket;
 * download da saída de um ticket, pela tela de Saídas ou pelo detalhe do ticket (`OUTPUT_DOWNLOAD`, CR-020a). É uma leitura: a linha é gravada pelo service antes do envio, como a exportação da auditoria;
 * envio de arquivo para a pasta de entrada (`INPUT_UPLOAD`, pela web) e a entrega de cada agente (`INPUT_DELIVERY`, pelo agente), CR-020b;
+* envio e download da Pasta de Arquivos (`FILES_UPLOAD` e `FILES_DOWNLOAD`, CR-037, §5.11), entidade `files`, sem `entity_id`;
 * inserção, alteração e desativação em qualquer cadastro;
 * alteração de matriz de permissão;
 * pausa automática de agendamento;
@@ -693,7 +697,7 @@ Toda ação sensível grava uma linha em `tbsss_audit` **na mesma transação** 
 
 O campo `detail` nunca contém segredos nem valores de parâmetros sensíveis.
 
-* **Mesma transação:** a linha de auditoria é gravada pelo **próprio repositório**, na operação que recebe `audit=`. Isso vale também para o login (§4.2). O service nunca grava a auditoria numa chamada separada, salvo nas **leituras auditadas** (`AUDIT_EXPORT` e `OUTPUT_DOWNLOAD`), que não têm gravação de negócio para acompanhar: a linha é gravada por `RepoAudit.register` antes do envio.
+* **Mesma transação:** a linha de auditoria é gravada pelo **próprio repositório**, na operação que recebe `audit=`. Isso vale também para o login (§4.2). O service nunca grava a auditoria numa chamada separada, salvo nas **leituras auditadas** (`AUDIT_EXPORT`, `OUTPUT_DOWNLOAD` e `FILES_DOWNLOAD`) e no envio da Pasta de Arquivos (`FILES_UPLOAD`, gravado em disco, sem transação de negócio no banco, logo depois da cópia, CR-037), que não têm gravação de negócio para acompanhar: a linha é gravada por `RepoAudit.register` antes do envio.
 * **Entidade de cada ação:**
 
 | Ação | `entity` | `entity_id` |
@@ -710,6 +714,7 @@ O campo `detail` nunca contém segredos nem valores de parâmetros sensíveis.
 | `OUTPUT_DOWNLOAD` (CR-020a) | `tbsss_tickets` | id do ticket; o `detail` diz se foi o zip completo ou qual arquivo, com o tamanho |
 | `INPUT_UPLOAD` (CR-020b) | `tbsss_input_upload` | id do envio; o `detail` traz o arquivo, o tamanho, o destino e os agentes que vão receber |
 | `INPUT_DELIVERY` (CR-020b) | `tbsss_input_upload` | id do envio; o `detail` traz o agente e o resultado (com o motivo da falha); ator `SYSTEM:<agent_id>` |
+| `FILES_UPLOAD`, `FILES_DOWNLOAD` (CR-037) | `files` | nulo; o `detail` traz o caminho (`<ambiente>/<script>/inputs` ou `outputs/...`), os bytes, o agente e, no envio, o sha256 (com `substituído: ` no início quando trocou um arquivo existente) ou "zip da pasta" |
 
   O filtro "Entidade" da consulta oferece exatamente as tabelas acima.
 * **Atores do sistema:** `SYSTEM:<agent_id>` (agente), `SYSTEM:init_db` (`init_db.py`), `SYSTEM:purge` (o purge, retirado no CR-030; só nas linhas antigas) e `SYSTEM:seed` (seed FAKE). Por isso `init_db`, `seed` e `purge` não podem ser `agent_id` (§8.12).
@@ -1033,7 +1038,7 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
 
 ### 5.9 Saídas (CR-020a)
 
-**Saídas** (`outputs/index`, exige `DOWNLOAD_OUTPUT`, item "Saídas" do menu Operação): navegação pelas saídas dos tickets com a estrutura da pasta de saída (§8.13), montada a partir do banco, porque o web não enxerga o disco dos agentes.
+**Saídas** (`outputs/index`, exige `DOWNLOAD_OUTPUT`, item "Saídas" do menu Operação): navegação pelas saídas dos tickets com a estrutura da pasta de saída (§8.13), montada a partir do banco, porque o web não enxerga o disco dos agentes (a exceção é a Pasta de Arquivos, §5.11, que exige o web no mesmo servidor do agente ou na raiz compartilhada).
 
 * **Níveis:** Ambientes → Scripts → Dias → Tickets → Arquivos, com o caminho percorrido no topo e a quantidade de saídas em cada nível. Os dias vêm do `started_at` do ticket, o mesmo minuto da pasta.
 * **Só `AVAILABLE`:** as saídas `FAILED` (e as `EXCEEDED` antigas, anteriores ao CR-036) estão só no disco do agente e não aparecem; o detalhe do ticket explica cada caso (§8.13).
@@ -1054,7 +1059,7 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
 * **Enviar arquivo** (`inputs/upload`, POST multipart):
   * arquivo, subpasta (preenchida com a pasta atual; em branco é a própria pasta do script) e **Substituir se já existir**. Com a caixa marcada, uma janela explica o efeito antes do envio (`src/sss/web/static/js/app/inputs.js`; sem JavaScript, o envio segue direto, porque a caixa já é a escolha explícita);
   * nome e subpasta seguem a regra do `put-input` (`ticket_files.py`, §8.0) e são conferidos antes de gravar; o nome é o do arquivo no computador (só o último nível);
-  * **tamanho máximo** `[web] input_upload_max_bytes` (padrão 50 MiB). O modelo de segurança recusa com **413** qualquer POST com `Content-Length` acima dele (mais 64 KiB de folga do formulário) **antes** de ler o corpo; o serviço confere de novo o tamanho real;
+  * **tamanho máximo** `[web] input_upload_max_bytes` (padrão 50 MiB). O modelo de segurança recusa com **413** qualquer POST (salvo `files/upload` com sessão logada, §5.11) com `Content-Length` acima dele (mais 64 KiB de folga do formulário) **antes** de ler o corpo; o serviço confere de novo o tamanho real;
   * o SHA-256 é calculado na web e o envio vai para todos os agentes vivos do ambiente (§10, tabelas 19 e 20). Sem nenhum: "Nenhum servidor deste ambiente está no ar agora. Tente de novo mais tarde." e nada é gravado.
 * **Últimos envios** do script no ambiente (de todas as subpastas, com o caminho completo): arquivo, quem enviou (mascarado como no resto do sistema), quando, tamanho e a situação em cada servidor (Aguardando, Entregue ou Falhou, com o motivo em linguagem simples), paginados de 20 em 20, com o link **Atualizar** (sem atualização automática).
 * **Auditoria:** `INPUT_UPLOAD` no envio e `INPUT_DELIVERY` na entrega (§4.4); navegar e pedir retrato não auditam.
@@ -1066,8 +1071,8 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
 * **Navegação:** ambiente → script (ativos, do perfil, homologados no ambiente) → `inputs` ou `outputs`, com subpastas. O agente sai do cadastro de agentes que atendem o ambiente e têm `var/<agente>/files` **neste servidor web**: com um só, a tela o usa; com mais de um, pede a escolha; sem nenhum, mostra "Nenhum servidor deste ambiente tem a pasta de arquivos neste servidor web". Por isso, o web precisa estar no mesmo servidor do agente ou na mesma raiz compartilhada (DEPLOYMENT §4.1). O agente pode estar parado.
 * **`inputs` (`FILES_UPLOAD`):** lista nome, tamanho e data; envia um arquivo (até `[web] files_upload_max_bytes`, 1 GiB por padrão), opcionalmente para uma subpasta criada se faltar, com a regra de nome e subpasta da Entrada; **substitui** um existente só com "Substituir se já existir" e a confirmação do modal (sem a caixa, "Já existe um arquivo com esse nome"). O corpo vai em blocos para um temporário em `var/<web>/tmp/` e depois, de novo em blocos, para um temporário na pasta de destino, que só aparece com o nome final no fim (link sem substituir ou rename substituindo); o arquivo nunca passa inteiro pela memória do web.
 * **`outputs` (`FILES_DOWNLOAD`):** navega nas subpastas, baixa um arquivo ou **a pasta (ou uma subpasta) em zip**, montado em fluxo durante o download (sem gravar no disco nem no banco; a resposta não tem `Content-Length` e termina no fechamento da conexão).
-* **Segurança:** nenhum caminho segue link simbólico (cada nível conferido com `lstat`, arquivos com `O_NOFOLLOW`, `platform/files_area.py`); `..`, nível começando com ponto e caractere de controle são recusados; fora do escopo, 404 (nunca 403); sem as duas funcionalidades, 403. Envio é POST com CSRF; downloads são GET. Os temporários do envio (`.sss_files_*`) não aparecem na lista nem no zip.
-* **Auditoria:** `FILES_UPLOAD` (com caminho, bytes, sha256, "substituído" e agente) e `FILES_DOWNLOAD` (arquivo ou "zip da pasta"), entidade `files`, gravados antes do envio. Nada apagado pela tela (D7): a limpeza é à mão (§14).
+* **Segurança:** nenhum caminho segue link simbólico: cada nível, a partir de `var/<agente>/files` (inclusive `<ambiente>`, `<script>` e `inputs`/`outputs`), é conferido com `lstat` como diretório do usuário, e os arquivos são abertos com `O_NOFOLLOW` (`platform/files_area.py`); `..`, nível começando com ponto e caractere de controle são recusados; fora do escopo, 404 (nunca 403); 403 sem `FILES_UPLOAD` em `upload`, sem `FILES_DOWNLOAD` em `download`/`download_zip` e sem nenhuma das duas na tela. O limite grande do corpo só vale com sessão logada: sem login, `files/upload` fica no limite da Entrada e o corpo grande não chega ao temporário. Envio é POST com CSRF; downloads são GET. Os temporários do envio (`.sss_files_*`) não aparecem na lista nem no zip.
+* **Auditoria:** `FILES_UPLOAD` (`substituído: ` no início quando trocou um arquivo existente, para aparecer na lista da auditoria, que mostra só os 80 primeiros caracteres; depois caminho, bytes, agente e sha256), gravado **logo depois da cópia** (se a auditoria falhar, o arquivo fica, a tela avisa "Mas a auditoria falhou; avise o administrador" e o log da aplicação recebe um ERROR com o detalhe que iria para a auditoria; revisão do CR-037, decisão B); `FILES_DOWNLOAD` (arquivo ou "zip da pasta"), gravado **antes** do envio. Entidade `files` (filtrável na tela, §4.4). Nada apagado pela tela (D7): a limpeza é à mão (§14).
 
 ## 6. Parâmetros, Validação e Compilação do Snapshot
 
@@ -1773,7 +1778,7 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
   * absoluto (começa com `/`) ou relativo (não começa com `/`), e normalizado (`os.path.normpath(p) == p`): sem `//`, sem `./`, sem `/./` e sem barra no fim; o relativo também não pode ser só `.`;
   * sem `..` em nenhum ponto, sem `\` e sem caractere de controle;
   * até 500 caracteres.
-* **Pastas proibidas**, no caminho cadastrado e no real: dentro de `/bin`, `/sbin`, `/usr`, `/lib`, `/lib32`, `/lib64`, `/libx32`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev` ou `/root` é `SYSTEM_DIR`; dentro de `log_dir`, `work_dir`, `output_dir`, `input_dir` ou `script_work_dir` é `SSS_DIR` (CR-014 e CR-019: os scripts gravam nas três últimas, e um script guardado ali poderia ser trocado por outro script); dentro da pasta da aplicação (a raiz, cujo código a atualização troca, DEPLOYMENT §18) é `APP_DIR` (CR-023), salvo a subpasta `scripts_ambiente/` (CR-028, preservada pela atualização) e a subpasta `dev/` onde ela existe (o repositório; o pacote não a leva, CR-032 D11). No cadastro, o caminho relativo não é conferido aqui: a conferência é no agente, depois de juntar a pasta base.
+* **Pastas proibidas**, no caminho cadastrado e no real: dentro de `/bin`, `/sbin`, `/usr`, `/lib`, `/lib32`, `/lib64`, `/libx32`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev` ou `/root` é `SYSTEM_DIR`; dentro de `log_dir`, `work_dir`, `output_dir`, `input_dir`, `script_work_dir` ou `files_dir` (CR-037) é `SSS_DIR` (CR-014 e CR-019: os scripts gravam nas três últimas, e um script guardado ali poderia ser trocado por outro script); dentro da pasta da aplicação (a raiz, cujo código a atualização troca, DEPLOYMENT §18) é `APP_DIR` (CR-023), salvo a subpasta `scripts_ambiente/` (CR-028, preservada pela atualização) e a subpasta `dev/` onde ela existe (o repositório; o pacote não a leva, CR-032 D11). No cadastro, o caminho relativo não é conferido aqui: a conferência é no agente, depois de juntar a pasta base.
 * **O arquivo real** (`os_platform.validate_script_path`):
   * existe (`NOT_FOUND`; um ciclo de links também dá `NOT_FOUND`);
   * as pastas do caminho deixam o agente passar (`EACCES` é `NO_ACCESS`, diferente de `NOT_FOUND`);
@@ -2031,7 +2036,7 @@ O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualqu
 4. **Diretórios:**
    * `log_dir` e `work_dir` existem (a que falta é criada, CR-032, D12), são graváveis pelo agente e não ficam dentro das pastas do sistema (§8.5);
    * sem conferência de interpretador na subida (CR-026): ele é conferido a cada ticket (§8.5); uma linha `[agent] interpreters` antiga só gera aviso;
-   * com `output_dir`, `input_dir` e `script_work_dir` (CR-012, CR-014, CR-019): a pasta existe (ou é criada, CR-032 D12), é gravável pelo agente e fica fora das pastas do sistema; as pastas de cada ambiente saem sob demanda.
+   * com `output_dir`, `input_dir` e `script_work_dir` (CR-012, CR-014, CR-019), e sempre `files_dir` (CR-037): a pasta existe (ou é criada, CR-032 D12), é gravável pelo agente e fica fora das pastas do sistema; as pastas de cada ambiente saem sob demanda.
    * `script_base_dir` (CR-023): INFO com a pasta base, INFO "sem pasta base" quando vazia, ou WARNING se ela não existir (a subida segue; os tickets com caminho relativo terminam em `NOT_FOUND`). O formato já foi conferido na carga da configuração.
 5. **Instância única por host:** `os_platform.lock_instance` em `work_dir/sss-<agent_id>.lock`. Um arquivo `.stop` antigo é removido com WARN, para o daemon não parar logo depois de subir (CR-007, R-32).
 6. **Banco:** selecionar o driver (§2.3; a sondagem roda aqui), conectar e confirmar o relógio do banco (`SELECT SYSDATE FROM DUAL`). WARN se o `SYSDATE` divergir do relógio local em mais de 60 s (§7.1). **Versão do esquema (CR-007, D4):** `SELECT schema_version FROM {owner}.tbsss_control WHERE id = 1` precisa ser igual a `sql_ident.SCHEMA_VERSION`; diferente ou ausente, CRITICAL com as duas versões.
@@ -2052,7 +2057,7 @@ O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualqu
 
 ### 8.13 Pasta de saída do script (CR-012)
 
-Canal opcional para o script devolver arquivos ao usuário. O zip vai para o banco, e o download sai do banco: web e agentes podem estar em servidores diferentes, e o `output_dir` de cada agente não precisa ser igual ao dos outros.
+Canal opcional para o script devolver arquivos ao usuário. O zip vai para o banco, e o download sai do banco (a Pasta de Arquivos, §8.16, é o canal só em disco): web e agentes podem estar em servidores diferentes, e o `output_dir` de cada agente não precisa ser igual ao dos outros.
 
 * **Ligado por agente:** `[agent] output_dir` vazio desliga o recurso naquele agente (sem `SSS_OUTPUT_DIR`, sem zip).
 * **Pasta do ticket:** `output_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, com as partes do caminho do log (§8.4, passo 3). Usa o número do ticket, e não o PID.
@@ -2094,7 +2099,7 @@ Pasta permanente onde o script encontra os arquivos de que precisa (lotes, plani
 * **Permanente:** o SSS não limpa, não compacta, não purga e não lê nada nessa pasta. O conteúdo é responsabilidade do script e da operação (quem deposita os arquivos).
 * **Concorrência:** dois tickets do mesmo script no mesmo ambiente (com `max_parallel_env` maior que 1) usam a mesma pasta ao mesmo tempo. A coordenação (por exemplo, mover o arquivo para uma subpasta antes de processar) é do script.
 * **Scripts** não podem ficar dentro de `input_dir` (`SSS_DIR`, §8.5). O **interpretador** não tem essa conferência (CR-026; risco aceito, §14).
-* Web e agentes podem estar em servidores diferentes: a pasta existe só no servidor de cada agente. Com mais de um agente atendendo o mesmo ambiente, cada um tem a sua `input_dir` (ou um compartilhamento de rede comum, montado pela infraestrutura).
+* Web e agentes podem estar em servidores diferentes: a pasta existe só no servidor de cada agente (por isso o envio vai pelo banco; a Pasta de Arquivos, §8.16, é o caminho só em disco). Com mais de um agente atendendo o mesmo ambiente, cada um tem a sua `input_dir` (ou um compartilhamento de rede comum, montado pela infraestrutura).
 * **Envio pela tela (CR-020):** o arquivo chega pelo banco (§10, tabelas 19 a 21) e cada agente vivo do ambiente o grava na sua pasta (`src/sss/scheduler/input_phase.py`, máquina de estados do laço, sem espera, uma entrega por vez; persistência do agente por `src/sss/persistence/oracle/scheduler_input`, fora da camada web, com a conexão do daemon):
   1. **baixar:** no ciclo rápido, o agente pega a próxima entrega `PENDING` dele e, a cada volta do laço, lê até 4 partes de 1 MiB do banco para `work_dir/input/delivery_<id>.part` (do agente, `0600`). No fim, tamanho e SHA-256 são conferidos; divergência é `FAILED`/`HASH` sem chamar o `put-input`;
   2. **gravar:** o `put-input` (`ticket_files.py`, num processo próprio, com o temporário na entrada padrão; aos 120 s só alerta e a gravação termina, CR-036 D7, com as entregas seguintes esperando, porque o agente faz uma por vez) grava `.sss_upload_<pid>.tmp` no destino com `O_EXCL`, confere tamanho e hash enquanto grava e publica de forma atômica: **sem substituir**, `link` + `unlink`, e um item já existente é `EXISTS`; **substituindo**, `replace`, recusado se o destino não for arquivo regular (`NAME`). Disco cheio é `SPACE`; outro erro, `ERROR`;
@@ -2597,7 +2602,7 @@ END;
   * `entity_id NUMBER(10)`
   * `detail VARCHAR2(1000 CHAR)`
   * `created_at DATE DEFAULT SYSDATE NOT NULL`
-* **Ações:** `LOGIN_OK`, `LOGIN_FAILED`, `LOGIN_LOCKED`, `LOGOUT`, `TICKET_CREATE`, `TICKET_CANCEL`, `TICKET_RERUN`, `CREATE`, `UPDATE`, `DEACTIVATE`, `PERM_UPDATE`, `SCHEDULE_PAUSE`, `AGENT_START`, `AGENT_STOP`, `PURGE` (só linhas antigas, CR-030), `AUDIT_EXPORT` (exportação CSV da trilha, F6.1), `SCHEMA_MIGRATE` (migração de versão do esquema, CR-007), `OUTPUT_DOWNLOAD` (download de saída, CR-020a), `INPUT_UPLOAD` e `INPUT_DELIVERY` (envio e entrega na pasta de entrada, CR-020b). O catálogo é mantido em código (`audit_service.ACTIONS`) e não usa CK, para permitir extensão.
+* **Ações:** `LOGIN_OK`, `LOGIN_FAILED`, `LOGIN_LOCKED`, `LOGOUT`, `TICKET_CREATE`, `TICKET_CANCEL`, `TICKET_RERUN`, `CREATE`, `UPDATE`, `DEACTIVATE`, `PERM_UPDATE`, `SCHEDULE_PAUSE`, `AGENT_START`, `AGENT_STOP`, `PURGE` (só linhas antigas, CR-030), `AUDIT_EXPORT` (exportação CSV da trilha, F6.1), `SCHEMA_MIGRATE` (migração de versão do esquema, CR-007), `OUTPUT_DOWNLOAD` (download de saída, CR-020a), `INPUT_UPLOAD` e `INPUT_DELIVERY` (envio e entrega na pasta de entrada, CR-020b), `FILES_UPLOAD` e `FILES_DOWNLOAD` (Pasta de Arquivos, CR-037). O catálogo é mantido em código (`audit_service.ACTIONS`) e não usa CK, para permitir extensão.
 * A tabela não tem FKs intencionalmente: a trilha sobrevive a exclusões.
 * **Privilégios (CR-007, D1b):** web com `SELECT` e `INSERT`; agente só com `INSERT`. Nenhuma conta de aplicação tem `UPDATE` nem `DELETE` (a limpeza manual do §11.3 é feita pelo DBA ou pela conta dona do esquema).
 
@@ -2833,6 +2838,7 @@ find var/*/logs var/*/outputs var/*/script_works -mindepth 3 -type d -empty -del
 * Uma pasta de minuto só é criada quando o processo começa a gravar nela, e um ticket nunca roda mais que o tempo máximo (`timeout_s` do script ou `script_timeout_s`, 168 h no padrão). Use `D` maior que esse tempo (com o padrão, mais de 7 dias) para nunca atingir um ticket em andamento.
 * **Saída padrão dos processos:** `var/<nome>/logs/<nome>.out` (`sss-keepalive.sh`) e `var/web0001/logs/server.out` (`start_local.sh`, só DEV) crescem sem limite. Esvazie com `: > var/<nome>/logs/<nome>.out` quando quiser (o processo continua gravando no mesmo arquivo).
 * **Pasta de entrada** (`var/<agente>/inputs/<ambiente>/<script>/`): é permanente e o script decide o que fazer com os arquivos (CR-014). Se quiser limpar, só arquivos antigos: `find var/*/inputs -type f -mtime +$D -print` para conferir e `-delete` para apagar.
+* **Pasta de arquivos** (`var/<agente>/files`, CR-037): sem procedimento (decisão D8); apague à mão o que não quiser guardar. Os temporários de um envio interrompido (`.sss_files_*`, escondidos da tela) também ficam: `find var/*/files -name '.sss_files_*' -mmin +60 -print` para conferir e `-delete` para apagar.
 * **Pacotes de retorno** do `sss-update.sh` (`var/update/<data>/`): apague à mão os que não quiser guardar.
 * **Pelo cron**, as mesmas linhas num script da sua conta, por exemplo diário às 02:15: `15 2 * * * cd <RAIZ> && find var/*/logs var/*/outputs var/*/script_works -mindepth 7 -maxdepth 7 -type d -mtime +30 -exec rm -rf {} + ; find var/*/logs var/*/outputs var/*/script_works -mindepth 3 -type d -empty -delete`.
 
@@ -2887,7 +2893,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 
 | Seção | Chave | Obrigatória | Padrão | Faixa / formato |
 |---|---|---|---|---|
-| `[app]` | `name` (CR-028, CR-032) | sim | — | nome do processo, igual ao da pasta `instance/<nome>/` (`web0001`, `agente0001`...), `^[a-z][a-z0-9_-]{0,29}$`, diferente de `init_db`, `seed` e `purge`. Dele saem o `agent_id` (o próprio nome), `log_dir` (`var/<nome>/logs`), `work_dir` (`var/<nome>/works`) e, quando não escritas, as demais pastas do agente |
+| `[app]` | `name` (CR-028, CR-032) | sim | — | nome do processo, igual ao da pasta `instance/<nome>/` (`web0001`, `agente0001`...), `^[a-z][a-z0-9_-]{0,29}$`, diferente de `init_db`, `seed` e `purge`. Dele saem o `agent_id` (o próprio nome), `log_dir` (`var/<nome>/logs`), `work_dir` (`var/<nome>/works`), `files_dir` (`var/<nome>/files`, CR-037; uma linha `files_dir` no config só gera aviso) e, quando não escritas, as demais pastas do agente |
 | `[oracle]` | `user` | sim | — | não vazio; pode ser o `owner` (CR-032, D11: ambiente com um usuário de banco só) |
 | `[oracle]` | `dsn` | sim | — | não vazio |
 | `[oracle]` | `owner` | sim | — | `^[A-Za-z][A-Za-z0-9_]{0,29}$` |
@@ -2924,7 +2930,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 
 **Retiradas no CR-030 (ignoradas com aviso):** a seção `[retention]` inteira (`purge_user`, `ticket_retention_days`, `audit_retention_days`, `purge_batch_size`, `input_retention_days`) e, em `[logging]`, `app_log_retention_days`, `local_log_retention_days`, `output_retention_days` e `script_work_retention_days`. A limpeza é manual (§11.3).
 
-**Pastas: o processo cria na subida as que faltarem (CR-032, D12).** O `log_dir` é criado com `0750` pela configuração do log; o agente cria `work_dir` (`0700`) e, quando ligadas, `output_dir`, `input_dir`, `script_work_dir` e `script_base_dir` (`0755`), com uma linha `pasta criada` no log para cada uma. Uma pasta existente que não possa ser usada (arquivo no lugar, sem escrita, pasta do sistema) recusa a subida (código 13), salvo o `script_base_dir`: a falha ao criá-lo só gera WARNING (os tickets com caminho relativo terminam em `PRECHECK_FAILED`, `NOT_FOUND`). Os níveis abaixo delas (ambiente, script, data, ticket) são criados a cada ticket. O `prepare_dirs.py` (CR-026e) saiu no CR-032.
+**Pastas: o processo cria na subida as que faltarem (CR-032, D12).** O `log_dir` é criado com `0750` pela configuração do log; o agente cria `work_dir` (`0700`), `files_dir` (`var/<nome>/files`, `0755`, CR-037) e, quando ligadas, `output_dir`, `input_dir`, `script_work_dir` e `script_base_dir` (`0755`), com uma linha `pasta criada` no log para cada uma; o web cria `var/<nome>/tmp` (`0700`, CR-037) se faltar, com `os.makedirs`: é o temporário de todo envio do web acima de 1 MiB (Entrada e Pasta de Arquivos); não tem linha `pasta criada` nem a recusa com código 13. Uma pasta existente que não possa ser usada (arquivo no lugar, sem escrita, pasta do sistema) recusa a subida (código 13), salvo o `script_base_dir`: a falha ao criá-lo só gera WARNING (os tickets com caminho relativo terminam em `PRECHECK_FAILED`, `NOT_FOUND`). Os níveis abaixo delas (ambiente, script, data, ticket) são criados a cada ticket. O `prepare_dirs.py` (CR-026e) saiu no CR-032.
 
 **Pastas no plural (CR-032, 032e, D21):** as pastas que saem do nome do agente são `var/<nome>/works`, `inputs`, `outputs` e `script_works` (antes `work`, `input`, `output` e `script_work`; `logs` não muda). Na subida, o agente renomeia a pasta com o nome anterior para o novo (`rename`, na mesma partição, sem cópia), só quando a chave não foi escrita no `config.ini`, a anterior existe e a nova não; cada uma gera a linha `pasta renomeada: <chave> <anterior> -> <nova>`. Uma pasta escrita no `config.ini` nunca é renomeada.
 
@@ -3066,6 +3072,7 @@ O `sss-scheduler.sh` aceita só a linha do daemon: o nome do processo, `--config
 | Arquivo local do log de execução sem máscara (§8.10) | Escrito pelo próprio script; arquivo do usuário do agente (`0600`), só no agente, até a limpeza manual (§11.3) |
 | Processo órfão com identidade desconhecida (Unix sem leitura de identidade) não é encerrado automaticamente (§8.12) | WARN `ORFAO_SEM_IDENTIDADE` para intervenção; o ticket é finalizado `ORPHAN_PROCESS` |
 | Script que escreve log sem parar (§8.10): desde o CR-036 (D1) o teto do log local só alerta, e um script pode encher o `log_dir` | `log_dir` em partição própria com alerta de uso (`DEPLOYMENT.md` §4.3), claim suspenso com pouco espaço livre (`log_dir_min_free_mb`, CR-008 R-25; só segura os tickets novos) e o WARNING `log local acima de <n> MB` para o monitoramento |
+| Pasta de arquivos sem limpeza (CR-037, D8): `var/<agente>/files` só cresce, e o envio pela tela vai até 1 GiB por arquivo | partição própria do `var/` com alerta de uso (DEPLOYMENT §4.3 e §19); limpeza à mão |
 | Empacotamento da saída ou entrega da Entrada travados (CR-036, D4 e D7: o prazo de 120 s só alerta) | WARNING aos 120 s; o zip travado prende a vaga do ticket e a entrega travada segura as seguintes, até a parada do agente (`bin/sss-stop.sh`), que os abandona |
 | Regex gravada antes do CR-007 fora do subconjunto seguro (§6.2) | Continua valendo até a próxima gravação do parâmetro, que exige a correção; a revisão dos parâmetros com regex faz parte da implantação do CR-007 |
 | Banco com charset `AL32UTF8`: o CLOB conta um caractere fora do BMP (emoji) como 2 posições, e a leitura da tela (`VIEW_LOGS`, offset em caracteres) ainda não foi validada nesse charset (revisão F8.0–F8.2). O GFPR é `WE8ISO8859P15` (o caractere vira `¿` e conta 1) | O agente mede a unidade no banco (`RepoSchedulerLog.supplementary_unit`) e o pump grava no offset certo; validar a tela num banco `AL32UTF8` antes de produção nesse charset |

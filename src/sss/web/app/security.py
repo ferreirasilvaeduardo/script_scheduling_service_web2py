@@ -61,10 +61,11 @@ def max_body_bytes() -> int:
     return max(web.input_upload_max_bytes, web.files_upload_max_bytes) + POST_MARGIN_BYTES
 
 
-def body_limit(controller: str, function: str) -> int:
-    """CR-037 (D6): so o envio a pasta de arquivos tem o limite grande; o resto, o da Entrada."""
+def body_limit(controller: str, function: str, logged: bool = True) -> int:
+    """CR-037 (D6): so o envio a pasta de arquivos tem o limite grande, e so com sessao logada (sem
+    login, o corpo grande nao chega a ser gravado no temporario); o resto, o da Entrada."""
     web = app_context.require_config().web
-    if (controller, function) == ("files", "upload"):
+    if logged and (controller, function) == ("files", "upload"):
         return web.files_upload_max_bytes + POST_MARGIN_BYTES
     return web.input_upload_max_bytes + POST_MARGIN_BYTES
 
@@ -168,7 +169,7 @@ def _check_size() -> None:
         size = int(raw)
     except ValueError:
         size = -1
-    if size < 0 or size > body_limit(request.controller, request.function):
+    if size < 0 or size > body_limit(request.controller, request.function, bool(session.user_id)):
         log().warning("requisicao rejeitada (motivo=tamanho bytes=%s caminho=%s ip=%s)", raw,
                       path_info(), request.env.remote_addr, extra={"action": "CSRF"})
         raise HTTP(413)

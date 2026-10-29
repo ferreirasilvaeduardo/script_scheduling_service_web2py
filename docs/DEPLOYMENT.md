@@ -69,9 +69,9 @@ O `health.py` usa a conta do processo do `--name` (CR-032, D8: não há papel mo
 │   ├── agente0001/   config.ini        # de cada agente
 │   └── agente0002/   config.ini
 ├── var/                                # PRESERVADO; de preferência numa partição própria (§4.3)
-│   ├── web0001/      logs/
-│   ├── agente0001/   logs/  works/  outputs/  inputs/  script_works/
-│   ├── agente0002/   logs/  works/  outputs/  inputs/  script_works/
+│   ├── web0001/      logs/  tmp/
+│   ├── agente0001/   logs/  works/  outputs/  inputs/  script_works/  files/
+│   ├── agente0002/   logs/  works/  outputs/  inputs/  script_works/  files/
 │   └── update/<data>/retorno/          # pacotes de retorno do sss-update.sh
 └── scripts_ambiente/                   # PRESERVADO: scripts dos ambientes (script_base_dir padrão)
 ```
@@ -87,6 +87,8 @@ O `health.py` usa a conta do processo do `--name` (CR-032, D8: não há papel mo
 | `<RAIZ>/var/<agente>/outputs` | Saída dos scripts (CR-012) | `0755`; abaixo, `0700` | padrão de `[agent] output_dir` |
 | `<RAIZ>/var/<agente>/inputs` | Entrada dos scripts, uma subpasta permanente por script (CR-014) | `0755`; abaixo, `0700` | padrão de `[agent] input_dir` |
 | `<RAIZ>/var/<agente>/script_works` | Pasta de trabalho dos scripts, uma por ticket (CR-019) | `0755`; abaixo, `0700` | padrão de `[agent] script_work_dir` |
+| `<RAIZ>/var/<agente>/files` | Pasta de arquivos só em disco: `<ambiente>/<script>/inputs` e `outputs`, permanentes (CR-037; README §5.11 e §8.16) | `0755`; abaixo, `0700` | sempre do nome (sem chave) |
+| `<RAIZ>/var/<web>/tmp` | Temporário dos envios do web acima de 1 MiB, da Entrada e da Pasta de Arquivos (CR-037, D6) | `0700` | sempre do nome (sem chave) |
 | `<RAIZ>/scripts_ambiente` | Scripts dos ambientes | `0755` | padrão de `[agent] script_base_dir` |
 
 Tudo pertence à conta do SSS. As pastas saem do nome do processo, sem precisar escrevê-las, e são criadas na subida (CR-028, D5; CR-032, D12; README §12.1). Uma chave escrita no `config.ini` vale no lugar do padrão; escrita vazia (ex.: `output_dir =`) desliga a função.
@@ -319,7 +321,7 @@ O papel vem do próprio arquivo (CR-028, D4): o do web tem `[web]` e não tem `[
 | Web (`instance/web0001/`) | `[app] name` (o nome da pasta); `[web] allowed_origins` e, atrás de proxy, `trusted_proxies` |
 | Agente (`instance/agente0001/`) | `[app] name` (o nome da pasta, que é o `agent_id`); `[agent] environments`, `max_parallel_jobs` |
 
-As pastas (`log_dir`, `work_dir`, `output_dir`, `input_dir`, `script_work_dir` e `script_base_dir`) saem do nome e não precisam ser escritas. A tabela completa, com o padrão e a faixa de cada chave, está no README §12.1. **O próprio processo cria na subida as pastas que faltarem** (CR-032, D12): não há passo manual de pastas. `[agent] interpreters` não existe mais (CR-026): uma linha antiga só gera aviso. Dos valores de `[agent]`, o web usa só a `misfire_policy` (os demais são fixos desde o CR-032). Sem `[agent]` no config do web, vale o padrão. Se mudar a `misfire_policy` nos agentes, escreva o mesmo valor num `[agent]` do config do web, que só aceita essa chave e continua com o papel web (README §12.1). Em `instance/<nome>/`, o `[app] name` precisa ser o nome da pasta: ao copiar a pasta de um agente para criar outro, troque o `name`.
+As pastas (`log_dir`, `work_dir`, `output_dir`, `input_dir`, `script_work_dir`, `script_base_dir` e `files_dir`, CR-037) saem do nome e não precisam ser escritas. A tabela completa, com o padrão e a faixa de cada chave, está no README §12.1. **O próprio processo cria na subida as pastas que faltarem** (CR-032, D12): não há passo manual de pastas. `[agent] interpreters` não existe mais (CR-026): uma linha antiga só gera aviso. Dos valores de `[agent]`, o web usa só a `misfire_policy` (os demais são fixos desde o CR-032). Sem `[agent]` no config do web, vale o padrão. Se mudar a `misfire_policy` nos agentes, escreva o mesmo valor num `[agent]` do config do web, que só aceita essa chave e continua com o papel web (README §12.1). Em `instance/<nome>/`, o `[app] name` precisa ser o nome da pasta: ao copiar a pasta de um agente para criar outro, troque o `name`.
 
 **Tempos que precisam ser idênticos em todos os agentes (README §8.9, D7):** desde o CR-032, os tempos de saúde e os ajustes do desdobro são fixos no código (`heartbeat_interval_s` 10, `fence_timeout_s` 90, `node_offline_timeout_s` 180, `kill_grace_s` 5, `misfire_tolerance_s` 300, `cron_horizon_days` 1461, `queue_aging_min` 60). O `critical_config` tem só `call_timeout_ms` e `misfire_policy` (CR-032, D16): escreva-os iguais em todos os agentes (ou deixe o padrão). Na troca desta versão, pare todos os agentes antes de subir o primeiro, porque o texto mudou. Cada agente registra na subida:
 
@@ -352,13 +354,13 @@ Um `secrets.cfg` antigo dentro de `instance/<nome>/` ainda é lido, com um aviso
 
 ## 8. Pastas dos processos
 
-O web e o agente criam na subida as pastas que faltarem (CR-032, D12): `var/<nome>/logs` (`0750`), `var/<nome>/works` (`0700`), `outputs`, `inputs`, `script_works` e `scripts_ambiente` (`0755`). Uma pasta existente que não possa ser usada (arquivo no lugar, sem escrita, pasta do sistema) recusa a subida (código 13, §15). Não há helper de execução, `sudoers` nem usuário de execução (CR-032, D7): os scripts rodam com a conta do agente, em `var/<agente>/works/ticket_<id>/exec`, apagada no fim do ticket.
+O web e o agente criam na subida as pastas que faltarem (CR-032, D12): `var/<nome>/logs` (`0750`), `var/<nome>/works` (`0700`), `outputs`, `inputs`, `script_works`, `files` e `scripts_ambiente` (`0755`); o web, `var/<web>/tmp` (`0700`, CR-037), o temporário de todo envio acima de 1 MiB, criado se faltar (sem a recusa com código 13). O web lê e grava em `var/<agente>/files` de cada agente que atende o ambiente: a tela Pasta de Arquivos só funciona com o web no mesmo servidor do agente ou na raiz compartilhada (§4.1). Uma pasta existente que não possa ser usada (arquivo no lugar, sem escrita, pasta do sistema) recusa a subida (código 13, §15). Não há helper de execução, `sudoers` nem usuário de execução (CR-032, D7): os scripts rodam com a conta do agente, em `var/<agente>/works/ticket_<id>/exec`, apagada no fim do ticket.
 
 ---
 
 ## 9. Scripts cadastrados (CR-005, CR-011, CR-023)
 
-* O caminho cadastrado (`path_file`) é **absoluto** ou **relativo à pasta base** do agente (CR-023), em qualquer pasta fora das pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`), fora das pastas do SSS (`log_dir`, `work_dir`, `output_dir`, `input_dir` e `script_work_dir`) e fora da pasta da aplicação (a `<RAIZ>`, cujo código é trocado a cada atualização), **exceto** `<RAIZ>/scripts_ambiente/`, que a atualização preserva (CR-028, D3).
+* O caminho cadastrado (`path_file`) é **absoluto** ou **relativo à pasta base** do agente (CR-023), em qualquer pasta fora das pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`), fora das pastas do SSS (`log_dir`, `work_dir`, `output_dir`, `input_dir`, `script_work_dir` e `files_dir`) e fora da pasta da aplicação (a `<RAIZ>`, cujo código é trocado a cada atualização), **exceto** `<RAIZ>/scripts_ambiente/`, que a atualização preserva (CR-028, D3).
 * **Pasta base (CR-023, CR-028):** `[agent] script_base_dir`, por padrão `<RAIZ>/scripts_ambiente/`. O agente junta o caminho relativo cadastrado (ex.: `faturamento/carga.py`) a ela e confere o resultado como um caminho absoluto; o arquivo real pode ficar fora da pasta base (link). A pasta pode ser diferente em cada servidor, mas **todo agente de um ambiente que tem script com caminho relativo precisa dela**: o ticket vai para qualquer agente do ambiente, e o agente sem pasta base termina o ticket em `PRECHECK_FAILED` (`NO_BASE_DIR`). Na subida, o log mostra a pasta base (INFO) ou avisa que ela não existe (WARNING); o painel de agentes mostra a de cada um. Os 14 scripts de demonstração do seed são cadastrados como `utilitarios/<arquivo>`.
 * **Pasta de entrada (CR-014):** com `[agent] input_dir`, cada script recebe `SSS_INPUT_DIR` = `input_dir/<ambiente>/<nome do script em minúsculo, sem acento nem espaço>/` (ex.: "Carga Diária" em `PRODUCAO`, no `agente0001` → `<RAIZ>/var/agente0001/inputs/producao/carga_diaria/`). A pasta é criada na primeira execução e **nunca** é limpa pelo SSS: quem deposita os arquivos e o próprio script cuidam do conteúdo. Para depositar arquivos de fora, use a conta do agente (ou a tela de Entrada, CR-020).
 * **Pasta de trabalho (CR-019):** com `[agent] script_work_dir`, cada ticket recebe `SSS_WORK_DIR` = `script_work_dir/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, criada antes da execução e mantida depois dela, para consulta no servidor do agente. O `HOME` e a pasta corrente do script continuam na pasta descartável `work_dir/ticket_<id>/exec`.
@@ -491,6 +493,7 @@ O SSS não apaga nada sozinho: não há `purge.py` nem retenção automática. O
 
 * **Banco:** o SQL comentado, em lotes, para tickets terminais, auditoria e envios da tela de Entrada. Roda o DBA, ou a conta do SSS quando ela é a dona do esquema (§4.0).
 * **Arquivos:** os `find` para as pastas de minuto de `var/<nome>/logs`, `outputs` e `script_works`, primeiro só listando e depois apagando, e para os `.out` dos processos e os pacotes de retorno do `sss-update.sh`.
+* **Pasta de arquivos** (`var/<agente>/files`, CR-037): sem procedimento (decisão D8 do CR-037). Os arquivos ficam até alguém apagar à mão; acompanhe o espaço da partição do `var/` (§4.3).
 * **Pelo cron** da conta que roda o SSS, como no exemplo do §4.0. Comece listando (`-print`) e só depois troque por `-exec rm -rf {} +`.
 
 ---
@@ -584,7 +587,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | 11 | `configuracao invalida: [secao] chave: <motivo>` | Chave ausente, desconhecida ou fora da faixa | Compare com o modelo de `instance/exemplos/`; uma chave retirada só gera aviso "apague a linha" (CR-036, D6) |
 | 11 | `child_locale <x> nao consta em locale -a (CR-007, R-17)` | Locale do filho não instalado | Instale o locale `C.UTF-8` (fixo desde o CR-032) |
 | 12 | `secrets.cfg invalido: <reason>` (ex.: `Arquivo de segredos possui permissoes inseguras (mode 644, ...)`, `... deve pertencer ao usuario corrente`, `Ambientes atendidos sem credencial em secrets.cfg: X`) | Modo, dono ou seções do `secrets.cfg` | `chmod 0600` e dono a conta do SSS (§7.2); com a raiz compartilhada, o mesmo UID em todos os servidores (§4.1) |
-| 13 | `work_dir <pasta> recusado: <motivo>` (ou `output_dir`, `input_dir`, `script_work_dir`) | A pasta existe mas não pode ser usada (arquivo no lugar, sem escrita, pasta do sistema); a que falta é criada na subida (CR-032, D12) | Corrija ou apague o que está no caminho e suba de novo |
+| 13 | `work_dir <pasta> recusado: <motivo>` (ou `output_dir`, `input_dir`, `script_work_dir`, `files_dir`) | A pasta existe mas não pode ser usada (arquivo no lugar, sem escrita, pasta do sistema); a que falta é criada na subida (CR-032, D12) | Corrija ou apague o que está no caminho e suba de novo |
 | 13 | `<nome> <caminho> recusado: <código>` (`log_dir`, `work_dir`...), `output_dir ... recusado`, `input_dir ... recusado` e `script_work_dir ... recusado` | Pasta sem escrita ou nas pastas do sistema | §4 e §8 |
 | 14 | `Outra instancia do agente ja esta em execucao (<work_dir>/sss-<agent_id>.lock)` | Outro agente com o mesmo `work_dir` e `agent_id` | Pare o outro, ou use `config.ini` próprio (§7.1) |
 | 15 | `sem conexao com o Oracle` ou `banco: <erro>` (ex.: `Versao do esquema incompativel: esperada N, encontrada M`) | Banco inacessível, driver (§15.2) ou versão do esquema | §15.2, §15.3 ou a migração (§18) |
@@ -627,7 +630,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | `FAILED` / `PRECHECK_FAILED` | `pre-validacao recusada: <código>` e `[SSS] pre-validacao recusada: <código> (agente X)` | Ver os códigos abaixo | Ver abaixo |
 | ↳ `NOT_FOUND`, `NO_ACCESS`, `NOT_A_FILE` | | O arquivo real não existe, não é legível ou não é arquivo, no servidor do agente | Corrija o arquivo no agente (§9) |
 | ↳ `GROUP_OTHER_WRITABLE` | | Arquivo real com escrita de grupo ou outros | `chmod go-w <arquivo>` |
-| ↳ `SYSTEM_DIR`, `SSS_DIR`, `APP_DIR` | | Script nas pastas do sistema, nas do SSS (inclusive `output_dir`, `input_dir` e `script_work_dir`, CR-014 e CR-019) ou na pasta da aplicação (CR-023) | Mova o script e corrija o cadastro |
+| ↳ `SYSTEM_DIR`, `SSS_DIR`, `APP_DIR` | | Script nas pastas do sistema, nas do SSS (inclusive `output_dir`, `input_dir`, `script_work_dir` e `files_dir`, CR-014, CR-019 e CR-037) ou na pasta da aplicação (CR-023) | Mova o script e corrija o cadastro |
 | ↳ `NO_BASE_DIR` | | Script com caminho relativo e **este** agente sem `[agent] script_base_dir` (CR-023) | Configure a pasta base no agente (§9) e suba de novo |
 | ↳ `RELATIVE_PATH` | | Agente de versão anterior ao CR-023 diante de script com caminho relativo | Atualize todos os agentes do ambiente (§18) |
 | ↳ `INTERPRETER_NOT_FOUND` | | Nenhum interpretador existe e é executável neste servidor (CR-027): nem o digitado no disparo, nem o do `#!`, nem o nome do cadastro (`python` e `python3` são tentados um pelo outro). Os nomes são procurados no `PATH` do agente; o log do ticket mostra uma linha `[SSS]` por tentativa pulada, antes da linha de recusa | Instale o interpretador, ajuste o `PATH` do serviço, corrija o `#!` ou dispare de novo com outro interpretador |
@@ -728,6 +731,11 @@ O código é trocado **no lugar** pelo `bin/sss-update.sh`. `instance/`, `var/` 
 
 Do mais novo para o mais antigo. Quem vem de uma versão anterior aplica na ordem cronológica. As notas da instalação anterior ao CR-028 (`/opt/sss/app`) estão em `docs/architecture/DEPLOYMENT-history.md`.
 
+* **CR-037: Pasta de Arquivos, só em disco (sem mudança de esquema; muda o catálogo).**
+  * Duas funcionalidades novas no catálogo, `FILES_UPLOAD` e `FILES_DOWNLOAD`, e no seed dos perfis `ADMINISTRATOR`, `OPERATOR_PROD` e `OPERATOR_HML`. Numa instalação nova, o `01_deploy` já as traz. **Num banco em uso, não rode o `init_db`**: ele refaz o seed inteiro e devolve ao padrão ambientes, parâmetros, scripts, perfis e usuários do seed (reativa e sobrescreve o que foi mudado pela tela). Aplique só os blocos `MERGE` das duas funcionalidades e das marcas dos três perfis, copiados do `docs/sql/01_deploy_sss_<owner>_<prefixo>.sql` da versão (procure por `FILES_UPLOAD` e `FILES_DOWNLOAD`), com `COMMIT` no fim.
+  * Pastas novas, criadas na subida: `var/<agente>/files` (agente) e `var/<web>/tmp` (web). Chave opcional nova: `[web] files_upload_max_bytes` (1 GiB por padrão).
+  * O script recebe `SSS_FILES_INPUTS_DIR` e `SSS_FILES_OUTPUTS_DIR`. A tela exige o web no mesmo servidor do agente ou na raiz compartilhada (§4.1, §8).
+  * **Retorno:** o pacote de retorno; as funcionalidades novas ficam no banco, sem efeito na versão anterior (os perfis podem desmarcá-las).
 * **CR-036: alertas no lugar de bloqueios (sem mudança de esquema).**
   * Log local do ticket acima de `max_local_log_size_bytes`: só alerta (`[SSS] log local acima de <n> MB`); o script continua. Novos tickets não terminam mais em `FAILED/LOG_LIMIT`.
   * Os scripts herdam o limite de arquivos abertos da conta (antes, fixo em 1024); o *core dump* continua desligado.
@@ -772,6 +780,7 @@ Do mais novo para o mais antigo. Quem vem de uma versão anterior aplica na orde
 - [ ] `instance/common.ini` com o `[oracle]` (CR-032, D18) e nenhum `config.ini` de processo repetindo o `[oracle]` sem motivo
 - [ ] `instance/secrets.cfg` único, com `0600` e dono a conta do SSS, com o `[environment:*]` de todo ambiente atendido
 - [ ] Nenhuma linha `[app] sss_env`, `data_backend`, `exec_users`, `exec_work_dir`, `helper_path`, `script_owner_uids`, `ambientes_exigem_hash`, `output_max_bytes`, `output_max_files`, `[retention]`, `*_retention_days`, `[purge]` nem `[monitor]` (só geram aviso)
+- [ ] Espaço da partição do `var/` acompanhado também para a pasta de arquivos (`var/<agente>/files`), que não tem limpeza (CR-037, D8)
 - [ ] Alerta de espaço do tablespace do esquema combinado com o DBA: o zip da saída vai inteiro para o banco, sem teto por ticket (§5.5, CR-036)
 - [ ] Na tela, sem a faixa de ambiente e com o rodapé `Ambiente PROD`; no log de subida, `ambiente da instalacao: PROD`
 - [ ] Limpeza manual combinada: quem roda o SQL do banco e o `find` dos arquivos, e com que frequência (§12, README §11.3)
@@ -812,6 +821,7 @@ O DEV é a mesma instalação, na pasta `DEV` (`<RAIZ>` = `/portaloptrib/TESHUVA
 * a `<RAIZ>` do DEV é o repositório git: tem `dev/` (scripts de exemplo em `dev/scripts`, usados como `script_base_dir`), os testes, a vitrine `/dev/...` e o FAKE dos testes, que o pacote não leva;
 * a tela mostra `[DEV]` no título da aba, o cabeçalho em outra cor e a faixa de ambiente não produtivo;
 * `bin/start_local.sh` e `bin/stop_local.sh` sobem e param o web na máquina de desenvolvimento e não vêm no pacote;
-* a bateria Oracle (`SSS_TEST_ORACLE=1`) usa o `instance/common.ini`, o `instance/secrets.cfg` e o `instance/agente0001/` do DEV, com o DEV parado.
+* a bateria Oracle (`SSS_TEST_ORACLE=1`) usa o `instance/common.ini`, o `instance/secrets.cfg` e o `instance/agente0001/` do DEV, com o DEV parado;
+* **prefixo próprio no mesmo banco (2026-10-29):** o DEV usa `table_prefix = ssdev_` e o PROD `tbsss_`, no mesmo owner. Cada um tem as suas tabelas (agentes, fila, tickets, auditoria), então os dois podem ficar no ar ao mesmo tempo, mesmo com os mesmos nomes `web0001`/`agente0001` (substitui a regra do CR-033, D1). O esquema `ssdev_` foi criado pelo `init_db --real-schema`; o `docs/sql/` versionado continua no prefixo do PROD.
 
 Um DEV instalado pelo pacote não tem a vitrine `/dev/...` (o `src/sss/web/controllers/dev.py` não vai no pacote): ela responde 404, e o resto sobe normalmente (CR-021f3).

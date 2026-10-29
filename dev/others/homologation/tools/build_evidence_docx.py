@@ -43,7 +43,7 @@ AMBAR = RGBColor(0x8A, 0x5A, 0x00)
 ORDEM = ["CT-01", "CT-02", "CT-03", "MASSA", "CT-04", "CT-05", "CT-06", "CT-07", "CT-08", "CT-09", "CT-10",
          "CT-11", "CT-12", "CT-13", "CT-14", "CT-15", "CT-16", "CT-17", "CT-18", "CT-19", "CT-20", "CT-21",
          "CT-22", "CT-23", "CT-24", "CT-25", "CT-26", "CT-27", "CT-28", "CT-29", "CT-30", "CT-31",
-         "CT-32", "ENCERRAMENTO"]
+         "CT-32", "CT-33", "ENCERRAMENTO"]
 
 # Adaptacao de cada caso ao DEV real (o manual de 18/10 foi escrito sobre a massa simulada do FAKE).
 ADAPTACAO = {
@@ -737,6 +737,29 @@ RODADAS["20261029"] = dict(RODADAS["20261028_r2"], **{
         u"O PROD não mostra a faixa de ambiente nem o [DEV] no título; o rodapé diz \"Ambiente PROD\". O "
         u"check_env.py --name do PROD conectou ao banco (CR-034, D6).",
         u"O banco não foi recriado: o admin já estava com a senha escolhida (SSS_ADMIN_START=new).",
+    ],
+})
+RODADAS["20261029_r3"] = dict(RODADAS["20261028"], **{
+    "commit": u"a485163 (CR-037b) mais o CR-037c (documentação e CT-33), no mesmo commit deste documento",
+    "defeitos": [
+        (u"Auditoria do envio substituído: a marca ficava fora do resumo da lista", u"files_service (CR-037)",
+         u"A lista da auditoria mostra só os 80 primeiros caracteres do detalhe; o sha256 longo empurrava "
+         u"\"substituído\" para o \"ver mais\".",
+         u"Corrigido: \"substituído:\" no início e o sha256 no fim; CT-33 repetido com 19/19 OK."),
+    ],
+    "observacoes": [
+        u"Rodada do CR-037 no DEV, já no prefixo ssdev_ (esquema recriado pelo init_db no 037a, com o seed "
+        u"de 14 funcionalidades): o admin começou com a senha inicial do seed, trocada no CT-01. Marca %s." % STAMP,
+        u"CT-33 novo: Pasta de Arquivos (CR-037), com o envio para inputs, a substituição confirmada, o "
+        u"script de diagnóstico lendo SSS_FILES_INPUTS_DIR e gravando em SSS_FILES_OUTPUTS_DIR, o download "
+        u"de um arquivo e da pasta em zip, a recusa do perfil consulta e a auditoria; nada vai ao banco.",
+        u"A rodada completa teve 351/352: a única falha foi a do defeito acima. Depois da correção, o web "
+        u"foi reiniciado e o CT-33 repetido (os resultados do CT-33 são os dessa passada).",
+        u"Web e agente do DEV subidos pelo bin/sss-keepalive.sh (web em 127.0.0.1:18000); o PROD ficou "
+        u"parado.",
+        u"Depois das correções do batimento código x documentação (link em files/<ambiente>, limite do "
+        u"corpo só logado, \"substituído\" só quando havia arquivo, auditoria que falha), o web foi "
+        u"reiniciado e o CT-33 repetido de novo, com 19/19 OK.",
     ],
 })
 RODADA = RODADAS[RUN_TAG]

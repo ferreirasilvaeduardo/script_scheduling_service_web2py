@@ -84,14 +84,15 @@ def list_dir(path: str) -> Tuple[List[str], List[Entry]]:
 
 
 def write_file(folder: str, name: str, source: BinaryIO, max_bytes: int,
-               replace: bool) -> Tuple[int, str]:
-    """Copia source em blocos para folder/name e devolve (bytes, sha256).
+               replace: bool) -> Tuple[int, str, bool]:
+    """Copia source em blocos para folder/name e devolve (bytes, sha256, substituiu um existente).
 
     Sem substituir, o nome que ja existe da FileExists; acima de max_bytes, TooLarge. O temporario
     sai em qualquer falha.
     """
     final = os.path.join(folder, name)
-    if os.path.lexists(final):
+    existed = os.path.lexists(final)
+    if existed:
         if not stat.S_ISREG(os.lstat(final).st_mode):
             raise AreaError("o nome final nao e um arquivo comum")
         if not replace:
@@ -127,7 +128,7 @@ def write_file(folder: str, name: str, source: BinaryIO, max_bytes: int,
         except FileNotFoundError:  # fluxo previsto: ja renomeado ou nunca criado por completo
             pass
         raise
-    return size, digest.hexdigest()
+    return size, digest.hexdigest(), existed and replace
 
 
 def open_file(folder: str, name: str) -> Tuple[BinaryIO, int]:
