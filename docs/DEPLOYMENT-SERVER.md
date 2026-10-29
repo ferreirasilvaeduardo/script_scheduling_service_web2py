@@ -600,7 +600,7 @@ PYTHON=/portaloptrib/TESHUVA/sparta/python3.8/bin/python3
 ORACLE_HOME=/opt/oracle/product/12c/client
 SSS_IC_DIR=/opt/oracle/product/12c/client/lib
 SSS_DRIVER_MODE=auto
-SSS_LOCALE='<a confirmar: en_US.utf8 ou pt_BR.utf8>'
+SSS_LOCALE=en_US.utf8
 ```
 
 O resto do arquivo (a parte "derivados" e a função `sss_tipo`) é o do passo 0, sem mudança.
@@ -618,6 +618,7 @@ O resto do arquivo (a parte "derivados" e a função `sss_tipo`) é o do passo 0
 | `sqlplus` | 12.2, em `/opt/oracle/product/12c/client/bin` |
 | Banco | `10.129.177.188:1521` (GFPR) alcançável. No mesmo owner `openrisow` já existem `tbsss_` e `ssdev_` (21 tabelas cada, instalações da máquina de desenvolvimento); `s3dev_` e `s3prd_` vazios |
 | Portas | 18000 e 18001 livres |
+| Locale | Sem `C.UTF-8`; existem `en_US.utf8` e `pt_BR.utf8` (escolhido `en_US.utf8`, que mantém ponto decimal e mensagens do sistema em inglês nos scripts). A sessão SSH mostra `Cannot set LC_CTYPE to default locale`: o locale da estação não existe no servidor, sem efeito no SSS, que exporta o seu |
 | SSS antigo | `web2py.py` na porta 8000 desde 17/10, pasta `/home/mastersafgf/sss/web2py` (anterior ao CR-021); `crontab` sem SSS |
 
 ### A.3 Decisões desta implantação
