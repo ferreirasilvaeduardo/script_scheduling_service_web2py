@@ -1,0 +1,134 @@
+{{extend 'layout.html'}}
+{{
+# Pasta de Arquivos (README §5.11, CR-037): ambiente > script > inputs ou outputs, só em disco.
+from sss.ui import ui_helpers
+_v = view
+_names = {'inputs': 'inputs (enviar para o script)', 'outputs': 'outputs (o que o script gravou)'}
+}}
+<div class="sss-page-header">
+  <h1 class="sss-page-title">Pasta de Arquivos</h1>
+  <p class="sss-page-sub">Troque arquivos com os scripts sem passar pelo banco: envie para a pasta <span class="sss-mono">inputs</span>, que o script lê, e baixe da pasta <span class="sss-mono">outputs</span>, que o script grava. As pastas ficam no servidor do agente e não são apagadas pelo sistema.</p>
+</div>
+
+<nav aria-label="Caminho">
+  <ol class="breadcrumb sss-breadcrumb">
+    {{if level == 'environment':}}<li class="breadcrumb-item active" aria-current="page">Pasta de Arquivos</li>{{else:}}<li class="breadcrumb-item"><a href="{{=URL(c='files', f='index')}}">Pasta de Arquivos</a></li>{{pass}}
+    {{if level in ('script', 'agent'):}}<li class="breadcrumb-item active sss-mono" aria-current="page">{{=environment}}</li>{{pass}}
+    {{if level == 'folder':}}
+    {{_base = dict(environment=environment, script_id=_v['script']['id'], area=_v['area'], agent=_v['agent'])}}
+    <li class="breadcrumb-item sss-mono"><a href="{{=URL(c='files', f='index', vars=dict(environment=environment))}}">{{=environment}}</a></li>
+    <li class="breadcrumb-item sss-mono"><a href="{{=URL(c='files', f='index', vars=_base)}}">{{=_v['script']['name']}}/{{=_v['area']}}</a></li>
+    {{for _i, _c in enumerate(_v['crumbs']):}}
+    {{if _i == len(_v['crumbs']) - 1:}}<li class="breadcrumb-item active sss-mono" aria-current="page">{{=_c['name']}}</li>{{else:}}<li class="breadcrumb-item sss-mono"><a href="{{=URL(c='files', f='index', vars=dict(_base, dir=_c['path']))}}">{{=_c['name']}}</a></li>{{pass}}
+    {{pass}}
+    {{pass}}
+  </ol>
+</nav>
+
+{{if error:}}
+<div class="alert alert-danger sss-alert" role="alert"><span>{{=error}}</span></div>
+{{elif level in ('environment', 'script'):}}
+<section class="sss-card" aria-labelledby="title-level">
+  <h2 class="sss-card-title" id="title-level">{{='Ambientes' if level == 'environment' else 'Scripts'}}</h2>
+  {{if not rows:}}
+  <p class="sss-card-body sss-text-muted mb-0">{{='Seu perfil não tem ambientes para a pasta de arquivos.' if level == 'environment' else 'Nenhum script do seu perfil está liberado neste ambiente.'}}</p>
+  {{else:}}
+  <ul class="sss-card-body sss-list-permissions">
+    {{for _r in rows:}}
+    {{if level == 'environment':}}
+    <li><a class="sss-mono" href="{{=URL(c='files', f='index', vars=dict(environment=_r['name']))}}">{{=_r['name']}}</a>{{if _r['description']:}}<span class="sss-text-muted"> — {{=_r['description']}}</span>{{pass}}</li>
+    {{else:}}
+    <li><a class="sss-mono" href="{{=URL(c='files', f='index', vars=dict(environment=environment, script_id=_r['id']))}}">{{=_r['name']}}</a>{{if _r['description']:}}<span class="sss-text-muted"> — {{=_r['description']}}</span>{{pass}}</li>
+    {{pass}}
+    {{pass}}
+  </ul>
+  {{pass}}
+</section>
+{{elif level == 'agent':}}
+<section class="sss-card" aria-labelledby="title-agent">
+  <h2 class="sss-card-title" id="title-agent">Servidor</h2>
+  <p class="sss-card-body mb-0">Mais de um servidor atende este ambiente, e cada um tem a sua pasta. Escolha qual abrir:</p>
+  <ul class="sss-card-body sss-list-permissions">
+    {{for _a in agents:}}
+    <li><a class="sss-mono" href="{{=URL(c='files', f='index', vars=dict(environment=environment, script_id=script_id, area=area, agent=_a))}}">{{=_a}}</a></li>
+    {{pass}}
+  </ul>
+</section>
+{{else:}}
+{{_base = dict(environment=environment, script_id=_v['script']['id'], area=_v['area'], agent=_v['agent'])}}
+<section class="sss-card" aria-labelledby="title-folder">
+  <div class="sss-card-title sss-title-row">
+    <h2 class="sss-card-title-text" id="title-folder">Pasta <span class="sss-mono">{{=_v['script']['name']}}/{{=_v['area']}}{{if _v['folder']:}}/{{=_v['folder']}}{{pass}}</span></h2>
+    <div class="sss-actions-inline">
+      {{for _a in _v['areas']:}}
+      {{if _a != _v['area']:}}<a class="btn btn-sm btn-outline-primary" href="{{=URL(c='files', f='index', vars=dict(environment=environment, script_id=_v['script']['id'], area=_a, agent=_v['agent']))}}">Abrir {{=_names[_a]}}</a>{{pass}}
+      {{pass}}
+      {{if _v['area'] == 'outputs' and (_v['subfolders'] or _v['files']):}}<a class="btn btn-sm btn-outline-primary" href="{{=URL(c='files', f='download_zip', vars=dict(_base, dir=_v['folder']))}}">Baixar a pasta em zip</a>{{pass}}
+    </div>
+  </div>
+  <p class="sss-card-body mb-0 sss-text-muted">Servidor <span class="sss-mono">{{=_v['agent']}}</span>{{if len(_v['agents']) > 1:}} (<a href="{{=URL(c='files', f='index', vars=dict(environment=environment, script_id=_v['script']['id'], area=_v['area']))}}">trocar</a>){{pass}}. O script recebe esta pasta na variável <span class="sss-mono">{{='SSS_FILES_INPUTS_DIR' if _v['area'] == 'inputs' else 'SSS_FILES_OUTPUTS_DIR'}}</span>.</p>
+  {{if _v['subfolders'] or _v['files']:}}
+  <div class="table-responsive">
+    <table class="table table-sm sss-table mb-0">
+      <thead><tr><th scope="col">Nome</th><th scope="col">Tamanho</th><th scope="col">Data</th>{{if _v['area'] == 'outputs':}}<th scope="col"><span class="visually-hidden">Ações</span></th>{{pass}}</tr></thead>
+      <tbody>
+        {{for _s in _v['subfolders']:}}
+        <tr><th scope="row" class="sss-mono sss-break"><a href="{{=URL(c='files', f='index', vars=dict(_base, dir=_s['path']))}}">{{=_s['name']}}/</a></th><td>pasta</td><td>-</td>{{if _v['area'] == 'outputs':}}<td><a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='files', f='download_zip', vars=dict(_base, dir=_s['path']))}}">Baixar em zip</a></td>{{pass}}</tr>
+        {{pass}}
+        {{for _f in _v['files']:}}
+        <tr><th scope="row" class="sss-mono sss-break">{{=_f['name']}}</th><td>{{=ui_helpers.readable_size(_f['size'])}}</td><td>{{=_f['mtime']}}</td>{{if _v['area'] == 'outputs':}}<td><a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='files', f='download', vars=dict(_base, path=_f['path']))}}">Baixar</a></td>{{pass}}</tr>
+        {{pass}}
+      </tbody>
+    </table>
+  </div>
+  {{else:}}
+  <p class="sss-card-body sss-text-muted mb-0">A pasta está vazia.</p>
+  {{pass}}
+</section>
+
+{{if _v['area'] == 'inputs':}}
+<section class="sss-card" aria-labelledby="title-upload" data-component="inputUpload">
+  <h2 class="sss-card-title" id="title-upload">Enviar arquivo</h2>
+  <form class="sss-card-body" method="post" enctype="multipart/form-data" action="{{=URL(c='files', f='upload')}}" data-ref="form">
+    {{=csrf_field()}}
+    <input type="hidden" name="environment" value="{{=environment}}">
+    <input type="hidden" name="script_id" value="{{=_v['script']['id']}}">
+    <input type="hidden" name="agent" value="{{=_v['agent']}}">
+    <input type="hidden" name="dir" value="{{=_v['folder']}}">
+    <div class="mb-3">
+      <label class="form-label" for="field-file">Arquivo</label>
+      <input class="form-control" type="file" id="field-file" name="file" required aria-describedby="field-file-help">
+      <div class="form-text" id="field-file-help">Até {{=ui_helpers.readable_size(_v['max_bytes'])}}. O nome do arquivo é o mesmo do seu computador. O arquivo vai direto para a pasta, sem passar pelo banco.</div>
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="field-relative_dir">Subpasta</label>
+      <input class="form-control sss-mono" type="text" id="field-relative_dir" name="relative_dir" maxlength="2600" value="{{=_v['folder']}}" aria-describedby="field-relative_dir-help">
+      <div class="form-text" id="field-relative_dir-help">Dentro de <span class="sss-mono">inputs</span>, com os níveis separados por /. Em branco, a própria pasta. As subpastas que não existirem são criadas.</div>
+    </div>
+    <div class="form-check mb-3">
+      <input class="form-check-input" type="checkbox" id="field-replace" name="replace" value="Y" data-ref="replace">
+      <label class="form-check-label" for="field-replace">Substituir se já existir</label>
+    </div>
+    <button type="submit" class="btn btn-primary" data-ref="submit">Enviar</button>
+  </form>
+  <div class="modal sss-modal" data-ref="modal" role="dialog" aria-modal="true" aria-labelledby="replace-titulo" aria-describedby="replace-texto" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title fs-5" id="replace-titulo">Substituir o arquivo?</h2>
+          <button type="button" class="btn-close" aria-label="Fechar" data-action="close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-0" id="replace-texto">Se já existir um arquivo com esse nome nessa pasta, ele será trocado pelo novo. O arquivo antigo não pode ser recuperado pela tela.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-ref="cancel" data-action="close">Cancelar</button>
+          <button type="button" class="btn btn-sm btn-danger" data-action="confirm">Substituir e enviar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="sss-modal-backdrop" data-ref="backdrop"></div>
+</section>
+{{pass}}
+{{pass}}

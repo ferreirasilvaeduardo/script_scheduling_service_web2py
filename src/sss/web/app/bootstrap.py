@@ -42,11 +42,11 @@ def controllers(cfg: Any) -> Dict[str, ModuleType]:
     """Registro dos controllers, por import explicito."""
     # pylint: disable=import-outside-toplevel
     from sss.web.controllers import (admin_environments, admin_parameters, admin_profiles,
-                                     admin_scripts, admin_users, audit, default, inputs, logs,
-                                     outputs, schedules, tickets)
+                                     admin_scripts, admin_users, audit, default, files, inputs,
+                                     logs, outputs, schedules, tickets)
     registry = {module.__name__.rsplit(".", 1)[1]: module for module in (
         admin_environments, admin_parameters, admin_profiles, admin_scripts, admin_users, audit,
-        default, inputs, logs, outputs, schedules, tickets)}
+        default, files, inputs, logs, outputs, schedules, tickets)}
     if os.path.isfile(DEV_CONTROLLER):
         # Fora do pacote de implantacao (README §12.2): so se estiver presente (achado no ensaio do
         # pacote do CR-021f3: sem o arquivo, o servidor nao subia).
@@ -106,8 +106,11 @@ def render(ctx: Context, data: Mapping[str, Any]) -> str:
 def make_app(cfg: Any) -> Application:
     """O Application do SSS: sessao assinada, hooks de seguranca, views e pagina de erro."""
     secrets = sss_config.get_secrets("sss_web")
+    upload_dir = security.upload_dir(cfg)
+    # CR-037 (D6): o temporario do envio fica no var/ do web, criado aqui se faltar (CR-032, D12).
+    os.makedirs(upload_dir, 0o700, exist_ok=True)
     settings = Settings(APPLICATION, STATIC_DIR, security.max_body_bytes(),
-                        SessionCodec(secrets.cookie_key), security.secure_cookie)
+                        SessionCodec(secrets.cookie_key), security.secure_cookie, upload_dir)
     return Application(settings, make_resolver(controllers(cfg)), security.log(),
                        before=[security.before_request], after=[security.after_request],
                        renderer=render, error_page=errors.make_error_page(render_view))

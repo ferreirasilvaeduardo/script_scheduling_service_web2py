@@ -8,6 +8,7 @@ cabecalhos de seguranca em toda resposta dinamica, inclusive de erro. As guardas
 controllers (CR-018f).
 """
 import logging
+import os
 import time
 from typing import Any, Dict, Optional
 
@@ -53,8 +54,24 @@ def log() -> logging.Logger:
 
 
 def max_body_bytes() -> int:
-    """Maior corpo de POST aceito: o maior envio da tela de Entrada mais a folga do multipart."""
-    return app_context.require_config().web.input_upload_max_bytes + POST_MARGIN_BYTES
+    """Maior corpo de POST aceito pelo nucleo: o maior envio (Entrada ou pasta de arquivos) mais a
+    folga do multipart. O limite de cada rota fica em body_limit (o _check_size recusa antes de ler
+    o corpo)."""
+    web = app_context.require_config().web
+    return max(web.input_upload_max_bytes, web.files_upload_max_bytes) + POST_MARGIN_BYTES
+
+
+def body_limit(controller: str, function: str) -> int:
+    """CR-037 (D6): so o envio a pasta de arquivos tem o limite grande; o resto, o da Entrada."""
+    web = app_context.require_config().web
+    if (controller, function) == ("files", "upload"):
+        return web.files_upload_max_bytes + POST_MARGIN_BYTES
+    return web.input_upload_max_bytes + POST_MARGIN_BYTES
+
+
+def upload_dir(cfg: Any) -> str:
+    """CR-037 (D6): temporario do envio em var/<web>/tmp (particao do var/, DEPLOYMENT §4.3)."""
+    return os.path.join(sss_config.VAR_DIR, cfg.app.name, "tmp")
 
 
 def secure_cookie(req: Any) -> bool:
@@ -151,7 +168,7 @@ def _check_size() -> None:
         size = int(raw)
     except ValueError:
         size = -1
-    if size < 0 or size > max_body_bytes():
+    if size < 0 or size > body_limit(request.controller, request.function):
         log().warning("requisicao rejeitada (motivo=tamanho bytes=%s caminho=%s ip=%s)", raw,
                       path_info(), request.env.remote_addr, extra={"action": "CSRF"})
         raise HTTP(413)

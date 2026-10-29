@@ -6,6 +6,7 @@ A pasta existe so no servidor de cada agente; a tela mostra o retrato que cada a
 Permissao: UPLOAD_INPUT, o ambiente e o script no perfil (admin: todos), so script ativo homologado em
 ambiente ativo. Fora disso, RepoNotFound (404, nunca 403). Nome e subpasta seguem a regra do put-input (ticket_files).
 """
+from typing import Any, Optional
 import hashlib
 import json
 import re
@@ -43,12 +44,12 @@ class InvalidRequest(Exception):
     """Parametro de navegacao fora do formato (o controller responde 404)."""
 
 
-def valid_part(text):
+def valid_part(text: Any) -> bool:
     """Um nivel da subpasta ou o nome do arquivo, como o put-input (ticket_files) confere."""
     return isinstance(text, str) and bool(_RE_PART.match(text)) and not text.startswith(".")
 
 
-def normalize_folder(text):
+def normalize_folder(text: Optional[str]) -> Optional[str]:
     """Subpasta digitada ou da URL: '' (a propria pasta do script) ou 'a/b'; None se fora do formato."""
     text = (text or "").strip().strip("/")
     if not text:
@@ -59,7 +60,7 @@ def normalize_folder(text):
     return "/".join(parts)
 
 
-def upload_name(filename):
+def upload_name(filename: Optional[str]) -> str:
     """So o ultimo nivel do nome enviado pelo navegador (alguns mandam o caminho do computador)."""
     return re.split(r"[\\/]", filename or "")[-1].strip()
 

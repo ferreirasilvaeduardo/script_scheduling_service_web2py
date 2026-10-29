@@ -3,6 +3,7 @@
 
 Modulo puro: nao importa gluon (testavel sem o framework).
 """
+from typing import Any
 import hashlib
 import json
 import re
@@ -31,7 +32,7 @@ class OperationDenied(Exception):
         self.message = message
 
 
-def require_feature(ctx, code):
+def require_feature(ctx: Any, code: str) -> None:
     """Defesa em profundidade: o controller ja exige a funcionalidade, o service reconfirma."""
     if not rbac.has_feature(ctx, code):
         raise AccessDenied(code)
@@ -139,7 +140,7 @@ def truncate_detail(detail):
     return detail[:DETAIL_LIMIT - 3] + u"..."
 
 
-def free_detail(text):
+def free_detail(text: Any) -> Any:
     """Detalhe de auditoria montado pelo service, sempre mascarado e limitado (README §4.4)."""
     return truncate_detail(masking.MASKER.mask(text))
 

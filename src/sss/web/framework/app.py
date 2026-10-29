@@ -12,7 +12,7 @@ import uuid
 from typing import (Any, Callable, Iterable, Iterator, List, Mapping,
                     NamedTuple, Optional, Sequence)
 
-from . import static
+from . import multipart, static
 from .errors import HTTP, status_line
 from .request import Request
 from .response import Response
@@ -32,6 +32,7 @@ Settings = NamedTuple("Settings", [
     ("max_body_bytes", int),
     ("session_codec", SessionCodec),
     ("secure_cookie", Callable[[Request], bool]),
+    ("upload_dir", Optional[str]),
 ])
 
 _HTML = "text/html; charset=utf-8"
@@ -127,7 +128,8 @@ class Application:  # pylint: disable=too-many-instance-attributes,too-few-publi
 
     def _dynamic(self, environ: Mapping[str, Any], route: Route,
                  start_response: StartResponse) -> Iterable[bytes]:
-        request = Request(environ, route, self.settings.max_body_bytes)
+        request = Request(environ, route, self.settings.max_body_bytes,
+                          multipart.DEFAULT_LIMITS._replace(spool_dir=self.settings.upload_dir))
         response = Response()
         cookie = request.cookies.get(COOKIE_NAME)
         codec = self.settings.session_codec

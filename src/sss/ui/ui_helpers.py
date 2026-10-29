@@ -3,6 +3,7 @@
 
 Funcoes puras: nao importam gluon.
 """
+from typing import Any
 import re
 
 # Nomes simples da situacao (README §2.4.2, §5.2.1); o codigo tecnico fica so como detalhe.
@@ -256,7 +257,7 @@ _OUTPUT_CLASS = {"WRITING": "info", "STALLED": "warning", "AVAILABLE": "success"
                  "BYTES": "warning", "FAILED": "warning"}
 
 
-def readable_size(nbytes):
+def readable_size(nbytes: Any) -> str:
     """Bytes em texto curto: '512 bytes', '12,3 KB', '4,5 MB' (virgula decimal, README §2.4.2)."""
     if nbytes is None:
         return u"-"

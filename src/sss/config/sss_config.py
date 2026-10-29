@@ -238,6 +238,9 @@ SCHEMA = collections.OrderedDict([
         # CR-020d: tamanho maximo do arquivo enviado pela tela de Entrada (o POST maior e recusado antes de ser lido).
         ("input_upload_max_bytes", FieldDef("int", required=False, min_val=1048576, max_val=209715200,
                                             default=52428800)),
+        # CR-037 (D6): envio para a pasta de arquivos, em blocos para o disco (nunca inteiro na memoria nem no banco).
+        ("files_upload_max_bytes", FieldDef("int", required=False, min_val=1048576, max_val=10737418240,
+                                            default=1073741824)),
     ])),
 ])
 
@@ -300,7 +303,7 @@ class LoggingConfig(_ItemAccessMixin, collections.namedtuple("LoggingConfig", [
 class WebConfig(_ItemAccessMixin, collections.namedtuple("WebConfig", [
     "session_idle_timeout_s", "session_max_hours", "login_max_attempts", "login_lockout_s",
     "log_poll_interval_s", "trusted_proxies", "allowed_origins", "input_upload_max_bytes",
-    "max_threads", "socket_timeout_s"
+    "max_threads", "socket_timeout_s", "files_upload_max_bytes"
 ])):
     __slots__ = ()
 

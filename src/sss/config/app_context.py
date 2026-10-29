@@ -5,6 +5,8 @@ A configuracao e uma so por processo: o bootstrap da web (models/00_config.py) o
 e services, repositorios e controllers a leem daqui. O contexto da requisicao (usuario logado) nao mora
 neste modulo. Nao importa gluon (AGENTS §5.2).
 """
+from typing import Any
+
 
 _config = None
 
@@ -20,7 +22,7 @@ def get_config():
     return _config
 
 
-def require_config():
+def require_config() -> Any:
     """Configuracao do processo; sem ela, falha na hora (AGENTS §6, fail-fast)."""
     if _config is None:
         raise RuntimeError("Configuracao ausente: carregue-a com app_context.set_config (models/00_config.py)")

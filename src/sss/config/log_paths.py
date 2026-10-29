@@ -9,6 +9,7 @@ Modulo puro: nao importa gluon (AGENTS §7.1). E o unico lugar que monta caminho
 import os
 import re
 import unicodedata
+from typing import Optional, Tuple
 
 # Pasta dos logs da aplicacao; nenhum script pode ter essa pasta de log (CR-005, D7).
 APP_DIR = 'app'
@@ -114,7 +115,8 @@ def input_dir(input_dir, environment, script_name, script_id=None):
     return os.path.join(input_dir, environment_dir(environment)), script_dir(script_name, script_id)
 
 
-def files_dirs(files_dir, environment, script_name, script_id=None):
+def files_dirs(files_dir: str, environment: str, script_name: str,
+               script_id: Optional[int] = None) -> Tuple[str, str, str, str]:
     """Pasta de arquivos do script (CR-037, so em disco): permanente, uma por ambiente e script, como a de
     entrada. Devolve (base, relativo, inputs, outputs): base = files_dir/<ambiente>, relativo = <pasta do script>
     (a regra da pasta do log) e os caminhos completos das subpastas inputs e outputs."""

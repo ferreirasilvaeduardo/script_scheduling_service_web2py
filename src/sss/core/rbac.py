@@ -4,6 +4,8 @@
 Modulo puro: nao importa gluon nem acessa repositorios (AGENTS §7.1). Os dados de
 entrada (script, ambiente, ticket) devem vir do repositorio, nunca do cliente.
 """
+from typing import Any
+
 
 ADMIN_PRIORITY = 1
 PRIORITIES = (1, 2, 3, 4)
@@ -59,7 +61,7 @@ def _active(ctx):
     return bool(ctx) and ctx.get("active_user") is True and ctx.get("active_profile") is True
 
 
-def has_feature(ctx, code):
+def has_feature(ctx: Any, code: str) -> bool:
     """True se o perfil concede a funcionalidade; admin tem todas, desde que ativo."""
     if not _active(ctx):
         return False

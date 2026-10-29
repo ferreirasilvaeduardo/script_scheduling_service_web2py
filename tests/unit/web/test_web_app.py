@@ -56,7 +56,7 @@ class AppTest(unittest.TestCase):
         self.app = self._app()
 
     def _app(self, **kwargs):
-        settings = Settings(APP, self.static_dir, 4096, self.codec, lambda request: False)
+        settings = Settings(APP, self.static_dir, 4096, self.codec, lambda request: False, None)
         actions = {
             ("default", "index"): lambda ctx: "<p>início</p>",
             ("default", "login"): self._login,

@@ -10,7 +10,7 @@ from sss.web.framework.errors import HTTP
 BOUNDARY = "----sssBoundary7MA4YWxk"
 CONTENT_TYPE = "multipart/form-data; boundary=%s" % BOUNDARY
 LIMITS = multipart.Limits(max_body_bytes=1 << 20, max_parts=10, max_header_bytes=1024, max_field_bytes=4096,
-                          spool_memory_bytes=1024)
+                          spool_memory_bytes=1024, spool_dir=None)
 
 
 def _body(*parts, closing=True):

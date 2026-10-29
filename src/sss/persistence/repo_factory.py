@@ -5,6 +5,7 @@ A aplicacao usa sempre o Oracle do [oracle] do config.ini (owner e table_prefix)
 quando um teste o injeta explicitamente por configurar({"app": {"data_backend": "FAKE", ...}}), e so
 onde a pasta dev/ existe (o repositorio; CR-032, D11). Garante singletons por processo.
 """
+from typing import Any
 import logging
 import os
 import threading
@@ -100,7 +101,7 @@ def _oracle_class(normalized_name):
     return None
 
 
-def get(name, config=None):
+def get(name: str, config: Any = None) -> Any:
     """Retorna a instancia singleton do repositorio solicitado.
 
     Lanca RuntimeError se o FAKE (so de teste) for pedido onde nao ha a pasta dev/ e ValueError para

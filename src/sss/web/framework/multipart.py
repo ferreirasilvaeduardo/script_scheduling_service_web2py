@@ -16,10 +16,11 @@ CHUNK_BYTES = 65536
 
 Limits = NamedTuple("Limits", [("max_body_bytes", int), ("max_parts", int),
                                ("max_header_bytes", int), ("max_field_bytes", int),
-                               ("spool_memory_bytes", int)])
+                               ("spool_memory_bytes", int), ("spool_dir", Optional[str])])
 
+# spool_dir: pasta do temporario acima de spool_memory_bytes (None: a do sistema).
 DEFAULT_LIMITS = Limits(max_body_bytes=1048576, max_parts=1000, max_header_bytes=8192,
-                        max_field_bytes=1048576, spool_memory_bytes=1048576)
+                        max_field_bytes=1048576, spool_memory_bytes=1048576, spool_dir=None)
 
 # RFC 2046 §5.1.1: 1 a 70 caracteres de bchars, sem espaco no fim.
 _RE_BOUNDARY = re.compile(r"[0-9A-Za-z'()+_,\-./=:? ]{0,69}[0-9A-Za-z'()+_,\-./=:?]")
@@ -143,13 +144,16 @@ class _Scanner:
 class _Sink:  # pylint: disable=too-few-public-methods
     """Destino de uma parte: memoria limitada (campo) ou arquivo temporario (upload)."""
 
-    def __init__(self, limit: Optional[int], spool_bytes: int) -> None:
+    def __init__(self, limit: Optional[int], spool_bytes: int,
+                 spool_dir: Optional[str] = None) -> None:
         self._limit = limit
         self.size = 0
         self.memory = bytearray() if limit is not None else None
         # Sem with de proposito: o arquivo passa ao UploadedFile e e fechado pelo Request.close().
-        self.file = (tempfile.SpooledTemporaryFile(max_size=spool_bytes)  # pylint: disable=R1732
-                     if limit is None else None)
+        self.file = None
+        if limit is None:
+            self.file = tempfile.SpooledTemporaryFile(  # pylint: disable=R1732
+                max_size=spool_bytes, dir=spool_dir)
 
     def write(self, data: bytes) -> None:
         """Acrescenta ``data``; campo de texto acima do limite e 413."""
@@ -204,7 +208,8 @@ def parse(stream: BinaryIO, content_type: str, content_length: int,
         if kind != "form-data" or not name:
             raise _bad("parte sem nome")
         is_file = "filename" in params
-        sink = _Sink(None if is_file else limits.max_field_bytes, limits.spool_memory_bytes)
+        sink = _Sink(None if is_file else limits.max_field_bytes, limits.spool_memory_bytes,
+                     limits.spool_dir)
         scanner.stream_until(b"\r\n" + delimiter, sink)
         if is_file:
             sink.file.seek(0)

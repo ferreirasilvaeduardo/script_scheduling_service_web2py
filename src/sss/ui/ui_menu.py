@@ -16,6 +16,8 @@ _CATALOG = (
         ("DOWNLOAD_OUTPUT", u"Saídas", "outputs", "index", "icon-download"),
         # Envio de arquivos para a pasta de entrada dos scripts, entregue pelos agentes (CR-020d).
         ("UPLOAD_INPUT", u"Entrada", "inputs", "index", "icon-upload"),
+        # Pasta de arquivos so em disco, por ambiente e script (CR-037): com qualquer das duas.
+        (("FILES_UPLOAD", "FILES_DOWNLOAD"), u"Pasta de Arquivos", "files", "index", "icon-folder"),
         # Telas que antes so abriam por botao ou aba (CR-017c): o que vai rodar e a saude dos agentes.
         ("MANAGE_SCHEDULES", u"Agenda", "schedules", "agenda", "icon-calendar"),
         ("VIEW_AUDIT", u"Agentes", "audit", "agents", "icon-server"),

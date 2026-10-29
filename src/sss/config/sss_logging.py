@@ -6,6 +6,7 @@ Gera formato:
 %(asctime)s %(levelname)s [pid=%(process)d] [agent=%(agent)s] [ticket=%(ticket)s] [action=%(action)s] %(message)s
 com data ISO local e offset.
 """
+from typing import Any
 import datetime
 import logging
 import logging.handlers
@@ -265,7 +266,7 @@ def log_initial_critical(log_name, message, log_dir=None, stream=None):
     return destination
 
 
-def get_logger(log_name, cfg):
+def get_logger(log_name: str, cfg: Any) -> Any:
     """Retorna o logger configurado por configurar(), criando-o uma unica vez por processo."""
     with _LOGGERS_LOCK:
         logger = _LOGGERS.get(log_name)

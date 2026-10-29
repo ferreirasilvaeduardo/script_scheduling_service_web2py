@@ -158,7 +158,8 @@ class SecurityHooksTest(unittest.TestCase):
         self.addCleanup(app_context.set_config, previous)
         self.cfg = types.SimpleNamespace(
             app=types.SimpleNamespace(name="web0001"),
-            web=types.SimpleNamespace(input_upload_max_bytes=1000, allowed_origins=("https://sss",),
+            web=types.SimpleNamespace(input_upload_max_bytes=1000, files_upload_max_bytes=5000,
+                                      allowed_origins=("https://sss",),
                                       trusted_proxies=(), session_idle_timeout_s=1800,
                                       session_max_hours=12))
         app_context.set_config(self.cfg)
@@ -196,6 +197,26 @@ class SecurityHooksTest(unittest.TestCase):
                 with self.assertRaises(HTTP) as raised:
                     security.before_request(ctx)
                 self.assertEqual(raised.exception.status, status)
+
+    def test_cr037_limite_grande_so_no_envio_da_pasta_de_arquivos(self):
+        """CR-037 (D6): files/upload aceita files_upload_max_bytes; qualquer outra rota, o da Entrada."""
+        margin = security.POST_MARGIN_BYTES
+        self.assertEqual(security.max_body_bytes(), 5000 + margin)
+        self.assertEqual(security.body_limit("files", "upload"), 5000 + margin)
+        self.assertEqual(security.body_limit("inputs", "upload"), 1000 + margin)
+        self.assertEqual(security.body_limit("default", "login"), 1000 + margin)
+        ctx = _context(controller="default", function="login", method="POST",
+                       CONTENT_LENGTH=str(1000 + margin + 1))
+        with self.assertRaises(HTTP) as raised:
+            security.before_request(ctx)
+        self.assertEqual(raised.exception.status, 413, "login nao herda o limite grande")
+        ctx = _context(controller="files", function="upload", method="POST",
+                       CONTENT_LENGTH=str(5000 + margin + 1))
+        with self.assertRaises(HTTP) as raised:
+            security.before_request(ctx)
+        self.assertEqual(raised.exception.status, 413)
+        self.assertEqual(security.upload_dir(self.cfg), os.path.join(
+            security.sss_config.VAR_DIR, "web0001", "tmp"))
 
     def test_cr032_own_host_origin_and_secure_cookie_only_on_https(self):
         """CR-032 (D11): o proprio Host vale como origem, e o cookie e Secure so sob HTTPS, em DEV e PROD."""

@@ -150,6 +150,7 @@ Todas as telas, quem pode abrir cada uma e para que servem. Telas marcadas com *
 | Detalhe do ticket | `tickets/detail/<id>` | Quem pode ver o ticket | Saber o que aconteceu, ver o log, cancelar ou repetir (§5.7, **CR-004**: frase-resumo e etapas) |
 | **Saída do ticket** (CR-012) | `tickets/output/<id>` | Quem pode ler o log do ticket | Baixar o zip com os arquivos que o script deixou na pasta de saída (§8.13) |
 | **Saídas** (CR-020a) | `outputs/index`, `files`, `download_zip`, `download_file` | `DOWNLOAD_OUTPUT` | Navegar pelas saídas dos tickets e baixar o zip ou um arquivo (§5.9) |
+| **Pasta de Arquivos** (CR-037) | `files/index`, `upload`, `download`, `download_zip` | `FILES_UPLOAD` (inputs) ou `FILES_DOWNLOAD` (outputs) | Enviar arquivos para a pasta `inputs` de um script e baixar da pasta `outputs`, só em disco, sem passar pelo banco (§5.11) |
 | **Entrada** (CR-020d) | `inputs/index`, `upload`, `refresh` | `UPLOAD_INPUT` | Enviar arquivos para a pasta de entrada de um script e acompanhar a entrega pelo agente (§5.10) |
 | Agendamentos | `schedules/index`, `form` | `MANAGE_SCHEDULES` | Criar e cuidar das regras que rodam sozinhas (§7.6) |
 | **Agenda** (CR-004) | `schedules/agenda` | `MANAGE_SCHEDULES` | Ver o que vai rodar hoje e nos próximos 7 dias (§7.7). Item próprio no menu Operação (CR-017c) |
@@ -1057,6 +1058,16 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
   * o SHA-256 é calculado na web e o envio vai para todos os agentes vivos do ambiente (§10, tabelas 19 e 20). Sem nenhum: "Nenhum servidor deste ambiente está no ar agora. Tente de novo mais tarde." e nada é gravado.
 * **Últimos envios** do script no ambiente (de todas as subpastas, com o caminho completo): arquivo, quem enviou (mascarado como no resto do sistema), quando, tamanho e a situação em cada servidor (Aguardando, Entregue ou Falhou, com o motivo em linguagem simples), paginados de 20 em 20, com o link **Atualizar** (sem atualização automática).
 * **Auditoria:** `INPUT_UPLOAD` no envio e `INPUT_DELIVERY` na entrega (§4.4); navegar e pedir retrato não auditam.
+
+### 5.11 Pasta de Arquivos (CR-037)
+
+**Pasta de Arquivos** (`files/index`, item "Pasta de Arquivos" do menu Operação, com `FILES_UPLOAD` ou `FILES_DOWNLOAD`): a pasta de arquivos dos scripts (§8.16), lida e gravada **direto no disco** do servidor, sem o conteúdo passar pelo banco. Convive com a Entrada (§5.10) e as Saídas (§5.9), que continuam pelo banco.
+
+* **Navegação:** ambiente → script (ativos, do perfil, homologados no ambiente) → `inputs` ou `outputs`, com subpastas. O agente sai do cadastro de agentes que atendem o ambiente e têm `var/<agente>/files` **neste servidor web**: com um só, a tela o usa; com mais de um, pede a escolha; sem nenhum, mostra "Nenhum servidor deste ambiente tem a pasta de arquivos neste servidor web". Por isso, o web precisa estar no mesmo servidor do agente ou na mesma raiz compartilhada (DEPLOYMENT §4.1). O agente pode estar parado.
+* **`inputs` (`FILES_UPLOAD`):** lista nome, tamanho e data; envia um arquivo (até `[web] files_upload_max_bytes`, 1 GiB por padrão), opcionalmente para uma subpasta criada se faltar, com a regra de nome e subpasta da Entrada; **substitui** um existente só com "Substituir se já existir" e a confirmação do modal (sem a caixa, "Já existe um arquivo com esse nome"). O corpo vai em blocos para um temporário em `var/<web>/tmp/` e depois, de novo em blocos, para um temporário na pasta de destino, que só aparece com o nome final no fim (link sem substituir ou rename substituindo); o arquivo nunca passa inteiro pela memória do web.
+* **`outputs` (`FILES_DOWNLOAD`):** navega nas subpastas, baixa um arquivo ou **a pasta (ou uma subpasta) em zip**, montado em fluxo durante o download (sem gravar no disco nem no banco; a resposta não tem `Content-Length` e termina no fechamento da conexão).
+* **Segurança:** nenhum caminho segue link simbólico (cada nível conferido com `lstat`, arquivos com `O_NOFOLLOW`, `platform/files_area.py`); `..`, nível começando com ponto e caractere de controle são recusados; fora do escopo, 404 (nunca 403); sem as duas funcionalidades, 403. Envio é POST com CSRF; downloads são GET. Os temporários do envio (`.sss_files_*`) não aparecem na lista nem no zip.
+* **Auditoria:** `FILES_UPLOAD` (com caminho, bytes, sha256, "substituído" e agente) e `FILES_DOWNLOAD` (arquivo ou "zip da pasta"), entidade `files`, gravados antes do envio. Nada apagado pela tela (D7): a limpeza é à mão (§14).
 
 ## 6. Parâmetros, Validação e Compilação do Snapshot
 
@@ -2903,6 +2914,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[web]` | `login_max_attempts` | não | `5` | **1 a 99** (a coluna `failed_attempts` é `NUMBER(2)`) |
 | `[web]` | `trusted_proxies` | não | vazio | lista CSV |
 | `[web]` | `input_upload_max_bytes` (CR-020d) | não | `52428800` | 1.048.576 a 209.715.200; o POST acima disso é recusado com 413 antes de ser lido (§5.10) |
+| `[web]` | `files_upload_max_bytes` (CR-037) | não | `1073741824` | 1.048.576 a 10.737.418.240; só para o envio à pasta de arquivos (§5.11), copiado em blocos de `var/<web>/tmp/` para o disco; o POST acima disso é recusado com 413 antes de ser lido |
 
 **Derivadas, não são mais chaves (CR-032, D4 e D14; uma linha antiga só gera aviso):** `[agent] agent_id` e `work_dir`, `[logging] log_dir` (do `name`) e `[secrets] secrets_file`: o arquivo de segredos é um só por servidor, `instance/secrets.cfg` (na pasta de cima da do `config.ini`); um `secrets.cfg` antigo dentro de `instance/<nome>/` ainda é lido, com aviso para mover. Não existe mais o formato único: um arquivo com `[web]` e `[agent]` (ou sem nenhum dos dois) é recusado.
 
