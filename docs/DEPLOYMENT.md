@@ -119,6 +119,8 @@ python3 /tmp/sss-limpo/tools/package.py --source /tmp/sss-limpo --out-dir /tmp/s
 # esperado: "Pacote: .../sss-<versao>.tar.gz" e "SHA256SUMS: .../SHA256SUMS"; código 0
 ```
 
+Na máquina de desenvolvimento, `make package` faz o mesmo (cópia do `HEAD` por `git archive` e `package.py`) e grava o pacote, o `SHA256SUMS` e o `COMMIT` em `.bkp/pacote_<data>/` (usado no CR-035).
+
 O `package.py` fica em `tools/` desde o CR-022b2 (antes, `scripts/`): é ferramenta de build e não vai no pacote. Ensaiado de novo no CR-021f3, já sem web2py: o `package.py` não grava `__pycache__` na cópia que empacota (antes, o próprio `__pycache__` recusava o pacote). Com código 1, a saída diz o que foi recusado ("Pacote recusado:" e uma linha por problema, com arquivo e linha, nunca o valor). O caso comum é um `password` ou `cookie_key` que não é `CHANGE_ME` no `instance/secrets.cfg.example`.
 
 Leve os dois arquivos (`sss-<version>.tar.gz` e `SHA256SUMS`) ao servidor e confira. Na **primeira instalação**:
@@ -488,7 +490,7 @@ Depois:
 O SSS não apaga nada sozinho: não há `purge.py` nem retenção automática. O README §11.3 traz o procedimento completo:
 
 * **Banco:** o SQL comentado, em lotes, para tickets terminais, auditoria e envios da tela de Entrada. Roda o DBA, ou a conta do SSS quando ela é a dona do esquema (§4.0).
-* **Arquivos:** os `find` para as pastas de minuto de `var/<nome>/logs`, `output` e `script_work`, primeiro só listando e depois apagando, e para os `.out` dos processos e os pacotes de retorno do `sss-update.sh`.
+* **Arquivos:** os `find` para as pastas de minuto de `var/<nome>/logs`, `outputs` e `script_works`, primeiro só listando e depois apagando, e para os `.out` dos processos e os pacotes de retorno do `sss-update.sh`.
 * **Pelo cron** da conta que roda o SSS, como no exemplo do §4.0. Comece listando (`-print`) e só depois troque por `-exec rm -rf {} +`.
 
 ---
@@ -700,7 +702,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 
 ---
 
-## 18. Atualização de versão e retorno [ensaiado no CR-031]
+## 18. Atualização de versão e retorno [ensaiado no CR-031 e no CR-035]
 
 ### 18.1 Atualização no lugar (CR-028, D10)
 
@@ -725,6 +727,13 @@ O código é trocado **no lugar** pelo `bin/sss-update.sh`. `instance/`, `var/` 
 ### 18.2 Notas por versão (estrutura por processo)
 
 Do mais novo para o mais antigo. Quem vem de uma versão anterior aplica na ordem cronológica. As notas da instalação anterior ao CR-028 (`/opt/sss/app`) estão em `docs/architecture/DEPLOYMENT-history.md`.
+
+* **CR-033 e CR-034 (sem mudança de esquema nem de config).** Ensaiados no PROD de `5c0383d` para `e0030e7`, com retorno (CR-035).
+  * O pacote não leva mais `docs/homologation/` (CR-033, D3): a pasta some do servidor na atualização.
+  * `check_env.py --name <nome>` passa a **conectar ao banco** sempre (CR-034, D6), com uma linha do orçamento da conexão (`AVISO` não reprova); sem processo, sai com 2. Use-o antes da subida (§6).
+  * `health.py` não grava mais `health_<PID>.log` com a configuração inválida (D7): o motivo fica só no `health.txt` do cron.
+  * `[app] name` igual a `init_db`, `seed` ou `purge` é recusado também no web (D9); `sss-stop.sh --config` segue a mesma regra de nome (D10). Confira os nomes antes de atualizar.
+  * **Retorno:** o pacote de retorno do `sss-update.sh`, sem SQL.
 
 * **Pastas no plural (CR-032, 032e, D21).** As pastas que saem do nome do agente passam a `var/<nome>/works`, `inputs`, `outputs` e `script_works`. Na primeira subida da versão nova, o agente renomeia sozinho as anteriores (`work`, `input`, `output`, `script_work`), com a linha `pasta renomeada` no log; nada a fazer à mão. Ajuste os `find` da limpeza manual no `crontab` (§4.0 e §12). Com uma pasta escrita no `config.ini`, nada muda. A pasta `var/exec/` do helper (CR-028) não é mais usada e pode ser apagada.
 * **CR-032: com tudo parado em todos os servidores.**

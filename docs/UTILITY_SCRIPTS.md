@@ -14,9 +14,9 @@ Para atender aos cenários operacionais frequentes de manipulação de arquivos 
   - Leitura em *streaming* / blocos (*chunks*) para arquivos de grande porte, com baixo uso de memória;
   - Parâmetros sanitizados sem injeção de comandos.
 - **Localização dos Fontes:**
-  - **Ambiente de Desenvolvimento:** `dev/scripts/utilitarios/`
-  - **Ambiente de Produção:** `/opt/automacoes/scripts/utilitarios/`
-- **Cadastro no catálogo (CR-023):** o seed cadastra os 14 scripts com caminho relativo à pasta base do agente (`utilitarios/<arquivo>`). Cada agente precisa de `[agent] script_base_dir` apontando para a pasta que contém `utilitarios/` (em produção, `/opt/automacoes/scripts`; no DEV, `dev/scripts` do repositório).
+  - **Repositório (DEV):** `dev/scripts/utilitarios/`; o agente do DEV usa `[agent] script_base_dir = <RAIZ>/dev/scripts`.
+  - **Instalação pelo pacote (PROD):** `<RAIZ>/scripts_ambiente/utilitarios/`, na pasta base padrão do agente (`scripts_ambiente/`, sem `script_base_dir` no `config.ini`; CR-028 e CR-032). O pacote não leva `dev/`: os scripts são copiados à parte (§6.1).
+- **Cadastro no catálogo (CR-023):** o seed cadastra os 14 scripts com caminho relativo à pasta base do agente (`utilitarios/<arquivo>`). O mesmo cadastro vale no DEV e no PROD; só a pasta base muda.
 
 ---
 
@@ -79,7 +79,7 @@ Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de da
   3. `nivel_compressao` (`--nivel`, opcional, padrão `6`)
 - **Exemplo de Execução CLI:**
   ```bash
-  python3 /opt/automacoes/scripts/utilitarios/zipar_arquivos.py --origem /dados/relatorios --destino /backup/relatorios.zip --nivel 9
+  python3 scripts_ambiente/utilitarios/zipar_arquivos.py --origem /dados/relatorios --destino /backup/relatorios.zip --nivel 9
   ```
 
 ### 4.2 `descompactar_zip` (Python 3)
@@ -89,7 +89,7 @@ Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de da
   2. `arq_destino` (`--destino`, obrigatório)
 - **Exemplo de Execução CLI:**
   ```bash
-  python3 /opt/automacoes/scripts/utilitarios/descompactar_zip.py --arquivo-zip /backup/relatorios.zip --destino /dados/relatorios_extracao
+  python3 scripts_ambiente/utilitarios/descompactar_zip.py --arquivo-zip /backup/relatorios.zip --destino /dados/relatorios_extracao
   ```
 
 ### 4.3 `quebrar_arquivo` (Python 3)
@@ -100,7 +100,7 @@ Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de da
   3. `prefixo_saida` (`--prefixo-saida`, opcional, padrão `/tmp/parte_`)
 - **Exemplo de Execução CLI:**
   ```bash
-  python3 /opt/automacoes/scripts/utilitarios/quebrar_arquivo.py --origem /dados/extrato_anual.csv --linhas-por-parte 5000 --prefixo-saida /dados/partes/extrato_
+  python3 scripts_ambiente/utilitarios/quebrar_arquivo.py --origem /dados/extrato_anual.csv --linhas-por-parte 5000 --prefixo-saida /dados/partes/extrato_
   ```
 
 ### 4.4 `juntar_arquivos` (Python 3)
@@ -110,7 +110,7 @@ Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de da
   2. `arq_destino` (`--destino`, obrigatório)
 - **Exemplo de Execução CLI:**
   ```bash
-  python3 /opt/automacoes/scripts/utilitarios/juntar_arquivos.py --padrao-origem "/dados/partes/extrato_*" --destino /dados/extrato_consolidado.csv
+  python3 scripts_ambiente/utilitarios/juntar_arquivos.py --padrao-origem "/dados/partes/extrato_*" --destino /dados/extrato_consolidado.csv
   ```
 
 ### 4.5 `converter_encoding` (Python 3)
@@ -122,7 +122,7 @@ Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de da
   4. `enc_destino` (`--enc-destino`, opcional, padrão `UTF-8`)
 - **Exemplo de Execução CLI:**
   ```bash
-  python3 /opt/automacoes/scripts/utilitarios/converter_encoding.py --origem /dados/legado.txt --destino /dados/moderno_utf8.txt --enc-origem ISO-8859-1 --enc-destino UTF-8
+  python3 scripts_ambiente/utilitarios/converter_encoding.py --origem /dados/legado.txt --destino /dados/moderno_utf8.txt --enc-origem ISO-8859-1 --enc-destino UTF-8
   ```
 
 ### 4.6 `substituir_texto` (Python 3)
@@ -134,7 +134,7 @@ Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de da
   4. `termo_substituicao` (`--substituicao`, obrigatório)
 - **Exemplo de Execução CLI:**
   ```bash
-  python3 /opt/automacoes/scripts/utilitarios/substituir_texto.py --origem /dados/config.ini --destino /dados/config_novo.ini --busca "10.0.0.1" --substituicao "10.0.0.2"
+  python3 scripts_ambiente/utilitarios/substituir_texto.py --origem /dados/config.ini --destino /dados/config_novo.ini --busca "10.0.0.1" --substituicao "10.0.0.2"
   ```
 
 ### 4.7 `remover_duplicadas` (Python 3)
@@ -145,7 +145,7 @@ Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de da
   3. `flag_ordenar` (`--ordenar`, opcional, padrão `Y`)
 - **Exemplo de Execução CLI:**
   ```bash
-  python3 /opt/automacoes/scripts/utilitarios/remover_duplicadas.py --origem /dados/lista_emails.txt --destino /dados/lista_emails_unicos.txt --ordenar S
+  python3 scripts_ambiente/utilitarios/remover_duplicadas.py --origem /dados/lista_emails.txt --destino /dados/lista_emails_unicos.txt --ordenar S
   ```
 
 ### 4.8 `gerar_hash_arquivo` (Python 3)
@@ -155,7 +155,7 @@ Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de da
   2. `tipo_hash` (`--algoritmo`, opcional, padrão `sha256`)
 - **Exemplo de Execução CLI:**
   ```bash
-  python3 /opt/automacoes/scripts/utilitarios/gerar_hash_arquivo.py --origem /dados/remessa.txt --algoritmo sha256
+  python3 scripts_ambiente/utilitarios/gerar_hash_arquivo.py --origem /dados/remessa.txt --algoritmo sha256
   ```
 
 ### 4.9 `compactar_targz` (Bash)
@@ -165,7 +165,7 @@ Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de da
   2. `arq_destino` (`--destino`, obrigatório)
 - **Exemplo de Execução CLI:**
   ```bash
-  /opt/automacoes/scripts/utilitarios/compactar_targz.sh --origem /dados/arquivos --destino /backup/arquivos.tar.gz
+  scripts_ambiente/utilitarios/compactar_targz.sh --origem /dados/arquivos --destino /backup/arquivos.tar.gz
   ```
 
 ### 4.10 `descompactar_targz` (Bash)
@@ -175,7 +175,7 @@ Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de da
   2. `arq_destino` (`--destino`, obrigatório)
 - **Exemplo de Execução CLI:**
   ```bash
-  /opt/automacoes/scripts/utilitarios/descompactar_targz.sh --arquivo-tar /backup/arquivos.tar.gz --destino /dados/arquivos_extraidos
+  scripts_ambiente/utilitarios/descompactar_targz.sh --arquivo-tar /backup/arquivos.tar.gz --destino /dados/arquivos_extraidos
   ```
 
 ### 4.11 `contar_linhas_arquivo` (POSIX Sh)
@@ -184,7 +184,7 @@ Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de da
   1. `caminho_arquivo` (*posicional $1*, obrigatório)
 - **Exemplo de Execução CLI:**
   ```bash
-  /opt/automacoes/scripts/utilitarios/contar_linhas_arquivo.sh /dados/carga.csv
+  scripts_ambiente/utilitarios/contar_linhas_arquivo.sh /dados/carga.csv
   ```
 
 ### 4.12 `filtrar_linhas` (Bash)
@@ -196,7 +196,7 @@ Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de da
   4. `flag_inverter` (`--inverter`, opcional, padrão `N`)
 - **Exemplo de Execução CLI:**
   ```bash
-  /opt/automacoes/scripts/utilitarios/filtrar_linhas.sh --origem /dados/log.txt --destino /dados/erros.txt --padrao "ERROR" --inverter N
+  scripts_ambiente/utilitarios/filtrar_linhas.sh --origem /dados/log.txt --destino /dados/erros.txt --padrao "ERROR" --inverter N
   ```
 
 ### 4.13 `ordenar_arquivo` (POSIX Sh)
@@ -208,7 +208,7 @@ Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de da
   4. `flag_reverso` (`--reverso`, opcional, padrão `N`)
 - **Exemplo de Execução CLI:**
   ```bash
-  /opt/automacoes/scripts/utilitarios/ordenar_arquivo.sh --origem /dados/valores.txt --destino /dados/valores_ordenados.txt --numerico S --reverso N
+  scripts_ambiente/utilitarios/ordenar_arquivo.sh --origem /dados/valores.txt --destino /dados/valores_ordenados.txt --numerico S --reverso N
   ```
 
 ### 4.14 `limpar_linhas_vazias` (Bash)
@@ -218,7 +218,7 @@ Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de da
   2. `arq_destino` (`--destino`, obrigatório)
 - **Exemplo de Execução CLI:**
   ```bash
-  /opt/automacoes/scripts/utilitarios/limpar_linhas_vazias.sh --origem /dados/bruto.txt --destino /dados/limpo.txt
+  scripts_ambiente/utilitarios/limpar_linhas_vazias.sh --origem /dados/bruto.txt --destino /dados/limpo.txt
   ```
 
 ---
@@ -241,9 +241,9 @@ Foram configurados **4 perfis de acesso** com escopos operacionais e administrat
 
 | Perfil | Tipo | Funcionalidades Autorizadas (`tbsss_profile_feature`) | Ambientes Autorizados (`tbsss_profile_env`) |
 |:---|:---:|:---|:---|
-| `ADMINISTRATOR` | Super Administrador (`is_admin = 'Y'`) | Todas as 10 funcionalidades (`EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `MANAGE_USERS`, `MANAGE_PROFILES`, `MANAGE_ENVIRONMENTS`, `MANAGE_SCRIPTS`, `MANAGE_PARAMETERS`, `MANAGE_SCHEDULES`, `VIEW_AUDIT`) | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
-| `OPERATOR_PROD` | Operacional Produção (`is_admin = 'N'`) | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET` | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
-| `OPERATOR_HML` | Operacional Homologação (`is_admin = 'N'`) | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET` | Ambientes não produtivos (`CLONE6`, `CLONE7`, `GFPREPROD`) |
+| `ADMINISTRATOR` | Super Administrador (`is_admin = 'Y'`) | Todas as 12 funcionalidades (`EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `MANAGE_USERS`, `MANAGE_PROFILES`, `MANAGE_ENVIRONMENTS`, `MANAGE_SCRIPTS`, `MANAGE_PARAMETERS`, `MANAGE_SCHEDULES`, `VIEW_AUDIT`) | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
+| `OPERATOR_PROD` | Operacional Produção (`is_admin = 'N'`) | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT` | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
+| `OPERATOR_HML` | Operacional Homologação (`is_admin = 'N'`) | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT` | Ambientes não produtivos (`CLONE6`, `CLONE7`, `GFPREPROD`) |
 | `READ_ONLY` | Auditoria / Leitura (`is_admin = 'N'`) | Apenas leitura de logs e tickets (`VIEW_LOGS`) | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
 
 ### 5.3 Liberação de Scripts por Perfil (`tbsss_profile_script`)
@@ -274,21 +274,18 @@ Foram criados **38 vínculos de parâmetros**, estabelecendo ordem de exibição
 
 ### 6.1 Instalação dos Arquivos Físicos no Servidor Linux
 
+Com a conta do SSS, sem root (DEPLOYMENT §4.0: um usuário de SO só), a partir de uma cópia do repositório (o pacote não leva `dev/`):
+
 ```bash
-# Criar pasta homologada de automacoes
-sudo install -d -o root -g root -m 0755 /opt/automacoes/scripts/utilitarios
+# na <RAIZ>; a pasta scripts_ambiente/ e criada pelo agente na subida, se faltar (CR-032, D12)
+mkdir -p scripts_ambiente/utilitarios
+cp <copia do repositorio>/dev/scripts/utilitarios/* scripts_ambiente/utilitarios/
 
-# Copiar os scripts utilitarios
-sudo cp dev/scripts/utilitarios/* /opt/automacoes/scripts/utilitarios/
-
-# Ajustar proprietario e permissoes de seguranca (AGENTS.md §3.2)
-sudo chown -R root:root /opt/automacoes/scripts/utilitarios
-sudo chmod 0755 /opt/automacoes/scripts/utilitarios
-sudo chmod 0755 /opt/automacoes/scripts/utilitarios/*.sh
-sudo chmod 0755 /opt/automacoes/scripts/utilitarios/*.py
+# o agente recusa script gravavel por grupo ou por outros (README §8.5; AGENTS §3.2)
+chmod 0755 scripts_ambiente/utilitarios scripts_ambiente/utilitarios/*.sh scripts_ambiente/utilitarios/*.py
 ```
 
-No `config.ini` de cada agente: `[agent] script_base_dir = /opt/automacoes/scripts` (CR-023; DEPLOYMENT §9).
+Nada a configurar no `config.ini` do agente: sem `[agent] script_base_dir`, a pasta base é `scripts_ambiente/` (CR-023, CR-028; DEPLOYMENT §9). Ensaiado no PROD (CR-033 e CR-035).
 
 ### 6.2 Execução do Script SQL via SQL*Plus
 

@@ -1,6 +1,6 @@
 # Guia de Configuração do Ambiente de Desenvolvimento (SSS)
 
-> Para instalar o SSS em **outro servidor** (usuário de serviço, diretórios, segredos, subida, acesso por túnel, systemd, atualização e troubleshooting), siga o `docs/DEPLOYMENT.md`.
+> Para instalar o SSS em **outro servidor** (uma conta de SO e uma de banco, sem root; pastas, segredos, subida pelo `sss-keepalive.sh` no `cron`, acesso, atualização pelo `sss-update.sh` e problemas), siga o `docs/DEPLOYMENT.md`.
 
 Este documento descreve como configurar o ambiente de desenvolvimento local para o **Script Scheduling Service (SSS)**, executar o verificador de ambiente, iniciar o servidor web em modo de desenvolvimento e rodar a suíte de testes.
 
@@ -179,7 +179,7 @@ python -m unittest tests.unit.core.test_cron_parser         # um arquivo
 | `tests/functional/` | A aplicação inteira, por requisição ou com o servidor real | `make test-functional` |
 | `tests/architecture/` | Regras lidas no código e nos documentos | `make test-architecture` |
 
-Resultado esperado no encerramento do CR-022b, sem `SSS_TEST_ORACLE`: `Ran 1484 tests ... OK (skipped=62)` (o total cresce com os testes novos). Os pulados são, na maior parte, os de `tests/integration/oracle/`. Rode a suíte na **3.6.0** e na **3.6.8** (AGENTS §7, item 3) e, de preferência, também na 3.13.2:
+Resultado esperado no encerramento do CR-034, sem `SSS_TEST_ORACLE`: `Ran 1499 tests ... OK (skipped=61)` (o total cresce com os testes novos). Os pulados são, na maior parte, os de `tests/integration/oracle/`. Rode a suíte na **3.6.0** e na **3.6.8** (AGENTS §7, item 3) e, de preferência, também na 3.13.2:
 
 ```bash
 for v in 3.6.0 3.6.8 3.13.2; do ~/.pyenv/versions/$v/bin/python -m unittest discover -s tests -t .; done
@@ -260,7 +260,7 @@ Os arquivos precisam de modo `0644` ou `0755` (`chmod -R go-w dev/scripts`). Uma
 ### 6.3 Agente em DEV (a partir do F8, CR-007)
 
 * **Config enxuto (CR-026, CR-028):** o `instance/agente0001/config.ini` do DEV só tem as chaves obrigatórias e as que fogem do padrão (`name = agente0001`, `environments`, `max_parallel_jobs`, `script_base_dir = <RAIZ>/dev/scripts`, `env_passthrough` e `level = DEBUG`); o do `web0001`, `name`, `level` e `allowed_origins`; o `[oracle]` dos dois fica no `instance/common.ini` (CR-032, D18). As pastas saem do nome. Não há `[agent] interpreters`: o agente procura `python3`, `bash`... no `PATH` do terminal que o subiu. O agente sobe pelo nome: `PYTHON=~/.pyenv/versions/3.6.15/bin/python3 bin/sss-scheduler.sh agente0001`. Para parar, `bin/sss-stop.sh agente0001` ou `SIGTERM` no PID do agente: ele encerra pela máquina de estados (README §8.11).
-* **Pasta de trabalho dos scripts (CR-019, CR-028):** no DEV é `var/agente0001/script_works` (padrão do nome; fora do git; criada pelo agente na subida, CR-032). Cada ticket recebe `SSS_WORK_DIR` em `script_work/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, que fica depois do ticket até a limpeza manual (README §11.3, CR-030).
+* **Pasta de trabalho dos scripts (CR-019, CR-028):** no DEV é `var/agente0001/script_works` (padrão do nome; fora do git; criada pelo agente na subida, CR-032). Cada ticket recebe `SSS_WORK_DIR` em `script_works/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, que fica depois do ticket até a limpeza manual (README §11.3, CR-030).
 * **DEV igual ao PROD (CR-032, D7, D8, D11):** os scripts rodam com a conta do agente, sem `sudo` nem helper, no DEV e no PROD; não há `sss_env` nem papel monitor. As linhas antigas (`sss_env`, `exec_users`, `exec_work_dir`, `helper_path`, `[monitor]`) só geram aviso.
 * `cron_horizon_days` é fixo em 1.461 desde o CR-032 (uma linha antiga só gera aviso); `max_log_size_bytes` vai até 64 MiB e o `table_prefix` só aceita minúsculas: um `config.ini` fora dessas faixas aborta a subida com a chave no log.
 * **CR-008:** `[web] session_max_hours` (padrão 12) e `[agent] log_dir_min_free_mb` (padrão 1.024; 0 desliga) são opcionais. `[oracle] user` pode ser igual ao `owner` (CR-032, D11). O `scripts/health.py` usa os segredos e a conta do processo do `--name` (CR-032, D8).
@@ -294,13 +294,13 @@ O backend FAKE não precisa de banco. Para o backend ORACLE (README §2.3, CR-00
 
 ## 8. Usuários Padrão para Desenvolvimento e Homologação
 
-Para testes interativos na interface web (tanto no backend FAKE quanto no backend ORACLE), utilize os usuários cadastrados no seed:
+Para testes interativos na interface web (a aplicação usa sempre o Oracle; o FAKE é só dos testes automáticos), utilize os usuários cadastrados no seed:
 
 | Login | Perfil | Permissões Principais | Escopo de Ambientes |
 |---|---|---|---|
-| `admin` | `ADMINISTRATOR` | Acesso irrestrito a todas as 10 funcionalidades | Todos os 5 ambientes |
-| `op.prod` | `OPERATOR_PROD` | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET` | Todos os 5 ambientes |
-| `op.hml` | `OPERATOR_HML` | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET` | `CLONE6`, `CLONE7`, `GFPREPROD` |
+| `admin` | `ADMINISTRATOR` | Acesso irrestrito a todas as 12 funcionalidades | Todos os 5 ambientes |
+| `op.prod` | `OPERATOR_PROD` | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT` | Todos os 5 ambientes |
+| `op.hml` | `OPERATOR_HML` | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT` | `CLONE6`, `CLONE7`, `GFPREPROD` |
 | `consulta` | `READ_ONLY` | Apenas consulta (`VIEW_LOGS`) | Todos os 5 ambientes |
 
 * **Senha Inicial Padrão:** `Sss@Homolog2026!` (hash PBKDF2-SHA256 com 200.000 iterações).

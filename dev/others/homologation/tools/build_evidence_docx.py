@@ -722,6 +722,23 @@ RODADAS["20261028_r2"] = dict(RODADAS["20261028"], **{
         u"subiu sozinho). Os resultados do CT-30 são os dessa segunda passada.",
     ],
 })
+RODADAS["20261029"] = dict(RODADAS["20261028_r2"], **{
+    "commit": u"e0030e7 (CR-034) instalado no PROD pelo sss-update.sh, sobre o 5c0383d, com ensaio do retorno "
+              u"(CR-035); o roteiro e o documento no mesmo commit deste documento",
+    "web": u"Servidor web do PROD subido pelo bin/sss-keepalive.sh web0001:18100 (Python 3.6.0) depois da "
+           u"atualização pelo bin/sss-update.sh, com o [oracle] do instance/common.ini do PROD (o mesmo banco do DEV).",
+    "defeitos": [],
+    "observacoes": [
+        u"Rodada do CR-035: PROD atualizado no lugar pelo bin/sss-update.sh (DEPLOYMENT §18.1), de 5c0383d para "
+        u"e0030e7 (CR-033 e CR-034), com o retorno ensaiado (volta ao 5c0383d e reaplicação); instance/ e "
+        u"scripts_ambiente/ idênticos depois das três trocas. Marca %s." % STAMP,
+        u"Mesmo banco do DEV, com os mesmos nomes web0001 e agente0001 e o DEV parado durante toda a rodada "
+        u"(CR-033, D1 A).",
+        u"O PROD não mostra a faixa de ambiente nem o [DEV] no título; o rodapé diz \"Ambiente PROD\". O "
+        u"check_env.py --name do PROD conectou ao banco (CR-034, D6).",
+        u"O banco não foi recriado: o admin já estava com a senha escolhida (SSS_ADMIN_START=new).",
+    ],
+})
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]
