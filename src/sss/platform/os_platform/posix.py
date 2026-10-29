@@ -380,10 +380,13 @@ def validate_script_path(path):
 # -----------------------------------------------------------------------------
 
 def _run_short(argv):
-    """Comando curto (locale -a na subida, list-input e clean-output): devolve (codigo, saida)."""
+    """Comando curto (locale -a na subida, list-input e clean-output): devolve (codigo, saida).
+
+    A saida e lida em bytes e decodificada como UTF-8 com substituicao: o `locale -a` de sistemas antigos
+    (ex.: CentOS 6) lista nomes em Latin-1 (`bokm\\xe5l`), que no modo texto derrubavam a subida do agente."""
     p = subprocess.run(argv, shell=False, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                       stderr=subprocess.STDOUT, env=dict(_ENV_MINIMAL), universal_newlines=True, timeout=30)
-    return p.returncode, p.stdout or ""
+                       stderr=subprocess.STDOUT, env=dict(_ENV_MINIMAL), timeout=30)
+    return p.returncode, (p.stdout or b"").decode("utf-8", "replace")
 
 
 # -----------------------------------------------------------------------------

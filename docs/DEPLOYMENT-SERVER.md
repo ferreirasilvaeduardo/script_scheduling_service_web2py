@@ -578,6 +578,41 @@ bin/sss-keepalive.sh --resume $SSS_WEB
 
 Um agente parado deixa o ambiente dele sem atendimento: o `health.py` dá `CRITICAL: ambiente X ativo sem nenhum agente saudavel` até ele voltar (DEPLOYMENT §13). Atualizações seguem o DEPLOYMENT §18 (`bin/sss-update.sh`).
 
+
+### 15.1 Atualização de versão (`sss-update.sh`)
+
+Pacote novo gerado e transferido como nos passos 4.2 e 5 (os mesmos cinco arquivos em `~/sss_pacote`, conferidos com `sha256sum -c`). Em cada tipo, um passo de cada vez. O `sss-update.sh` troca só o código (`bin/`, `docs/`, `scripts/`, `src/`, `AGENTS.md`, `README.md`, `SHA256SUMS`, `instance/exemplos/`); `instance/`, `var/` e `scripts_ambiente/` ficam como estão (DEPLOYMENT §18.1).
+
+1. Pausar e parar todos os processos desta raiz:
+
+```bash
+. ~/sss_pacote/sss_vars.sh; sss_tipo PROD && cd "$R"            # ou sss_tipo DEV
+for n in $SSS_WEB $SSS_NOMES_AGENTES; do bin/sss-keepalive.sh --pause $n; done
+for n in $SSS_NOMES_AGENTES; do bin/sss-stop.sh $n; done
+for p in /proc/[0-9]*; do
+  [ "$(readlink $p/cwd 2>/dev/null)" = "$(pwd -P)" ] && tr '\0' ' ' < $p/cmdline | grep -q "scripts/run_web.py --name $SSS_WEB" && kill -TERM ${p#/proc/}
+done
+sleep 10
+for p in /proc/[0-9]*; do [ "$(readlink $p/cwd 2>/dev/null)" = "$(pwd -P)" ] && tr '\0' ' ' < $p/cmdline | grep -E 'run_(web|scheduler)\.py'; done; echo "fim da lista (esperado: vazia)"
+```
+
+2. Atualizar e conferir:
+
+```bash
+bin/sss-update.sh ~/sss_pacote/sss-*.tar.gz; echo "codigo $?"   # esperado: 0; a última linha é o comando de retorno
+sha256sum -c --quiet SHA256SUMS && echo "$T: conteudo confere"
+ls var/update/
+```
+
+3. Retomar e subir (um tipo que deve ficar parado pula este passo e continua pausado):
+
+```bash
+for n in $SSS_WEB $SSS_NOMES_AGENTES; do bin/sss-keepalive.sh --resume $n; done
+bin/sss-keepalive.sh $SSS_WEB:$PORT $SSS_NOMES_AGENTES; echo "codigo $?"
+```
+
+Depois, as conferências do passo 12. **Retorno:** pare como no item 1 e rode o comando impresso na última linha do item 2 (`bin/sss-update.sh <RAIZ>/var/update/<data>/sss-retorno-<data>.tar.gz`).
+
 ---
 
 ## 16. Retorno (desfazer a implantação)
@@ -668,6 +703,7 @@ O resto do arquivo (a parte "derivados" e a função `sss_tipo`) é o do passo 0
 | `sqlplus` | 12.2, em `/opt/oracle/product/12c/client/bin` |
 | Banco | `10.129.177.188:1521` (GFPR) alcançável. No mesmo owner `openrisow` já existem `tbsss_` e `ssdev_` (21 tabelas cada, instalações da máquina de desenvolvimento); `s3dev_` e `s3prd_` vazios |
 | Portas | 18000 e 18001 livres |
+| `locale -a` | Lista nomes em Latin-1 (`bokmål`, byte `0xe5`). Até a correção de 29/10 (`posix._run_short` lê em bytes e decodifica com substituição), os agentes caíam na subida com `UnicodeDecodeError` no passo 12; o web subia. Corrigido no código, com teste, e levado ao servidor pelo `sss-update.sh` |
 | Umask da conta | `002` (os arquivos transferidos chegaram `664`): o passo 7 usa `umask 027` |
 | Locale | Sem `C.UTF-8`; existem `en_US.utf8` e `pt_BR.utf8` (escolhido `en_US.utf8`, que mantém ponto decimal e mensagens do sistema em inglês nos scripts). A sessão SSH mostra `Cannot set LC_CTYPE to default locale`: o locale da estação não existe no servidor, sem efeito no SSS, que exporta o seu |
 | SSS antigo | `web2py.py` na porta 8000 desde 17/10, pasta `/home/mastersafgf/sss/web2py` (anterior ao CR-021); `crontab` sem SSS |

@@ -341,6 +341,18 @@ class TestLockStopPrivilege(unittest.TestCase):
         with mock.patch.object(posix.os, "geteuid", return_value=1000):
             self.assertFalse(os_platform.is_privileged_user())
 
+    def test_comando_curto_com_saida_latin1(self):
+        # CentOS 6: o `locale -a` lista nomes em Latin-1 ("bokm\xe5l"); a subida do agente nao pode cair.
+        listing = b"C\nen_US.utf8\nnorwegian\nnb_NO.ISO-8859-1 bokm\xe5l\npt_BR.utf8\n"
+        code = "import sys; sys.stdout.buffer.write(%r)" % listing
+        status, output = posix._run_short([sys.executable, "-c", code])
+        self.assertEqual(status, 0)
+        self.assertIn("en_US.utf8", output.splitlines())
+        self.assertIn(u"bokm�l", output)
+        run = lambda argv: posix._run_short([sys.executable, "-c", code])  # noqa: E731
+        self.assertTrue(os_platform.locale_available("en_US.UTF-8", run=run))
+        self.assertFalse(os_platform.locale_available("C.UTF-8", run=run))
+
     def test_parada_por_sinal_so_seta_a_flag(self):
         old = (signal.getsignal(signal.SIGTERM), signal.getsignal(signal.SIGINT))
         try:
