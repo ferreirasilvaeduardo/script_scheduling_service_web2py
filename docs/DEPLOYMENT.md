@@ -6,6 +6,8 @@ O README.md é a especificação. Quando este guia e o README divergirem, vale o
 
 **O cenário do guia (CR-032, D15):** sem administrador. **Um usuário do sistema operacional** e **um usuário de banco** fazem tudo: sem root, sem `sudo` e sem `systemd`; os processos ficam no ar pelo `cron` da própria conta. Há só DEV e PROD, com o **mesmo comportamento** (CR-032, D11); a diferença é a pasta `<TIPO>` e o que se pode desenvolver no DEV. O registro do que saiu daqui (instalação anterior ao CR-028, notas daquele formato e os registros de servidores antigos) está em `docs/architecture/DEPLOYMENT-history.md`.
 
+**Roteiro por servidor:** para instalar num servidor concreto, use o modelo `docs/DEPLOYMENT-SERVER.md`. Os valores do servidor ficam num arquivo `sss_vars.sh`, e os passos seguem este guia; o Apêndice A dele é o servidor `brtlvlty3067sl`.
+
 **Marcas de validação:**
 * **[ensaiado]:** executado a partir do pacote extraído (F9.1d, 2026-10-21; CR-031, 2026-10-27) contra o Oracle de homologação (GFPR).
 * **[não ensaiado]:** sintaxe conferida, mas ainda não executado. Valide antes de usar em produção.
@@ -826,6 +828,6 @@ O DEV é a mesma instalação, na pasta `DEV` (`<RAIZ>` = `/portaloptrib/TESHUVA
 * a tela mostra `[DEV]` no título da aba, o cabeçalho em outra cor e a faixa de ambiente não produtivo;
 * `bin/start_local.sh` e `bin/stop_local.sh` sobem e param o web na máquina de desenvolvimento e não vêm no pacote;
 * a bateria Oracle (`SSS_TEST_ORACLE=1`) usa o `instance/common.ini`, o `instance/secrets.cfg` e o `instance/agente0001/` do DEV, com o DEV parado;
-* **prefixo próprio no mesmo banco (2026-10-29):** o DEV usa `table_prefix = ssdev_` e o PROD `tbsss_`, no mesmo owner. Cada um tem as suas tabelas (agentes, fila, tickets, auditoria), então os dois podem ficar no ar ao mesmo tempo, mesmo com os mesmos nomes `web0001`/`agente0001` (substitui a regra do CR-033, D1). O esquema `ssdev_` foi criado pelo `init_db --real-schema`; o `docs/sql/` tem os scripts dos dois prefixos, com o prefixo no nome (`*_tbsss.sql` do PROD e `*_ssdev.sql` do DEV). No PROD, use só os `*_tbsss.sql`. Os `*_s3dev.sql` e `*_s3prd.sql` são das duas instalações do servidor 3067, com o roteiro próprio em `docs/DEPLOYMENT-3067.md`.
+* **prefixo próprio no mesmo banco (2026-10-29):** o DEV usa `table_prefix = ssdev_` e o PROD `tbsss_`, no mesmo owner. Cada um tem as suas tabelas (agentes, fila, tickets, auditoria), então os dois podem ficar no ar ao mesmo tempo, mesmo com os mesmos nomes `web0001`/`agente0001` (substitui a regra do CR-033, D1). O esquema `ssdev_` foi criado pelo `init_db --real-schema`; o `docs/sql/` tem os scripts dos dois prefixos, com o prefixo no nome (`*_tbsss.sql` do PROD e `*_ssdev.sql` do DEV). No PROD, use só os `*_tbsss.sql`. Os `*_s3dev.sql` e `*_s3prd.sql` são das duas instalações do servidor 3067, com o roteiro próprio em `docs/DEPLOYMENT-SERVER.md`, Apêndice A.
 
 Um DEV instalado pelo pacote não tem a vitrine `/dev/...` (o `src/sss/web/controllers/dev.py` não vai no pacote): ela responde 404, e o resto sobe normalmente (CR-021f3).

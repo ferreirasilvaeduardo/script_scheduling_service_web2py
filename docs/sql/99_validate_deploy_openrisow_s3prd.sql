@@ -1,7 +1,7 @@
 -- ==============================================================================
 -- Script Scheduling Service (SSS) - Validacao da Implantacao Oracle 11gR2+
 -- Gerado automaticamente a partir do registro sql_ident.py (somente leitura)
--- Owner: OPENRISOW
+-- Owner: openrisow
 -- Prefixo: s3prd_
 -- Cada verificacao mostra OK ou FALHA; procure tambem ORA-/SP2- no SPOOL.
 -- ==============================================================================
@@ -165,28 +165,28 @@ PROMPT 2. VERSAO DO ESQUEMA E MINIMO DE LINHAS DO SEED
 PROMPT (se as tabelas nao existirem, esta secao falha com ORA-00942: veja a secao 1)
 PROMPT ==============================================================================
 WITH chk AS (
-  SELECT 10 AS sort_order, 'VERSAO DO ESQUEMA' AS verificacao, '=' AS regra, 1 AS esperado, (SELECT MAX(schema_version) FROM OPENRISOW.s3prd_control) AS encontrado FROM DUAL
-  UNION ALL SELECT 11 AS sort_order, 'LINHAS S3PRD_ENVIRONMENTS' AS verificacao, '>=' AS regra, 5 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_environments) AS encontrado FROM DUAL
-  UNION ALL SELECT 12 AS sort_order, 'LINHAS S3PRD_PROFILES' AS verificacao, '>=' AS regra, 4 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_profiles) AS encontrado FROM DUAL
-  UNION ALL SELECT 13 AS sort_order, 'LINHAS S3PRD_FEATURES' AS verificacao, '>=' AS regra, 14 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_features) AS encontrado FROM DUAL
-  UNION ALL SELECT 14 AS sort_order, 'LINHAS S3PRD_PROFILE_FEATURE' AS verificacao, '>=' AS regra, 29 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_profile_feature) AS encontrado FROM DUAL
-  UNION ALL SELECT 15 AS sort_order, 'LINHAS S3PRD_PROFILE_ENV' AS verificacao, '>=' AS regra, 18 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_profile_env) AS encontrado FROM DUAL
-  UNION ALL SELECT 16 AS sort_order, 'LINHAS S3PRD_SCRIPTS' AS verificacao, '>=' AS regra, 14 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_scripts) AS encontrado FROM DUAL
-  UNION ALL SELECT 17 AS sort_order, 'LINHAS S3PRD_PROFILE_SCRIPT' AS verificacao, '>=' AS regra, 56 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_profile_script) AS encontrado FROM DUAL
-  UNION ALL SELECT 18 AS sort_order, 'LINHAS S3PRD_SCRIPT_ENV' AS verificacao, '>=' AS regra, 70 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_script_env) AS encontrado FROM DUAL
-  UNION ALL SELECT 19 AS sort_order, 'LINHAS S3PRD_USERS' AS verificacao, '>=' AS regra, 4 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_users) AS encontrado FROM DUAL
-  UNION ALL SELECT 20 AS sort_order, 'LINHAS S3PRD_PARAMETERS' AS verificacao, '>=' AS regra, 19 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_parameters) AS encontrado FROM DUAL
-  UNION ALL SELECT 21 AS sort_order, 'LINHAS S3PRD_SCRIPT_PARAM' AS verificacao, '>=' AS regra, 38 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_script_param) AS encontrado FROM DUAL
-  UNION ALL SELECT 22 AS sort_order, 'LINHAS S3PRD_SCHEDULES' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_schedules) AS encontrado FROM DUAL
-  UNION ALL SELECT 23 AS sort_order, 'LINHAS S3PRD_TICKETS' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_tickets) AS encontrado FROM DUAL
-  UNION ALL SELECT 24 AS sort_order, 'LINHAS S3PRD_TICKET_ANSWER' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_ticket_answer) AS encontrado FROM DUAL
-  UNION ALL SELECT 25 AS sort_order, 'LINHAS S3PRD_AGENTS' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_agents) AS encontrado FROM DUAL
-  UNION ALL SELECT 26 AS sort_order, 'LINHAS S3PRD_AUDIT' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_audit) AS encontrado FROM DUAL
-  UNION ALL SELECT 27 AS sort_order, 'LINHAS S3PRD_CONTROL' AS verificacao, '>=' AS regra, 1 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_control) AS encontrado FROM DUAL
-  UNION ALL SELECT 28 AS sort_order, 'LINHAS S3PRD_TICKET_OUTPUT' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_ticket_output) AS encontrado FROM DUAL
-  UNION ALL SELECT 29 AS sort_order, 'LINHAS S3PRD_INPUT_UPLOAD' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_input_upload) AS encontrado FROM DUAL
-  UNION ALL SELECT 30 AS sort_order, 'LINHAS S3PRD_INPUT_DELIVERY' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_input_delivery) AS encontrado FROM DUAL
-  UNION ALL SELECT 31 AS sort_order, 'LINHAS S3PRD_INPUT_LISTING' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_input_listing) AS encontrado FROM DUAL
+  SELECT 10 AS sort_order, 'VERSAO DO ESQUEMA' AS verificacao, '=' AS regra, 1 AS esperado, (SELECT MAX(schema_version) FROM openrisow.s3prd_control) AS encontrado FROM DUAL
+  UNION ALL SELECT 11 AS sort_order, 'LINHAS S3PRD_ENVIRONMENTS' AS verificacao, '>=' AS regra, 5 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_environments) AS encontrado FROM DUAL
+  UNION ALL SELECT 12 AS sort_order, 'LINHAS S3PRD_PROFILES' AS verificacao, '>=' AS regra, 4 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_profiles) AS encontrado FROM DUAL
+  UNION ALL SELECT 13 AS sort_order, 'LINHAS S3PRD_FEATURES' AS verificacao, '>=' AS regra, 14 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_features) AS encontrado FROM DUAL
+  UNION ALL SELECT 14 AS sort_order, 'LINHAS S3PRD_PROFILE_FEATURE' AS verificacao, '>=' AS regra, 29 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_profile_feature) AS encontrado FROM DUAL
+  UNION ALL SELECT 15 AS sort_order, 'LINHAS S3PRD_PROFILE_ENV' AS verificacao, '>=' AS regra, 18 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_profile_env) AS encontrado FROM DUAL
+  UNION ALL SELECT 16 AS sort_order, 'LINHAS S3PRD_SCRIPTS' AS verificacao, '>=' AS regra, 14 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_scripts) AS encontrado FROM DUAL
+  UNION ALL SELECT 17 AS sort_order, 'LINHAS S3PRD_PROFILE_SCRIPT' AS verificacao, '>=' AS regra, 56 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_profile_script) AS encontrado FROM DUAL
+  UNION ALL SELECT 18 AS sort_order, 'LINHAS S3PRD_SCRIPT_ENV' AS verificacao, '>=' AS regra, 70 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_script_env) AS encontrado FROM DUAL
+  UNION ALL SELECT 19 AS sort_order, 'LINHAS S3PRD_USERS' AS verificacao, '>=' AS regra, 4 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_users) AS encontrado FROM DUAL
+  UNION ALL SELECT 20 AS sort_order, 'LINHAS S3PRD_PARAMETERS' AS verificacao, '>=' AS regra, 19 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_parameters) AS encontrado FROM DUAL
+  UNION ALL SELECT 21 AS sort_order, 'LINHAS S3PRD_SCRIPT_PARAM' AS verificacao, '>=' AS regra, 38 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_script_param) AS encontrado FROM DUAL
+  UNION ALL SELECT 22 AS sort_order, 'LINHAS S3PRD_SCHEDULES' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_schedules) AS encontrado FROM DUAL
+  UNION ALL SELECT 23 AS sort_order, 'LINHAS S3PRD_TICKETS' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_tickets) AS encontrado FROM DUAL
+  UNION ALL SELECT 24 AS sort_order, 'LINHAS S3PRD_TICKET_ANSWER' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_ticket_answer) AS encontrado FROM DUAL
+  UNION ALL SELECT 25 AS sort_order, 'LINHAS S3PRD_AGENTS' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_agents) AS encontrado FROM DUAL
+  UNION ALL SELECT 26 AS sort_order, 'LINHAS S3PRD_AUDIT' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_audit) AS encontrado FROM DUAL
+  UNION ALL SELECT 27 AS sort_order, 'LINHAS S3PRD_CONTROL' AS verificacao, '>=' AS regra, 1 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_control) AS encontrado FROM DUAL
+  UNION ALL SELECT 28 AS sort_order, 'LINHAS S3PRD_TICKET_OUTPUT' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_ticket_output) AS encontrado FROM DUAL
+  UNION ALL SELECT 29 AS sort_order, 'LINHAS S3PRD_INPUT_UPLOAD' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_input_upload) AS encontrado FROM DUAL
+  UNION ALL SELECT 30 AS sort_order, 'LINHAS S3PRD_INPUT_DELIVERY' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_input_delivery) AS encontrado FROM DUAL
+  UNION ALL SELECT 31 AS sort_order, 'LINHAS S3PRD_INPUT_LISTING' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_input_listing) AS encontrado FROM DUAL
 )
 SELECT verificacao, regra || ' ' || esperado AS esperado, encontrado,
        CASE WHEN (regra = '=' AND encontrado = esperado) OR (regra = '>=' AND encontrado >= esperado)
@@ -194,28 +194,28 @@ SELECT verificacao, regra || ' ' || esperado AS esperado, encontrado,
   FROM chk ORDER BY sort_order;
 
 WITH chk AS (
-  SELECT 10 AS sort_order, 'VERSAO DO ESQUEMA' AS verificacao, '=' AS regra, 1 AS esperado, (SELECT MAX(schema_version) FROM OPENRISOW.s3prd_control) AS encontrado FROM DUAL
-  UNION ALL SELECT 11 AS sort_order, 'LINHAS S3PRD_ENVIRONMENTS' AS verificacao, '>=' AS regra, 5 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_environments) AS encontrado FROM DUAL
-  UNION ALL SELECT 12 AS sort_order, 'LINHAS S3PRD_PROFILES' AS verificacao, '>=' AS regra, 4 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_profiles) AS encontrado FROM DUAL
-  UNION ALL SELECT 13 AS sort_order, 'LINHAS S3PRD_FEATURES' AS verificacao, '>=' AS regra, 14 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_features) AS encontrado FROM DUAL
-  UNION ALL SELECT 14 AS sort_order, 'LINHAS S3PRD_PROFILE_FEATURE' AS verificacao, '>=' AS regra, 29 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_profile_feature) AS encontrado FROM DUAL
-  UNION ALL SELECT 15 AS sort_order, 'LINHAS S3PRD_PROFILE_ENV' AS verificacao, '>=' AS regra, 18 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_profile_env) AS encontrado FROM DUAL
-  UNION ALL SELECT 16 AS sort_order, 'LINHAS S3PRD_SCRIPTS' AS verificacao, '>=' AS regra, 14 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_scripts) AS encontrado FROM DUAL
-  UNION ALL SELECT 17 AS sort_order, 'LINHAS S3PRD_PROFILE_SCRIPT' AS verificacao, '>=' AS regra, 56 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_profile_script) AS encontrado FROM DUAL
-  UNION ALL SELECT 18 AS sort_order, 'LINHAS S3PRD_SCRIPT_ENV' AS verificacao, '>=' AS regra, 70 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_script_env) AS encontrado FROM DUAL
-  UNION ALL SELECT 19 AS sort_order, 'LINHAS S3PRD_USERS' AS verificacao, '>=' AS regra, 4 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_users) AS encontrado FROM DUAL
-  UNION ALL SELECT 20 AS sort_order, 'LINHAS S3PRD_PARAMETERS' AS verificacao, '>=' AS regra, 19 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_parameters) AS encontrado FROM DUAL
-  UNION ALL SELECT 21 AS sort_order, 'LINHAS S3PRD_SCRIPT_PARAM' AS verificacao, '>=' AS regra, 38 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_script_param) AS encontrado FROM DUAL
-  UNION ALL SELECT 22 AS sort_order, 'LINHAS S3PRD_SCHEDULES' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_schedules) AS encontrado FROM DUAL
-  UNION ALL SELECT 23 AS sort_order, 'LINHAS S3PRD_TICKETS' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_tickets) AS encontrado FROM DUAL
-  UNION ALL SELECT 24 AS sort_order, 'LINHAS S3PRD_TICKET_ANSWER' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_ticket_answer) AS encontrado FROM DUAL
-  UNION ALL SELECT 25 AS sort_order, 'LINHAS S3PRD_AGENTS' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_agents) AS encontrado FROM DUAL
-  UNION ALL SELECT 26 AS sort_order, 'LINHAS S3PRD_AUDIT' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_audit) AS encontrado FROM DUAL
-  UNION ALL SELECT 27 AS sort_order, 'LINHAS S3PRD_CONTROL' AS verificacao, '>=' AS regra, 1 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_control) AS encontrado FROM DUAL
-  UNION ALL SELECT 28 AS sort_order, 'LINHAS S3PRD_TICKET_OUTPUT' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_ticket_output) AS encontrado FROM DUAL
-  UNION ALL SELECT 29 AS sort_order, 'LINHAS S3PRD_INPUT_UPLOAD' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_input_upload) AS encontrado FROM DUAL
-  UNION ALL SELECT 30 AS sort_order, 'LINHAS S3PRD_INPUT_DELIVERY' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_input_delivery) AS encontrado FROM DUAL
-  UNION ALL SELECT 31 AS sort_order, 'LINHAS S3PRD_INPUT_LISTING' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM OPENRISOW.s3prd_input_listing) AS encontrado FROM DUAL
+  SELECT 10 AS sort_order, 'VERSAO DO ESQUEMA' AS verificacao, '=' AS regra, 1 AS esperado, (SELECT MAX(schema_version) FROM openrisow.s3prd_control) AS encontrado FROM DUAL
+  UNION ALL SELECT 11 AS sort_order, 'LINHAS S3PRD_ENVIRONMENTS' AS verificacao, '>=' AS regra, 5 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_environments) AS encontrado FROM DUAL
+  UNION ALL SELECT 12 AS sort_order, 'LINHAS S3PRD_PROFILES' AS verificacao, '>=' AS regra, 4 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_profiles) AS encontrado FROM DUAL
+  UNION ALL SELECT 13 AS sort_order, 'LINHAS S3PRD_FEATURES' AS verificacao, '>=' AS regra, 14 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_features) AS encontrado FROM DUAL
+  UNION ALL SELECT 14 AS sort_order, 'LINHAS S3PRD_PROFILE_FEATURE' AS verificacao, '>=' AS regra, 29 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_profile_feature) AS encontrado FROM DUAL
+  UNION ALL SELECT 15 AS sort_order, 'LINHAS S3PRD_PROFILE_ENV' AS verificacao, '>=' AS regra, 18 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_profile_env) AS encontrado FROM DUAL
+  UNION ALL SELECT 16 AS sort_order, 'LINHAS S3PRD_SCRIPTS' AS verificacao, '>=' AS regra, 14 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_scripts) AS encontrado FROM DUAL
+  UNION ALL SELECT 17 AS sort_order, 'LINHAS S3PRD_PROFILE_SCRIPT' AS verificacao, '>=' AS regra, 56 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_profile_script) AS encontrado FROM DUAL
+  UNION ALL SELECT 18 AS sort_order, 'LINHAS S3PRD_SCRIPT_ENV' AS verificacao, '>=' AS regra, 70 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_script_env) AS encontrado FROM DUAL
+  UNION ALL SELECT 19 AS sort_order, 'LINHAS S3PRD_USERS' AS verificacao, '>=' AS regra, 4 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_users) AS encontrado FROM DUAL
+  UNION ALL SELECT 20 AS sort_order, 'LINHAS S3PRD_PARAMETERS' AS verificacao, '>=' AS regra, 19 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_parameters) AS encontrado FROM DUAL
+  UNION ALL SELECT 21 AS sort_order, 'LINHAS S3PRD_SCRIPT_PARAM' AS verificacao, '>=' AS regra, 38 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_script_param) AS encontrado FROM DUAL
+  UNION ALL SELECT 22 AS sort_order, 'LINHAS S3PRD_SCHEDULES' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_schedules) AS encontrado FROM DUAL
+  UNION ALL SELECT 23 AS sort_order, 'LINHAS S3PRD_TICKETS' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_tickets) AS encontrado FROM DUAL
+  UNION ALL SELECT 24 AS sort_order, 'LINHAS S3PRD_TICKET_ANSWER' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_ticket_answer) AS encontrado FROM DUAL
+  UNION ALL SELECT 25 AS sort_order, 'LINHAS S3PRD_AGENTS' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_agents) AS encontrado FROM DUAL
+  UNION ALL SELECT 26 AS sort_order, 'LINHAS S3PRD_AUDIT' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_audit) AS encontrado FROM DUAL
+  UNION ALL SELECT 27 AS sort_order, 'LINHAS S3PRD_CONTROL' AS verificacao, '>=' AS regra, 1 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_control) AS encontrado FROM DUAL
+  UNION ALL SELECT 28 AS sort_order, 'LINHAS S3PRD_TICKET_OUTPUT' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_ticket_output) AS encontrado FROM DUAL
+  UNION ALL SELECT 29 AS sort_order, 'LINHAS S3PRD_INPUT_UPLOAD' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_input_upload) AS encontrado FROM DUAL
+  UNION ALL SELECT 30 AS sort_order, 'LINHAS S3PRD_INPUT_DELIVERY' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_input_delivery) AS encontrado FROM DUAL
+  UNION ALL SELECT 31 AS sort_order, 'LINHAS S3PRD_INPUT_LISTING' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.s3prd_input_listing) AS encontrado FROM DUAL
 )
 SELECT CASE WHEN COUNT(*) = 0 THEN 'OK: nenhuma falha'
             ELSE 'FALHA: ' || COUNT(*) || ' verificacao(oes) divergente(s)' END AS resumo
@@ -234,7 +234,7 @@ COLUMN active FORMAT A5
 COLUMN senha_definida FORMAT A14
 SELECT u.id, u.login, u.name, p.name AS perfil, p.is_admin AS admin, u.active,
        CASE WHEN u.password_hash IS NULL THEN 'N' ELSE 'Y' END AS senha_definida
-  FROM OPENRISOW.s3prd_users u JOIN OPENRISOW.s3prd_profiles p ON p.id = u.profile_id
+  FROM openrisow.s3prd_users u JOIN openrisow.s3prd_profiles p ON p.id = u.profile_id
  ORDER BY u.id;
 
 PROMPT ==============================================================================
@@ -246,7 +246,7 @@ COLUMN param_type FORMAT A10
 COLUMN path_file FORMAT A70
 SELECT id, name, interpreter, param_type, max_parallel_env AS paral, timeout_s AS tmout,
        active, path_file
-  FROM OPENRISOW.s3prd_scripts
+  FROM openrisow.s3prd_scripts
  ORDER BY id;
 
 PROMPT ==============================================================================
@@ -254,10 +254,10 @@ PROMPT 5. ACESSO POR PERFIL (funcionalidades, ambientes e scripts liberados)
 PROMPT ==============================================================================
 COLUMN perfil FORMAT A20
 SELECT p.name AS perfil, p.is_admin AS admin, p.active,
-       (SELECT COUNT(*) FROM OPENRISOW.s3prd_profile_feature x WHERE x.profile_id = p.id) AS funcionalidades,
-       (SELECT COUNT(*) FROM OPENRISOW.s3prd_profile_env x WHERE x.profile_id = p.id) AS environments,
-       (SELECT COUNT(*) FROM OPENRISOW.s3prd_profile_script x WHERE x.profile_id = p.id) AS scripts
-  FROM OPENRISOW.s3prd_profiles p
+       (SELECT COUNT(*) FROM openrisow.s3prd_profile_feature x WHERE x.profile_id = p.id) AS funcionalidades,
+       (SELECT COUNT(*) FROM openrisow.s3prd_profile_env x WHERE x.profile_id = p.id) AS environments,
+       (SELECT COUNT(*) FROM openrisow.s3prd_profile_script x WHERE x.profile_id = p.id) AS scripts
+  FROM openrisow.s3prd_profiles p
  ORDER BY p.name;
 
 PROMPT ==============================================================================
