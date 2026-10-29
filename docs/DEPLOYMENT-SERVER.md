@@ -391,7 +391,13 @@ EOF
 sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_pacote/${P}_00_vazio.sql
 ```
 
-Depois, a implantação e a validação, gravando a saída:
+Conferência de que a DDL do pacote é a do código instalado (só leitura, sem senha): os três `sha256` aparecem duas vezes, iguais aos do passo 4.1.
+
+```bash
+"$PYTHON" scripts/generate_sql.py --owner "$SSS_OWNER" --prefix "$PREFIX" --out-dir /tmp/sql_conferencia_$$ >/dev/null && sha256sum /tmp/sql_conferencia_$$/*_${P}.sql docs/sql/*_${O}_${P}.sql; rm -rf /tmp/sql_conferencia_$$
+```
+
+Depois, a implantação e a validação. A saída vai para um arquivo: o `Enter password:` não aparece na tela, mas o `sqlplus` espera a senha (digite e aperte Enter):
 
 ```bash
 cat > ~/sss_pacote/${P}_01_99.sql <<EOF
@@ -403,7 +409,8 @@ SPOOL $HOME/sss_pacote/${P}_99_validate.log
 SPOOL OFF
 EXIT
 EOF
-sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_pacote/${P}_01_99.sql
+sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_pacote/${P}_01_99.sql > ~/sss_pacote/${P}_sqlplus.out 2>&1; echo "codigo $?"   # esperado: 0
+grep -i 'concluida com sucesso' ~/sss_pacote/${P}_01_deploy.log
 grep -c -E 'ORA-|SP2-' ~/sss_pacote/${P}_01_deploy.log       # esperado: 0
 grep 'OK: nenhuma falha' ~/sss_pacote/${P}_99_validate.log     # esperado: as duas linhas de resumo
 ```
