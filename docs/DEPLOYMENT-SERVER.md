@@ -475,13 +475,12 @@ Em cada tipo:
 ```bash
 . ~/sss_pacote/sss_vars.sh; sss_tipo DEV && cd "$R"            # depois, sss_tipo PROD
 for n in $SSS_WEB $SSS_NOMES_AGENTES; do echo "== $n"; "$PYTHON" scripts/check_env.py --name $n; echo "codigo $?"; done
-for c in thin thick cx_oracle; do echo "== $c"; "$PYTHON" scripts/probe_driver.py $c --config instance/$SSS_AGENTE_HEALTH/config.ini; done
 bin/sss-web.sh "$PYTHON" $SSS_WEB --check                     # esperado: CONFIG_OK ambiente=<TIPO>
 ```
 
 * `check_env`: código 0 em todos (avisos não reprovam). A saída mostra o driver, o modo e as versões. Registre-a. Código 1: falta arquivo ou o banco não conectou (veja a linha `FALHA`). Código 2: Python menor que 3.6.0 ou nome errado.
-* `probe_driver`: uma linha por candidato, com `"ok": true` no que funciona neste servidor. Ele deve bater com o escolhido pelo `check_env`.
-* O `check_env.py`, o `probe_driver.py` e o `health.py` rodam direto no Python. Com o cliente fora do `ldconfig`, eles usam o `LD_LIBRARY_PATH` que o `sss_vars.sh` monta a partir do `SSS_IC_DIR`. Os launchers (`sss-web.sh`, `sss-scheduler.sh`) o montam sozinhos.
+* O `check_env` já roda o `scripts/probe_driver.py` para cada candidato, com a senha do processo: as linhas `Sondagem do candidato Oracle '<candidato>' falhou` e o `Selecionado: modo=...` da tabela são o resultado da sondagem. **Não rode o `probe_driver.py` à mão:** ele é um auxiliar interno que lê a senha da entrada padrão até o fim, e fica esperando o terminal (as linhas coladas depois dele seriam lidas como senha).
+* O `check_env.py` e o `health.py` rodam direto no Python. Com o cliente fora do `ldconfig`, eles usam o `LD_LIBRARY_PATH` que o `sss_vars.sh` monta a partir do `SSS_IC_DIR`. Os launchers (`sss-web.sh`, `sss-scheduler.sh`) o montam sozinhos.
 
 ---
 
@@ -618,7 +617,7 @@ Copie esta tabela para o registro da janela e preencha cada linha (uma coluna de
 | 8 | `secrets.cfg` `600`, `CHANGE_ME` 0, um bloco por ambiente | todos os tipos | |
 | 9 | Prefixo vazio antes; `ORA-`/`SP2-` = 0; `99` com `OK: nenhuma falha` | todos os tipos | |
 | 10 | 14 utilitários; nada gravável por grupo/outros | 14; 0 | |
-| 11 | `check_env` código 0 em todos os processos; `probe_driver`; `CONFIG_OK` | todos | |
+| 11 | `check_env` código 0 em todos os processos, com o driver selecionado; `CONFIG_OK` | todos | |
 | 12 | 1 web e um processo por agente; porta em `127.0.0.1`; `healthy_agents` | todos os tipos | |
 | 13 | HTTP 303/200/4/403; senhas trocadas; ticket de teste `SUCCESS` | todos os tipos | |
 | 14 | `crontab` com 2 keepalives e 1 `health.py` por tipo | conferido | |
