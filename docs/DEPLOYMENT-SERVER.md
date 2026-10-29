@@ -436,7 +436,7 @@ sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_pacote/${P}_99.sql; echo "codigo $?"  
 ```
 
 ```bash
-grep -c -E 'ORA-|SP2-' ~/sss_pacote/${P}_99_validate.log     # esperado: 0
+grep -E 'ORA-|SP2-' ~/sss_pacote/${P}_99_validate.log | grep -vc 'esta secao falha com'   # esperado: 0 (o aviso impresso pelo proprio 99 cita ORA-00942)
 grep -c 'FALHA' ~/sss_pacote/${P}_99_validate.log             # esperado: 0
 grep 'OK: nenhuma falha' ~/sss_pacote/${P}_99_validate.log     # esperado: as duas linhas de resumo
 ```
