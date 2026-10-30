@@ -614,6 +614,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | `Falha fatal: todos os candidatos de driver Oracle falharam (thin (NETWORK: DPY-6005); thick (NETWORK: ORA-12541); cx_oracle (NETWORK: ORA-12541))` (capturada no ensaio, com o túnel do banco fora) | Listener inacessível: rede, firewall, DSN ou banco parado | `tnsping`/`nc -z <host> 1521` a partir do servidor; confira o `dsn` |
 | `Falha de configuracao: python-oracledb 2.x nao e compativel com Python 3.6 ...` | Driver errado para o Python | Instale `python-oracledb < 2.0` ou use `driver_mode = cx_oracle` |
 | WARNING `cliente Oracle X; o recomendado e o Instant Client 19` | Outro cliente no `ldconfig` ou no `SSS_IC_DIR` | Só aviso: o processo sobe. Se a conexão falhar, use o 19 no caminho de bibliotecas |
+| WARNING `cliente Oracle sem call_timeout (DPI-1050): as chamadas ao banco ficam sem prazo` | Cliente abaixo do 18.1 (ex.: 12.2) | Só aviso: o SSS funciona sem o prazo por chamada. Para tê-lo, use um cliente 18 ou 19 no caminho de bibliotecas |
 | `Falha de configuracao: driver_mode '<x>' invalido ...` | Valor errado no `config.ini` | `auto`, `thin`, `thick` ou `cx_oracle` |
 
 ### 15.3 Banco durante a operação

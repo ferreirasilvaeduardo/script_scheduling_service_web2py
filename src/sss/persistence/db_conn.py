@@ -74,7 +74,23 @@ def client_version_warning(c_view):
     major = c_view[0] if (isinstance(c_view, (tuple, list)) and c_view) else None
     if major is None or major == 19:
         return None
-    return "cliente Oracle %s; o recomendado e o Instant Client 19 (README §2.3)" % ".".join(str(x) for x in c_view)
+    text = "cliente Oracle %s; o recomendado e o Instant Client 19 (README §2.3)" % ".".join(str(x) for x in c_view)
+    if major < 18:
+        # Decisao 11 B (2026-10-30): abaixo do 18.1 o driver recusa o call_timeout (DPI-1050).
+        text += "; abaixo do 18.1 nao ha call_timeout: as chamadas ao banco ficam sem prazo"
+    return text
+
+
+_NO_CALL_TIMEOUT_WARNED = False
+
+
+def _warn_no_call_timeout(exc):
+    """Uma vez por processo: o cliente nao aceita call_timeout (DPI-1050, abaixo do 18.1; decisao 11 B)."""
+    global _NO_CALL_TIMEOUT_WARNED
+    if not _NO_CALL_TIMEOUT_WARNED:
+        _NO_CALL_TIMEOUT_WARNED = True
+        logger.warning("cliente Oracle sem call_timeout (%s): as chamadas ao banco ficam sem prazo (README §2.3)",
+                       str(exc).split(":")[0], extra={"agent": "-", "ticket": "-", "action": "CONEXAO"})
 
 
 def _warn_client_version(driver):
@@ -589,7 +605,12 @@ def configure_session(conn, cfg, role="web", user=None):
         timeout_ms = 30000
     conn.autocommit = False
     if hasattr(conn, "call_timeout"):
-        conn.call_timeout = timeout_ms
+        try:
+            conn.call_timeout = timeout_ms
+        except Exception as exc:  # cliente abaixo do 18.1: segue sem prazo por chamada (decisao 11 B)
+            if "DPI-1050" not in str(exc):
+                raise
+            _warn_no_call_timeout(exc)
 
     conn.module = "SSS_%s" % role.upper()
     conn.action = "INICIO"

@@ -304,6 +304,36 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
         self.assertIsNone(db_conn.client_version_warning((19, 27, 0, 0, 0)))
         self.assertIsNone(db_conn.client_version_warning(None))
 
+    def test_cliente_sem_call_timeout_segue_sem_prazo(self):
+        """Decisao 11 B: abaixo do 18.1 (ex.: cliente 12.2) o call_timeout da DPI-1050; a sessao segue, com WARNING."""
+        class _Conn(object):
+            def __init__(self, error):
+                self._error = error
+
+            @property
+            def call_timeout(self):
+                return 0
+
+            @call_timeout.setter
+            def call_timeout(self, value):
+                raise self._error
+
+        old = db_conn._NO_CALL_TIMEOUT_WARNED
+        try:
+            db_conn._NO_CALL_TIMEOUT_WARNED = False
+            dpi = RuntimeError("DPI-1050: Oracle Client library is at version 12.2 but version 18.1 or higher is needed")
+            with self.assertLogs("sss_db_conn", level="WARNING") as cm:
+                conn = db_conn.configure_session(_Conn(dpi), self.cfg, role="agent")
+            self.assertFalse(conn.autocommit)
+            self.assertEqual(conn.module, "SSS_AGENT")
+            self.assertTrue(any("sem call_timeout (DPI-1050)" in m for m in cm.output))
+            with self.assertRaises(RuntimeError):
+                db_conn.configure_session(_Conn(RuntimeError("DPI-1010: not connected")), self.cfg)
+        finally:
+            db_conn._NO_CALL_TIMEOUT_WARNED = old
+        self.assertIn("abaixo do 18.1 nao ha call_timeout", db_conn.client_version_warning((12, 2, 0, 1, 0)))
+        self.assertNotIn("call_timeout", db_conn.client_version_warning((21, 3, 0, 0, 0)))
+
     def test_mesma_api_tres_combinacoes(self):
         """Valida que conectar() configura autocommit=False, call_timeout, module e action nos 3 modos."""
         modes = [
