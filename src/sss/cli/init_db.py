@@ -829,7 +829,13 @@ def main(argv=None):
                 print(g)
         return 0
 
-    # Modo Real: Conecta ao Oracle
+    # Modo Real: Conecta ao Oracle. O log da aplicacao (README §13, log_dir/internal/app/.../sss_init_db_<PID>.log)
+    # so aqui: --dry-run e --generate-sql nao tocam o banco e respondem so na tela (batimento A6).
+    try:
+        sss_logging.configure("sss_init_db", cfg)
+    except OSError as exc:
+        print("Aviso: log da aplicacao indisponivel (%s); mensagens so na tela" % exc, file=sys.stderr)
+
     user_owner = args.usuario_dono or owner
     password_owner = os.environ.get("SSS_INIT_DB_PASSWORD")
     if not password_owner:

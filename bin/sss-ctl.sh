@@ -183,14 +183,15 @@ _cron() {
             _cron_block
             ;;
         install)
-            mkdir -m 0700 -p var/crontab_sss
-            _cron_block > "${file}.tmp" || { rm -f "${file}.tmp"; return 2; }
-            chmod 0600 "${file}.tmp" && mv "${file}.tmp" "${file}"
+            # Primeiro o crontab: com o bloco ja la, a copia tambem fica como esta (e a do bloco instalado).
             current="$(crontab -l 2>/dev/null || true)"
             if printf '%s\n' "${current}" | grep -q "^# --- SSS ${TIPO} ---"; then
                 echo "ja existe o bloco do SSS ${TIPO} no crontab (nada acrescentado; para trocar: cron remove e cron install)"
                 return 0
             fi
+            mkdir -m 0700 -p var/crontab_sss
+            _cron_block > "${file}.tmp" || { rm -f "${file}.tmp"; return 2; }
+            chmod 0600 "${file}.tmp" && mv "${file}.tmp" "${file}"
             { [ -n "${current}" ] && printf '%s\n' "${current}"; cat "${file}"; } | crontab - || return 3
             echo "bloco do SSS ${TIPO} acrescentado ao crontab (copia em ${REPO_ROOT}/${file})"
             ;;

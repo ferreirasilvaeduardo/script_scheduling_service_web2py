@@ -581,7 +581,8 @@ def _pids_in_dir(folder):
 def stop_ticket(base_dir, ticket_id, kill_grace_s):
     """Encerra os processos do ticket "talvez iniciado" (.sss_spawn sem .sss_proc): os do proprio usuario cujo
     diretorio atual esta em <base_dir>/ticket_<id>. Devolve 'OK' ou 'UNSUPPORTED'. Unica operacao que espera
-    (kill_grace_s), porque roda so antes do laco.
+    (kill_grace_s, fixo em 5 s): na subida, antes do laco, e tambem na varredura do laco (_reconcile), no caso raro de
+    ticket talvez iniciado fora do mapa local. Excecao aceita ao orcamento do laco (decisao 19 C, README §8.1).
     """
     if NAME != "LINUX" or not os.path.isdir("/proc/self"):
         return "UNSUPPORTED"

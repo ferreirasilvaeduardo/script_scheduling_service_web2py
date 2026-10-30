@@ -538,6 +538,35 @@ class TestAdminLogin(unittest.TestCase):
                 self.assertIn("'joao.silva' AS login", f.read())
 
 
+class TestBatimentoCli(unittest.TestCase):
+    """Batimento de 30/10/2026: A4 (generate_sql com config invalido sai com 2) e A6 (init_db com log da aplicacao
+    so no modo real)."""
+
+    def test_generate_sql_config_invalido_sai_com_2_sem_gerar(self):
+        from sss.cli import generate_sql
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = os.path.join(tmp, "config.ini")
+            with open(bad, "w", encoding="utf-8") as f:
+                f.write("[oracle]\nisto nao e ini valido\n")
+            out = os.path.join(tmp, "sql")
+            with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+                self.assertEqual(generate_sql.main(["--config", bad, "--out-dir", out]), 2)
+            self.assertIn("Configuracao invalida", err.getvalue())
+            self.assertFalse(os.path.exists(out))
+
+    def test_init_db_configura_o_log_so_no_modo_real(self):
+        with mock.patch.object(init_db.sss_logging, "configure") as configure, \
+                mock.patch("sys.stdout", new_callable=io.StringIO):
+            self.assertEqual(init_db.main(["--config", _EXAMPLE_CONFIG, "--dry-run"]), 0)
+            configure.assert_not_called()
+            with mock.patch.dict(os.environ, {"SSS_INIT_DB_PASSWORD": "x"}), \
+                    mock.patch.object(init_db, "_connect", side_effect=RuntimeError("ORA-12541: no listener")), \
+                    mock.patch("sys.stderr", new_callable=io.StringIO):
+                self.assertEqual(init_db.main(["--config", _EXAMPLE_CONFIG, "--real-schema"]), 1)
+            configure.assert_called_once()
+            self.assertEqual(configure.call_args[0][0], "sss_init_db")
+
+
 class TestDdlSeedAndRollback(unittest.TestCase):
     """Testes unitarios da geracao de scripts DML Seed, Rollback e CLI de geracao SQL."""
 

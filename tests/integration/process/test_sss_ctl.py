@@ -151,10 +151,17 @@ class TestSssCtl(unittest.TestCase):
             code, out, err = self._run("cron", "install")
             self.assertEqual(code, 0, err)
         self.assertIn("ja existe o bloco do SSS DEV", out, "a segunda vez nao repete")
+        saved = os.path.join(self.root, "var", "crontab_sss", "crontab_sss.txt")
+        with open(saved, encoding="utf-8") as f:
+            copy = f.read()
+        self.assertEqual(self._run("cron", "install", SSS_LOCALE="pt_BR.utf8")[0], 0)
+        with open(saved, encoding="utf-8") as f:
+            self.assertEqual(f.read(), copy,
+                             "com o bloco ja instalado, a copia continua a do crontab")
+        self.assertNotIn("pt_BR", self._crontab())
         text = self._crontab()
         self.assertEqual(text.count("# --- SSS DEV ---"), 1)
         self.assertIn("/opt/outro/job.sh", text, "o resto do crontab fica")
-        saved = os.path.join(self.root, "var", "crontab_sss", "crontab_sss.txt")
         self.assertEqual(stat.S_IMODE(os.stat(saved).st_mode), 0o600)
         code, _out, err = self._run("cron", "remove")
         self.assertEqual(code, 0, err)

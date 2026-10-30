@@ -77,7 +77,9 @@ def main(argv=None):
                     if not args.lob_basicfile:
                         lob_storage = getattr(cfg.oracle, "lob_storage", "SECUREFILE")
             except Exception as exc:
-                print("Aviso ao ler config.ini: %s" % exc, file=sys.stderr)
+                # Batimento A4: config invalido nao gera SQL com os padroes OPENRISOW/tbsss_ (codigo 2, README §12.1)
+                print("Configuracao invalida: %s" % exc, file=sys.stderr)
+                return 2
 
     owner = owner or "OPENRISOW"
     prefix = prefix or "tbsss_"
