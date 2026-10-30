@@ -897,6 +897,14 @@ CTS['CT-11'] = async () => {
     state.envNovo = envId;
     saveState();
     check(`Ambiente ${ENV_NOVO} gravado`, !!envId, '#' + envId);
+    // Batimento A1 (30/10/2026): o duplicado vem da UK com o prefixo do banco (uk_s3dev_env_name etc.); a tela
+    // precisa da mensagem do campo, nao da generica, com qualquer prefixo.
+    await go('/admin_environments/form');
+    await fill('#field-name', ENV_NOVO);
+    await fill('#field-description', 'Mesmo nome de novo');
+    await submit('/admin_environments/save');
+    await expectText('Nome repetido: mensagem do campo, com o prefixo do banco', 'Já existe um ambiente com este nome.');
+    await snap('Nome de ambiente repetido recusado');
     await go(`/admin_environments/form/${envId}`);
     check('Ambiente novo nasce fora de produção (caixa desmarcada, CR-017a)',
         await page.$eval('#field-is_production', (e) => !e.checked));
