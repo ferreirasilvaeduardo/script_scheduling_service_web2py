@@ -81,7 +81,7 @@ clean-cache: ## Apaga todas as pastas __pycache__ e .mypy_cache
 # docs/homologation (o package.py já a exclui desde o CR-033, D3; o rm fica como defesa), conferida pelo tools/package.py, que recusa senha, secrets.cfg
 # real, código de DEV, o FAKE, testes e __pycache__. Mudança não commitada NÃO entra: faça o commit antes.
 PKG_DIR = ./.bkp/pacote_$(shell date +%Y%m%d_%H%M%S)
-package: ## Gera sss-<versao>.tar.gz e SHA256SUMS em ./.bkp/pacote_<data> para levar ao servidor
+package: ## Gera em ./.bkp/pacote_<data> os arquivos para o servidor: sss-<versao>.tar.gz (BUILD = commit), utilitarios.tar.gz, sss_vars.sh e SHA256SUMS
 	@if [ -n "$$(git status --porcelain --untracked-files=no -- . ':!LEIA-ME.TXT')" ]; then \
 		echo "[!] Aviso: há mudanças não commitadas; o pacote usa só o commit $$(git rev-parse --short HEAD)."; \
 	fi
@@ -91,9 +91,16 @@ package: ## Gera sss-<versao>.tar.gz e SHA256SUMS em ./.bkp/pacote_<data> para l
 	git archive HEAD | tar -x -C "$$TMP"; \
 	rm -rf "$$TMP/docs/homologation"; \
 	mkdir -p "$$DEST"; \
-	$(PYTHON) "$$TMP/tools/package.py" --source "$$TMP" --out-dir "$$DEST"; \
+	$(PYTHON) "$$TMP/tools/package.py" --source "$$TMP" --out-dir "$$DEST" --build "$$(git rev-parse --short=7 HEAD)"; \
 	git rev-parse HEAD > "$$DEST/COMMIT"; \
-	echo ""; echo "[+] Leve ao servidor os dois arquivos de $$DEST: sss-*.tar.gz e SHA256SUMS"; \
+	UTIL_ROOT="$$TMP"; \
+	tar -czf "$$DEST/utilitarios.tar.gz" --exclude=__pycache__ --exclude='*.pyc' -C "$$UTIL_ROOT" dev/scripts/utilitarios; \
+	VARS="$${SSS_VARS:-$$HOME/sss_pacote/sss_vars.sh}"; \
+	if [ -f "$$VARS" ]; then cp "$$VARS" "$$DEST/sss_vars.sh"; chmod 0600 "$$DEST/sss_vars.sh"; \
+	else echo "[!] Sem sss_vars.sh ($$VARS): o pacote sai sem ele (defina SSS_VARS=<arquivo>)."; fi; \
+	(cd "$$DEST" && sha256sum utilitarios.tar.gz $$([ -f sss_vars.sh ] && echo sss_vars.sh) >> SHA256SUMS \
+		&& sha256sum -c --quiet SHA256SUMS); \
+	echo ""; echo "[+] Leve ao servidor os arquivos de $$DEST: $$(cd "$$DEST" && ls | tr '\n' ' ')"; \
 	echo "    No servidor: sha256sum -c SHA256SUMS (DEPLOYMENT §3). COMMIT guarda o commit empacotado."
 
 # Mesmo pacote, mas a partir dos arquivos desta pasta como estão (sem git; inclui o que não foi commitado).
@@ -102,7 +109,7 @@ package: ## Gera sss-<versao>.tar.gz e SHA256SUMS em ./.bkp/pacote_<data> para l
 # senhas reais e nunca são copiados). A conferência do
 # package.py é a mesma: senha fora do placeholder, código de DEV, o FAKE, testes ou link simbólico recusam o pacote.
 PKG_LOCAL_DIR = ./.bkp/pacote_local_$(shell date +%Y%m%d_%H%M%S)
-package-local: ## Gera o pacote a partir dos arquivos locais (sem git) em ./.bkp/pacote_local_<data>
+package-local: ## O mesmo a partir dos arquivos locais (sem git; BUILD = AAMMDDHHMM) em ./.bkp/pacote_local_<data>
 	@set -e; \
 	DEST=$(PKG_LOCAL_DIR); TMP=$$(mktemp -d); \
 	trap 'rm -rf "$$TMP"' EXIT; \
@@ -111,13 +118,20 @@ package-local: ## Gera o pacote a partir dos arquivos locais (sem git) em ./.bkp
 		--exclude='docs/homologation/' \
 		bin docs instance/exemplos scripts src tools AGENTS.md README.md "$$TMP/"; \
 	mkdir -p "$$DEST"; \
-	$(PYTHON) -B "$$TMP/tools/package.py" --source "$$TMP" --out-dir "$$DEST"; \
+	$(PYTHON) -B "$$TMP/tools/package.py" --source "$$TMP" --out-dir "$$DEST" --build "$$(date +%y%m%d%H%M)"; \
 	{ echo "Origem: arquivos locais de $$(pwd) em $$(date '+%Y-%m-%d %H:%M:%S')"; \
 	  if git rev-parse --short HEAD >/dev/null 2>&1; then \
 		echo "Commit de base: $$(git rev-parse --short HEAD) (mais as mudanças locais abaixo)"; \
 		git status --short -- bin docs instance/exemplos scripts src AGENTS.md README.md; \
 	  fi; } > "$$DEST/ORIGEM"; \
-	echo ""; echo "[+] Leve ao servidor os dois arquivos de $$DEST: sss-*.tar.gz e SHA256SUMS"; \
+	UTIL_ROOT="$$(pwd)"; \
+	tar -czf "$$DEST/utilitarios.tar.gz" --exclude=__pycache__ --exclude='*.pyc' -C "$$UTIL_ROOT" dev/scripts/utilitarios; \
+	VARS="$${SSS_VARS:-$$HOME/sss_pacote/sss_vars.sh}"; \
+	if [ -f "$$VARS" ]; then cp "$$VARS" "$$DEST/sss_vars.sh"; chmod 0600 "$$DEST/sss_vars.sh"; \
+	else echo "[!] Sem sss_vars.sh ($$VARS): o pacote sai sem ele (defina SSS_VARS=<arquivo>)."; fi; \
+	(cd "$$DEST" && sha256sum utilitarios.tar.gz $$([ -f sss_vars.sh ] && echo sss_vars.sh) >> SHA256SUMS \
+		&& sha256sum -c --quiet SHA256SUMS); \
+	echo ""; echo "[+] Leve ao servidor os arquivos de $$DEST: $$(cd "$$DEST" && ls | tr '\n' ' ')"; \
 	echo "    No servidor: sha256sum -c SHA256SUMS (DEPLOYMENT §3). ORIGEM diz de onde veio o pacote."
 
 # Inspeciona o pacote mais recente do make package ou do make package-local em ./.bkp

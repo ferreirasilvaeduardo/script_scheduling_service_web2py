@@ -33,7 +33,7 @@ class TestPack(unittest.TestCase):
         files = {
             "bin/sss-web.sh": "#!/bin/bash\n", "bin/sss-scheduler.sh": "#!/bin/bash\n",
             "bin/sss-stop.sh": "#!/bin/bash\n", "bin/sss-update.sh": "#!/bin/bash\n",
-            "bin/sss-keepalive.sh": "#!/bin/bash\n",
+            "bin/sss-keepalive.sh": "#!/bin/bash\n", "bin/sss-ctl.sh": "#!/bin/bash\n",
             "bin/start_local.sh": "#!/bin/bash\n", "CLAUDE.md": "x", "parameters_8000.py": "x",
             "src/sss/web/controllers/default.py": "# default\n", "src/sss/web/controllers/dev.py": "# dev\n",
             "scripts/run_web.py": "# servidor\n", "src/sss/web/app/bootstrap.py": "# web\n",
@@ -66,9 +66,9 @@ class TestPack(unittest.TestCase):
             f.write(text)
         return path
 
-    def _main(self):
+    def _main(self, *extra):
         text = io.StringIO()
-        code = empacotar.main(["--source", self.origem, "--out-dir", self.saida], output_text=text)
+        code = empacotar.main(["--source", self.origem, "--out-dir", self.saida] + list(extra), output_text=text)
         return code, text.getvalue()
 
     def _package(self):
@@ -81,6 +81,20 @@ class TestPack(unittest.TestCase):
         self.assertNotIn(SECRET, text, "o valor nunca e impresso")
         self.assertFalse(os.path.exists(self.saida) and os.listdir(self.saida), "nada gravado")
         return text
+
+    def test_build_gravado_dentro_do_pacote(self):
+        """--build grava src/sss/BUILD no pacote (no SHA256SUMS interno); um BUILD da origem nao entra."""
+        self._write("src/sss/BUILD", "deadbee\n")
+        code, text = self._main("--build", "97d7352")
+        self.assertEqual(code, 0, text)
+        top = "sss-%s/" % empacotar.sss_config.SSS_VERSION_BASE
+        with tarfile.open(self._package()) as tar:
+            self.assertEqual(tar.extractfile(top + "src/sss/BUILD").read(), b"97d7352\n")
+            sums = tar.extractfile(top + "SHA256SUMS").read().decode("utf-8")
+        self.assertIn("  src/sss/BUILD\n", sums)
+        code, text = self._main("--build", "nao-vale")
+        self.assertEqual(code, 1, text)
+        self.assertIn("--build", text)
 
     def test_pacote_e_sha256sums(self):
         code, text = self._main()
@@ -103,7 +117,7 @@ class TestPack(unittest.TestCase):
                          (0, 0o644))
         self.assertNotIn("bin/sss-helper", members, "CR-032 (D7): sem helper de execucao")
         for rel in ("bin/sss-web.sh", "bin/sss-scheduler.sh", "bin/sss-stop.sh", "bin/sss-update.sh",
-                    "bin/sss-keepalive.sh",
+                    "bin/sss-keepalive.sh", "bin/sss-ctl.sh",
                     "src/sss/web/controllers/default.py", "scripts/run_web.py",
                     "src/sss/web/app/bootstrap.py", "src/sss/web/templates/layout.html",
                     "src/sss/web/static/css/sss.css", "scripts/purge.py",
@@ -207,7 +221,8 @@ class TestPack(unittest.TestCase):
         with open(os.path.join(_testenv.APP_DIR, "tools", "package.py"), encoding="utf-8") as f:
             self._write("tools/package.py", f.read())
         self._write("src/sss/config/sss_config.py",
-                    f"SSS_VERSION = {empacotar.sss_config.SSS_VERSION!r}\n")
+                    f"import re\nSSS_VERSION = SSS_VERSION_BASE = {empacotar.sss_config.SSS_VERSION_BASE!r}\n"
+                    f"RE_BUILD = re.compile({empacotar.sss_config.RE_BUILD.pattern!r})\n")
         p = subprocess.run([sys.executable, os.path.join(self.origem, "tools", "package.py"),
                             "--source", self.origem, "--out-dir", self.saida], check=False,
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)

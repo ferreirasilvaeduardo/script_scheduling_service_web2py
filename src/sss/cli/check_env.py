@@ -20,6 +20,31 @@ if sys.version_info[:3] < (3, 6, 0):
     sys.exit(2)
 
 
+def _agent_checks(cfg):
+    """Linhas do agente: locale dos scripts (C.UTF-8 ou o substituto) e python/python3 do PATH."""
+    from sss.platform import os_platform
+    rows = []
+    wanted = cfg.agent.child_locale
+    chosen = os_platform.pick_child_locale(wanted)
+    if not chosen:
+        rows.append(("Locale dos scripts", "FALHA", "%s nao consta em locale -a e nao ha outro UTF-8" % wanted))
+    elif chosen != wanted:
+        rows.append(("Locale dos scripts", "AVISO", "%s nao consta em locale -a: os scripts usam %s" % (wanted, chosen)))
+    else:
+        rows.append(("Locale dos scripts", "OK", chosen))
+    found = os_platform.interpreter_versions()
+    detail = "; ".join("%s -> %s" % (name, "%s (%s)" % (path, version or "versao desconhecida") if path
+                                     else "nao encontrado") for name, path, version in found)
+    python2 = [version for name, _path, version in found
+               if name == "python" and version and version.startswith("2.")]
+    if python2:
+        rows.append(("Interpretadores", "AVISO",
+                     detail + "; python e o Python %s: cadastre scripts Python 3 como python3" % python2[0]))
+    else:
+        rows.append(("Interpretadores", "OK", detail))
+    return rows
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Verificador de ambiente do SSS")
     parser.add_argument("--config", default=None, help="config.ini (ou --name)")
@@ -67,6 +92,7 @@ def main(argv=None):
         results.append(("bootstrap.bundle.min.js", "FALHA", "Arquivo inexistente ou vazio"))
 
     # Item 5: Driver Oracle (driver_mode e cadeia adaptativa)
+    cfg = None
     try:
         cfg = sss_config.get_config(path=config_file)
         mode = getattr(cfg.oracle, "driver_mode", "auto")
@@ -107,6 +133,11 @@ def main(argv=None):
                                                         "" if budget <= call_s else ": CONEXAO_ACIMA_DO_PRAZO")))
     except Exception as exc:
         results.append(("Driver Oracle (driver_mode)", "FALHA", "Erro ao carregar configuracao: %s" % exc))
+
+    # Itens 7 e 8, so nos agentes (com a configuracao que o item 5 carregou): o que a subida do agente confere e
+    # avisa (locale dos scripts e interpretadores), para o servidor se mostrar compativel antes de subir.
+    if cfg is not None and getattr(cfg.app, "role", "all") == "agent":
+        results.extend(_agent_checks(cfg))
 
     # Renderizacao da tabela OK/FALHA
     col1_w = max([len(r[0]) for r in results] + [4]) + 2

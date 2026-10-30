@@ -661,6 +661,28 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class TestBuild(unittest.TestCase):
+    """Versao com o id do pacote (src/sss/BUILD): <base>+<build>, ate 20 caracteres (<prefixo>agents.version)."""
+
+    def test_le_o_build_valido(self):
+        folder = tempfile.mkdtemp(prefix="sss_build_")
+        self.addCleanup(shutil.rmtree, folder, True)
+        path = os.path.join(folder, "BUILD")
+        self.assertEqual(sss_config.read_build(path), "", "sem arquivo: so a base")
+        for content, expected in (("97d7352\n", "97d7352"), ("2610301111", "2610301111"),
+                                  ("97D7352", ""), ("1; rm -rf /", ""), ("", "")):
+            with open(path, "w") as f:
+                f.write(content)
+            self.assertEqual(sss_config.read_build(path), expected, content)
+
+    def test_cabe_na_coluna_version(self):
+        for build in ("97d7352", "2610301111"):
+            version = sss_config.version_with_build(build)
+            self.assertEqual(version, sss_config.SSS_VERSION_BASE + "+" + build)
+            self.assertLessEqual(len(version), 20, version)
+        self.assertEqual(sss_config.version_with_build(""), sss_config.SSS_VERSION_BASE)
+
+
 class TestConfigCR007(unittest.TestCase):
     """CR-007 (README §4.1, §8.6, §8.9, §12.1): chaves novas, invariantes I3/I4 e segredos por papel."""
 

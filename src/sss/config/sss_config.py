@@ -29,7 +29,29 @@ _FIXED_KEYS = frozenset(["PATH", "HOME", "TMPDIR", "LANG", "TZ", "PADRAO_VALOR_R
 _FIXED_PREFIXES = ("LC_", "SSS_", "PYTHON")
 
 # Versao do SSS: unico lugar (tbsss_agentes.versao e SSS_VERSION do script, CR-010). Trocada a cada release.
-SSS_VERSION = "1.0.0-dev"
+SSS_VERSION_BASE = "1.0.0-dev"
+# Identificacao do pacote (src/sss/BUILD, gravado pelo tools/package.py): o commit curto (7 hex) ou, sem git, a
+# data e a hora (AAMMDDHHMM). Sem o arquivo (o DEV do repositorio), so a base. Cabe nos 20 caracteres de
+# <prefixo>agents.version.
+RE_BUILD = re.compile(r"^([0-9a-f]{7}|[0-9]{10})$")
+BUILD_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "BUILD")
+
+
+def read_build(path=BUILD_FILE):
+    """O id do pacote no arquivo BUILD, ou "" (sem arquivo ou com conteudo fora do formato)."""
+    try:
+        with open(path, encoding="ascii") as f:
+            value = f.read().strip()
+    except (OSError, ValueError):  # sem BUILD (DEV do repositorio) ou ilegivel: so a versao base
+        return ""
+    return value if RE_BUILD.match(value) else ""
+
+
+def version_with_build(build):
+    return SSS_VERSION_BASE + ("+" + build if build else "")
+
+
+SSS_VERSION = version_with_build(read_build())
 
 # Chaves que existiram e foram retiradas: ignoradas com aviso "apague a linha", nunca em silencio.
 # CR-036 (D6): as chaves retiradas antes do CR-032 tambem so geram aviso (antes recusavam a subida): uma regra

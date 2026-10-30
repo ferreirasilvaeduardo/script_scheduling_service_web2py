@@ -12,16 +12,20 @@ from tests.support import _testenv  # noqa: F401
 from sss.cli import check_env
 from sss.config import sss_config
 from sss.persistence import db_conn
+from sss.platform import os_platform
 
 
 def _cfg(role, dsn="servidor:1521/servico"):
     oracle = types.SimpleNamespace(driver_mode="thick", dsn=dsn, call_timeout_ms=30000)
-    return types.SimpleNamespace(app=types.SimpleNamespace(role=role), oracle=oracle)
+    return types.SimpleNamespace(app=types.SimpleNamespace(role=role), oracle=oracle,
+                                 agent=types.SimpleNamespace(child_locale="C.UTF-8"))
 
 
 class TestCheckEnvDriver(unittest.TestCase):
 
-    def _run(self, role, probe, dsn="servidor:1521/servico"):
+    def _run(self, role, probe, dsn="servidor:1521/servico", locale="C.UTF-8",
+             interpreters=(("python", "/usr/bin/python", "3.12.3"),
+                           ("python3", "/usr/bin/python3", "3.12.3"))):
         out = io.StringIO()
         secrets = mock.Mock(return_value=object())
         # CR-033 (D6): a sondagem nao depende mais do SSS_TEST_ORACLE (a variavel dos testes)
@@ -30,7 +34,10 @@ class TestCheckEnvDriver(unittest.TestCase):
                 mock.patch.object(sss_config, "config_path", return_value="config-de-teste.ini"), \
                 mock.patch.object(sss_config, "get_config", return_value=_cfg(role, dsn)), \
                 mock.patch.object(sss_config, "get_secrets", secrets), \
-                mock.patch.object(db_conn, "select_driver", probe), redirect_stdout(out):
+                mock.patch.object(db_conn, "select_driver", probe), redirect_stdout(out), \
+                mock.patch.object(os_platform, "pick_child_locale", return_value=locale), \
+                mock.patch.object(os_platform, "interpreter_versions",
+                                  return_value=list(interpreters)):
             try:
                 check_env.main(["--config", "config-de-teste.ini"])
             except SystemExit:
@@ -85,6 +92,27 @@ class TestCheckEnvDriver(unittest.TestCase):
         sel.client_version = "19.27.0.0.0"
         _secrets, text = self._run("agent", mock.Mock(return_value=sel))
         self.assertNotIn("Cliente Oracle", text)
+
+    def test_agente_mostra_locale_e_interpretadores(self):
+        """Melhoria 1 (2026-10-30): o que a subida do agente avisa aparece antes, no check_env (so
+        no agente)."""
+        sel = types.SimpleNamespace(candidate="cx_oracle", server_version="19.0.0.0.0",
+                                    driver_version="8.3.0", client_version="19.27.0.0.0")
+        _secrets, text = self._run("agent", mock.Mock(return_value=sel))
+        self.assertRegex(text, r"Locale dos scripts\s+\| OK\s+\| C\.UTF-8")
+        self.assertRegex(text,
+                         r"Interpretadores\s+\| OK\s+\| python -> /usr/bin/python \(3\.12\.3\)")
+        _secrets, text = self._run("agent", mock.Mock(return_value=sel), locale="en_US.utf8",
+                                   interpreters=(("python", "/usr/bin/python", "2.6.6"),
+                                                 ("python3", None, None)))
+        self.assertIn("C.UTF-8 nao consta em locale -a: os scripts usam en_US.utf8", text)
+        self.assertIn("python e o Python 2.6.6: cadastre scripts Python 3 como python3", text)
+        self.assertIn("python3 -> nao encontrado", text)
+        self.assertIn("Todos os pre-requisitos", text, "AVISO nao reprova o ambiente")
+        _secrets, text = self._run("agent", mock.Mock(return_value=sel), locale=None)
+        self.assertRegex(text, r"Locale dos scripts\s+\| FALHA")
+        _secrets, text = self._run("web", mock.Mock(return_value=sel))
+        self.assertNotIn("Locale dos scripts", text, "o web nao roda scripts")
 
     def test_sem_processo_sai_com_2(self):
         # README §12.1: sem --name nem --config (CR-029, sem config padrao), codigo 2 antes

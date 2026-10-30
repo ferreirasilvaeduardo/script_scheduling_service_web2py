@@ -33,6 +33,9 @@ Variáveis do roteiro (`capture_evidence.js`):
 | `SSS_EVIDENCE_DIR` | Pasta de saída, no lugar da `evidence_<data>[_r<n>]` |
 | `SSS_ADMIN_START=new` | O admin já está com a senha nova (rodada repetida no mesmo banco) |
 | `SSS_AGENT_NAME` | Agente principal (padrão `agente0001`) |
+| `SSS_ADMIN_RESET=seed` | No encerramento, o `admin` volta à senha inicial do seed e o roteiro confere com um login (instalação que mantém os usuários do seed na senha inicial, como o 3067) |
+| `SSS_REMOTE_HOST`, `SSS_REMOTE_JUMP` | Instalação em outro servidor (`conta@servidor` e, com salto, `conta@bastion`): o disco da instalação (configs, pastas do agente) é lido por `ssh`, só com chave e com até 3 tentativas na falha de conexão; o `SSS_APP_ROOT` é a raiz no servidor e o `SSS_BASE_URL` chega ao web por um túnel (`dev/others/notas/sss-tunel-3067`) |
+| `SSS_HOM_SHEBANG` (+`_VER`), `SSS_HOM_TYPED` (+`_VER`), `SSS_HOM_NAME` (+`_PATH`), `SSS_HOM_ENV_PYTHON3`, `SSS_HOM_VENV` | Interpretadores do CT-32 no servidor homologado: o `#!` do `diagnostico/interp_py36.py` (o script copiado ao servidor leva esse `#!`), o caminho completo digitado, o nome digitado (achado no `PATH` do agente), o `python3` que o `#!/usr/bin/env python3` acha (vazio quando não há: o caso passa a esperar a falha) e o virtualenv. Padrão: os desta máquina (pyenv) |
 | `SSS_CHROME`, `PUPPETEER_MODULE` | Navegador e módulo do Puppeteer |
 
 O `build_evidence_docx.py` usa as mesmas `SSS_EVIDENCE_DATE` (padrão a data do dia) e `SSS_EVIDENCE_ROUND`; numa rodada de outro dia, passe a data.

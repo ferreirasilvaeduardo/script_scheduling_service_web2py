@@ -6,7 +6,7 @@ Uso: python tools/package.py [--source <raiz do repositorio>] [--out-dir <pasta>
 Ferramenta de build (CR-022b2): fica em tools/, fora do pacote que ela mesma gera.
 
 Gera <saida>/sss-<versao>.tar.gz (tudo sob sss-<versao>/, com um SHA256SUMS de cada arquivo) e <saida>/SHA256SUMS
-com o hash do tar.gz. A versao e sss_config.SSS_VERSION. O tar e deterministico (ordem, dono, data e modos fixos).
+com o hash do tar.gz. A versao e sss_config.SSS_VERSION_BASE, com --build gravado em src/sss/BUILD. O tar e deterministico (ordem, dono, data e modos fixos).
 
 Entram: os launchers de producao do bin/ (sem helper desde o CR-032) e a aplicacao (APP_DIRS e APP_FILES da raiz, que e a propria
 aplicacao desde o CR-022a) sem codigo de DEV, sem testes e sem pastas de runtime. Desde o CR-021f nao ha web2py: o servidor web e o scripts/run_web.py da propria aplicacao.
@@ -34,7 +34,7 @@ sys.dont_write_bytecode = True
 from sss.config import sss_config  # noqa: E402
 
 DEFAULT_ROOT = _APP_DIR  # CR-022a: a aplicacao e a raiz do repositorio
-BIN = ("sss-web.sh", "sss-scheduler.sh", "sss-stop.sh", "sss-update.sh", "sss-keepalive.sh")
+BIN = ("sss-web.sh", "sss-scheduler.sh", "sss-stop.sh", "sss-update.sh", "sss-keepalive.sh", "sss-ctl.sh")
 # Da raiz so entram estas pastas e arquivos da aplicacao (lista de permissao, CR-022a): o resto da raiz
 # (.git, Makefile, CLAUDE.md, input/, output/, logs/...) e da maquina de desenvolvimento.
 APP_DIRS = ("docs", "instance", "scripts", "src")
@@ -174,9 +174,17 @@ def _info(name, size, mode, kind=tarfile.REGTYPE):
     return info
 
 
-def build_package(source, output, version=None):
-    """Gera o pacote e o SHA256SUMS; devolve (tar_gz, sha256sums). PackageError sem gravar nada."""
-    version = version or sss_config.SSS_VERSION
+BUILD_REL = "src/sss/BUILD"
+
+
+def build_package(source, output, version=None, build=None):
+    """Gera o pacote e o SHA256SUMS; devolve (tar_gz, sha256sums). PackageError sem gravar nada.
+
+    build: o id do pacote (commit curto de 7 hex ou AAMMDDHHMM), gravado em src/sss/BUILD dentro do pacote
+    (e no SHA256SUMS interno); a aplicacao mostra a versao como <base>+<build>."""
+    version = version or sss_config.SSS_VERSION_BASE
+    if build is not None and not sss_config.RE_BUILD.match(build):
+        raise PackageError(["--build %r: use o commit curto (7 hex) ou AAMMDDHHMM" % build])
     source = os.path.abspath(source)
     files, problems = collect(source)
 
@@ -188,7 +196,9 @@ def build_package(source, output, version=None):
         raise PackageError(problems)
 
     top = "sss-%s" % version
-    content = [(rel, ler(rel)) for rel in files]
+    content = [(rel, ler(rel)) for rel in files if rel != BUILD_REL]
+    if build:
+        content.append((BUILD_REL, (build + "\n").encode("ascii")))
     content.sort()
     sums = "".join("%s  %s\n" % (hashlib.sha256(data).hexdigest(), rel) for rel, data in content)
     dirs = set()
@@ -230,9 +240,12 @@ def main(argv=None, output_text=None):
     parser = argparse.ArgumentParser(description="Pacote de implantacao do SSS (README §12.2)")
     parser.add_argument("--source", dest="origem", default=DEFAULT_ROOT, help="raiz do repositorio a empacotar (padrao: esta arvore)")
     parser.add_argument("--out-dir", dest="saida", default=None, help="pasta de saida (padrao: <origem>/dist)")
+    parser.add_argument("--build", dest="build", default=None,
+                        help="id do pacote em src/sss/BUILD: commit curto (7 hex) ou AAMMDDHHMM")
     args = parser.parse_args(argv)
     try:
-        destination, sums = build_package(args.origem, args.saida or os.path.join(args.origem, "dist"))
+        destination, sums = build_package(args.origem, args.saida or os.path.join(args.origem, "dist"),
+                                          build=args.build)
     except PackageError as exc:
         output_text.write("Pacote recusado:\n")
         for problem in exc.problems:

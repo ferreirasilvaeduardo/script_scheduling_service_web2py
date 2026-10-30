@@ -125,6 +125,8 @@ python3 /tmp/sss-limpo/tools/package.py --source /tmp/sss-limpo --out-dir /tmp/s
 
 Na máquina de desenvolvimento, `make package` faz o mesmo (cópia do `HEAD` por `git archive` e `package.py`) e grava o pacote, o `SHA256SUMS` e o `COMMIT` em `.bkp/pacote_<data>/` (usado no CR-035).
 
+Desde 30/10/2026, o `make package` (e o `make package-local`, a partir dos arquivos locais) gravam na mesma pasta os arquivos de levar ao servidor: o `sss-<versao>.tar.gz` com o id do pacote em `src/sss/BUILD` (o commit curto, ou a data e a hora no `package-local`; a versão aparece como `1.0.0-dev+<id>` no log, na tela Agentes e no rodapé), o `utilitarios.tar.gz` (os scripts de exemplo do seed), o `sss_vars.sh` (de `~/sss_pacote` ou `SSS_VARS=<arquivo>`, para o roteiro `docs/DEPLOYMENT-SERVER.md`) e o `SHA256SUMS` de todos.
+
 O `package.py` fica em `tools/` desde o CR-022b2 (antes, `scripts/`): é ferramenta de build e não vai no pacote. Ensaiado de novo no CR-021f3, já sem web2py: o `package.py` não grava `__pycache__` na cópia que empacota (antes, o próprio `__pycache__` recusava o pacote). Com código 1, a saída diz o que foi recusado ("Pacote recusado:" e uma linha por problema, com arquivo e linha, nunca o valor). O caso comum é um `password` ou `cookie_key` que não é `CHANGE_ME` no `instance/secrets.cfg.example`.
 
 Leve os dois arquivos (`sss-<version>.tar.gz` e `SHA256SUMS`) ao servidor e confira. Na **primeira instalação**:
@@ -157,6 +159,8 @@ O pacote só tem o `bin/` e a aplicação (o código, os templates e os estátic
 4. **Pastas:** nada a fazer. Na subida, o web e o agente criam as que faltarem em `var/<nome>/` e `scripts_ambiente/` (CR-032, D12), com uma linha `pasta criada` no log para cada pasta do agente (o `log_dir` é criado sem essa linha).
 5. **Subida e permanência (§10.6):** `bin/sss-keepalive.sh` no `crontab` da conta, com `@reboot` e a cada 5 minutos.
 6. **Monitoração (§13)** e **limpeza manual (§12, README §11.3)** pelo mesmo `crontab`.
+
+O `bin/sss-ctl.sh cron install` gera e instala o bloco abaixo para a raiz em que é rodado (com o `PATH` da pasta do `PYTHON`, os avisos do `health.py` em `health.err` e as marcas `# --- SSS <TIPO> ---`), sem duplicar; `cron remove` o retira (README §12.2, `docs/DEPLOYMENT-SERVER.md` passo 14).
 
 Exemplo de `crontab -e` da conta, com os usuários entrando direto por HTTP na porta 18000 (§10.4; troque `<TIPO>`, a porta e o Python):
 
@@ -446,6 +450,8 @@ No cron, defina-as no topo do `crontab` (§4.0). O agente procura os interpretad
 
 ### 10.6 `sss-keepalive.sh` no cron da conta (CR-030) [ensaiado]
 
+Para operar uma raiz inteira em um comando, `bin/sss-ctl.sh status | stop | start | restart` (README §12.2): ele chama o keepalive, o `sss-stop.sh` e o `SIGTERM` do web abaixo, com os processos tirados do `instance/` e a porta do web do `[web] allowed_origins`.
+
 O `bin/sss-keepalive.sh` mantém os processos no ar pelo cron da conta do SSS (§4.0):
 
 ```bash
@@ -720,7 +726,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 O código é trocado **no lugar** pelo `bin/sss-update.sh`. `instance/`, `var/` e `scripts_ambiente/` não são tocados (de `instance/`, só `instance/exemplos/` é trocado):
 
 1. Gere e confira o pacote novo (§3). Leia as notas da versão (§18.2) e, se o esquema mudou, combine a janela com quem roda o SQL.
-2. Pare o web e **todos** os agentes: `bin/sss-keepalive.sh --pause <nome>` de cada um, `bin/sss-stop.sh` nos agentes e `SIGTERM` no web (§10.6). Com a raiz compartilhada (§4.1), em **todos** os servidores. Com SQL de migração, aplique-o agora (§5.2).
+2. Pare o web e **todos** os agentes: `bin/sss-keepalive.sh --pause <nome>` de cada um, `bin/sss-stop.sh` nos agentes e `SIGTERM` no web (§10.6). Com a raiz compartilhada (§4.1), em **todos** os servidores. Com SQL de migração, aplique-o agora (§5.2). Com o `bin/sss-ctl.sh`, basta `bin/sss-ctl.sh stop` (e, no passo 5, `bin/sss-ctl.sh start`).
 3. Atualize:
    ```bash
    # na pasta onde estão o pacote e o SHA256SUMS

@@ -13,6 +13,7 @@
  * Senhas: nunca no codigo nem no log.
  *   - senha inicial dos usuarios do seed: lida do docs/DEPLOYMENT.md (secao 5.3, documentada);
  *   - senha nova do admin (troca valida do CT-01): arquivo SSS_ADMIN_NEW_PASSWORD_FILE (padrao ~/.sss_homolog_pw, 0600).
+ *   - SSS_ADMIN_RESET=seed: no encerramento, o admin volta a senha inicial (instalacao que a mantem).
  *   - SSS_ADMIN_START=new: o admin ja esta com a senha nova (rodada repetida no mesmo banco); o CT-01 troca
  *     a senha nova por ela mesma.
  * Data da rodada: SSS_EVIDENCE_DATE (AAAAMMDD, padrao a data do dia): carimbo HOMOLOG_<data> dos registros criados.
@@ -129,6 +130,8 @@ if (!AGENT_ID || !INPUT || !SCRIPT_WORK) {
 }
 const STAMP = `HOMOLOG_${RUN_DATE}${ROUND ? 'R' + ROUND : ''}`;
 const ADMIN_STARTS_NEW = process.env.SSS_ADMIN_START === 'new';
+// SSS_ADMIN_RESET=seed: no encerramento, o admin volta a senha inicial do seed (ver o ENCERRAMENTO).
+const ADMIN_RESET_SEED = process.env.SSS_ADMIN_RESET === 'seed';
 
 const deployDoc = dfs.readFileSync(path.join(APP, 'docs', 'DEPLOYMENT.md'), 'utf8');
 const SEED_PASS = (deployDoc.match(/senha inicial `([^`]+)`/) || [])[1];
@@ -2220,6 +2223,20 @@ CTS['ENCERRAMENTO'] = async () => {
     const ativas = await page.$$eval('form[action*="/schedules/pause"]', (fs) => fs.length);
     check(`Regras ${STAMP}_* pausadas (${ids.length} nesta etapa)`, ativas === 0, ativas + ' ativa(s) restante(s)');
     await snap('Regras da homologação pausadas ao final', { full: true });
+    // SSS_ADMIN_RESET=seed: o admin volta a senha inicial do seed (instalacao que mantem os usuarios do seed na
+    // senha inicial, ex.: o 3067, decisao 15). Sem a variavel, o admin fica com a senha escolhida.
+    if (ADMIN_RESET_SEED && state.adminNew) {
+        await login('admin');
+        await go('/default/my_password');
+        await fill('#field-current_password', NEW_PASS);
+        await fill('#field-new_password', SEED_PASS);
+        await fill('#field-confirmation', SEED_PASS);
+        await submit('/default/my_password');
+        const voltou = await has('Senha alterada com sucesso.');
+        if (voltou) { state.adminNew = false; saveState(); }
+        check('Senha do admin devolvida à senha inicial do seed (SSS_ADMIN_RESET=seed)', voltou);
+        check('Login do admin com a senha inicial', await login('admin', SEED_PASS));
+    }
 };
 
 const ORDER = ['CT-01', 'CT-02', 'CT-03', 'MASSA', 'CT-04', 'CT-05', 'CT-06', 'CT-07', 'CT-08', 'CT-09', 'CT-10',

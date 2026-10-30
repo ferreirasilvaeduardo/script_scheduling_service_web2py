@@ -208,22 +208,23 @@ done
 
 ### 4.2 Pacote
 
+Um comando gera os cinco arquivos do passo 5 (com o `sss_vars.sh` de `~/sss_pacote`, ou o de `SSS_VARS=<arquivo>`):
+
 ```bash
 cd "$ORIGEM"
-make package-local                            # grava .bkp/pacote_local_<data>/sss-<versao>.tar.gz, SHA256SUMS e ORIGEM
+make package-local
 PKG=$(ls -d .bkp/pacote_local_* | tail -1); ls -l "$PKG"; cat "$PKG/ORIGEM"
-(cd "$PKG" && sha256sum -c SHA256SUMS)        # esperado: sss-<versao>.tar.gz: OK
 tar -tzf "$PKG"/sss-*.tar.gz | grep -E '__pycache__|secrets\.cfg$|common\.ini$|config\.ini$' || echo "sem cache e sem segredos"
 for t in $SSS_TIPOS; do sss_tipo $t >/dev/null; tar -tzf "$PKG"/sss-*.tar.gz | grep -c "_$P\.sql$"; done   # esperado: 3 por tipo
-tar -czf "$PKG/utilitarios.tar.gz" --exclude=__pycache__ --exclude='*.pyc' dev/scripts/utilitarios
-tar -tzf "$PKG/utilitarios.tar.gz" | grep -c '\.\(py\|sh\)$'           # esperado: 14
-cp ~/sss_pacote/sss_vars.sh "$PKG/"
-(cd "$PKG" && sha256sum utilitarios.tar.gz sss_vars.sh >> SHA256SUMS && sha256sum -c SHA256SUMS)
+tar -xzOf "$PKG"/sss-*.tar.gz --wildcards '*/src/sss/BUILD'      # o id do pacote (AAMMDDHHMM)
 ```
 
+Esperado: `ORIGEM`, `SHA256SUMS`, `sss-<versao>.tar.gz`, `sss_vars.sh` e `utilitarios.tar.gz`, com o `sha256sum -c` já conferido pelo próprio `make`.
+
 * O `make package-local` copia só o que vai para o servidor (`bin`, `docs`, `instance/exemplos`, `scripts`, `src`, `AGENTS.md`, `README.md`), sem caches e sem `docs/homologation`, e passa a cópia pelo `tools/package.py`. Esse script só usa a biblioteca padrão e recusa o pacote com `__pycache__`, `*.pyc`, `secrets.cfg` real, senha fora do `CHANGE_ME` dos modelos, código de DEV, testes ou link simbólico. Os `instance/<nome>/` da origem (com senhas reais) nunca entram.
+* O id do pacote (`src/sss/BUILD`) aparece na versão (`1.0.0-dev+<id>`): no log de subida, na tela Agentes e no rodapé. Com o `make package` (git), o id é o commit curto.
 * O `ORIGEM` registra a pasta e a hora do pacote. Se a pasta tiver um `.git`, ele também cita o commit de base, só como informação: a referência são os arquivos.
-* Os scripts de exemplo do seed (`utilitarios/*`) ficam em `dev/scripts/`, que o pacote não leva: por isso o tar separado.
+* Os scripts de exemplo do seed (`utilitarios/*`) ficam em `dev/scripts/`, que o pacote não leva: por isso o `utilitarios.tar.gz` separado.
 
 ---
 
@@ -488,6 +489,7 @@ bin/sss-web.sh "$PYTHON" $SSS_WEB --check                     # esperado: CONFIG
 ```
 
 * `check_env`: código 0 em todos (avisos não reprovam). A saída mostra o driver, o modo e as versões. Registre-a. Código 1: falta arquivo ou o banco não conectou (veja a linha `FALHA`). Código 2: Python menor que 3.6.0 ou nome errado.
+* Nos agentes, o `check_env` também mostra o que a subida vai avisar: `Locale dos scripts` (o `C.UTF-8` ou o substituto, `AVISO`), `Interpretadores` (`python` e `python3` do `PATH`; `AVISO` se `python` for o 2) e `Cliente Oracle` (`AVISO` fora do 19; abaixo do 18.1, sem `call_timeout`). Assim, o servidor se mostra compatível antes de subir.
 * O `check_env` já roda o `scripts/probe_driver.py` para cada candidato, com a senha do processo: as linhas `Sondagem do candidato Oracle '<candidato>' falhou` e o `Selecionado: modo=...` da tabela são o resultado da sondagem. **Não rode o `probe_driver.py` à mão:** ele é um auxiliar interno que lê a senha da entrada padrão até o fim, e fica esperando o terminal (as linhas coladas depois dele seriam lidas como senha).
 * O `check_env.py` e o `health.py` rodam direto no Python. Com o cliente fora do `ldconfig`, eles usam o `LD_LIBRARY_PATH` que o `sss_vars.sh` monta a partir do `SSS_IC_DIR`. Os launchers (`sss-web.sh`, `sss-scheduler.sh`) o montam sozinhos.
 
@@ -495,23 +497,20 @@ bin/sss-web.sh "$PYTHON" $SSS_WEB --check                     # esperado: CONFIG
 
 ## 12. Subida
 
-Em cada tipo:
+Em cada tipo, pelo `bin/sss-ctl.sh` (os processos saem do `instance/`; a porta do web, do `[web] allowed_origins`):
 
 ```bash
 . ~/sss_pacote/sss_vars.sh; sss_tipo DEV && cd "$R"            # depois, sss_tipo PROD
-bin/sss-keepalive.sh $SSS_WEB:$PORT $SSS_NOMES_AGENTES; echo "codigo $?"
+bin/sss-ctl.sh start; echo "codigo $?"                         # esperado: 0
 sleep 15
-tail -n 3 var/*/logs/keepalive.log
-for p in /proc/[0-9]*; do
-  [ "$(readlink $p/cwd 2>/dev/null)" = "$(pwd -P)" ] && tr '\0' ' ' < $p/cmdline | grep -E 'run_(web|scheduler)\.py' && echo
-done                                           # esperado: 1 run_web.py e um run_scheduler.py por agente, desta raiz
+bin/sss-ctl.sh status                                          # cada processo "no ar (pid ...)"
 (ss -ltnp 2>/dev/null || netstat -ltnp 2>/dev/null) | grep ":$PORT\b"   # esperado: 127.0.0.1:<porta> LISTEN
-grep -h "pasta criada\|driver=\|agente inicializado\|Subida abortada" var/agente*/logs/internal/app/*/*/*/*/*/sss_scheduler_*.log | tail -n 20
-"$PYTHON" scripts/health.py --name $SSS_AGENTE_HEALTH; echo "codigo $?"   # esperado: SSS OK ... healthy_agents=<N>, codigo 0
+grep -h "pasta criada\|interpretadores\|driver=\|agente inicializado\|Subida abortada" var/agente*/logs/internal/app/*/*/*/*/*/sss_scheduler_*.log | tail -n 20
+"$PYTHON" scripts/health.py --name $SSS_AGENTE_HEALTH 2>/dev/null; echo "codigo $?"   # esperado: SSS OK ... healthy_agents=<N>, codigo 0
 ```
 
-* Keepalive com código 3: algum processo não subiu. Veja `var/<nome>/logs/<nome>.out` e o DEPLOYMENT §15.
-* Cada agente cria as suas pastas em `var/<nome>/` na primeira subida e se cadastra na tabela de agentes (`AGENT_START` na auditoria).
+* Código 3: algum processo não subiu. Veja `var/<nome>/logs/<nome>.out`, o `keepalive.log` e o DEPLOYMENT §15.
+* Cada agente cria as suas pastas em `var/<nome>/` na primeira subida e se cadastra na tabela de agentes (`AGENT_START` na auditoria). A linha `agente inicializado (versao 1.0.0-dev+<id>, ...)` mostra o pacote que está rodando.
 
 ---
 
@@ -540,37 +539,20 @@ Em cada tipo:
 
 ## 14. Permanência (`crontab` da conta)
 
-Um bloco por tipo, guardado na própria raiz em `var/crontab_sss/crontab_sss.txt` (o `var/` é preservado pelo `sss-update.sh` e não vai no pacote): variáveis, keepalive com `@reboot` e a cada 5 minutos, e um `health.py`. O bloco começa em `# --- SSS <TIPO> ---` e termina em `# --- fim SSS <TIPO> ---`, para instalar ou retirar um tipo sem tocar no outro. Em cada tipo que o cron deve manter no ar:
+Um bloco por tipo, gerado pelo `bin/sss-ctl.sh cron` a partir do ambiente de quem roda (o `sss_vars.sh` carregado) e guardado na própria raiz em `var/crontab_sss/crontab_sss.txt` (o `var/` é preservado pelo `sss-update.sh` e não vai no pacote): as variáveis, o keepalive com `@reboot` e a cada 5 minutos, e um `health.py` com os avisos em `health.err`. O bloco começa em `# --- SSS <TIPO> ---` e termina em `# --- fim SSS <TIPO> ---`, para instalar ou retirar um tipo sem tocar no outro nem nas tarefas de outros sistemas. Em cada tipo que o cron deve manter no ar:
 
 ```bash
 . ~/sss_pacote/sss_vars.sh; sss_tipo DEV && cd "$R"            # depois, sss_tipo PROD
-mkdir -m 0700 -p var/crontab_sss
-{ echo "# --- SSS $T --- (DEPLOYMENT-SERVER, gerado em $(date '+%Y-%m-%d %H:%M'))"
-  echo "PYTHON=$PYTHON"; echo "SSS_TZ=$SSS_TZ"
-  echo "PATH=$(dirname "$PYTHON"):/usr/local/bin:/usr/bin:/bin"
-  [ -n "$ORACLE_HOME" ] && echo "ORACLE_HOME=$ORACLE_HOME"
-  [ -n "$SSS_IC_DIR" ] && { echo "SSS_IC_DIR=$SSS_IC_DIR"; echo "LD_LIBRARY_PATH=$SSS_IC_DIR"; }
-  [ -n "${SSS_LOCALE:-}" ] && echo "SSS_LOCALE=$SSS_LOCALE"
-  echo "@reboot      cd $R && bin/sss-keepalive.sh $SSS_WEB:$PORT $SSS_NOMES_AGENTES"
-  echo "*/5 * * * *  cd $R && bin/sss-keepalive.sh $SSS_WEB:$PORT $SSS_NOMES_AGENTES"
-  echo "*/5 * * * *  cd $R && \$PYTHON scripts/health.py --name $SSS_AGENTE_HEALTH > var/$SSS_AGENTE_HEALTH/logs/health.txt 2> var/$SSS_AGENTE_HEALTH/logs/health.err"
-  echo "# --- fim SSS $T ---"; } > var/crontab_sss/crontab_sss.txt
-chmod 0600 var/crontab_sss/crontab_sss.txt; cat var/crontab_sss/crontab_sss.txt
-```
-
-O `PATH` do cron é curto (`/usr/bin:/bin`); os agentes o herdam e procuram nele os interpretadores dos scripts (DEPLOYMENT §9). Por isso a pasta do `PYTHON` entra na frente: sem ela, num servidor em que o `python3` não está em `/usr/bin` (o 3067), todo script `python3` termina em `INTERPRETER_NOT_FOUND` depois do primeiro reboot. Acrescente outras pastas se os scripts usarem outros interpretadores. As variáveis valem para as linhas abaixo delas: com os mesmos valores nos blocos de cada tipo, a ordem dos blocos não importa.
-
-Revise e acrescente ao fim do `crontab` atual. Se o bloco do tipo já estiver lá, ele não é repetido:
-
-```bash
 crontab -l > ~/sss_registro/crontab_antes_$(date +%Y%m%d_%H%M%S).txt 2>/dev/null
-if crontab -l 2>/dev/null | grep -q "^# --- SSS $T ---"; then echo "ja existe o bloco do SSS $T (nada acrescentado)"
-else (crontab -l 2>/dev/null; cat var/crontab_sss/crontab_sss.txt) | crontab - && echo "bloco do SSS $T acrescentado"; fi
+bin/sss-ctl.sh cron show                     # revise o bloco
+bin/sss-ctl.sh cron install                  # acrescenta, so se o bloco do tipo ainda nao estiver no crontab
 crontab -l | grep -c "cd $R && bin/sss-keepalive.sh"      # esperado: 2
 ```
 
-* **Trocar o bloco de um tipo:** retire-o e acrescente de novo. **Retirar:** `crontab -l | sed "/^# --- SSS $T ---/,/^# --- fim SSS $T ---/d" | crontab -`.
-* Depois de 5 minutos, `cat var/$SSS_AGENTE_HEALTH/logs/health.txt` mostra só o estado (`SSS OK ...`, a primeira linha que o monitoramento lê; os avisos vão para o `health.err`), e nenhum processo aparece em dobro (o keepalive só sobe o que caiu).
+O `PATH` do cron é curto (`/usr/bin:/bin`); os agentes o herdam e procuram nele os interpretadores dos scripts (DEPLOYMENT §9). Por isso o bloco põe a pasta do `PYTHON` na frente: sem ela, num servidor em que o `python3` não está em `/usr/bin` (o 3067), todo script `python3` terminaria em `INTERPRETER_NOT_FOUND` depois do primeiro reboot. Se os scripts usarem outros interpretadores, acrescente a pasta deles com `crontab -e`. As variáveis valem para as linhas abaixo delas: com os mesmos valores nos blocos de cada tipo, a ordem dos blocos não importa.
+
+* **Trocar o bloco de um tipo:** `bin/sss-ctl.sh cron remove` e `bin/sss-ctl.sh cron install`. **Retirar:** `bin/sss-ctl.sh cron remove`.
+* Depois de 5 minutos, `bin/sss-ctl.sh status` mostra cada processo no ar e o `health` com `SSS OK ...` (a primeira linha do `health.txt`, que o monitoramento lê; os avisos vão para o `health.err`). Nenhum processo aparece em dobro: o keepalive só sobe o que caiu.
 * A limpeza dos logs e saídas antigos é manual (README §11.3). Para agendá-la, use a linha `find` do DEPLOYMENT §4.0, uma para cada raiz, começando só com `-print`.
 
 ---
@@ -580,53 +562,30 @@ crontab -l | grep -c "cd $R && bin/sss-keepalive.sh"      # esperado: 2
 Sempre a partir da raiz certa (`. ~/sss_pacote/sss_vars.sh; sss_tipo <TIPO> && cd "$R"`):
 
 ```bash
-bin/sss-keepalive.sh --pause <agente>         # o keepalive não sobe mais esse processo
-bin/sss-stop.sh <agente>                      # para o agente (só o desta raiz)
-bin/sss-keepalive.sh --resume <agente>        # volta na próxima passada do cron
-# parar o web DESTA raiz: o PID pelo cwd, nunca só pelo nome (cada raiz tem o seu web0001)
-bin/sss-keepalive.sh --pause $SSS_WEB
-for p in /proc/[0-9]*; do
-  [ "$(readlink $p/cwd 2>/dev/null)" = "$(pwd -P)" ] && tr '\0' ' ' < $p/cmdline | grep -q "scripts/run_web.py --name $SSS_WEB" && kill -TERM ${p#/proc/}
-done
-bin/sss-keepalive.sh --resume $SSS_WEB
+bin/sss-ctl.sh status                        # cada processo (no ar com o pid, parado, pausado) e o health
+bin/sss-ctl.sh stop                          # pausa todos, para os agentes e o web desta raiz e espera sair
+bin/sss-ctl.sh start                         # retira a pausa e sobe pelo keepalive
+bin/sss-ctl.sh restart                       # stop e start
+bin/sss-keepalive.sh --pause <agente>; bin/sss-stop.sh <agente>   # um processo só (o cron não o sobe)
+bin/sss-keepalive.sh --resume <agente>                              # volta na próxima passada do cron
 ```
 
-Um agente parado deixa o ambiente dele sem atendimento: o `health.py` dá `CRITICAL: ambiente X ativo sem nenhum agente saudavel` até ele voltar (DEPLOYMENT §13). Atualizações seguem o DEPLOYMENT §18 (`bin/sss-update.sh`).
-
+Um agente parado deixa o ambiente dele sem atendimento: o `health.py` dá `CRITICAL: ambiente X ativo sem nenhum agente saudavel` até ele voltar (DEPLOYMENT §13). O `sss-ctl.sh` só age nesta raiz (o web e os agentes de cada raiz têm os mesmos nomes).
 
 ### 15.1 Atualização de versão (`sss-update.sh`)
 
-Pacote novo gerado e transferido como nos passos 4.2 e 5 (os mesmos cinco arquivos em `~/sss_pacote`, conferidos com `sha256sum -c`). Em cada tipo, um passo de cada vez. O `sss-update.sh` troca só o código (`bin/`, `docs/`, `scripts/`, `src/`, `AGENTS.md`, `README.md`, `SHA256SUMS`, `instance/exemplos/`); `instance/`, `var/` e `scripts_ambiente/` ficam como estão (DEPLOYMENT §18.1).
-
-1. Pausar e parar todos os processos desta raiz:
+Pacote novo gerado e transferido como nos passos 4.2 e 5 (os mesmos cinco arquivos em `~/sss_pacote`, conferidos com `sha256sum -c`). Em cada tipo. O `sss-update.sh` troca só o código (`bin/`, `docs/`, `scripts/`, `src/`, `AGENTS.md`, `README.md`, `SHA256SUMS`, `instance/exemplos/`); `instance/`, `var/` e `scripts_ambiente/` ficam como estão (DEPLOYMENT §18.1).
 
 ```bash
 . ~/sss_pacote/sss_vars.sh; sss_tipo PROD && cd "$R"            # ou sss_tipo DEV
-for n in $SSS_WEB $SSS_NOMES_AGENTES; do bin/sss-keepalive.sh --pause $n; done
-for n in $SSS_NOMES_AGENTES; do bin/sss-stop.sh $n; done
-for p in /proc/[0-9]*; do
-  [ "$(readlink $p/cwd 2>/dev/null)" = "$(pwd -P)" ] && tr '\0' ' ' < $p/cmdline | grep -q "scripts/run_web.py --name $SSS_WEB" && kill -TERM ${p#/proc/}
-done
-sleep 10
-for p in /proc/[0-9]*; do [ "$(readlink $p/cwd 2>/dev/null)" = "$(pwd -P)" ] && tr '\0' ' ' < $p/cmdline | grep -E 'run_(web|scheduler)\.py'; done; echo "fim da lista (esperado: vazia)"
-```
-
-2. Atualizar e conferir:
-
-```bash
-bin/sss-update.sh ~/sss_pacote/sss-*.tar.gz; echo "codigo $?"   # esperado: 0; a última linha é o comando de retorno
+bin/sss-ctl.sh stop; echo "codigo $?"                            # esperado: parado ..., codigo 0
+bin/sss-update.sh ~/sss_pacote/sss-*.tar.gz; echo "codigo $?"    # esperado: 0; a última linha é o comando de retorno
 sha256sum -c --quiet SHA256SUMS && echo "$T: conteudo confere"
-ls var/update/
+bin/sss-ctl.sh start; echo "codigo $?"                           # um tipo que deve ficar parado pula esta linha
 ```
 
-3. Retomar e subir (um tipo que deve ficar parado pula este passo e continua pausado):
-
-```bash
-for n in $SSS_WEB $SSS_NOMES_AGENTES; do bin/sss-keepalive.sh --resume $n; done
-bin/sss-keepalive.sh $SSS_WEB:$PORT $SSS_NOMES_AGENTES; echo "codigo $?"
-```
-
-Depois, as conferências do passo 12. **Retorno:** pare como no item 1 e rode o comando impresso na última linha do item 2 (`bin/sss-update.sh <RAIZ>/var/update/<data>/sss-retorno-<data>.tar.gz`).
+* **Primeira atualização de uma raiz sem o `bin/sss-ctl.sh`** (instalação anterior a 30/10/2026): copie-o do pacote novo antes do `stop`: `tar -xzOf ~/sss_pacote/sss-*.tar.gz --wildcards '*/bin/sss-ctl.sh' > bin/sss-ctl.sh && chmod 0755 bin/sss-ctl.sh` (a atualização o troca depois pelo mesmo arquivo).
+* Depois, as conferências do passo 12. **Retorno:** `bin/sss-ctl.sh stop` e o comando impresso na última linha do `sss-update.sh` (`bin/sss-update.sh <RAIZ>/var/update/<data>/sss-retorno-<data>.tar.gz`).
 
 ---
 
@@ -635,11 +594,9 @@ Depois, as conferências do passo 12. **Retorno:** pare como no item 1 e rode o 
 Em cada tipo a desfazer, com autorização:
 
 ```bash
-crontab -l | sed "/^# --- SSS $T ---/,/^# --- fim SSS $T ---/d" | crontab -   # retira o bloco deste tipo (passo 14)
 . ~/sss_pacote/sss_vars.sh; sss_tipo <TIPO> && cd "$R"
-for n in $SSS_WEB $SSS_NOMES_AGENTES; do bin/sss-keepalive.sh --pause $n; done
-for n in $SSS_NOMES_AGENTES; do bin/sss-stop.sh $n; done
-# o web: o laço do passo 15
+bin/sss-ctl.sh cron remove                   # tira só o bloco deste tipo do crontab
+bin/sss-ctl.sh stop
 ( umask 077; tar -czf ~/sss_registro/retorno_${T}_$(date +%Y%m%d_%H%M%S).tar.gz instance var )   # config e logs; tem senhas
 ```
 

@@ -65,3 +65,5 @@ dev/others/notas/sss-web-*_v*.sh
 /dev/others/notas/*
 # Excecao: o script do tunel ate o web do 3067 (sem senha; so hosts e portas), versionado a pedido
 !/dev/others/notas/sss-tunel-3067/
+# Id do pacote, gravado so dentro do pacote pelo tools/package.py --build (versao <base>+<build>)
+/src/sss/BUILD
