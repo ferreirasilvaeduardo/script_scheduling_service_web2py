@@ -5,6 +5,7 @@ Gera instrucoes DDL fase a fase, sem importar drivers Oracle nem depender do web
 Totalmente idempotente e aderente ao README §9, §10, §11.1 e AGENTS §4.
 """
 import collections
+import unicodedata
 
 from sss.core import sql_ident
 
@@ -859,6 +860,80 @@ def _escape_sql(text):
     if text is None:
         return ""
     return str(text).replace("'", "''")
+
+
+# Decisao 16 A (2026-10-30): o SQL gerado para o DBA sai so com ASCII. Com o arquivo em UTF-8, um sqlplus com outro
+# NLS_LANG (no 3067, WE8MSWIN1252) gravava "GestÃ£o" no lugar de "Gestão"; com UNISTR, o texto chega igual com
+# qualquer NLS_LANG do cliente e qualquer conjunto de caracteres do banco.
+_ASCII_FALLBACK = {u"\u00a7": "secao ", u"\u00ba": "o", u"\u00aa": "a", u"\u2014": "-", u"\u2013": "-",
+                   u"\u201c": '"', u"\u201d": '"', u"\u2018": "'", u"\u2019": "'", u"\u2192": "->"}
+
+
+def _ascii_text(text):
+    """Texto livre (comentario, PROMPT) so com ASCII: sem acento, e o resto pela tabela ou "?"."""
+    result = []
+    for ch in unicodedata.normalize("NFKD", text):
+        if ord(ch) < 128:
+            result.append(ch)
+        elif not unicodedata.combining(ch):
+            result.append(_ASCII_FALLBACK.get(ch, "?"))
+    return "".join(result)
+
+
+def _unistr_literal(body):
+    """Corpo de um literal '...' (aspas ja dobradas) -> UNISTR('...') so com ASCII (\\XXXX por caractere)."""
+    out = []
+    for ch in body:
+        code = ord(ch)
+        if ch == "\\":
+            out.append("\\005C")
+        elif code < 128:
+            out.append(ch)
+        elif code <= 0xFFFF:
+            out.append("\\%04X" % code)
+        else:  # fora do BMP: o par de substitutos do UTF-16
+            code -= 0x10000
+            out.append("\\%04X\\%04X" % (0xD800 + (code >> 10), 0xDC00 + (code & 0x3FF)))
+    return "UNISTR('%s')" % "".join(out)
+
+
+def ascii_sql(script):
+    """O script com os literais nao ASCII em UNISTR e comentarios (--) e PROMPT sem acento (decisao 16 A).
+    Um literal so com ASCII fica como esta; o script que ja e ASCII sai identico."""
+    result = []
+    i, n = 0, len(script)
+    line_start = True
+    while i < n:
+        ch = script[i]
+        if line_start and script.startswith("PROMPT", i):
+            end = script.find("\n", i)
+            end = n if end < 0 else end
+            result.append(_ascii_text(script[i:end]))
+            i, line_start = end, False
+            continue
+        if script.startswith("--", i):
+            end = script.find("\n", i)
+            end = n if end < 0 else end
+            result.append(_ascii_text(script[i:end]))
+            i, line_start = end, False
+            continue
+        if ch == "'":
+            j = i + 1
+            while j < n:
+                if script[j] == "'":
+                    if j + 1 < n and script[j + 1] == "'":
+                        j += 2
+                        continue
+                    break
+                j += 1
+            body = script[i + 1:j]
+            result.append(_unistr_literal(body) if any(ord(c) > 127 for c in body) else script[i:j + 1])
+            i, line_start = j + 1, False
+            continue
+        result.append(ch if ord(ch) < 128 else _ascii_text(ch))
+        line_start = ch == "\n"
+        i += 1
+    return "".join(result)
 
 
 def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admin_password_hash=None):

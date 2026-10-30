@@ -596,5 +596,54 @@ class TestDdlSeedAndRollback(unittest.TestCase):
                 self.assertIn("rode antes o 02_rollback_sss_owner_b_tbsss.sql", f.read())
 
 
+def _decode_unistr(sql):
+    """Volta cada UNISTR('...') do script ao literal '...' original (o que o Oracle faz ao executar)."""
+    def literal(match):
+        body = re.sub(r"\\([0-9A-F]{4})", lambda m: chr(int(m.group(1), 16)), match.group(1))
+        body = body.encode("utf-16-le", "surrogatepass").decode("utf-16-le")
+        return "'%s'" % body
+    return re.sub(r"UNISTR\('((?:[^']|'')*)'\)", literal, sql)
+
+
+class TestAsciiSql(unittest.TestCase):
+    """Decisao 16 A: o SQL gerado para o DBA sai so com ASCII, com os literais acentuados em UNISTR."""
+
+    def test_literal_acentuado_vira_unistr_e_volta_igual(self):
+        sql = "INSERT INTO t VALUES ('Gest\u00e3o d''\u00c1gua \\ x', 'ascii', '\U0001F600');\n"
+        out = ddl_builder.ascii_sql(sql)
+        self.assertEqual(out, "INSERT INTO t VALUES (UNISTR('Gest\\00E3o d''\\00C1gua \\005C x'), 'ascii', "
+                              "UNISTR('\\D83D\\DE00'));\n")
+        self.assertEqual(_decode_unistr(out), sql)
+
+    def test_comentario_e_prompt_sem_acento_e_ascii_identico(self):
+        sql = ("PROMPT Cria\u00e7\u00e3o das tabelas\n"
+               "-- REGRA: AGENTS.md \u00a7 4.2 \u2014 n\u00ba 1\n"
+               "SELECT 'a' FROM dual; -- coment\u00e1rio com 'aspas\n")
+        self.assertEqual(ddl_builder.ascii_sql(sql),
+                         "PROMPT Criacao das tabelas\n"
+                         "-- REGRA: AGENTS.md secao  4.2 - no 1\n"
+                         "SELECT 'a' FROM dual; -- comentario com 'aspas\n")
+        ascii_only = "SELECT 'it''s' FROM dual;\n-- ok\nPROMPT fim\n"
+        self.assertEqual(ddl_builder.ascii_sql(ascii_only), ascii_only)
+
+    def test_scripts_gerados_so_ascii_e_seed_preservado(self):
+        from sss.cli import generate_sql
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(generate_sql.main(["--owner", "openrisow", "--prefix", "tbsss_", "--out-dir", tmp]), 0)
+            for name in os.listdir(tmp):
+                with open(os.path.join(tmp, name), "rb") as f:
+                    data = f.read()
+                self.assertEqual([b for b in data if b > 127], [], name)
+            with open(os.path.join(tmp, "01_deploy_sss_openrisow_tbsss.sql"), encoding="ascii") as f:
+                deploy = f.read()
+        self.assertIn("UNISTR(", deploy)
+        seed = "\n".join(ddl_builder.build_seed_statements("openrisow", "tbsss_"))
+        accented = sorted(set(re.findall(r"'((?:[^']|'')*[^\x00-\x7f](?:[^']|'')*)'", seed)))
+        self.assertTrue(accented, "o seed tem textos com acento")
+        decoded = _decode_unistr(deploy)
+        for text in accented:
+            self.assertIn("'%s'" % text, decoded)
+
+
 if __name__ == "__main__":
     unittest.main()

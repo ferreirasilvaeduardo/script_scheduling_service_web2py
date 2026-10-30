@@ -410,6 +410,12 @@ Conferência de que a DDL do pacote é a do código instalado (só leitura, sem 
 "$PYTHON" scripts/generate_sql.py --owner "$SSS_OWNER" --prefix "$PREFIX" --out-dir /tmp/sql_conferencia_$$ >/dev/null && sha256sum /tmp/sql_conferencia_$$/*_${P}.sql docs/sql/*_${O}_${P}.sql; rm -rf /tmp/sql_conferencia_$$
 ```
 
+Os scripts são só ASCII (decisão 16 A): o `NLS_LANG` da conta não muda o texto gravado. Conferência, esperado `0`:
+
+```bash
+LC_ALL=C grep -c '[^ -~]' docs/sql/*_${O}_${P}.sql | grep -v ':0$' | wc -l
+```
+
 Depois, a implantação. O `01` termina com `EXIT`, por isso a validação (`99`) roda numa segunda chamada. **Cole a linha do `sqlplus` sozinha:** ele lê a senha do terminal, e uma linha colada junto depois dela seria lida como senha (`SP2-0306: Invalid option`, sem conectar). A saída fica só no `SPOOL` (`SET TERMOUT OFF`); o pedido de senha continua visível:
 
 ```bash
@@ -587,6 +593,32 @@ bin/sss-ctl.sh start; echo "codigo $?"                           # um tipo que d
 * **Primeira atualização de uma raiz sem o `bin/sss-ctl.sh`** (instalação anterior a 30/10/2026): copie-o do pacote novo antes do `stop`: `tar -xzOf ~/sss_pacote/sss-*.tar.gz --wildcards '*/bin/sss-ctl.sh' > bin/sss-ctl.sh && chmod 0755 bin/sss-ctl.sh` (a atualização o troca depois pelo mesmo arquivo).
 * Depois, as conferências do passo 12. **Retorno:** `bin/sss-ctl.sh stop` e o comando impresso na última linha do `sss-update.sh` (`bin/sss-update.sh <RAIZ>/var/update/<data>/sss-retorno-<data>.tar.gz`).
 
+### 15.2 Refazer o esquema de um tipo (apaga os dados)
+
+Só com autorização, um tipo de cada vez. O `02_rollback` apaga as tabelas e os dados do prefixo `$P` deste tipo (usuários, cadastros, tickets e auditoria); o seed volta com a senha inicial. Use quando o esquema precisa sair do zero (decisão 17 B). Com dados a guardar, peça antes o backup ao DBA. O código já deve estar atualizado (15.1, sem o `start`), porque o `01` usado é o do `docs/sql` da raiz.
+
+```bash
+. ~/sss_pacote/sss_vars.sh; sss_tipo DEV && cd "$R"            # depois, sss_tipo PROD
+O=$(echo "$SSS_OWNER" | tr A-Z a-z)
+bin/sss-ctl.sh stop; echo "codigo $?"                            # esperado: parado ..., codigo 0 (pausado, o cron não sobe)
+ls -d var/*/works/ticket_* 2>/dev/null | wc -l                   # esperado: 0 (uma sobra o agente limpa na subida)
+cat > ~/sss_registro/${P}_02.sql <<EOF
+SET TERMOUT OFF
+SPOOL $HOME/sss_registro/${P}_02_rollback.log
+@$R/docs/sql/02_rollback_sss_${O}_${P}.sql
+EOF
+```
+
+```bash
+sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_registro/${P}_02.sql; echo "codigo $?"   # sozinha; esperado: 0
+```
+
+```bash
+grep 'Rollback do SSS concluido' ~/sss_registro/${P}_02_rollback.log   # esperado: a linha
+```
+
+Depois, o passo 9 inteiro deste tipo: a conferência do prefixo vazio (`0`), o `01` e o `99`, com as mesmas conferências (os logs antigos do passo 9 são sobrescritos). Por fim, `bin/sss-ctl.sh start` e as conferências do passo 12. As pastas de saída, de trabalho e de logs dos tickets antigos ficam em disco: o nome delas tem ambiente, script e minuto, e não colide com os tickets novos (os números recomeçam em 1).
+
 ---
 
 ## 16. Retorno (desfazer a implantação)
@@ -682,6 +714,7 @@ O resto do arquivo (a parte "derivados" e a função `sss_tipo`) é o do passo 0
 | Cliente 12.2 e `call_timeout` | Com o aviso da decisão 10, os agentes chegaram à conexão e caíram com `DPI-1050` (o prazo por chamada exige cliente 18.1+). Decisão 11 B (30/10): abaixo do 18.1 a sessão segue sem `call_timeout`, com WARNING. Testado no 3067 com o cliente 12.2 (conexão, `SELECT` e pool com `ping_interval`); o `/opt/oracle/client_11` não tem `lib/` e não foi testado. O `/opt/oracle/19c` é só o instalador do cliente 32 bits; o Instant Client 19 de 64 bits exige glibc 2.14 |
 | `PATH` do cron | O `python3` dos scripts é o do Sparta (`/portaloptrib/TESHUVA/sparta/python3.8/bin`), fora do `PATH` curto do cron, e `python` é o 2.6 de `/usr/bin`. O passo 14 grava o `PATH` com a pasta do `PYTHON` na frente. Sem `/usr/bin/python3`, o `#!/usr/bin/env python3` dos utilitários do seed falhava (`env: python3: No such file`), porque o filho rodava com `PATH=/usr/bin:/bin`: a homologação de 30/10 achou isso em 11 verificações. Decisão 13 A: o `PATH` do filho ganha, no fim, a pasta do Python do agente |
 | `python` e `python3` | Pelo passo 3.2: `python -> /usr/bin/python (Python 2.6.6)`, `python3 -> /portaloptrib/TESHUVA/sparta/python3.8/bin/python3 (Python 3.8.5)`. Cadastre os scripts Python como `python3`; o agente avisa na subida (`WARNING ... o interpretador "python" do cadastro e o Python 2.6.6`) |
+| Acentos do seed | Os textos do seed apareciam como `GestÃ£o` na tela e no banco: o `01` era UTF-8 e o `sqlplus` da conta lê com `NLS_LANG=AMERICAN_AMERICA.WE8MSWIN1252`, gravando cada byte do UTF-8 como um caractere no banco `WE8ISO8859P15`. O que é digitado na tela fica certo. Decisão 16 A: o SQL gerado é só ASCII (`UNISTR`); ensaiado com o mesmo `NLS_LANG` num prefixo temporário (12 textos com acento certos) |
 | `health.txt` | Com `2>&1` no cron, os avisos da sondagem do driver e do cliente 12.2 viravam a primeira linha do `health.txt`, no lugar do `SSS OK`. O passo 14 grava os avisos em `health.err` |
 | Umask da conta | `002` (os arquivos transferidos chegaram `664`): o passo 7 usa `umask 027` |
 | Locale | Sem `C.UTF-8`; existem `en_US.utf8` e `pt_BR.utf8` (escolhido `en_US.utf8`, que mantém ponto decimal e mensagens do sistema em inglês nos scripts). A sessão SSH mostra `Cannot set LC_CTYPE to default locale`: o locale da estação não existe no servidor, sem efeito no SSS, que exporta o seu |
@@ -697,6 +730,8 @@ O resto do arquivo (a parte "derivados" e a função `sss_tipo`) é o do passo 0
 | 4 B, 5 A | Prefixos novos, `s3dev_` e `s3prd_`, independentes do `tbsss_` e do `ssdev_` |
 | — | Transferência manual pela equipe; pacote dos arquivos locais (sem git); acesso pelo meio habitual; `driver_mode = auto` |
 | 15 (risco aceito) | Os quatro usuários do seed (`admin`, `op.prod`, `op.hml`, `consulta`) ficam na senha inicial do DEPLOYMENT §5.3 no DEV e no PROD, por decisão do responsável (30/10). A senha está num documento público; o que reduz o risco é o web atender só em `127.0.0.1` do servidor (acesso só pela conta do servidor ou por túnel pelo bastion). Uma homologação no DEV troca a senha do `admin` no CT-01 (passo 13); depois dela, o `admin` volta à senha inicial pela tela |
+| 16 A | SQL gerado só em ASCII, com os literais acentuados em `UNISTR` (30/10), para valer com qualquer `NLS_LANG` e conjunto de caracteres, em qualquer servidor |
+| 17 B | Os textos com mojibake do seed (6 linhas de `features` em cada esquema) saem refazendo os esquemas `s3dev_` e `s3prd_` com o SSS parado (passo 15.2), não por `MERGE` no lugar. Os dados de homologação e de teste se perdem, e os usuários do seed voltam à senha inicial (decisão 15) |
 | 7 A | SSS antigo (web2py, porta 8000, `/home/mastersafgf/sss/web2py`): parado no passo 6, sem apagar nada; a pasta `~/sss` fica como histórico |
 
 ### A.4 Diferenças em relação ao pedido original

@@ -743,7 +743,7 @@ CREATE INDEX openrisow.ix_tbsss_ils_scr ON openrisow.tbsss_input_listing (script
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_environments FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_environments. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_env_bi
 BEFORE INSERT ON openrisow.tbsss_environments
@@ -761,14 +761,14 @@ END;
 -- EVENTO: BEFORE UPDATE ON openrisow.tbsss_environments FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Garante a imutabilidade estrita da chave natural 'name'.
 -- Bloqueia qualquer alteracao posterior de valor para preservar integridade de FKs.
--- REGRA: README §10 e AGENTS.md §4.
+-- REGRA: README secao 10 e AGENTS.md secao 4.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_env_bu
 BEFORE UPDATE ON openrisow.tbsss_environments
 FOR EACH ROW
 BEGIN
     IF :NEW.name <> :OLD.name THEN
-        RAISE_APPLICATION_ERROR(-20001, 'name é imutável');
+        RAISE_APPLICATION_ERROR(-20001, UNISTR('name \00E9 imut\00E1vel'));
     END IF;
 END;
 /
@@ -779,7 +779,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_profiles FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_profiles. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_prf_bi
 BEFORE INSERT ON openrisow.tbsss_profiles
@@ -797,7 +797,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_features FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_features. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_fea_bi
 BEFORE INSERT ON openrisow.tbsss_features
@@ -815,7 +815,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_profile_feature FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_profile_feature. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_pfea_bi
 BEFORE INSERT ON openrisow.tbsss_profile_feature
@@ -833,7 +833,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_profile_env FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_profile_env. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_penv_bi
 BEFORE INSERT ON openrisow.tbsss_profile_env
@@ -851,7 +851,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_scripts FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_scripts. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_scr_bi
 BEFORE INSERT ON openrisow.tbsss_scripts
@@ -869,7 +869,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_profile_script FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_profile_script. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_pscr_bi
 BEFORE INSERT ON openrisow.tbsss_profile_script
@@ -887,7 +887,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_script_env FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_script_env. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_senv_bi
 BEFORE INSERT ON openrisow.tbsss_script_env
@@ -905,7 +905,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_users FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_users. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_usr_bi
 BEFORE INSERT ON openrisow.tbsss_users
@@ -923,14 +923,14 @@ END;
 -- EVENTO: BEFORE UPDATE ON openrisow.tbsss_users FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Garante a imutabilidade estrita da chave natural 'login'.
 -- Bloqueia qualquer alteracao posterior de valor para preservar integridade de FKs.
--- REGRA: README §10 e AGENTS.md §4.
+-- REGRA: README secao 10 e AGENTS.md secao 4.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_usr_bu
 BEFORE UPDATE ON openrisow.tbsss_users
 FOR EACH ROW
 BEGIN
     IF :NEW.login <> :OLD.login THEN
-        RAISE_APPLICATION_ERROR(-20001, 'login é imutável');
+        RAISE_APPLICATION_ERROR(-20001, UNISTR('login \00E9 imut\00E1vel'));
     END IF;
 END;
 /
@@ -941,7 +941,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_parameters FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_parameters. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_prm_bi
 BEFORE INSERT ON openrisow.tbsss_parameters
@@ -959,7 +959,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_script_param FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_script_param. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_sprm_bi
 BEFORE INSERT ON openrisow.tbsss_script_param
@@ -977,7 +977,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_schedules FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_schedules. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_sch_bi
 BEFORE INSERT ON openrisow.tbsss_schedules
@@ -995,7 +995,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_tickets FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_tickets. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_tck_bi
 BEFORE INSERT ON openrisow.tbsss_tickets
@@ -1013,7 +1013,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_ticket_answer FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_ticket_answer. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_tans_bi
 BEFORE INSERT ON openrisow.tbsss_ticket_answer
@@ -1031,7 +1031,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_agents FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_agents. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_agt_bi
 BEFORE INSERT ON openrisow.tbsss_agents
@@ -1049,7 +1049,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_audit FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_audit. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_aud_bi
 BEFORE INSERT ON openrisow.tbsss_audit
@@ -1067,7 +1067,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_control FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_control. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_ctl_bi
 BEFORE INSERT ON openrisow.tbsss_control
@@ -1085,7 +1085,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_ticket_output FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_ticket_output. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_tout_bi
 BEFORE INSERT ON openrisow.tbsss_ticket_output
@@ -1103,7 +1103,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_input_upload FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_input_upload. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_iup_bi
 BEFORE INSERT ON openrisow.tbsss_input_upload
@@ -1121,7 +1121,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_input_delivery FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_input_delivery. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_idl_bi
 BEFORE INSERT ON openrisow.tbsss_input_delivery
@@ -1139,7 +1139,7 @@ END;
 -- EVENTO: BEFORE INSERT ON openrisow.tbsss_input_listing FOR EACH ROW
 -- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
 -- openrisow.sq_tbsss_input_listing. Preserva ID explicitamente informado (migracoes/carga).
--- REGRA: AGENTS.md §4.2 e README §10.
+-- REGRA: AGENTS.md secao 4.2 e README secao 10.
 -- ==============================================================================
 CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_ils_bi
 BEFORE INSERT ON openrisow.tbsss_input_listing
@@ -1440,17 +1440,17 @@ ON (dst.code = src.code)
 WHEN MATCHED THEN
   UPDATE SET dst.name = 'Rodar Scripts',
              dst.module = 'OPERATION',
-             dst.description = 'Preencher questionários e abrir tickets',
+             dst.description = UNISTR('Preencher question\00E1rios e abrir tickets'),
              dst.active = 'Y',
              dst.updated_at = SYSDATE,
              dst.updated_by = 'SYSTEM:init_db'
   WHERE dst.active <> 'Y'
      OR dst.name <> 'Rodar Scripts'
      OR dst.module <> 'OPERATION'
-     OR dst.description <> 'Preencher questionários e abrir tickets'
+     OR dst.description <> UNISTR('Preencher question\00E1rios e abrir tickets')
 WHEN NOT MATCHED THEN
   INSERT (id, code, module, name, description, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'EXEC_SCRIPT', 'OPERATION', 'Rodar Scripts', 'Preencher questionários e abrir tickets', 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'EXEC_SCRIPT', 'OPERATION', 'Rodar Scripts', UNISTR('Preencher question\00E1rios e abrir tickets'), 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_features dst
 USING (SELECT 'VIEW_LOGS' AS code FROM DUAL) src
@@ -1492,19 +1492,19 @@ MERGE INTO openrisow.tbsss_features dst
 USING (SELECT 'DOWNLOAD_OUTPUT' AS code FROM DUAL) src
 ON (dst.code = src.code)
 WHEN MATCHED THEN
-  UPDATE SET dst.name = 'Baixar Saídas',
+  UPDATE SET dst.name = UNISTR('Baixar Sa\00EDdas'),
              dst.module = 'OPERATION',
-             dst.description = 'Navegar pelas saídas dos tickets nos ambientes do perfil e baixar o zip ou um arquivo',
+             dst.description = UNISTR('Navegar pelas sa\00EDdas dos tickets nos ambientes do perfil e baixar o zip ou um arquivo'),
              dst.active = 'Y',
              dst.updated_at = SYSDATE,
              dst.updated_by = 'SYSTEM:init_db'
   WHERE dst.active <> 'Y'
-     OR dst.name <> 'Baixar Saídas'
+     OR dst.name <> UNISTR('Baixar Sa\00EDdas')
      OR dst.module <> 'OPERATION'
-     OR dst.description <> 'Navegar pelas saídas dos tickets nos ambientes do perfil e baixar o zip ou um arquivo'
+     OR dst.description <> UNISTR('Navegar pelas sa\00EDdas dos tickets nos ambientes do perfil e baixar o zip ou um arquivo')
 WHEN NOT MATCHED THEN
   INSERT (id, code, module, name, description, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'DOWNLOAD_OUTPUT', 'OPERATION', 'Baixar Saídas', 'Navegar pelas saídas dos tickets nos ambientes do perfil e baixar o zip ou um arquivo', 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'DOWNLOAD_OUTPUT', 'OPERATION', UNISTR('Baixar Sa\00EDdas'), UNISTR('Navegar pelas sa\00EDdas dos tickets nos ambientes do perfil e baixar o zip ou um arquivo'), 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_features dst
 USING (SELECT 'UPLOAD_INPUT' AS code FROM DUAL) src
@@ -1564,91 +1564,91 @@ MERGE INTO openrisow.tbsss_features dst
 USING (SELECT 'MANAGE_USERS' AS code FROM DUAL) src
 ON (dst.code = src.code)
 WHEN MATCHED THEN
-  UPDATE SET dst.name = 'Gestão de Usuários',
+  UPDATE SET dst.name = UNISTR('Gest\00E3o de Usu\00E1rios'),
              dst.module = 'ADMIN',
              dst.description = 'Gerenciar operadores e credenciais',
              dst.active = 'Y',
              dst.updated_at = SYSDATE,
              dst.updated_by = 'SYSTEM:init_db'
   WHERE dst.active <> 'Y'
-     OR dst.name <> 'Gestão de Usuários'
+     OR dst.name <> UNISTR('Gest\00E3o de Usu\00E1rios')
      OR dst.module <> 'ADMIN'
      OR dst.description <> 'Gerenciar operadores e credenciais'
 WHEN NOT MATCHED THEN
   INSERT (id, code, module, name, description, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'MANAGE_USERS', 'ADMIN', 'Gestão de Usuários', 'Gerenciar operadores e credenciais', 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'MANAGE_USERS', 'ADMIN', UNISTR('Gest\00E3o de Usu\00E1rios'), 'Gerenciar operadores e credenciais', 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_features dst
 USING (SELECT 'MANAGE_PROFILES' AS code FROM DUAL) src
 ON (dst.code = src.code)
 WHEN MATCHED THEN
-  UPDATE SET dst.name = 'Gestão de Perfis',
+  UPDATE SET dst.name = UNISTR('Gest\00E3o de Perfis'),
              dst.module = 'ADMIN',
-             dst.description = 'Gerenciar perfis e matrizes de permissão',
+             dst.description = UNISTR('Gerenciar perfis e matrizes de permiss\00E3o'),
              dst.active = 'Y',
              dst.updated_at = SYSDATE,
              dst.updated_by = 'SYSTEM:init_db'
   WHERE dst.active <> 'Y'
-     OR dst.name <> 'Gestão de Perfis'
+     OR dst.name <> UNISTR('Gest\00E3o de Perfis')
      OR dst.module <> 'ADMIN'
-     OR dst.description <> 'Gerenciar perfis e matrizes de permissão'
+     OR dst.description <> UNISTR('Gerenciar perfis e matrizes de permiss\00E3o')
 WHEN NOT MATCHED THEN
   INSERT (id, code, module, name, description, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'MANAGE_PROFILES', 'ADMIN', 'Gestão de Perfis', 'Gerenciar perfis e matrizes de permissão', 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'MANAGE_PROFILES', 'ADMIN', UNISTR('Gest\00E3o de Perfis'), UNISTR('Gerenciar perfis e matrizes de permiss\00E3o'), 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_features dst
 USING (SELECT 'MANAGE_ENVIRONMENTS' AS code FROM DUAL) src
 ON (dst.code = src.code)
 WHEN MATCHED THEN
-  UPDATE SET dst.name = 'Gestão de Ambientes',
+  UPDATE SET dst.name = UNISTR('Gest\00E3o de Ambientes'),
              dst.module = 'ADMIN',
              dst.description = 'Gerenciar ambientes e DSNs',
              dst.active = 'Y',
              dst.updated_at = SYSDATE,
              dst.updated_by = 'SYSTEM:init_db'
   WHERE dst.active <> 'Y'
-     OR dst.name <> 'Gestão de Ambientes'
+     OR dst.name <> UNISTR('Gest\00E3o de Ambientes')
      OR dst.module <> 'ADMIN'
      OR dst.description <> 'Gerenciar ambientes e DSNs'
 WHEN NOT MATCHED THEN
   INSERT (id, code, module, name, description, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'MANAGE_ENVIRONMENTS', 'ADMIN', 'Gestão de Ambientes', 'Gerenciar ambientes e DSNs', 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'MANAGE_ENVIRONMENTS', 'ADMIN', UNISTR('Gest\00E3o de Ambientes'), 'Gerenciar ambientes e DSNs', 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_features dst
 USING (SELECT 'MANAGE_SCRIPTS' AS code FROM DUAL) src
 ON (dst.code = src.code)
 WHEN MATCHED THEN
-  UPDATE SET dst.name = 'Gestão de Scripts',
+  UPDATE SET dst.name = UNISTR('Gest\00E3o de Scripts'),
              dst.module = 'ADMIN',
-             dst.description = 'Cadastrar rotinas e homologação por ambiente',
+             dst.description = UNISTR('Cadastrar rotinas e homologa\00E7\00E3o por ambiente'),
              dst.active = 'Y',
              dst.updated_at = SYSDATE,
              dst.updated_by = 'SYSTEM:init_db'
   WHERE dst.active <> 'Y'
-     OR dst.name <> 'Gestão de Scripts'
+     OR dst.name <> UNISTR('Gest\00E3o de Scripts')
      OR dst.module <> 'ADMIN'
-     OR dst.description <> 'Cadastrar rotinas e homologação por ambiente'
+     OR dst.description <> UNISTR('Cadastrar rotinas e homologa\00E7\00E3o por ambiente')
 WHEN NOT MATCHED THEN
   INSERT (id, code, module, name, description, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'MANAGE_SCRIPTS', 'ADMIN', 'Gestão de Scripts', 'Cadastrar rotinas e homologação por ambiente', 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'MANAGE_SCRIPTS', 'ADMIN', UNISTR('Gest\00E3o de Scripts'), UNISTR('Cadastrar rotinas e homologa\00E7\00E3o por ambiente'), 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_features dst
 USING (SELECT 'MANAGE_PARAMETERS' AS code FROM DUAL) src
 ON (dst.code = src.code)
 WHEN MATCHED THEN
-  UPDATE SET dst.name = 'Dicionário de Parâmetros',
+  UPDATE SET dst.name = UNISTR('Dicion\00E1rio de Par\00E2metros'),
              dst.module = 'ADMIN',
-             dst.description = 'Gerenciar perguntas e flags reutilizáveis',
+             dst.description = UNISTR('Gerenciar perguntas e flags reutiliz\00E1veis'),
              dst.active = 'Y',
              dst.updated_at = SYSDATE,
              dst.updated_by = 'SYSTEM:init_db'
   WHERE dst.active <> 'Y'
-     OR dst.name <> 'Dicionário de Parâmetros'
+     OR dst.name <> UNISTR('Dicion\00E1rio de Par\00E2metros')
      OR dst.module <> 'ADMIN'
-     OR dst.description <> 'Gerenciar perguntas e flags reutilizáveis'
+     OR dst.description <> UNISTR('Gerenciar perguntas e flags reutiliz\00E1veis')
 WHEN NOT MATCHED THEN
   INSERT (id, code, module, name, description, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'MANAGE_PARAMETERS', 'ADMIN', 'Dicionário de Parâmetros', 'Gerenciar perguntas e flags reutilizáveis', 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'MANAGE_PARAMETERS', 'ADMIN', UNISTR('Dicion\00E1rio de Par\00E2metros'), UNISTR('Gerenciar perguntas e flags reutiliz\00E1veis'), 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_features dst
 USING (SELECT 'MANAGE_SCHEDULES' AS code FROM DUAL) src
@@ -1656,17 +1656,17 @@ ON (dst.code = src.code)
 WHEN MATCHED THEN
   UPDATE SET dst.name = 'Regras de Agendamento',
              dst.module = 'ADMIN',
-             dst.description = 'Criar e gerenciar recorrências',
+             dst.description = UNISTR('Criar e gerenciar recorr\00EAncias'),
              dst.active = 'Y',
              dst.updated_at = SYSDATE,
              dst.updated_by = 'SYSTEM:init_db'
   WHERE dst.active <> 'Y'
      OR dst.name <> 'Regras de Agendamento'
      OR dst.module <> 'ADMIN'
-     OR dst.description <> 'Criar e gerenciar recorrências'
+     OR dst.description <> UNISTR('Criar e gerenciar recorr\00EAncias')
 WHEN NOT MATCHED THEN
   INSERT (id, code, module, name, description, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'MANAGE_SCHEDULES', 'ADMIN', 'Regras de Agendamento', 'Criar e gerenciar recorrências', 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_features.NEXTVAL, 'MANAGE_SCHEDULES', 'ADMIN', 'Regras de Agendamento', UNISTR('Criar e gerenciar recorr\00EAncias'), 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_features dst
 USING (SELECT 'VIEW_AUDIT' AS code FROM DUAL) src
@@ -5497,7 +5497,7 @@ END;
 COMMIT;
 
 -- ==============================================================================
--- GRANTS POR PAPEL (README §11.1); nenhum GRANT a PUBLIC
+-- GRANTS POR PAPEL (README secao 11.1); nenhum GRANT a PUBLIC
 -- ==============================================================================
 
 -- papel web: conta nao informada; nenhum GRANT gerado

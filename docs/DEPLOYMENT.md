@@ -257,6 +257,8 @@ python3 scripts/generate_sql.py --config instance/web0001/config.ini --grants-to
 # gera docs/sql/01_deploy_sss_<owner>_<prefixo>.sql, 02_rollback_sss_<owner>_<prefixo>.sql, 99_validate_deploy_<owner>_<prefixo>.sql e 03_grants_sss_<owner>_<prefixo>.sql
 ```
 
+Os scripts saem só com ASCII (decisão 16 A): os textos com acento do seed vão em `UNISTR(...)`, e o resultado no banco é o mesmo com qualquer `NLS_LANG` do SQL*Plus. Não converta nem edite o arquivo com acentos.
+
 O DBA revisa o `01` (ou a saída de `python3 scripts/init_db.py --name agente0001 --dry-run`, que imprime o DDL sem conectar) **antes** de executar. Depois:
 
 ```sql

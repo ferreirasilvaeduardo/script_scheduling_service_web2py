@@ -138,6 +138,11 @@ def main(argv=None):
             "",
         ] + grants + ["", "PROMPT Grants aplicados com sucesso.", ""])
 
+    # Decisao 16 A: so ASCII (literais com acento em UNISTR), para o sqlplus gravar o mesmo texto com qualquer
+    # NLS_LANG do cliente e qualquer conjunto de caracteres do banco.
+    script_deploy, script_rollback, script_validate, script_grants = (
+        ddl_builder.ascii_sql(s) for s in (script_deploy, script_rollback, script_validate, script_grants))
+
     # 3. Saida stdout se solicitada
     if args.stdout == "deploy":
         print(script_deploy)
