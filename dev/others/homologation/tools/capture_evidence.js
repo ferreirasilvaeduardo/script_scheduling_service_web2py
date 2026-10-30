@@ -2094,6 +2094,9 @@ CTS['CT-32'] = async () => {
     await go(`/tickets/new?script_id=${info}&environment=GFPREPROD`);
     await fill('#field-interpreter', 'py thon');
     await clickText('[data-component="ticketTrigger"] [data-action="open"]', 'Criar ticket', { wait: 1500 });
+    // Pelo tunel de um servidor remoto a mensagem pode passar de 1,5 s: espera por ela (ate 10 s).
+    await page.waitForFunction((m) => document.body.innerText.includes(m), { timeout: 10000 },
+        'Informe o caminho completo do interpretador').catch(() => {});
     await expectText('Formato inválido recusado na confirmação', 'Informe o caminho completo do interpretador');
     await go('/audit/index?action=TICKET_CREATE');
     // Detalhe longo fica recolhido em "ver mais" (<details>): le o texto completo de cada linha.

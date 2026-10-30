@@ -866,6 +866,26 @@ RODADAS["20261030_r2"] = dict(RODADAS["20261029_r5"], **{
         u"(SSS_ADMIN_START=new).",
     ],
 })
+RODADAS["20261030_r3"] = dict(RODADAS["20261030_r2"], **{
+    "commit": u"97d7352 (Python dinâmico: keepalive e sss-update pelo executável do PYTHON, locale -a pelo PATH, "
+              u"aviso de python 2) instalado no DEV do brtlvlty3067sl pelo sss-update.sh; crontab instalado",
+    "defeitos": [
+        (u"Roteiro: espera fixa de 1,5 s na confirmação do CT-32", u"capture_evidence.js (CT-32)",
+         u"Pelo túnel do servidor remoto, a mensagem de formato inválido do interpretador às vezes chegava depois "
+         u"da espera fixa.",
+         u"O roteiro espera pela mensagem (até 10 s); CT-32 repetido com 41/41 OK. Não é defeito do produto."),
+    ],
+    "observacoes": [
+        u"Rodada com o código de 97d7352 e o crontab de cada tipo instalado (passo 14 do DEPLOYMENT-SERVER): o "
+        u"keepalive passou a cada 5 minutos durante a rodada sem subir nada em dobro, e o health.txt ficou com "
+        u"SSS OK na primeira linha (avisos no health.err). Marca %s." % STAMP,
+        u"Na subida, os agentes registram python -> /usr/bin/python (2.6.6) e python3 -> Python 3.8.5 do Sparta, "
+        u"com o WARNING para cadastrar scripts Python 3 como python3.",
+        u"A rodada completa teve 351/352: a única falha foi a do roteiro acima; o CT-32 foi repetido "
+        u"(os resultados do CT-32 são os dessa passada).",
+        u"O admin já estava com a senha escolhida (SSS_ADMIN_START=new); massa de 2 GB mantida no servidor.",
+    ],
+})
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]
