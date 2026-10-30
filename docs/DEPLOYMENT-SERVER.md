@@ -739,6 +739,7 @@ O resto do arquivo (a parte "derivados" e a função `sss_tipo`) é o do passo 0
 | 3 A | O DEV usa o DSN direto do GFPR (o `localhost:2424` do pedido é um túnel da máquina de desenvolvimento) |
 | 4 B, 5 A | Prefixos novos, `s3dev_` e `s3prd_`, independentes do `tbsss_` e do `ssdev_` |
 | — | Transferência manual pela equipe; pacote dos arquivos locais (sem git); acesso pelo meio habitual; `driver_mode = auto` |
+| 15 (risco aceito) | Os quatro usuários do seed (`admin`, `op.prod`, `op.hml`, `consulta`) ficam na senha inicial do DEPLOYMENT §5.3 no DEV e no PROD, por decisão do responsável (30/10). A senha está num documento público; o que reduz o risco é o web atender só em `127.0.0.1` do servidor (acesso só pela conta do servidor ou por túnel pelo bastion). Uma homologação no DEV troca a senha do `admin` no CT-01 (passo 13); depois dela, o `admin` volta à senha inicial pela tela |
 | 7 A | SSS antigo (web2py, porta 8000, `/home/mastersafgf/sss/web2py`): parado no passo 6, sem apagar nada; a pasta `~/sss` fica como histórico |
 
 ### A.4 Diferenças em relação ao pedido original
