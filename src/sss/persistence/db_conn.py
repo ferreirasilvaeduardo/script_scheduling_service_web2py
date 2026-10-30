@@ -604,13 +604,16 @@ def configure_session(conn, cfg, role="web", user=None):
     except (TypeError, ValueError):
         timeout_ms = 30000
     conn.autocommit = False
-    if hasattr(conn, "call_timeout"):
-        try:
-            conn.call_timeout = timeout_ms
-        except Exception as exc:  # cliente abaixo do 18.1: segue sem prazo por chamada (decisao 11 B)
-            if "DPI-1050" not in str(exc):
-                raise
-            _warn_no_call_timeout(exc)
+    # Sem hasattr: no cliente abaixo do 18.1 ate a leitura do atributo da DPI-1050 (e o hasattr so engole
+    # AttributeError).
+    try:
+        conn.call_timeout = timeout_ms
+    except AttributeError:  # driver sem o atributo: nada a definir
+        pass
+    except Exception as exc:  # cliente abaixo do 18.1: segue sem prazo por chamada (decisao 11 B)
+        if "DPI-1050" not in str(exc):
+            raise
+        _warn_no_call_timeout(exc)
 
     conn.module = "SSS_%s" % role.upper()
     conn.action = "INICIO"

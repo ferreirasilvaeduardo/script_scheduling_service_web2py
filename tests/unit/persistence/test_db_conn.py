@@ -312,7 +312,8 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
 
             @property
             def call_timeout(self):
-                return 0
+                # Como o cx_Oracle real com cliente 12.2: ate a leitura falha (o hasattr nao serve).
+                raise self._error
 
             @call_timeout.setter
             def call_timeout(self, value):
