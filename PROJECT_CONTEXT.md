@@ -176,10 +176,9 @@ O porquê completo de cada decisão está em `docs/architecture/CR-*.md` (CR-001
     | PROD local | `/portaloptrib/TESHUVA/SSS/PROD/script_scheduling_service` | `tbsss_` (GFPR) | esquema recriado vazio em 30/10; parado |
     | DEV 3067 | `brtlvlty3067sl`, porta 18000 | `s3dev_` | no ar, `1.0.0-dev+2610301500`, esquema refeito em 30/10 |
     | PROD 3067 | idem, porta 18001 | `s3prd_` | no ar, mesma versão, esquema refeito em 30/10 |
-  - [x] Homologação real automatizada no navegador (352/352 na rodada 3 do 3067) e batimento completo docs × código (30/10/2026).
+  - [x] Homologação real automatizada no navegador e batimento completo docs × código (30/10/2026): rodada 4 do DEV do 3067 com 356/356 na primeira passada, já com o pacote do batimento (`docs/homologation/SSS_Homologation_Evidence_2026-10-30_r4.docx`).
   - [x] Toda automação pelo `Makefile` (34 alvos, `make help`), com `make test-matrix` de 1557 testes OK em 3.6.0, 3.6.15 e 3.13.2.
 - **Tarefas Pendentes / Em Progresso:**
-  - [ ] Concluir a homologação da rodada 4 no DEV do 3067 (com o CT-11 conferindo o nome repetido): conferir o resultado, criar `RODADAS["20261030_r4"]` em `build_evidence_docx.py`, gerar o `.docx`, conferir que não há senha nele e commitar.
   - [ ] Decidir quando congelar a versão 1 do esquema: já há PROD no 3067 e PROD local. O `init_db` ainda não aplica migrações (`src/sss/cli/migrations/` vazia).
   - [ ] Definir a semântica do `--recreate` do `init_db` (README §11.1) antes de implementá-lo.
   - [ ] Decidir se o charset AL32UTF8 do README §2.2 é exigência ou recomendação: o GFPR é WE8ISO8859P15 e o SSS funciona nele.
