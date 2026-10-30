@@ -352,6 +352,22 @@ class TestLockStopPrivilege(unittest.TestCase):
         run = lambda argv: posix._run_short([sys.executable, "-c", code])  # noqa: E731
         self.assertTrue(os_platform.locale_available("en_US.UTF-8", run=run))
         self.assertFalse(os_platform.locale_available("C.UTF-8", run=run))
+        # Sem C.UTF-8: o substituto e en_US (antes de pt_BR); com o pedido presente, o proprio pedido.
+        self.assertEqual(os_platform.pick_child_locale("C.UTF-8", run=run), "en_US.utf8")
+        self.assertEqual(os_platform.pick_child_locale("pt_BR.UTF-8", run=run), "pt_BR.UTF-8")
+
+    def test_escolha_do_locale_dos_scripts(self):
+        def listing(text, code=0):
+            return lambda argv: (code, text)
+        self.assertEqual(os_platform.pick_child_locale("C.UTF-8", run=listing("C\nC.utf8\nPOSIX\n")), "C.UTF-8")
+        self.assertEqual(os_platform.pick_child_locale("C.UTF-8", run=listing("C\naa_DJ.utf8\nde_DE.utf8\n")),
+                         "aa_DJ.utf8")
+        self.assertIsNone(os_platform.pick_child_locale("C.UTF-8", run=listing("C\nPOSIX\nen_US\n")))
+        self.assertIsNone(os_platform.pick_child_locale("C.UTF-8", run=listing("", code=1)))
+
+        def missing(argv):
+            raise OSError("sem locale")
+        self.assertIsNone(os_platform.pick_child_locale("C.UTF-8", run=missing))
 
     def test_parada_por_sinal_so_seta_a_flag(self):
         old = (signal.getsignal(signal.SIGTERM), signal.getsignal(signal.SIGINT))

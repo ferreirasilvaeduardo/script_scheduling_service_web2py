@@ -42,6 +42,7 @@ from sss.platform.os_platform.posix import (  # noqa: E402,F401
                                             release_instance,
                                             clean_output,
                                             locale_available,
+                                            pick_child_locale,
                                             process_exists,
                                             reopen_group,
                                             signal_group,

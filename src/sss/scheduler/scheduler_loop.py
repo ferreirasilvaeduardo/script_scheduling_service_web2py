@@ -213,8 +213,16 @@ class Agent(object):
             sss_config.check_encoding()
         except sss_config.ConfigError as exc:
             self._fail(EXIT_CONFIG, "%s", exc)
-        if not self.plat.locale_available(agent.child_locale):
-            self._fail(EXIT_CONFIG, "child_locale %s nao consta em locale -a (CR-007, R-17)", agent.child_locale)
+        chosen = self.plat.pick_child_locale(agent.child_locale)
+        if not chosen:
+            self._fail(EXIT_CONFIG, "child_locale %s nao consta em locale -a, e nao ha outro locale UTF-8 "
+                       "(CR-007, R-17)", agent.child_locale)
+        if chosen != agent.child_locale:
+            # Servidor sem C.UTF-8 (ex.: CentOS 6): os scripts recebem o substituto em LANG e LC_ALL.
+            self.log.warning("child_locale %s nao consta em locale -a: os scripts usam %s",
+                             agent.child_locale, chosen)
+            self.cfg = self.cfg._replace(agent=agent._replace(child_locale=chosen))
+            agent = self.cfg.agent
         db_conn.connection_budget_s(self.cfg.oracle.dsn, sss_config.call_timeout_s(self.cfg.oracle.call_timeout_ms))
         # Conferencia entre nos no E2E (README §8.9, "Mesmos tempos em todos os nos").
         self.log.info("tempos do fencing: fence_timeout_s=%s node_offline_timeout_s=%s",

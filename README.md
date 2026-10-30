@@ -1810,7 +1810,7 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
 | `PATH` | `/usr/bin:/bin` |
 | `HOME` | diretório de trabalho do script (§8.4, passo 2) |
 | `TMPDIR` | `tmp/` dentro dele |
-| `LANG`, `LC_ALL` | `child_locale` (padrão `C.UTF-8`) |
+| `LANG`, `LC_ALL` | `child_locale` (`C.UTF-8`, fixo); num servidor sem ele, o substituto escolhido na subida (§8.12, passo 2) |
 | `TZ` | herdado do daemon (definido pelo launcher) |
 | `PYTHONDONTWRITEBYTECODE` | `1` (só tem efeito em scripts shell que chamem `python` sem `-I` nem `-E`; o `python3` achado pelo cadastro (inclusive na troca, CR-027) roda com `-I`, e os demais Python (o `python` achado pelo cadastro, o do `#!` e o digitado) com `-E`, que ignoram as variáveis `PYTHON*`; o UTF-8 deles vem do `LC_ALL`; CR-007, R-17; CR-026) |
 | `PYTHONIOENCODING` | `utf-8` (mesma observação) |
@@ -2031,7 +2031,7 @@ O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualqu
 1. **Usuário:** `os_platform.is_privileged_user()` precisa ser falso. É proibido rodar como root.
 2. **Configuração:** carregar e validar o `config.ini` (tipos, faixas, invariantes da §8.9, que desde o CR-032 só limitam o `call_timeout_ms`), o `owner` e o `table_prefix` (regex do `AGENTS.md`), e o `agent_id`, que é o `[app] name` (`^[a-z][a-z0-9_-]{0,29}$`, §12.1), sem ser `init_db`, `seed` nem `purge` (reservados para os atores do sistema, §4.4). Inclui as invariantes I1 a I4 (§8.9). As chaves retiradas (`sss_env`, `exec_users`, `exec_work_dir`, `helper_path`) só geram aviso (CR-032).
    **Aviso de configuração (CR-008):** um DSN descritor que passe da fórmula do §2.3 gera WARN `CONEXAO_ACIMA_DO_PRAZO` (R-17).
-   **Codificação (CR-007, R-17):** `sys.getfilesystemencoding()` precisa ser UTF-8 (o launcher exporta `LANG`/`LC_ALL`, §12.2); `child_locale` precisa constar em `locale -a`. Falha: CRITICAL.
+   **Codificação (CR-007, R-17):** `sys.getfilesystemencoding()` precisa ser UTF-8 (o launcher exporta `LANG`/`LC_ALL`, §12.2); `child_locale` precisa constar em `locale -a`; sem ele (ex.: CentOS 6, sem `C.UTF-8`), o agente usa o primeiro locale UTF-8 da lista, na ordem `C`, `en_US`, `pt_BR` e os demais em ordem alfabética, e registra um WARNING `child_locale C.UTF-8 nao consta em locale -a: os scripts usam <locale>` (2026-10-30, decisão 9 B). Sem nenhum UTF-8: CRITICAL.
 3. **Segredos:** validar o `secrets.cfg` (§4.1).
 4. **Diretórios:**
    * `log_dir` e `work_dir` existem (a que falta é criada, CR-032, D12), são graváveis pelo agente e não ficam dentro das pastas do sistema (§8.5);

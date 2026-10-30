@@ -286,6 +286,33 @@ def locale_available(name, run=None):
     return code == 0 and any(_normalize_locale(l) == target for l in output.splitlines())
 
 
+# Ordem dos substitutos quando o locale pedido falta (normalizados por _normalize_locale).
+_LOCALE_FALLBACK = ("c.utf8", "en_us.utf8", "pt_br.utf8")
+
+
+def pick_child_locale(name, run=None):
+    """Locale dos scripts: o pedido, se consta em `locale -a`; senao, o primeiro UTF-8 disponivel, nesta ordem:
+    C, en_US, pt_BR e os demais em ordem alfabetica (ex.: CentOS 6, sem C.UTF-8). None: nenhum UTF-8."""
+    run = run or _run_short
+    try:
+        code, output = run(["/usr/bin/locale", "-a"])
+    except OSError:  # sem o comando locale: nao da para escolher
+        return None
+    if code != 0:
+        return None
+    found = {}
+    for line in output.splitlines():
+        if line.strip():
+            found.setdefault(_normalize_locale(line), line.strip())
+    if _normalize_locale(name) in found:
+        return name
+    for preferred in _LOCALE_FALLBACK:
+        if preferred in found:
+            return found[preferred]
+    others = sorted(found[key] for key in found if key.endswith(".utf8"))
+    return others[0] if others else None
+
+
 def is_privileged_user():
     return os.geteuid() == 0
 

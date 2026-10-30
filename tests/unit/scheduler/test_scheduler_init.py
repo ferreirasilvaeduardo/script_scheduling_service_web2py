@@ -237,7 +237,17 @@ class TestSteps(_Base):
     def test_codificacao_e_locale(self):
         with mock.patch.object(sss_config.sys, "getfilesystemencoding", return_value="ascii"):
             self.failure(sl.EXIT_CONFIG)
-        self.failure(sl.EXIT_CONFIG, self.agent(cfg=self.cfg(child_locale="xx_YY.UTF-8")))
+        # Sem nenhum locale UTF-8 no servidor: recusa.
+        self.failure(sl.EXIT_CONFIG, self.agent(plat=_Plat(pick_child_locale=lambda name: None)))
+
+    def test_locale_substituto(self):
+        # Servidor sem C.UTF-8 (ex.: CentOS 6): os scripts usam o substituto, com WARNING.
+        ag = self.agent(plat=_Plat(pick_child_locale=lambda name: "en_US.utf8"))
+        with self.assertLogs("sss_scheduler", "WARNING") as logs:
+            ag.initialize()
+        self.assertIn("child_locale C.UTF-8 nao consta em locale -a: os scripts usam en_US.utf8",
+                      "\n".join(logs.output))
+        self.assertEqual(ag.cfg.agent.child_locale, "en_US.utf8")
 
     def test_diretorios(self):
         # CR-026: sem [agent] interpreters, nao ha executavel a conferir na subida.
