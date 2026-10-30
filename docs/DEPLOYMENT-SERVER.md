@@ -249,10 +249,12 @@ Esperado: `OK` nos três arquivos, o mesmo `ORIGEM` do passo 4.2 e `servidor e c
 
 ## 6. Instalação anterior do SSS no servidor
 
+**Registros da execução:** os logs do `sqlplus`, os `.sql` montados e as cópias do `crontab` ficam em `~/sss_registro` (crie agora com `mkdir -m 0700 -p ~/sss_registro`), nunca em `~/sss_pacote`: uma nova transferência pode trocar a pasta do pacote inteira e apagaria esses registros.
+
 Se o passo 3.4 mostrou processos do SSS (`web2py.py`, `run_web.py`, `run_scheduler.py`) de outra pasta, decida antes (registre a decisão no passo 17): parar e manter os arquivos (recomendado), ou deixar no ar quando não houver conflito de porta nem de pasta. Para parar, **sem apagar nada**:
 
 ```bash
-crontab -l > ~/sss_pacote/crontab_antes_$(date +%Y%m%d_%H%M%S).txt 2>/dev/null; crontab -l 2>/dev/null | grep -n -i -E 'sss|web2py'
+crontab -l > ~/sss_registro/crontab_antes_$(date +%Y%m%d_%H%M%S).txt 2>/dev/null; crontab -l 2>/dev/null | grep -n -i -E 'sss|web2py'
 for pid in $(ps -eo pid,args | grep -E '[r]un_web|[r]un_scheduler|[w]eb2py' | awk '{print $1}'); do
   echo "$pid $(readlink /proc/$pid/cwd) :: $(tr '\0' ' ' < /proc/$pid/cmdline)"
 done
@@ -384,14 +386,14 @@ Os comandos vão num arquivo `.sql`, e o `sqlplus` pede a senha no terminal (`-L
 ```bash
 . ~/sss_pacote/sss_vars.sh; sss_tipo DEV && cd "$R"            # depois, sss_tipo PROD
 O=$(echo "$SSS_OWNER" | tr A-Z a-z)
-cat > ~/sss_pacote/${P}_00_vazio.sql <<EOF
+cat > ~/sss_registro/${P}_00_vazio.sql <<EOF
 SELECT COUNT(*) FROM all_tables WHERE owner = UPPER('$SSS_OWNER') AND table_name LIKE UPPER('$P') || '\_%' ESCAPE '\';
 EXIT
 EOF
 ```
 
 ```bash
-sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_pacote/${P}_00_vazio.sql   # sozinha: pede a senha
+sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_registro/${P}_00_vazio.sql   # sozinha: pede a senha
 ```
 
 Conferência de que a DDL do pacote é a do código instalado (só leitura, sem senha): os três `sha256` aparecem duas vezes, iguais aos do passo 4.1.
@@ -403,42 +405,42 @@ Conferência de que a DDL do pacote é a do código instalado (só leitura, sem 
 Depois, a implantação. O `01` termina com `EXIT`, por isso a validação (`99`) roda numa segunda chamada. **Cole a linha do `sqlplus` sozinha:** ele lê a senha do terminal, e uma linha colada junto depois dela seria lida como senha (`SP2-0306: Invalid option`, sem conectar). A saída fica só no `SPOOL` (`SET TERMOUT OFF`); o pedido de senha continua visível:
 
 ```bash
-cat > ~/sss_pacote/${P}_01.sql <<EOF
+cat > ~/sss_registro/${P}_01.sql <<EOF
 SET TERMOUT OFF
-SPOOL $HOME/sss_pacote/${P}_01_deploy.log
+SPOOL $HOME/sss_registro/${P}_01_deploy.log
 @$R/docs/sql/01_deploy_sss_${O}_${P}.sql
 EOF
 ```
 
 ```bash
-sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_pacote/${P}_01.sql; echo "codigo $?"   # sozinha; esperado: 0
+sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_registro/${P}_01.sql; echo "codigo $?"   # sozinha; esperado: 0
 ```
 
 ```bash
-grep -c -E 'ORA-|SP2-' ~/sss_pacote/${P}_01_deploy.log       # esperado: 0
-grep -i 'concluida com sucesso' ~/sss_pacote/${P}_01_deploy.log
+grep -c -E 'ORA-|SP2-' ~/sss_registro/${P}_01_deploy.log       # esperado: 0
+grep -i 'concluida com sucesso' ~/sss_registro/${P}_01_deploy.log
 ```
 
-Com código diferente de 0, leia a tela (senha errada: `ORA-01017`) e `tail -25 ~/sss_pacote/${P}_01_deploy.log` (o comando que falhou) antes de qualquer outra coisa. Sem o log, o login falhou e nada foi criado.
+Com código diferente de 0, leia a tela (senha errada: `ORA-01017`) e `tail -25 ~/sss_registro/${P}_01_deploy.log` (o comando que falhou) antes de qualquer outra coisa. Sem o log, o login falhou e nada foi criado.
 
 A validação, só leitura:
 
 ```bash
-cat > ~/sss_pacote/${P}_99.sql <<EOF
+cat > ~/sss_registro/${P}_99.sql <<EOF
 SET TERMOUT OFF
-SPOOL $HOME/sss_pacote/${P}_99_validate.log
+SPOOL $HOME/sss_registro/${P}_99_validate.log
 @$R/docs/sql/99_validate_deploy_${O}_${P}.sql
 EOF
 ```
 
 ```bash
-sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_pacote/${P}_99.sql; echo "codigo $?"   # sozinha
+sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_registro/${P}_99.sql; echo "codigo $?"   # sozinha
 ```
 
 ```bash
-grep -E 'ORA-|SP2-' ~/sss_pacote/${P}_99_validate.log | grep -vc 'esta secao falha com'   # esperado: 0 (o aviso impresso pelo proprio 99 cita ORA-00942)
-grep -c 'FALHA' ~/sss_pacote/${P}_99_validate.log             # esperado: 0
-grep 'OK: nenhuma falha' ~/sss_pacote/${P}_99_validate.log     # esperado: as duas linhas de resumo
+grep -E 'ORA-|SP2-' ~/sss_registro/${P}_99_validate.log | grep -vc 'esta secao falha com'   # esperado: 0 (o aviso impresso pelo proprio 99 cita ORA-00942)
+grep -c 'FALHA' ~/sss_registro/${P}_99_validate.log             # esperado: 0
+grep 'OK: nenhuma falha' ~/sss_registro/${P}_99_validate.log     # esperado: as duas linhas de resumo
 ```
 
 * O `01` para no primeiro erro (`WHENEVER SQLERROR EXIT FAILURE ROLLBACK`). Se ele parar, guarde o log, rode o `02_rollback_sss_${O}_${P}.sql` (só o do prefixo deste passo) e repita.
@@ -544,15 +546,15 @@ O bloco gera as linhas do SSS (variáveis, keepalive com `@reboot` e a cada 5 mi
     echo "@reboot      cd $R && bin/sss-keepalive.sh $SSS_WEB:$PORT $SSS_NOMES_AGENTES"
     echo "*/5 * * * *  cd $R && bin/sss-keepalive.sh $SSS_WEB:$PORT $SSS_NOMES_AGENTES"
     echo "*/5 * * * *  cd $R && \$PYTHON scripts/health.py --name $SSS_AGENTE_HEALTH > var/$SSS_AGENTE_HEALTH/logs/health.txt 2>&1"
-  done; } > ~/sss_pacote/crontab_sss.txt
-cat ~/sss_pacote/crontab_sss.txt
+  done; } > ~/sss_registro/crontab_sss.txt
+cat ~/sss_registro/crontab_sss.txt
 ```
 
 Revise e acrescente ao fim do `crontab` atual (as variáveis valem para as linhas abaixo delas). Se o bloco do SSS já estiver lá, ele não é repetido: para trocá-lo, apague o bloco antigo com `crontab -e` e rode de novo.
 
 ```bash
 if crontab -l 2>/dev/null | grep -q '^# --- SSS (DEPLOYMENT-SERVER)'; then echo "ja existe um bloco do SSS no crontab (nada acrescentado)"
-else (crontab -l 2>/dev/null; cat ~/sss_pacote/crontab_sss.txt) | crontab - && echo "bloco do SSS acrescentado"; fi
+else (crontab -l 2>/dev/null; cat ~/sss_registro/crontab_sss.txt) | crontab - && echo "bloco do SSS acrescentado"; fi
 crontab -l | grep -c sss-keepalive; echo $(( $(echo $SSS_TIPOS | wc -w) * 2 ))   # os dois números iguais
 ```
 
@@ -625,7 +627,7 @@ crontab -e                                    # apague as linhas deste tipo (pas
 for n in $SSS_WEB $SSS_NOMES_AGENTES; do bin/sss-keepalive.sh --pause $n; done
 for n in $SSS_NOMES_AGENTES; do bin/sss-stop.sh $n; done
 # o web: o laço do passo 15
-( umask 077; tar -czf ~/sss_pacote/retorno_${T}_$(date +%Y%m%d_%H%M%S).tar.gz instance var )   # config e logs; tem senhas
+( umask 077; tar -czf ~/sss_registro/retorno_${T}_$(date +%Y%m%d_%H%M%S).tar.gz instance var )   # config e logs; tem senhas
 ```
 
 O esquema sai com o `02_rollback_sss_<owner>_${P}.sql` deste tipo, **depois** de um backup e só desse prefixo. Ele apaga os dados. Por fim, `cd .. && rm -rf script_scheduling_service`. Uma instalação antiga parada no passo 6 volta descomentando o `crontab` dela.
@@ -704,6 +706,7 @@ O resto do arquivo (a parte "derivados" e a função `sss_tipo`) é o do passo 0
 | Banco | `10.129.177.188:1521` (GFPR) alcançável. No mesmo owner `openrisow` já existem `tbsss_` e `ssdev_` (21 tabelas cada, instalações da máquina de desenvolvimento); `s3dev_` e `s3prd_` vazios |
 | Portas | 18000 e 18001 livres |
 | `locale -a` | Lista nomes em Latin-1 (`bokmål`, byte `0xe5`). Até a correção de 29/10 (`posix._run_short` lê em bytes e decodifica com substituição), os agentes caíam na subida com `UnicodeDecodeError` no passo 12; o web subia. Corrigido no código, com teste, e levado ao servidor pelo `sss-update.sh` |
+| Transferência | O meio usado troca a pasta `~/sss_pacote` inteira: os logs do passo 9 guardados nela se perderam na segunda transferência. Os registros passaram para `~/sss_registro` |
 | Umask da conta | `002` (os arquivos transferidos chegaram `664`): o passo 7 usa `umask 027` |
 | Locale | Sem `C.UTF-8`; existem `en_US.utf8` e `pt_BR.utf8` (escolhido `en_US.utf8`, que mantém ponto decimal e mensagens do sistema em inglês nos scripts). A sessão SSH mostra `Cannot set LC_CTYPE to default locale`: o locale da estação não existe no servidor, sem efeito no SSS, que exporta o seu |
 | SSS antigo | `web2py.py` na porta 8000 desde 17/10, pasta `/home/mastersafgf/sss/web2py` (anterior ao CR-021); `crontab` sem SSS |
