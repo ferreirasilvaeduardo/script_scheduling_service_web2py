@@ -63,3 +63,5 @@ dev/others/notas/sss-web-*_v*.sh
 
 # Notas pessoais de desenvolvimento: nunca versionadas (as antigas ja commitadas ficam como estao)
 /dev/others/notas/*
+# Excecao: o script do tunel ate o web do 3067 (sem senha; so hosts e portas), versionado a pedido
+!/dev/others/notas/sss-tunel-3067/

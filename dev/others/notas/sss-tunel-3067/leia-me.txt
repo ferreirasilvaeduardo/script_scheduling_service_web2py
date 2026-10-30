@@ -1,0 +1,3 @@
+/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/dev/others/notas/sss-tunel-3067/sss-tunel-3067.sh start    # abre em segundo plano (nohup); se a conexão cair, reabre em 10 s
+/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/dev/others/notas/sss-tunel-3067/sss-tunel-3067.sh status   # mostra se está no ar e testa as duas portas
+/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/dev/others/notas/sss-tunel-3067/sss-tunel-3067.sh stop     # fecha o túnel
