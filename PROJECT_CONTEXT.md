@@ -1,13 +1,16 @@
 # Contexto e Diretrizes do Projeto
 
-SSS (Script Scheduling Service). Atualizado em 30/10/2026 (base `52a9cf8`). Resumo para quem chega ao projeto sem o histórico; **não substitui as fontes normativas**: o `README.md` (negócio, dados e algoritmos) e o `AGENTS.md` (regras de código e de entrega), nesta ordem. O `CLAUDE.md` traz as diretrizes do agente de IA.
-
 ## 1. Visão Geral do Sistema
 
 - **Objetivo do Projeto:** agendar e executar scripts por ambiente, com rastreabilidade total. Nenhuma tarefa roda avulsa: cada execução é um **ticket** que registra de forma imutável o solicitante, o IP, o script, o ambiente, o snapshot das respostas e do `argv`, o agente, o PID, a situação, o código de retorno e o log completo (README §1).
   - Usuários disparam scripts, acompanham tickets, baixam saídas, enviam arquivos de entrada e cadastram regras recorrentes (diária, semanal, mensal, CRON).
   - Agentes (hoje um por ambiente) pegam os tickets da fila, executam o script com a conta do agente, coletam o log e gravam o resultado.
   - Administradores mantêm usuários, perfis, ambientes, parâmetros e scripts, com auditoria de tudo.
+  - Dois processos:
+    - **Web** (`web0001`): `bin/sss-web.sh` → `scripts/run_web.py`. UI, login, RBAC, tickets, cadastros, downloads e envio de arquivos.
+    - **Agente** (`agente0001`…): `bin/sss-scheduler.sh <nome>` → `scripts/run_scheduler.py`. Desdobro de agendamentos, claim da fila, execução, heartbeat, coleta de log, saída e entrada. Thread única, com laço de eventos e prazos do relógio monotônico.
+    - Os processos coordenam-se **só pelo banco**: claim por `UPDATE` condicional com `rowcount`, heartbeat, *fencing* e detecção de nó offline. O web nunca sinaliza processos do SO.
+  - Projeto SSS (Script Scheduling Service); este resumo é de 30/10/2026 (base `acd412e`) e **não substitui as fontes normativas**: o `README.md` (negócio, dados e algoritmos) e o `AGENTS.md` (regras de código e de entrega), nesta ordem. O `CLAUDE.md` traz as diretrizes do agente de IA.
 - **Stack Tecnológico:**
   - Linguagem / Runtime: **Python 3.6.0 ou superior**, com sintaxe e biblioteca padrão da 3.6.0; validado em 3.6.0, 3.6.15 e 3.13.2 (referência de produção 3.6.8; no servidor 3067, 3.8.5).
   - Frameworks / Bibliotecas: **nenhum framework**. Só a biblioteca padrão e o driver Oracle: `python-oracledb` (`< 2.0` no 3.6, `2.x` no 3.7+) e `cx_Oracle 8.3` como contingência. Servidor web, roteador, sessão e templates próprios (`src/sss/web/framework/`). Frontend com Bootstrap 5.3.8 local e JavaScript próprio, sem CDN nem script inline.
@@ -18,10 +21,6 @@ SSS (Script Scheduling Service). Atualizado em 30/10/2026 (base `52a9cf8`). Resu
 
 ## 2. Padrões de Arquitetura e Código
 
-- **Processos:**
-  - **Web** (`web0001`): `bin/sss-web.sh` → `scripts/run_web.py`. UI, login, RBAC, tickets, cadastros, downloads e envio de arquivos.
-  - **Agente** (`agente0001`…): `bin/sss-scheduler.sh <nome>` → `scripts/run_scheduler.py`. Desdobro de agendamentos, claim da fila, execução, heartbeat, coleta de log, saída e entrada. Thread única, com laço de eventos e prazos do relógio monotônico.
-  - Os processos coordenam-se **só pelo banco**: claim por `UPDATE` condicional com `rowcount`, heartbeat, *fencing* e detecção de nó offline. O web nunca sinaliza processos do SO.
 - **Estrutura de Pastas:**
   - `src/sss/`: código-fonte, em camadas:
     - `config/`: config, segredos, logging, caminhos de log;
@@ -80,7 +79,7 @@ SSS (Script Scheduling Service). Atualizado em 30/10/2026 (base `52a9cf8`). Resu
   - Linters / Formatação: `make check-all` (portões: `flake8` com zero achados e `mypy` estrito); `make format` (isort e autopep8; reescreve arquivos); `make lint-pylint` (fora do portão).
   - SQL e pacote: `make sql` / `make sql-all` (scripts do DBA em `docs/sql`, só ASCII); `make package-local` (pacote para o servidor em `.bkp/pacote_local_<data>`, com `ORIGEM` e `SHA256SUMS`).
   - Homologação: `make homolog-massa`, `make homolog` (roteiro no navegador, Puppeteer), `make homolog-docx`; acesso ao 3067 por `make tunel-3067 CMD=start`.
-- **Variáveis de Ambiente e Configuração:**
+- **Variáveis de Ambiente:**
   - Não há `.env`. A configuração fica em arquivos INI por processo:
     - os modelos estão em `instance/exemplos/` (`common.ini.example`, `secrets.cfg.example`, `web0001/` e `agente0001/config.ini.example`);
     - todo comando recebe o processo por `--name <nome>` (sem config padrão, CR-029);
@@ -91,16 +90,6 @@ SSS (Script Scheduling Service). Atualizado em 30/10/2026 (base `52a9cf8`). Resu
     - `SSS_STOP_WAIT_S`: espera do `stop`.
   - Senhas digitadas: `SSS_INIT_DB_PASSWORD` (dono do esquema, no `init_db`) e `SSS_BOOTSTRAP_ADMIN_PASSWORD` (administrador inicial).
   - Testes e homologação: `SSS_TEST_ORACLE=1` (bateria Oracle) e as `SSS_*` do roteiro de homologação (`dev/others/homologation/README.md`).
-- **Instalações:**
-
-  | Instalação | Onde | Prefixo | Situação em 30/10/2026 |
-  |---|---|---|---|
-  | DEV local | esta máquina (o próprio repositório) | `ssdev_` (GFPR) | web e 5 agentes, todos parados |
-  | PROD local | `/portaloptrib/TESHUVA/SSS/PROD/script_scheduling_service` | `tbsss_` (GFPR) | esquema recriado vazio em 30/10; parado |
-  | DEV 3067 | `brtlvlty3067sl`, porta 18000 | `s3dev_` | no ar, `1.0.0-dev+2610301500`, esquema refeito em 30/10 |
-  | PROD 3067 | idem, porta 18001 | `s3prd_` | no ar, mesma versão, esquema refeito em 30/10 |
-
-  - **Implantação num servidor novo:** `docs/DEPLOYMENT-SERVER.md`. A transferência do pacote é manual, pela equipe. Atualização: passo 15.1. Refazer esquema: passo 15.2, só com autorização.
 
 ---
 
@@ -179,11 +168,18 @@ O porquê completo de cada decisão está em `docs/architecture/CR-*.md` (CR-001
   - [x] RBAC por perfil × ambiente × script, auditoria completa e cadastros com controle de concorrência.
   - [x] Pasta de saída (zip no banco), pasta de entrada por tela, pasta de trabalho e Pasta de Arquivos (CR-012, CR-014, CR-019, CR-020, CR-037).
   - [x] Alta disponibilidade entre agentes: heartbeat, *fencing* e detecção de nó offline.
-  - [x] Implantação por roteiro em servidor real (3067: DEV e PROD no ar, crontab, `sss-ctl.sh`, `sss-update.sh` com retorno).
+  - [x] Implantação por roteiro em servidor real (`docs/DEPLOYMENT-SERVER.md`: transferência manual pela equipe, atualização pelo passo 15.1, esquema refeito pelo 15.2 só com autorização), com `crontab`, `sss-ctl.sh` e `sss-update.sh` com retorno. Instalações em 30/10/2026:
+
+    | Instalação | Onde | Prefixo | Situação |
+    |---|---|---|---|
+    | DEV local | esta máquina (o próprio repositório) | `ssdev_` (GFPR) | web e 5 agentes, todos parados |
+    | PROD local | `/portaloptrib/TESHUVA/SSS/PROD/script_scheduling_service` | `tbsss_` (GFPR) | esquema recriado vazio em 30/10; parado |
+    | DEV 3067 | `brtlvlty3067sl`, porta 18000 | `s3dev_` | no ar, `1.0.0-dev+2610301500`, esquema refeito em 30/10 |
+    | PROD 3067 | idem, porta 18001 | `s3prd_` | no ar, mesma versão, esquema refeito em 30/10 |
   - [x] Homologação real automatizada no navegador (352/352 na rodada 3 do 3067) e batimento completo docs × código (30/10/2026).
+  - [x] Toda automação pelo `Makefile` (34 alvos, `make help`), com `make test-matrix` de 1557 testes OK em 3.6.0, 3.6.15 e 3.13.2.
 - **Tarefas Pendentes / Em Progresso:**
   - [ ] Concluir a homologação da rodada 4 no DEV do 3067 (com o CT-11 conferindo o nome repetido): conferir o resultado, criar `RODADAS["20261030_r4"]` em `build_evidence_docx.py`, gerar o `.docx`, conferir que não há senha nele e commitar.
-  - [ ] Commit do `Makefile` (16 alvos novos), do `test_makefile.py` e deste arquivo (bateria `make test-matrix`: 1557 OK nas 3 versões).
   - [ ] Decidir quando congelar a versão 1 do esquema: já há PROD no 3067 e PROD local. O `init_db` ainda não aplica migrações (`src/sss/cli/migrations/` vazia).
   - [ ] Definir a semântica do `--recreate` do `init_db` (README §11.1) antes de implementá-lo.
   - [ ] Decidir se o charset AL32UTF8 do README §2.2 é exigência ou recomendação: o GFPR é WE8ISO8859P15 e o SSS funciona nele.
