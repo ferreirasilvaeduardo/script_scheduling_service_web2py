@@ -91,14 +91,14 @@ def translate_oracle_error(exc, constraint_padrao=None, prefix=None):
     m = _RE_CONSTRAINT.search(msg)
     constraint = m.group(1).lower() if m else (constraint_padrao.lower() if constraint_padrao else None)
 
-    pfx_real = prefix or "tbsss_"
     if pfx == "ORA":
         if num in (1, 2290, 2291, 2292, 1400, 12899, 1438, 20001):
             if num == 1438 and not constraint:
-                constraint = "ck_{}usr_tent".format(pfx_real)
+                constraint = "ck_{}usr_tent".format(sql_ident.LOGICAL_PREFIX)
             elif num == 20001 and not constraint:
-                constraint = "tr_{}usr_bu".format(pfx_real)
-            return repo_errors.RepoViolation(msg, constraint=constraint)
+                constraint = "tr_{}usr_bu".format(sql_ident.LOGICAL_PREFIX)
+            # O ORA- traz o nome fisico (uk_<prefixo>...); o servico traduz pelo nome logico.
+            return repo_errors.RepoViolation(msg, constraint=sql_ident.logical_object_name(constraint, prefix))
         if num in (54, 30006, 60, 3156):
             return repo_errors.RepoConflict(msg)
     elif pfx in ("DPY", "DPI"):
@@ -232,14 +232,14 @@ class BaseRepoOracle(object):
         return sql_ident.sequence(self._owner, self._prefixo, entity)
 
     def constraint_name(self, kind, entity, suffix):
-        """Retorna o nome da constraint/indice para o prefixo configurado (README §9.1)."""
+        """Nome logico da constraint/indice para o RepoViolation (sql_ident.LOGICAL_PREFIX, README §9.1)."""
         abbr = sql_ident.TABLES.get(entity, {}).get("abrev", entity[:3])
-        return "{}_{}{}_{}".format(kind, self._prefixo, abbr, suffix)
+        return "{}_{}{}_{}".format(kind, sql_ident.LOGICAL_PREFIX, abbr, suffix)
 
     def trigger_name(self, entity, suffix="bu"):
-        """Retorna o nome da trigger para o prefixo configurado (README §9.1)."""
+        """Nome logico da trigger para o RepoViolation (sql_ident.LOGICAL_PREFIX, README §9.1)."""
         abbr = sql_ident.TABLES.get(entity, {}).get("abrev", entity[:3])
-        return "tr_{}{}_{}".format(self._prefixo, abbr, suffix)
+        return "tr_{}{}_{}".format(sql_ident.LOGICAL_PREFIX, abbr, suffix)
 
     def tuple_to_dict(self, columns, values):
         """Converte tupla de resultado em dict normalizado."""

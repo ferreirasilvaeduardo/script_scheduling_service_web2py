@@ -82,7 +82,7 @@ class RepoSchedulerInput(object):
         return cls(cfg.oracle.owner.strip(), cfg.oracle.table_prefix.strip())
 
     def _constraint(self, entity, suffix):
-        return "ck_%s%s_%s" % (self._prefix, sql_ident.TABLES[entity]["abrev"], suffix)
+        return "ck_%s%s_%s" % (sql_ident.LOGICAL_PREFIX, sql_ident.TABLES[entity]["abrev"], suffix)
 
     def pending_deliveries(self, agent_id, limit=10, conn=None):
         """Entregas PENDING deste agente pela expressao de ix_<prefixo>idl_pend, das mais antigas, sem conteudo."""

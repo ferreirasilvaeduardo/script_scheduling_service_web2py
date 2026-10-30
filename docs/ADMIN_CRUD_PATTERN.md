@@ -49,7 +49,7 @@ As entidades mestras nunca são excluídas, apenas desativadas (README §10).
 | Origem | Apresentação |
 |---|---|
 | Validação do service | Mensagem em português no campo (`errors['<campo>']`), e no topo a mensagem-padrão em duas partes: "Alguns campos precisam de correção. Os campos estão marcados em vermelho, com a explicação embaixo de cada um." (README §2.4.2) |
-| `RepoViolation` | Mapeada por `constraint` para o campo. Exemplo: `uk_tbsss_env_name` vira "Já existe um ambiente com este nome." |
+| `RepoViolation` | Mapeada por `constraint` para o campo, sempre pelo nome lógico com `tbsss_`, qualquer que seja o prefixo do banco (README §2.5). Exemplo: `uk_tbsss_env_name` (no banco, `uk_s3dev_env_name`) vira "Já existe um ambiente com este nome." |
 | `RepoConflict` | `errors['_geral']`, com a mensagem de conflito |
 | Outra `RepoError` | `errors['_geral']` com "Não foi possível salvar...". O detalhe técnico (ORA-, SQL, traceback) vai só para o log. |
 | Regra de negócio (ex.: último administrador, desativar o próprio usuário, tirar o próprio perfil de administrador) | `RepoViolation` com constraint de aplicação (`sss_*`), traduzida para `errors['_geral']` ou `OperationDenied(message)`, que o controller exibe no flash |

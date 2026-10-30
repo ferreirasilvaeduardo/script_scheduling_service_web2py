@@ -1162,5 +1162,44 @@ class TestFailFastRegression(unittest.TestCase):
                          tck.log_read(11, offset=0, max_chars=5)[0])
 
 
+class TestLogicalConstraintName(unittest.TestCase):
+    """RepoViolation.constraint com o nome logico (tbsss_) com qualquer table_prefix: e o nome que os servicos de
+    cadastro traduzem (batimento de 30/10/2026: com ssdev_/s3dev_ o duplicado caia na mensagem generica)."""
+
+    def test_nome_fisico_vira_logico(self):
+        cases = (("UK_S3DEV_ENV_NAME", "s3dev_", "uk_tbsss_env_name"),
+                 ("ck_ssdev_usr_login", "ssdev_", "ck_tbsss_usr_login"),
+                 ("TR_A_USR_BU", "a_", "tr_tbsss_usr_bu"),
+                 ("uk_tbsss_scr_name", "tbsss_", "uk_tbsss_scr_name"),
+                 ("sss_ultimo_admin", "s3dev_", "sss_ultimo_admin"),
+                 (None, "s3dev_", None))
+        for name, prefix, expected in cases:
+            self.assertEqual(sql_ident.logical_object_name(name, prefix), expected, name)
+
+    def test_ora_00001_chega_a_chave_de_cada_servico(self):
+        from sss.persistence.oracle import base
+        from sss.services import (admin_environments_service, admin_parameters_service, admin_profiles_service,
+                                  admin_scripts_service, admin_users_service)
+        services = ((admin_environments_service, "env", "name"), (admin_users_service, "usr", "login"),
+                    (admin_profiles_service, "prf", "name"), (admin_parameters_service, "prm", "code"),
+                    (admin_scripts_service, "scr", "name"))
+        for prefix in ("s3dev_", "ssdev_", "tbsss_"):
+            for module, abbr, suffix in services:
+                physical = "UK_%s%s_%s" % (prefix.upper(), abbr.upper(), suffix.upper())
+                exc = Exception("ORA-00001: unique constraint (OPENRISOW.%s) violated" % physical)
+                violation = base.translate_oracle_error(exc, prefix=prefix)
+                self.assertIsInstance(violation, RepoViolation)
+                self.assertIn(violation.constraint, module._FIELD_BY_CONSTRAINT, (prefix, physical))
+
+    def test_nomes_montados_pelo_repositorio_sao_logicos(self):
+        from types import SimpleNamespace
+        from sss.persistence.oracle import base
+        cfg = SimpleNamespace(oracle=SimpleNamespace(owner="openrisow", table_prefix="s3dev_"))
+        repo = base.BaseRepoOracle(cfg=cfg)
+        self.assertEqual(repo.qualify_table("environments"), "openrisow.s3dev_environments")
+        self.assertEqual(repo.constraint_name("uk", "environments", "name"), "uk_tbsss_env_name")
+        self.assertEqual(repo.trigger_name("users", "bu"), "tr_tbsss_usr_bu")
+
+
 if __name__ == "__main__":
     unittest.main()

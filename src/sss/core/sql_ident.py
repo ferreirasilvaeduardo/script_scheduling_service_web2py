@@ -49,6 +49,25 @@ FBI_TCK_OCCUR_EXPR = (
 # incrementa e traz a migracao src/sss/cli/migrations/m<NNNN>_*.py no mesmo pacote (AGENTS §4.16).
 SCHEMA_VERSION = 1  # aberta ate a primeira producao (AGENTS §4.16): o CR-016a entra direto nela
 
+# Nome logico das constraints, indices e triggers nos erros do repositorio (RepoViolation.constraint): sempre com
+# este prefixo, qualquer que seja o table_prefix do banco, para os servicos traduzirem pelo mesmo nome no FAKE e no
+# Oracle (batimento de 30/10/2026: com ssdev_ ou s3dev_, o duplicado caia na mensagem generica).
+LOGICAL_PREFIX = "tbsss_"
+_OBJECT_KINDS = ("pk", "uk", "ck", "fk", "ix", "tr")
+
+
+def logical_object_name(name, prefix):
+    """<tipo>_<prefixo><abrev>_<sufixo> do banco -> o mesmo nome com LOGICAL_PREFIX; outro nome volta igual."""
+    if not name or not prefix:
+        return name
+    lowered = name.lower()
+    for kind in _OBJECT_KINDS:
+        physical = "%s_%s" % (kind, prefix.lower())
+        if lowered.startswith(physical):
+            return "%s_%s%s" % (kind, LOGICAL_PREFIX, lowered[len(physical):])
+    return lowered
+
+
 # Colunas de registro (CR-006, README §10): todas as tabelas, exceto as listadas em TABELAS_SEM_REGISTRO.
 RECORD_COLUMNS = ("created_at", "created_by", "updated_at", "updated_by")
 TABLES_WITHOUT_RECORD = ("audit", "control")

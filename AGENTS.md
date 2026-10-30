@@ -227,6 +227,8 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 
 ### 3.4 Web
 
+* **Erro do repositório para o campo:** o serviço traduz `RepoViolation` pelo `constraint` **lógico** (com `tbsss_`, README §2.5 exceções de contrato), nunca pelo nome físico com o prefixo do banco. Constraint nova no banco que vire mensagem de campo entra no `_FIELD_BY_CONSTRAINT` com `tbsss_`, e o teste `TestLogicalConstraintName` (`test_repo_contract.py`) cobre o caminho do `ORA-` com outro prefixo.
+
 * **Sessão:** somente o cookie assinado de `src/sss/web/framework/session.py` (`sss_session`, CR-021 D1), com payload mínimo (README §4.2). O conteúdo pode ser lido por quem tem o cookie: nunca guarde segredo na sessão.
 * **CSRF** obrigatório em todo `POST`, validado com `hmac.compare_digest`. `GET` nunca altera estado.
 * **Autorização:**
