@@ -553,7 +553,7 @@ mkdir -m 0700 -p var/crontab_sss
   [ -n "${SSS_LOCALE:-}" ] && echo "SSS_LOCALE=$SSS_LOCALE"
   echo "@reboot      cd $R && bin/sss-keepalive.sh $SSS_WEB:$PORT $SSS_NOMES_AGENTES"
   echo "*/5 * * * *  cd $R && bin/sss-keepalive.sh $SSS_WEB:$PORT $SSS_NOMES_AGENTES"
-  echo "*/5 * * * *  cd $R && \$PYTHON scripts/health.py --name $SSS_AGENTE_HEALTH > var/$SSS_AGENTE_HEALTH/logs/health.txt 2>&1"
+  echo "*/5 * * * *  cd $R && \$PYTHON scripts/health.py --name $SSS_AGENTE_HEALTH > var/$SSS_AGENTE_HEALTH/logs/health.txt 2> var/$SSS_AGENTE_HEALTH/logs/health.err"
   echo "# --- fim SSS $T ---"; } > var/crontab_sss/crontab_sss.txt
 chmod 0600 var/crontab_sss/crontab_sss.txt; cat var/crontab_sss/crontab_sss.txt
 ```
@@ -570,7 +570,7 @@ crontab -l | grep -c "cd $R && bin/sss-keepalive.sh"      # esperado: 2
 ```
 
 * **Trocar o bloco de um tipo:** retire-o e acrescente de novo. **Retirar:** `crontab -l | sed "/^# --- SSS $T ---/,/^# --- fim SSS $T ---/d" | crontab -`.
-* Depois de 5 minutos, `cat var/$SSS_AGENTE_HEALTH/logs/health.txt` mostra `SSS OK`, e nenhum processo aparece em dobro (o keepalive só sobe o que caiu).
+* Depois de 5 minutos, `cat var/$SSS_AGENTE_HEALTH/logs/health.txt` mostra só o estado (`SSS OK ...`, a primeira linha que o monitoramento lê; os avisos vão para o `health.err`), e nenhum processo aparece em dobro (o keepalive só sobe o que caiu).
 * A limpeza dos logs e saídas antigos é manual (README §11.3). Para agendá-la, use a linha `find` do DEPLOYMENT §4.0, uma para cada raiz, começando só com `-print`.
 
 ---
@@ -725,6 +725,7 @@ O resto do arquivo (a parte "derivados" e a função `sss_tipo`) é o do passo 0
 | Cliente 12.2 e `call_timeout` | Com o aviso da decisão 10, os agentes chegaram à conexão e caíram com `DPI-1050` (o prazo por chamada exige cliente 18.1+). Decisão 11 B (30/10): abaixo do 18.1 a sessão segue sem `call_timeout`, com WARNING. Testado no 3067 com o cliente 12.2 (conexão, `SELECT` e pool com `ping_interval`); o `/opt/oracle/client_11` não tem `lib/` e não foi testado. O `/opt/oracle/19c` é só o instalador do cliente 32 bits; o Instant Client 19 de 64 bits exige glibc 2.14 |
 | `PATH` do cron | O `python3` dos scripts é o do Sparta (`/portaloptrib/TESHUVA/sparta/python3.8/bin`), fora do `PATH` curto do cron, e `python` é o 2.6 de `/usr/bin`. O passo 14 grava o `PATH` com a pasta do `PYTHON` na frente. Sem `/usr/bin/python3`, o `#!/usr/bin/env python3` dos utilitários do seed falhava (`env: python3: No such file`), porque o filho rodava com `PATH=/usr/bin:/bin`: a homologação de 30/10 achou isso em 11 verificações. Decisão 13 A: o `PATH` do filho ganha, no fim, a pasta do Python do agente |
 | `python` e `python3` | Pelo passo 3.2: `python -> /usr/bin/python (Python 2.6.6)`, `python3 -> /portaloptrib/TESHUVA/sparta/python3.8/bin/python3 (Python 3.8.5)`. Cadastre os scripts Python como `python3`; o agente avisa na subida (`WARNING ... o interpretador "python" do cadastro e o Python 2.6.6`) |
+| `health.txt` | Com `2>&1` no cron, os avisos da sondagem do driver e do cliente 12.2 viravam a primeira linha do `health.txt`, no lugar do `SSS OK`. O passo 14 grava os avisos em `health.err` |
 | Umask da conta | `002` (os arquivos transferidos chegaram `664`): o passo 7 usa `umask 027` |
 | Locale | Sem `C.UTF-8`; existem `en_US.utf8` e `pt_BR.utf8` (escolhido `en_US.utf8`, que mantém ponto decimal e mensagens do sistema em inglês nos scripts). A sessão SSH mostra `Cannot set LC_CTYPE to default locale`: o locale da estação não existe no servidor, sem efeito no SSS, que exporta o seu |
 | SSS antigo | `web2py.py` na porta 8000 desde 17/10, pasta `/home/mastersafgf/sss/web2py` (anterior ao CR-021); `crontab` sem SSS |

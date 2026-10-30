@@ -166,7 +166,7 @@ SSS_TZ=America/Sao_Paulo
 R=/portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service
 @reboot      cd $R && bin/sss-keepalive.sh web0001:0.0.0.0:18000 agente0001
 */5 * * * *  cd $R && bin/sss-keepalive.sh web0001:0.0.0.0:18000 agente0001
-*/5 * * * *  cd $R && $PYTHON scripts/health.py --name agente0001 > var/agente0001/logs/health.txt 2>&1
+*/5 * * * *  cd $R && $PYTHON scripts/health.py --name agente0001 > var/agente0001/logs/health.txt 2> var/agente0001/logs/health.err
 # Com um agente por ambiente (§7.1; ensaiado no CR-039), os cinco nomes nas duas linhas do keepalive; um
 # health.py basta (ele olha todos os agentes e todos os ambientes):
 # @reboot     cd $R && bin/sss-keepalive.sh web0001:0.0.0.0:18000 agente0001 agente0002 agente0003 agente0004 agente0005
@@ -522,7 +522,7 @@ CRITICAL: ambiente CLONE1 ativo sem nenhum agente saudavel
 
 * **Códigos (padrão Nagios):** 0 OK, 1 WARNING, 2 CRITICAL e 3 UNKNOWN (configuração, segredos, conexão ou erro de banco). A primeira linha traz os dados de desempenho; depois vem uma linha por problema, os críticos primeiro.
 * **Limites:** `--no-pid-min 2`, `--queue-warn 500`, `--queue-crit 5000`, `--wait-warn-min 30` e `--wait-crit-min 120`.
-* **Agendamento:** pelo cron da conta, a cada 5 minutos, gravando a saída num arquivo (`var/<nome>/logs/health.txt`, exemplo no §4.0); o código de saída e a primeira linha dizem o estado. Um monitoramento corporativo pode ler esse arquivo. Com a raiz compartilhada (§4.1), basta um `health.py` para a instalação inteira: ele lê o estado de todos os agentes no banco.
+* **Agendamento:** pelo cron da conta, a cada 5 minutos, gravando a saída num arquivo (`var/<nome>/logs/health.txt`, exemplo no §4.0) e os avisos em outro (`health.err`: sondagem do driver, cliente Oracle); o código de saída e a primeira linha do `health.txt` dizem o estado. Com os dois no mesmo arquivo (`2>&1`), um aviso pode virar a primeira linha (achado no servidor 3067). Um monitoramento corporativo pode ler esse arquivo. Com a raiz compartilhada (§4.1), basta um `health.py` para a instalação inteira: ele lê o estado de todos os agentes no banco.
 
 **O que fazer em cada alerta:**
 
