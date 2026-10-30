@@ -2,6 +2,8 @@
 
 Geram e conferem as figuras dos documentos de homologação em `docs/homologation/`. Ficam em `dev/`, fora do pacote de implantação (README §12.2).
 
+**Passo a passo completo** (pré-requisitos, parâmetros da rodada, execução local e remota, conferência, repetição de casos, geração do `.docx`, conferência de senhas e versionamento): `docs/HOMOLOGATION_RUNBOOK.md`.
+
 ## Evidências reais no DEV e no PROD (desde 2026-10-22)
 
 `docs/homologation/SSS_Homologation_Evidence_<data>[_r<n>].docx`: os casos de teste do manual de UI Freeze executados de verdade no DEV ou no PROD (banco Oracle, servidor web e agentes reais), com a conferência de cada resultado esperado na própria página.
