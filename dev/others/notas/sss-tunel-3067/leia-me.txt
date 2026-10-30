@@ -1,3 +1,10 @@
 /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/dev/others/notas/sss-tunel-3067/sss-tunel-3067.sh start    # abre em segundo plano (nohup); se a conexão cair, reabre em 10 s
 /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/dev/others/notas/sss-tunel-3067/sss-tunel-3067.sh status   # mostra se está no ar e testa as duas portas
 /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/dev/others/notas/sss-tunel-3067/sss-tunel-3067.sh stop     # fecha o túnel
+
+Windows (PowerShell, sem WSL; cliente OpenSSH do Windows 10/11 e chave aceita no bastion):
+.\sss-tunel-3067.ps1 start    # se a politica bloquear: powershell -ExecutionPolicy Bypass -File .\sss-tunel-3067.ps1 start
+.\sss-tunel-3067.ps1 status
+.\sss-tunel-3067.ps1 stop
+Log e pid em %USERPROFILE%\.sss_tunel. Nao rode as duas versoes ao mesmo tempo (as portas 18000/18001 e as
+intermediarias 28000/28001 do bastion seriam as mesmas).
