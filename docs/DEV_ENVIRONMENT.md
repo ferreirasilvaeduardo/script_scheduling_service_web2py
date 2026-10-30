@@ -202,6 +202,20 @@ make lint DEV_PYTHON=/outro/python3.11   # outro Python das ferramentas
 
 O pacote de implantação sai só do `make package` (ou `make package-local`); o `make list-deploy` lista o mais recente. Os antigos `zip-deploy`, `zip-deploy-zip` e `freeze-req` saíram no CR-033 (D4): empacotavam a árvore inteira, com o `instance/secrets.cfg` real, o `LEIA-ME.TXT` e o `var/`.
 
+**Toda automação pelo Makefile (2026-10-30):** cada script de automação do repositório tem um alvo, e `make help` lista todos com a descrição. Os parâmetros vão na linha do `make` (`NAME=agente0001`, `CMD=status`, `OWNER=openrisow`, `PREFIX=tbsss_`); eles não são lidos do ambiente, porque `NAME` costuma ser o nome da máquina. O `tests/architecture/test_makefile.py` confere que todo alvo tem descrição, que todo arquivo chamado existe e que todo script de `bin/`, `scripts/` e `tools/` tem alvo, salvo os launchers do servidor (chamados pelo `sss-ctl.sh` e pelo cron, onde não há Makefile) e os `run_*.py` (chamados pelos launchers).
+
+| Alvo | O que faz |
+|---|---|
+| `dev-start` / `dev-stop` | Web do DEV desta máquina (`bin/start_local.sh [PORT]` / `bin/stop_local.sh`) |
+| `ctl CMD=...` | `bin/sss-ctl.sh` nesta raiz: `status` (padrão), `stop`, `start`, `restart`, `"cron show"` |
+| `check-env`, `health`, `probe-driver` | Diagnóstico do processo `NAME` (o `probe-driver` lê a senha pelo stdin) |
+| `sql`, `sql-all` | `docs/sql` de `OWNER`/`PREFIX`, ou de todos os prefixos versionados (`SQL_PREFIXES`) |
+| `init-db-dry` | DDL do processo `NAME` sem conectar. O `init_db` no modo real não tem alvo: nunca rode em banco em uso |
+| `test-matrix` | Bateria completa em cada Python de `PYTHONS` (3.6.0, 3.6.15 e 3.13.2) |
+| `test-oracle` | Bateria com `SSS_TEST_ORACLE=1`; recusa (código 2) com o DEV desta raiz no ar (R-23) |
+| `homolog-massa`, `homolog`, `homolog-docx` | Homologação: massa no `input_dir` de `NAME` (`LOTE_MB=`), roteiro no navegador (`CTS="CT-01 CT-05"`, variáveis `SSS_*` do ambiente) e o `.docx` da rodada |
+| `tunel-3067 CMD=...` | Túnel até o web do 3067 pelo bastion: `status` (padrão), `start` ou `stop` |
+
 Arquivo novo ou alterado segue 99 colunas e tipos estritos; a dívida antiga está listada no `.flake8` e no `pyproject.toml` e só diminui.
 
 ---

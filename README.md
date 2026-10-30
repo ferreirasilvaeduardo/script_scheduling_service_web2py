@@ -387,7 +387,7 @@ bin/
     <nome>/web.env                            # só DEV: variáveis do start_local.sh (fora do git)
   .flake8                     # [CR-022b9] lint: 99 colunas e a dívida anterior por arquivo (só diminui; AGENTS §1)
   pyproject.toml              # [CR-022b9] só configuração de ferramentas (mypy estrito com a dívida por módulo, isort, autopep8, pylint); sem [project], sem pip install
-  Makefile                    # alvos de teste (test-*), lint (portão flake8), type-check (mypy) e pacote; só DEV
+  Makefile                    # toda a automação (make help): testes, lint, tipos, pacote, operação, SQL e homologação; só DEV
   dev/scripts/                # árvore de scripts de exemplo para DEV/testes (nunca implantada)
   dev/others/                 # apoio ao desenvolvimento, nunca implantado (reunido aqui em 2026-10-26):
     homologation/             # ferramentas de homologação: figuras do manual de UI Freeze e evidências reais do DEV e do PROD
