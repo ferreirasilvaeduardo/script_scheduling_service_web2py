@@ -886,6 +886,21 @@ RODADAS["20261030_r3"] = dict(RODADAS["20261030_r2"], **{
         u"O admin já estava com a senha escolhida (SSS_ADMIN_START=new); massa de 2 GB mantida no servidor.",
     ],
 })
+RODADAS["20261030_r4"] = dict(RODADAS["20261030_r3"], **{
+    "commit": u"6d19438 (batimento docs x codigo de 30/10: nome logico da constraint, --admin-login, generate_sql, "
+              u"cron install, log do init_db; SQL so ASCII da decisao 16 A) instalado no DEV do brtlvlty3067sl pelo "
+              u"sss-update.sh (pacote 2610301500); o roteiro com a conferencia do nome repetido em 52a9cf8",
+    "defeitos": [],
+    "observacoes": [
+        u"Rodada depois do batimento docs x codigo de 30/10 e do esquema s3dev_ refeito pela decisao 17 B (02, 01 e "
+        u"99 com o SQL so ASCII): os textos do seed aparecem com acento certo na tela. Marca %s." % STAMP,
+        u"CT-11 com a verificacao nova do batimento A1: gravar de novo o ambiente recem-criado mostra \u201cJa existe "
+        u"um ambiente com este nome.\u201d, com a constraint uk_s3dev_env_name do banco traduzida pelo nome logico.",
+        u"Rodada completa sem repeticao: 356/356 na primeira passada.",
+        u"O admin comecou na senha inicial do seed (banco refeito), trocou no CT-01 e voltou a ela no encerramento "
+        u"(SSS_ADMIN_RESET=seed, decisao 15); massa de 2 GB mantida no servidor.",
+    ],
+})
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]
