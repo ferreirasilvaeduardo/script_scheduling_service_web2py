@@ -42,7 +42,7 @@ SSS_LOCALE='<locale UTF-8 do passo 3.1, vazio para C.UTF-8>'
 # --- derivados: não altere abaixo desta linha ---
 SSS_NOMES_AGENTES=$(for a in $SSS_AGENTES; do printf '%s ' "${a%%:*}"; done)
 SSS_AMBIENTES=$(for a in $SSS_AGENTES; do echo "${a#*:}"; done | sort -u | tr '\n' ' ')
-SSS_AGENTE_HEALTH=${SSS_NOMES_AGENTES%% *}
+SSS_AGENTE_HEALTH=$(printf '%s\n' $SSS_NOMES_AGENTES | sort | head -1)   # o 1o em ordem alfabetica, como o sss-ctl.sh
 [ -n "$SSS_LOCALE" ] || unset SSS_LOCALE
 export PYTHON SSS_TZ ORACLE_HOME SSS_IC_DIR SSS_LOCALE
 if [ -n "$SSS_IC_DIR" ]; then
@@ -112,7 +112,7 @@ locale -a 2>/dev/null | grep -i -E '^(c|en_US|pt_BR)\.utf-?8$'
 
 ### 3.2 Python
 
-O SSS precisa de Python 3.6.0 ou superior. O launcher só aceita interpretador chamado `python3` ou `python3.X`.
+O SSS precisa de Python 3.6.0 ou superior, indicado na variável `PYTHON` (qualquer nome de executável; o keepalive também reconhece o `platform-python` do RHEL 8). Só o primeiro argumento opcional do `bin/sss-web.sh` exige o nome `python3` ou `python3.X`.
 
 ```bash
 for p in python3 python3.6 python3.8 python3.9 python3.11 python3.12; do
@@ -195,8 +195,10 @@ OUTROS=$(echo $SSS_OUTROS_PREFIXOS | tr ' ' '|'); O=$(echo "$SSS_OWNER" | tr A-Z
 for t in $SSS_TIPOS; do sss_tipo $t >/dev/null
   echo "== $P"
   grep -c "WHENEVER SQLERROR EXIT FAILURE ROLLBACK" docs/sql/01_deploy_sss_${O}_$P.sql                  # esperado: 1
-  grep -E -i "${OUTROS:-^$}" docs/sql/01_deploy_sss_${O}_$P.sql | grep -vc "COMMENT ON COLUMN"           # esperado: 0
-  grep -E -ic "${OUTROS:-^$}" docs/sql/02_rollback_sss_${O}_$P.sql                                      # esperado: 0
+  if [ -n "$OUTROS" ]; then                                                                              # sem outros prefixos, nada a conferir
+    grep -E -i "$OUTROS" docs/sql/01_deploy_sss_${O}_$P.sql | grep -vc "COMMENT ON COLUMN"              # esperado: 0
+    grep -E -ic "$OUTROS" docs/sql/02_rollback_sss_${O}_$P.sql                                          # esperado: 0
+  fi
   grep -oE "[a-z_0-9]*${P}_[a-z_0-9]*" docs/sql/01_deploy_sss_${O}_$P.sql | awk '{ if (length($0) > m) m = length($0) } END { print "maior identificador:", m }'   # até 30
   grep -ic "GRANT .* TO PUBLIC" docs/sql/01_deploy_sss_${O}_$P.sql                                      # esperado: 0
   sha256sum docs/sql/*_${O}_$P.sql                                                                       # registre no passo 17
@@ -221,7 +223,7 @@ tar -xzOf "$PKG"/sss-*.tar.gz --wildcards '*/src/sss/BUILD'      # o id do pacot
 
 Esperado: `ORIGEM`, `SHA256SUMS`, `sss-<versao>.tar.gz`, `sss_vars.sh` e `utilitarios.tar.gz`, com o `sha256sum -c` já conferido pelo próprio `make`.
 
-* O `make package-local` copia só o que vai para o servidor (`bin`, `docs`, `instance/exemplos`, `scripts`, `src`, `AGENTS.md`, `README.md`), sem caches e sem `docs/homologation`, e passa a cópia pelo `tools/package.py`. Esse script só usa a biblioteca padrão e recusa o pacote com `__pycache__`, `*.pyc`, `secrets.cfg` real, senha fora do `CHANGE_ME` dos modelos, código de DEV, testes ou link simbólico. Os `instance/<nome>/` da origem (com senhas reais) nunca entram.
+* O `make package-local` copia só o que vai para o servidor (`bin`, `docs`, `instance/exemplos`, `scripts`, `src`, `AGENTS.md`, `README.md`), sem caches e sem `docs/homologation`, e passa a cópia pelo `tools/package.py`. Esse script só usa a biblioteca padrão e recusa o pacote com `__pycache__`, `*.pyc`, `secrets.cfg` real, senha fora do `CHANGE_ME` dos modelos, link simbólico ou restos do web2py. O código de DEV (`dev/`, `controllers/dev.py`, o FAKE) e os testes ficam de fora sem aviso. Os `instance/<nome>/` da origem (com senhas reais) nunca entram.
 * O id do pacote (`src/sss/BUILD`) aparece na versão (`1.0.0-dev+<id>`): no log de subida, na tela Agentes e no rodapé. Com o `make package` (git), o id é o commit curto.
 * O `ORIGEM` registra a pasta e a hora do pacote. Se a pasta tiver um `.git`, ele também cita o commit de base, só como informação: a referência são os arquivos.
 * Os scripts de exemplo do seed (`utilitarios/*`) ficam em `dev/scripts/`, que o pacote não leva: por isso o `utilitarios.tar.gz` separado.
@@ -545,14 +547,14 @@ Em cada tipo:
 
 ## 14. Permanência (`crontab` da conta)
 
-Um bloco por tipo, gerado pelo `bin/sss-ctl.sh cron` a partir do ambiente de quem roda (o `sss_vars.sh` carregado) e guardado na própria raiz em `var/crontab_sss/crontab_sss.txt` (o `var/` é preservado pelo `sss-update.sh` e não vai no pacote): as variáveis, o keepalive com `@reboot` e a cada 5 minutos, e um `health.py` com os avisos em `health.err`. O bloco começa em `# --- SSS <TIPO> ---` e termina em `# --- fim SSS <TIPO> ---`, para instalar ou retirar um tipo sem tocar no outro nem nas tarefas de outros sistemas. Em cada tipo que o cron deve manter no ar:
+Um bloco por tipo, gerado pelo `bin/sss-ctl.sh cron` a partir do ambiente de quem roda (o `sss_vars.sh` carregado). O `cron install`, quando acrescenta o bloco, guarda a cópia na própria raiz em `var/crontab_sss/crontab_sss.txt` (o `var/` é preservado pelo `sss-update.sh` e não vai no pacote); com o bloco já no `crontab`, nada muda, nem a cópia. O bloco tem as variáveis, o keepalive com `@reboot` e a cada 5 minutos, e um `health.py` com os avisos em `health.err`. O bloco começa em `# --- SSS <TIPO> ---` e termina em `# --- fim SSS <TIPO> ---`, para instalar ou retirar um tipo sem tocar no outro nem nas tarefas de outros sistemas. Em cada tipo que o cron deve manter no ar:
 
 ```bash
 . ~/sss_pacote/sss_vars.sh; sss_tipo DEV && cd "$R"            # depois, sss_tipo PROD
 crontab -l > ~/sss_registro/crontab_antes_$(date +%Y%m%d_%H%M%S).txt 2>/dev/null
 bin/sss-ctl.sh cron show                     # revise o bloco
 bin/sss-ctl.sh cron install                  # acrescenta, so se o bloco do tipo ainda nao estiver no crontab
-crontab -l | grep -c "cd $R && bin/sss-keepalive.sh"      # esperado: 2
+crontab -l | grep -c "cd $(cd "$R" && pwd -P) && bin/sss-keepalive.sh"      # esperado: 2 (o bloco grava o caminho fisico, sem link simbolico)
 ```
 
 O `PATH` do cron é curto (`/usr/bin:/bin`); os agentes o herdam e procuram nele os interpretadores dos scripts (DEPLOYMENT §9). Por isso o bloco põe a pasta do `PYTHON` na frente: sem ela, num servidor em que o `python3` não está em `/usr/bin` (o 3067), todo script `python3` terminaria em `INTERPRETER_NOT_FOUND` depois do primeiro reboot. Se os scripts usarem outros interpretadores, acrescente a pasta deles com `crontab -e`. As variáveis valem para as linhas abaixo delas: com os mesmos valores nos blocos de cada tipo, a ordem dos blocos não importa.
@@ -740,7 +742,7 @@ O resto do arquivo (a parte "derivados" e a função `sss_tipo`) é o do passo 0
 |---|---|
 | web2py | Não existe mais: o web é o servidor próprio do SSS (`scripts/run_web.py`, CR-021) |
 | `scripts/empacotar.py` | `make package-local` (ou `tools/package.py`), na máquina de origem (passo 4.2) |
-| `/etc/sss/secrets.cfg` | O SSS só lê `<RAIZ>/instance/secrets.cfg` (CR-032), `0600`, dono a conta do SSS; o 3067 também não tem `sudo` |
+| `/etc/sss/secrets.cfg` | O SSS lê `<RAIZ>/instance/secrets.cfg` (CR-032), `0600`, dono a conta do SSS (um `instance/<nome>/secrets.cfg` antigo ainda vale, com aviso); o 3067 também não tem `sudo` |
 | `sss_env = DEV/PROD` | Retirada no CR-032 (só gera aviso). O ambiente vem do nome da pasta `DEV` ou `PROD` acima da raiz |
 | DSN do DEV `localhost:2424` | Túnel SSH da máquina de desenvolvimento para `10.129.177.188:1521`; no servidor, o endereço direto |
 | `base_script_dir` | `[agent] script_base_dir`; o padrão é `<RAIZ>/scripts_ambiente/` (passo 10) |

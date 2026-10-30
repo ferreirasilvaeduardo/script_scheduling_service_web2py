@@ -26,7 +26,7 @@ Recomenda-se o uso do `pyenv` para gerenciamento da versão do Python:
 
    Em distribuições recentes, a 3.6.8 **não compila direto** com `pyenv install 3.6.8`, por dois motivos:
    * **GCC 11 ou mais novo:** dá segfault no `ensurepip` durante a instalação, por um bug de alinhamento de memória (bpo-27987) que só foi corrigido na 3.6.15;
-   * **OpenSSL 3 do sistema:** a 3.6.8 não reconhece essa versão, e o `_hashlib` não é compilado. Sem o `_hashlib`, o `hashlib.pbkdf2_hmac` das senhas cai numa implementação em Python puro: funciona (é o caso do servidor do `docs/DEPLOYMENT.md` Apêndice B.2), mas cada login fica mais lento. Na estação, a receita abaixo compila o `_hashlib` com OpenSSL 1.1.1w, para os testes rodarem na velocidade normal.
+   * **OpenSSL 3 do sistema:** a 3.6.8 não reconhece essa versão, e o `_hashlib` não é compilado. Sem o `_hashlib`, o `hashlib.pbkdf2_hmac` das senhas cai numa implementação em Python puro: funciona, mas cada login fica mais lento. Na estação, a receita abaixo compila o `_hashlib` com OpenSSL 1.1.1w, para os testes rodarem na velocidade normal.
 
    Receita testada no Ubuntu 24.04 (GCC 13, OpenSSL 3), sem `sudo` e sem alterar o sistema:
    ```bash
@@ -113,12 +113,12 @@ O servidor web é o próprio do SSS (`scripts/run_web.py`, CR-021e); o web2py n�
 
 ```bash
 cd /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
-~/.pyenv/versions/3.6.15/bin/python scripts/run_web.py --port 8000
+~/.pyenv/versions/3.6.15/bin/python scripts/run_web.py --name web0001 --port 8000
 # só conferir configuração e segredos, sem abrir a porta:
-~/.pyenv/versions/3.6.15/bin/python scripts/run_web.py --check
+~/.pyenv/versions/3.6.15/bin/python scripts/run_web.py --name web0001 --check
 ```
 
-**A aplicação usa sempre o Oracle** do `[oracle]` do config do processo (`instance/web0001/` e `instance/agente0001/`: owner e prefixo; F7.3). Por isso, o Python precisa ter o driver Oracle (`oracledb` ou `cx_Oracle`). Nesta máquina, o 3.6.0 e o 3.6.15 têm; no `bin/start_local.sh`, use `PYTHON=~/.pyenv/versions/3.6.15/bin/python3` (o launcher só aceita interpretador chamado `python3` ou `python3.X`, não o `python` do pyenv). Para parar, `Ctrl+C` ou `SIGTERM`: o servidor espera as requisições em andamento até `[web] socket_timeout_s`.
+**A aplicação usa sempre o Oracle** do `[oracle]` do config do processo (`instance/web0001/` e `instance/agente0001/`: owner e prefixo; F7.3). Por isso, o Python precisa ter o driver Oracle (`oracledb` ou `cx_Oracle`). Nesta máquina, o 3.6.0 e o 3.6.15 têm; no `bin/start_local.sh`, use `PYTHON=~/.pyenv/versions/3.6.15/bin/python3` (como primeiro argumento, o `sss-web.sh` só aceita interpretador chamado `python3` ou `python3.X`, não o `python` do pyenv). Para parar, `Ctrl+C` ou `SIGTERM`: o servidor espera as requisições em andamento até `[web] socket_timeout_s`.
 
 **Prefixo do DEV (2026-10-29):** o `instance/common.ini` do DEV usa `table_prefix = ssdev_`; o PROD usa `tbsss_`, no mesmo owner (DEPLOYMENT, Apêndice A). O esquema `ssdev_` foi criado pelo `init_db --name agente0001 --real-schema`, com o seed: o `admin` começa com a senha inicial do DEPLOYMENT §5.3, e a homologação a troca no CT-01. Os scripts do DEV ficam em `docs/sql/` ao lado dos do PROD, com o prefixo no nome (`01_deploy_sss_openrisow_ssdev.sql`, `02_rollback_sss_openrisow_ssdev.sql`, `99_validate_deploy_openrisow_ssdev.sql`), gerados por `python3 scripts/generate_sql.py --config instance/agente0001/config.ini`. Para recriar o esquema do DEV: `02_rollback` e `01_deploy` do `ssdev` (apaga os dados), ou um `DROP` das tabelas `ssdev_*` seguido do `init_db`. Os comentários de coluna das FKs citam `tbsss_<tabela>` em todos os prefixos (texto fixo do dicionário, sem efeito). Os `*_s3dev.sql` e `*_s3prd.sql` são do DEV e do PROD do servidor 3067 (`docs/DEPLOYMENT-SERVER.md`, Apêndice A): nunca os rode a partir desta máquina.
 
@@ -217,6 +217,7 @@ A pasta `dev/scripts/` contém scripts de exemplo **sem lógica perigosa**, usad
 | `infra/limpeza.sh` | Sai com 3 se receber `--falhar`; caso contrário, 0 |
 | `infra/longo.py` | Dorme em ciclos e imprime progresso (`[ciclos] [intervalo_s]`), para testes de timeout e cancelamento |
 | `relatorios/exporta.sh` | Imprime os argumentos posicionais |
+| `relatorios/run_executor_scripts.py`, `relatorios/run_executor_sql_plsql.sh` | Executores de SQL, PL/SQL e Python parametrizáveis (SQL*Plus ou driver Python, saída em CSV e ZIP opcional), trazidos como exemplo de script real com parâmetros; não estão no seed |
 | `carga_diaria.py`, `relatorio_mensal.py`, `validacao_fiscal.py`, `cleanup_tmp.sh`, `sync_tabelas.sh`, `backup_extra.sh` | Correspondem aos `path_file` do seed FAKE e imprimem os argumentos |
 | `utilitarios/*.py` e `utilitarios/*.sh` | 14 scripts utilitários de arquivos (zip, tar.gz, divisão, concatenação, encoding, substituição, deduplicação, hash, contagem, filtros, ordenação e limpeza). Detalhes em `docs/UTILITY_SCRIPTS.md` |
 | `diagnostico/pasta_trabalho.sh` | Diagnóstico do CR-019: confere `SSS_WORK_DIR`, grava `diagnostico.txt` e `sub/arquivo.txt` na pasta de trabalho e lista o que gravou. Sai com 1 sem a variável e com 2 se a pasta não existir |
@@ -283,7 +284,7 @@ O backend FAKE não precisa de banco. Para o backend ORACLE (README §2.3, CR-00
   * macOS e Windows não são suportados (CR-005; o `oracle_client_lib_dir` saiu no CR-032).
 * **Credencial:** só no `secrets.cfg` (`0600`, dono = usuário do processo), nunca no `config.ini`.
 * **Inicialização e DDL/DML:**
-  * Via Python: `python3 scripts/init_db.py --name agente0001`
+  * Via Python: `python3 scripts/init_db.py --name agente0001 --real-schema` (sem `--real-schema`, o `init_db` só aceita o esquema descartável dos testes, `SSS_TEST_*`, README §11.1)
   * Via SQL*Plus (autônomo): `sqlplus usuario/senha@//host:porta/servico @docs/sql/01_deploy_sss_openrisow_ssdev.sql`
   * Rollback total: `sqlplus usuario/senha@//host:porta/servico @docs/sql/02_rollback_sss_openrisow_ssdev.sql`
   * **No DEV, só os `*_ssdev.sql`.** Os `*_tbsss.sql` são as tabelas do PROD, no mesmo owner: o `02_rollback_sss_openrisow_tbsss.sql` apagaria o PROD.

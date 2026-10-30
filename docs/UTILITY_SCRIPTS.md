@@ -10,7 +10,7 @@ Para atender aos cenários operacionais frequentes de manipulação de arquivos 
 
 - **Runtime:** Compatíveis com Python 3.6.0+ (sem recursos de versões posteriores) e Shell POSIX (`/bin/bash` e `/bin/sh`).
 - **Segurança e Isolamento:**
-  - Validação estrita de caminhos (`path_guard`), rejeição de *path traversal* / *zip slip*;
+  - Caminhos recebidos do agente, que já passaram pelo `path_guard` no disparo (README §8.5); o `descompactar_zip` recusa *zip slip* (entrada com `..` ou caminho absoluto);
   - Leitura em *streaming* / blocos (*chunks*) para arquivos de grande porte, com baixo uso de memória;
   - Parâmetros sanitizados sem injeção de comandos.
 - **Localização dos Fontes:**
@@ -61,12 +61,12 @@ Na coluna "Orientação", o que se espera do valor: o seed não grava regex nem 
 | `enc_destino` | `--enc-destino` | Codificação de Destino | `SELECT` | `UTF-8`, `ISO-8859-1`, `CP1252` | `UTF-8` |
 | `termo_busca` | `--busca` | Texto a Localizar | `TEXT` | String de busca | — |
 | `termo_substituicao` | `--substituicao` | Texto Substituto | `TEXT` | Nova string | — |
-| `flag_ordenar` | `--ordenar` | Ordenar Resultado | `SELECT` | `Y` (Sim), `N` (Não) | `Y` |
+| `flag_ordenar` | `--ordenar` | Ordenar Resultado | `SELECT` | `S` (Sim), `N` (Não) | `S` |
 | `tipo_hash` | `--algoritmo` | Algoritmo de Hash | `SELECT` | `sha256`, `md5`, `sha1` | `sha256` |
 | `termo_filtro` | `--padrao` | Padrão de Filtragem | `TEXT` | Termo para filtragem | — |
-| `flag_inverter` | `--inverter` | Inverter Seleção | `SELECT` | `N` (Manter), `Y` (Excluir) | `N` |
-| `flag_numerico` | `--numerico` | Ordenação Numérica | `SELECT` | `N` (Alfanumérica), `Y` (Numérica) | `N` |
-| `flag_reverso` | `--reverso` | Ordem Reversa (Decrescente) | `SELECT` | `N` (Crescente), `Y` (Decrescente) | `N` |
+| `flag_inverter` | `--inverter` | Inverter Seleção | `SELECT` | `N` (Manter), `S` (Excluir) | `N` |
+| `flag_numerico` | `--numerico` | Ordenação Numérica | `SELECT` | `N` (Alfanumérica), `S` (Numérica) | `N` |
+| `flag_reverso` | `--reverso` | Ordem Reversa (Decrescente) | `SELECT` | `N` (Crescente), `S` (Decrescente) | `N` |
 | `caminho_arquivo` | *(posicional)* | Caminho do Arquivo | `TEXT` | Argumento posicional 1 | — |
 
 ---
@@ -264,7 +264,7 @@ Para viabilizar a demonstração operacional e os testes de interface (conforme 
 > [!IMPORTANT]
 > **Credenciais Padrão de Homologação / Demonstração:**
 > - **Senha Inicial:** `Sss@Homolog2026!` (atende à política corporativa com 16 caracteres, maiúsculas, minúsculas, números e caracteres especiais).
-> - **Hash no Banco:** Criptografado com PBKDF2-SHA256 (200.000 iterações): `pbkdf2_sha256$200000$f9fb31dc39b754d083af236a880dfa6e$2229f3f8a694a9c45be82d9c3bd38110f8b474d2a0aa0ee7f691d405738a4cd8`.
+> - **Hash no Banco:** Criptografado com PBKDF2-SHA256 (200.000 iterações): `pbkdf2_sha256$200000$8007db1bd770663178d0f1b1a129140c$9d9604af27e21326e982e5e7c64bfdd868c0995a97181b5a9695149755852d63`.
 > - **Idempotência:** A rotina de seed em SQL e Python utiliza `MERGE INTO`, atualizando nome, perfil e reativando o usuário, mas **preserva o hash da senha existente** caso o operador já tenha trocado sua senha.
 
 ### 5.5 Vínculos no Dicionário de Parâmetros (`tbsss_script_param`)

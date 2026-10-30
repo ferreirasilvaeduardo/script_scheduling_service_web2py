@@ -41,7 +41,7 @@ As entidades mestras nunca são excluídas, apenas desativadas (README §10).
 
 1. O `form` envia em campo oculto a `version`: o sha256 dos campos editáveis (`active` incluído) no momento da leitura. As colunas de registro (CR-006) não entram na versão nem no `expected`. Campo sensível entra no hash como marcador fixo (`<sensivel:preenchido>` ou `<sensivel:vazio>`, `admin_crud.FILLED_MARKER` e `EMPTY_MARKER`), nunca pelo valor. Uma troca concorrente feita só no valor sensível não gera conflito (README §10, "Consequência aceita").
 2. O `save` ou o `toggle_active` do service relê o registro. Se a `version` enviada for diferente da atual, o resultado é conflito.
-3. O service repassa os valores lidos como `expected=`. O repositório executa `UPDATE ... WHERE id = :id AND <coluna = valor lido ...>` e checa o `rowcount`. No ORACLE, cada comparação é nula-segura na forma ANSI `(c = :v OR (c IS NULL AND :v IS NULL))` (README §10). Se o `rowcount` for 0, o repositório lança `RepoConflict` e não altera nada. Com isso, não sobra janela entre a leitura e a escrita.
+3. O service repassa os valores lidos como `expected=`. No ORACLE, o repositório trava a linha (`SELECT ... FOR UPDATE WAIT 5`), compara os valores atuais com o `expected` em Python (nulo igual a nulo) e só então faz o `UPDATE ... WHERE id = :id`, conferindo o `rowcount`; no FAKE, a mesma comparação sob o lock do store. Valor diferente (ou linha sumida) dá `RepoConflict` e nada é alterado. Com a linha travada desde a releitura, não sobra janela entre a leitura e a escrita.
 4. Mensagem exibida (README §2.4.2): "Outra pessoa mudou este registro enquanto você editava. Recarregue a página para ver a versão nova e faça a sua alteração de novo." O formulário volta com os dados atuais e uma nova versão.
 
 ## Erros
@@ -60,10 +60,10 @@ As entidades mestras nunca são excluídas, apenas desativadas (README §10).
 
 | Situação | Ação | Detalhe |
 |---|---|---|
-| Inclusão | `CREATE` | `campo: valor` somente dos campos preenchidos (vazios omitidos), com todos os campos do formulário e referências pelo nome (ex.: `perfil: OPERATOR_PROD`) |
+| Inclusão | `CREATE` | `campo: valor` somente dos campos preenchidos (vazios omitidos), com todos os campos do formulário e referências pelo nome (ex.: `profile: OPERATOR_PROD`; o nome do campo é o técnico, em inglês) |
 | Alteração | `UPDATE` | `campo: antigo → novo`, só dos campos que mudaram. Se nada mudou, nada é gravado nem auditado. |
-| Desativação | `DEACTIVATE` | `ativo: S → N` mais o impacto (por exemplo, `agendamentos ativos afetados: 2`) |
-| Reativação | `UPDATE` | `ativo: N → S` |
+| Desativação | `DEACTIVATE` | `active: Y → N` mais o impacto (por exemplo, `agendamentos ativos afetados: 2`) |
+| Reativação | `UPDATE` | `active: N → Y` |
 
 O detalhe passa sempre pelo `masking` (segredos registrados e senha em connect string), inclusive em vínculos, homologação e matriz, e é limitado a 1.000 caracteres (`VARCHAR2(1000 CHAR)`). A linha é gravada pelo repositório, na mesma operação da ação.
 

@@ -74,7 +74,7 @@ O `health.py` usa a conta do processo do `--name` (CR-032, D8: não há papel mo
 │   ├── web0001/      logs/  tmp/
 │   ├── agente0001/   logs/  works/  outputs/  inputs/  script_works/  files/
 │   ├── agente0002/   logs/  works/  outputs/  inputs/  script_works/  files/
-│   └── update/<data>/retorno/          # pacotes de retorno do sss-update.sh
+│   └── update/<data>/                  # sss-retorno-<data>.tar.gz e SHA256SUMS do sss-update.sh
 └── scripts_ambiente/                   # PRESERVADO: scripts dos ambientes (script_base_dir padrão)
 ```
 
@@ -103,7 +103,7 @@ Tudo pertence à conta do SSS. As pastas saem do nome do processo, sem precisar 
 |---|---|
 | Sistema operacional | Linux x86_64 ou outro Unix POSIX (CR-005). Validado em Oracle Linux 6.9 e Ubuntu 24.04 |
 | Python | **3.6.0 ou superior** (referência de produção: 3.6.8). Só a biblioteca padrão, mais o driver Oracle. Não use `pip install` no servidor |
-| Driver Oracle | `python-oracledb` (`< 2.0` no Python 3.6; `2.x` no 3.7+) e `cx_Oracle 8.3` como contingência, **pré-instalados** pela infraestrutura (AGENTS §2.2), com o **Oracle Instant Client 19.x**. A biblioteca `cryptography` não é usada (o modo Thin fica fora de uso; `driver_mode = thick`) |
+| Driver Oracle | `python-oracledb` (`< 2.0` no Python 3.6; `2.x` no 3.7+) e `cx_Oracle 8.3` como contingência, **pré-instalados** pela infraestrutura (AGENTS §2.2), com o **Oracle Instant Client 19.x**. A biblioteca `cryptography` não é usada. O padrão é `driver_mode = auto` (Thin → Thick → cx_Oracle, §6): sem `cryptography`, o Thin não sobe e a cadeia segue para o Thick |
 | Oracle Instant Client 19 | **Obrigatório se algum banco for 11g** (o modo Thin não conecta ao 11g: `DPY-3010`); recomendado sempre, como contingência da cadeia de driver (§6). Registrado no `ldconfig` (ou no `SSS_IC_DIR`). Outro cliente que conecte ao banco (ex.: o 12.2 completo do 3067 com o banco 19c) só gera aviso (README §2.3) |
 | Banco | Oracle 11gR2 (11.2.0.4) ou superior, charset AL32UTF8, servidor **sem horário de verão** (UTC recomendado) e NTP em modo *slew* em todas as instâncias (README §7.1) |
 | Rede | Dos nós web e agentes até o listener Oracle. Dos usuários até a porta do web, quando ele atende num endereço da rede (§10.4) |
@@ -160,22 +160,27 @@ O pacote só tem o `bin/` e a aplicação (o código, os templates e os estátic
 5. **Subida e permanência (§10.6):** `bin/sss-keepalive.sh` no `crontab` da conta, com `@reboot` e a cada 5 minutos.
 6. **Monitoração (§13)** e **limpeza manual (§12, README §11.3)** pelo mesmo `crontab`.
 
-O `bin/sss-ctl.sh cron install` gera e instala o bloco abaixo para a raiz em que é rodado (com o `PATH` da pasta do `PYTHON`, os avisos do `health.py` em `health.err` e as marcas `# --- SSS <TIPO> ---`), sem duplicar; `cron remove` o retira (README §12.2, `docs/DEPLOYMENT-SERVER.md` passo 14).
-
-Exemplo de `crontab -e` da conta, com os usuários entrando direto por HTTP na porta 18000 (§10.4; troque `<TIPO>`, a porta e o Python):
+O bloco do `crontab` sai do `bin/sss-ctl.sh cron install`, rodado na raiz com o `sss_vars.sh` carregado (README §12.2, `docs/DEPLOYMENT-SERVER.md` passo 14). Ele acrescenta ao `crontab` da conta só o bloco deste tipo, sem duplicar, e `cron remove` o retira. `cron show` mostra o bloco sem instalar. Exemplo do que ele gera (o `PATH` começa pela pasta do `PYTHON`; `ORACLE_HOME`, `SSS_IC_DIR`/`LD_LIBRARY_PATH`, `SSS_TZ` e `SSS_LOCALE` só aparecem se estiverem definidos):
 
 ```text
+# --- SSS PROD --- (sss-ctl.sh, gerado em 2026-10-30 11:45)
 PYTHON=/usr/bin/python3
 SSS_TZ=America/Sao_Paulo
-R=/portaloptrib/TESHUVA/SSS/<TIPO>/script_scheduling_service
-@reboot      cd $R && bin/sss-keepalive.sh web0001:0.0.0.0:18000 agente0001
-*/5 * * * *  cd $R && bin/sss-keepalive.sh web0001:0.0.0.0:18000 agente0001
-*/5 * * * *  cd $R && $PYTHON scripts/health.py --name agente0001 > var/agente0001/logs/health.txt 2> var/agente0001/logs/health.err
-# Com um agente por ambiente (§7.1; ensaiado no CR-039), os cinco nomes nas duas linhas do keepalive; um
-# health.py basta (ele olha todos os agentes e todos os ambientes):
-# @reboot     cd $R && bin/sss-keepalive.sh web0001:0.0.0.0:18000 agente0001 agente0002 agente0003 agente0004 agente0005
-# */5 * * * * cd $R && bin/sss-keepalive.sh web0001:0.0.0.0:18000 agente0001 agente0002 agente0003 agente0004 agente0005
-15 2 * * *   cd $R && find var/*/logs var/*/outputs var/*/script_works -mindepth 7 -maxdepth 7 -type d -mtime +30 -exec rm -rf {} + ; find var/*/logs var/*/outputs var/*/script_works -mindepth 3 -type d -empty -delete
+PATH=/usr/bin:/usr/local/bin:/usr/bin:/bin
+SSS_IC_DIR=/opt/oracle/instantclient_19_27
+LD_LIBRARY_PATH=/opt/oracle/instantclient_19_27
+@reboot      cd /portaloptrib/TESHUVA/SSS/PROD/script_scheduling_service && bin/sss-keepalive.sh web0001:18000 agente0001 agente0002
+*/5 * * * *  cd /portaloptrib/TESHUVA/SSS/PROD/script_scheduling_service && bin/sss-keepalive.sh web0001:18000 agente0001 agente0002
+*/5 * * * *  cd /portaloptrib/TESHUVA/SSS/PROD/script_scheduling_service && $PYTHON scripts/health.py --name agente0001 > var/agente0001/logs/health.txt 2> var/agente0001/logs/health.err
+# --- fim SSS PROD ---
+```
+
+* **Processos e porta:** saem do `instance/` da raiz (todos os agentes; o `health.py` olha o primeiro em ordem alfabética, e ele vê todos os agentes e ambientes) e da porta da primeira URL do `[web] allowed_origins`.
+* **Acesso direto por HTTP (§10.4):** o web sobe só em `127.0.0.1`, a menos que `SSS_WEB_HOST` esteja definida quando se roda o `cron install` (e o `start`): com `SSS_WEB_HOST=0.0.0.0`, a linha fica `web0001:0.0.0.0:18000`. Guarde a `SSS_WEB_HOST` no `sss_vars.sh` para o `start` e o `cron install` usarem o mesmo endereço.
+* **Limpeza (§12):** o `sss-ctl.sh` não gera. Se quiser automatizar, acrescente a linha **fora** das marcas `# --- SSS ... ---` (o `cron remove` só tira o bloco do SSS), começando por listar:
+
+```text
+15 2 * * *   cd <RAIZ> && find var/*/logs var/*/outputs var/*/script_works -mindepth 7 -maxdepth 7 -type d -mtime +30 -print
 ```
 
 * **Risco aceito (README §14):** os scripts rodam com a mesma conta do agente e podem ler o `secrets.cfg`, o `common.ini`, os `config.ini` e os logs do SSS, além de alterar o código. Quem cadastra um script tem o poder dessa conta. E a conta do banco, sendo a dona do esquema, pode alterar qualquer objeto dele.
@@ -262,16 +267,21 @@ Os scripts saem só com ASCII (decisão 16 A): os textos com acento do seed vão
 O DBA revisa o `01` (ou a saída de `python3 scripts/init_db.py --name agente0001 --dry-run`, que imprime o DDL sem conectar) **antes** de executar. Depois:
 
 ```sql
--- como a conta dona do esquema, gravando a saída
+-- 1a chamada do sqlplus, como a conta dona do esquema: o 01 termina com EXIT
 SPOOL /tmp/sss_01_deploy.log
 @docs/sql/01_deploy_sss_openrisow_tbsss.sql
-SPOOL OFF
+```
+
+```sql
+-- 2a chamada do sqlplus, só leitura
 SPOOL /tmp/sss_99_validate.log
 @docs/sql/99_validate_deploy_openrisow_tbsss.sql
 SPOOL OFF
+EXIT
 ```
 
-* O `01` para no primeiro erro (`WHENEVER SQLERROR EXIT FAILURE ROLLBACK`): sai com código diferente de zero e sem a mensagem "concluída com sucesso!". Com o `01` interrompido, rode o `02` antes de aplicá-lo de novo. O `02` e o `99` seguem com `WHENEVER SQLERROR CONTINUE`: procure `ORA-` e `SP2-` nos logs deles.
+* O `01` e o `99` vão em **duas** chamadas do `sqlplus`: o `01` termina com `EXIT`, e um `@99` na mesma sessão nunca roda. O `docs/DEPLOYMENT-SERVER.md` (passo 9) tem os comandos completos, com o pedido de senha.
+* O `01` para no primeiro erro (`WHENEVER SQLERROR EXIT FAILURE ROLLBACK`): sai com código diferente de zero e sem a linha `Implantacao do SSS concluida com sucesso!` (só ASCII, decisão 16 A). Com o `01` interrompido, rode o `02` antes de aplicá-lo de novo. O `02` e o `99` seguem com `WHENEVER SQLERROR CONTINUE`: procure `ORA-` e `SP2-` nos logs deles.
 * O `99` só lê. As duas linhas de resumo precisam dizer `OK: nenhuma falha`.
 * Com contas separadas, `sss_web` e `sss_agente` são criadas antes do `01`; com a conta única (§4.0), nenhuma conta nova. Nenhum GRANT vai para PUBLIC.
 * **Rollback total** (só em instalação nova ou com autorização): `@docs/sql/02_rollback_sss_openrisow_tbsss.sql`. Ele apaga os dados.
@@ -325,7 +335,7 @@ mkdir -m 0750 instance/agente0001
 cp instance/exemplos/agente0001/config.ini.example instance/agente0001/config.ini && chmod 0640 instance/agente0001/config.ini
 ```
 
-O papel vem do próprio arquivo (CR-028, D4): o do web tem `[web]` e não tem `[agent]`; o do agente tem `[agent]` e não tem `[web]`. Cada um só tem o que o seu papel usa:
+O papel vem do próprio arquivo (CR-028, D4): o do web tem `[web]` e, no máximo, um `[agent]` parcial (sem `environments` nem `max_parallel_jobs`, §7.1); o do agente tem `[agent]` com `environments` e não tem `[web]`. Cada um só tem o que o seu papel usa:
 
 | Processo | Chaves a preencher |
 |---|---|
@@ -434,7 +444,7 @@ bin/sss-scheduler.sh agente0001            # instance/agente0001/config.ini (CR-
 
 ### 10.4 Acesso dos usuários
 
-* **Direto por HTTP (CR-032, D19):** na linha do keepalive, `web0001:0.0.0.0:18000` sobe o web em todas as interfaces (ou `web0001:<IP do servidor>:18000`, só nesse endereço). Os usuários abrem `http://<servidor>:18000/`. Ponha essa URL exata em `[web] allowed_origins`. Sem HTTPS, o cookie de sessão vai sem `Secure` (CR-032, D11) e a senha trafega sem criptografia na rede interna: risco aceito (README §14). Confira com a equipe de rede que a porta só é alcançável pela rede interna.
+* **Direto por HTTP (CR-032, D19):** na linha do keepalive, `web0001:0.0.0.0:18000` sobe o web em todas as interfaces (ou `web0001:<IP do servidor>:18000`, só nesse endereço). Com o `sss-ctl.sh`, defina `SSS_WEB_HOST=0.0.0.0` (ou o IP) no `sss_vars.sh`: o `start` e o `cron install` montam essa linha (§4.0). Os usuários abrem `http://<servidor>:18000/`. Ponha essa URL exata em `[web] allowed_origins`. Sem HTTPS, o cookie de sessão vai sem `Secure` (CR-032, D11) e a senha trafega sem criptografia na rede interna: risco aceito (README §14). Confira com a equipe de rede que a porta só é alcançável pela rede interna.
 * **Só local (padrão):** `web0001:18000` atende só em `127.0.0.1`. Os usuários chegam por um proxy ou balanceador da empresa que repasse para `http://127.0.0.1:<porta>`, ou por túnel SSH: `ssh -N -L 18000:127.0.0.1:18000 <usuário>@<servidor>` e, no navegador, `http://localhost:18000/` (o próprio `Host` da requisição já vale como origem, CR-032 D11).
 * **Proxy** [não ensaiado]: o limite de corpo dele precisa ser pelo menos `[web] input_upload_max_bytes` mais 64 KiB (tela de Entrada, CR-020d); o endereço dele vai em `[web] trusted_proxies`. Um proxy HTTPS precisa mandar `X-Forwarded-Proto: https`: sem isso, o web acha que a requisição chegou por HTTP e o cookie de sessão sai sem `Secure` (CR-032, D11).
 * **Trocar o endereço de um web que já está no ar:** o keepalive confere só o nome, não o endereço. Depois de mudar a linha do cron (ex.: de `web0001:18000` para `web0001:0.0.0.0:18000`), pare o web (`--pause`, `SIGTERM` e `--resume`, §10.6) para ele subir de novo no endereço novo.
@@ -467,7 +477,7 @@ bin/sss-keepalive.sh --resume agente0001    # volta a subir na proxima passada
 ```
 
 * Para cada nome, confere se há um Python (`python*` ou o executável do `PYTHON` com outro nome, como o `platform-python` do RHEL 8) rodando `scripts/run_web.py` ou `scripts/run_scheduler.py` com `--name <nome>` a partir da `<RAIZ>`. Se não houver, sobe pelo launcher, em segundo plano (`nohup`), e grava em `var/<nome>/logs/keepalive.log` uma linha por subida, recusa ou falha. A saída do processo vai para `var/<nome>/logs/<nome>.out`.
-* O papel vem do `config.ini` (`[web]` sem `[agent]`: web). O web atende em `127.0.0.1` ou no endereço da linha, na porta informada (§10.4); um endereço que não é IPv4 é recusado (`recusado: endereco invalido`, código 3).
+* O papel vem do `config.ini` (`[web]` sem `[agent]` com `environments` ou `max_parallel_jobs`: web). O web atende em `127.0.0.1` ou no endereço da linha, na porta informada (§10.4); um endereço que não é IPv4 é recusado (`recusado: endereco invalido`, código 3).
 * As linhas do `crontab` estão no §4.0 (`@reboot` e a cada 5 minutos). Recusa root (código 1) e uso inválido (2); sai com 3 se algum processo não subiu (veja o `.out`).
 * Na atualização (§18.1), pause os processos antes de parar e retome depois de subir.
 * Com a raiz compartilhada (§4.1), o keepalive de cada servidor só lista os nomes daquele servidor.
@@ -681,11 +691,11 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | Sintoma | Linha / onde ver | Causa | Ação |
 |---|---|---|---|
 | HTTP 500 em todas as telas | `CRITICAL ... Subida abortada: configuracao invalida: ...` no `sss_web_<PID>.log` (ou no stderr, se o `log_dir` não aceita escrita) | Configuração, segredos ou banco | Corrija pelo motivo da linha; o detalhe de cada erro 500 fica no log `sss_web` (§14), com o id de ocorrência mostrado na tela |
-| "Requisição recusada." (HTTP 403) nos formulários | `requisicao rejeitada (reason=origem ...)` | URL de acesso fora de `allowed_origins` | §10.4 |
-| Idem | `reason=csrf` | Página aberta há muito tempo | Recarregue e repita |
+| "Requisição recusada." (HTTP 403) nos formulários | `requisicao rejeitada (motivo=origem ...)` | URL de acesso fora de `allowed_origins` | §10.4 |
+| Idem | `motivo=csrf` | Página aberta há muito tempo | Recarregue e repita |
 | Ninguém entra por HTTP atrás de um proxy HTTPS | — | O proxy manda `X-Forwarded-Proto: https` e o cookie sai `Secure`, mas o navegador chega por HTTP | Acesse pela mesma URL do proxy, ou direto pela porta do `run_web.py` (§10.4) |
 | Um usuário não entra: "Houve muitas tentativas com a senha errada..." | — | Bloqueio após `login_max_attempts` | Aguarde `login_lockout_s` ou desbloqueie em Gestão de Usuários |
-| `Socket 127.0.0.1:18000 in use by other process` | `var/web0001/logs/web0001.out` | Porta ocupada | `ss -ltnp \| grep :18000` |
+| `CRITICAL servidor web nao subiu em 127.0.0.1:18000: ...` (o web sai com código 3) | log `sss_web_<PID>.log` (ou `var/web0001/logs/web0001.out`) | Porta ocupada | `ss -ltnp \| grep :18000` |
 
 ### 15.7 Keepalive, saúde e pacote
 
