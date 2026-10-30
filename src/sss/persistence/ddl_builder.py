@@ -5,6 +5,7 @@ Gera instrucoes DDL fase a fase, sem importar drivers Oracle nem depender do web
 Totalmente idempotente e aderente ao README §9, §10, §11.1 e AGENTS §4.
 """
 import collections
+import re
 import unicodedata
 
 from sss.core import sql_ident
@@ -69,6 +70,26 @@ DEFAULT_USERS = (
     ("op.hml", "Operador Homologacao", "OPERATOR_HML"),
     ("consulta", "Auditor e Consulta", "READ_ONLY"),
 )
+
+# Login do --admin-login: a mesma regra dos logins da tela (admin_users_service).
+_RE_SEED_LOGIN = re.compile(r"[a-z0-9._-]{3,30}")
+
+
+def seed_users(admin_login=None, admin_name=None):
+    """Usuarios do seed: (login, nome, perfil, alvo). O alvo recebe a senha e o nome informados (decisao 18 B):
+    o admin sem --admin-login ou com --admin-login admin; com outro login, um usuario a mais no perfil ADMINISTRATOR,
+    e o admin fica como os demais. ValueError com login invalido ou de outro usuario do seed."""
+    target = admin_login or "admin"
+    if not _RE_SEED_LOGIN.fullmatch(target):
+        raise ValueError("--admin-login invalido: use de 3 a 30 caracteres a-z, 0-9, ponto, _ ou -")
+    if any(login == target and profile != "ADMINISTRATOR" for login, _name, profile in DEFAULT_USERS):
+        raise ValueError("--admin-login %s e um usuario do seed com outro perfil" % target)
+    users = [(login, admin_name if (login == target and admin_name) else name, profile, login == target)
+             for login, name, profile in DEFAULT_USERS]
+    if target not in [u[0] for u in DEFAULT_USERS]:
+        users.append((target, admin_name or "Administrador", "ADMINISTRATOR", True))
+    return users
+
 
 # Hash PBKDF2 da senha padrao de homologacao/demonstracao (senha: Sss@Homolog2026!)
 HOMOLOGATION_DEFAULT_PASSWORD_HASH = "pbkdf2_sha256$200000$8007db1bd770663178d0f1b1a129140c$9d9604af27e21326e982e5e7c64bfdd868c0995a97181b5a9695149755852d63"
@@ -1246,9 +1267,8 @@ def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admi
     tb_usr = "{}.{}".format(owner, schema["users"]["tabela"])
     sq_usr = "{}.{}".format(owner, schema["users"]["sequence"])
 
-    for u_login, u_name, u_profile in DEFAULT_USERS:
-        name_final = admin_name if (u_login == "admin" and admin_name) else u_name
-        hash_final = admin_password_hash if (u_login == "admin" and admin_password_hash) else HOMOLOGATION_DEFAULT_PASSWORD_HASH
+    for u_login, name_final, u_profile, target in seed_users(admin_login, admin_name):
+        hash_final = admin_password_hash if (target and admin_password_hash) else HOMOLOGATION_DEFAULT_PASSWORD_HASH
         sql_usr = (
             "MERGE INTO {tb_usr} dst\n"
             "USING (\n"

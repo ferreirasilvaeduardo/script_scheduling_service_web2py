@@ -43,6 +43,11 @@ def main(argv=None):
     parser.add_argument("--stdout", dest="stdout", choices=["deploy", "rollback", "validate", "grants"], default=None, help="Imprime no stdout")
 
     args = parser.parse_args(argv)
+    try:
+        ddl_builder.seed_users(args.admin_login, args.admin_nome)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
 
     # 1. Carrega configuracoes de owner e prefixo
     owner = args.owner

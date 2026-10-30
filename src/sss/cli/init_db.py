@@ -494,9 +494,8 @@ def _run_seed(conn, owner, prefix, admin_login=None, admin_name=None, admin_pass
           VALUES ({sq_usr}.NEXTVAL, :login, :name, :password_hash, src.profile_id, 'Y', 0, 0, SYSDATE, 'SYSTEM:init_db')
         """.format(tb_usr=tb_usr, sq_usr=sq_usr, tb_prf=tb_prf)
 
-        for u_login, u_name, u_profile in ddl_builder.DEFAULT_USERS:
-            name_final = admin_name if (u_login == "admin" and admin_name) else u_name
-            if u_login == "admin" and admin_password:
+        for u_login, name_final, u_profile, target in ddl_builder.seed_users(admin_login, admin_name):
+            if target and admin_password:
                 hash_final = security.hash_password(admin_password)
             else:
                 hash_final = ddl_builder.HOMOLOGATION_DEFAULT_PASSWORD_HASH
@@ -779,6 +778,13 @@ def main(argv=None):
         msg = "Falha de configuracao em identificadores Oracle: %s" % exc
         _log_critical_config(msg, cfg)
         print(msg, file=sys.stderr)
+        return 2
+
+    # --admin-login (decisao 18 B): login valido e que nao seja de outro usuario do seed, antes de pedir senha
+    try:
+        ddl_builder.seed_users(args.admin_login, args.admin_nome)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
         return 2
 
     # Trata --grants-to se fornecido

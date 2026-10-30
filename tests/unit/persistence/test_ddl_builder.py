@@ -472,6 +472,72 @@ class TestInitDbSeedMock(unittest.TestCase):
         self.assertEqual(ligados, sum(len(p[4]) for p in ddl_builder.DEFAULT_PROFILES))
 
 
+class TestAdminLogin(unittest.TestCase):
+    """Decisao 18 B: --admin-login X cria X no perfil ADMINISTRATOR com a senha informada; o admin fica como os
+    demais usuarios do seed. Login invalido ou de outro usuario do seed: codigo 2, antes de pedir senha."""
+
+    def test_seed_users(self):
+        padrao = ddl_builder.seed_users()
+        self.assertEqual([u[0] for u in padrao], [u[0] for u in ddl_builder.DEFAULT_USERS])
+        self.assertEqual([u[0] for u in padrao if u[3]], ["admin"])
+        renomeado = ddl_builder.seed_users("admin", "Fulano")
+        self.assertEqual(renomeado[0], ("admin", "Fulano", "ADMINISTRATOR", True))
+        novo = ddl_builder.seed_users("joao.silva", "Joao Silva")
+        self.assertEqual(novo[-1], ("joao.silva", "Joao Silva", "ADMINISTRATOR", True))
+        self.assertEqual(novo[0], ("admin", "Super Administrador", "ADMINISTRATOR", False))
+        self.assertEqual(ddl_builder.seed_users("ana")[-1][1], "Administrador")
+        for login in ("ab", "Joao", "joao silva", "x" * 31, "op.prod", "op.hml", "consulta"):
+            with self.assertRaises(ValueError, msg=login):
+                ddl_builder.seed_users(login)
+
+    def test_sql_gerado_cria_o_novo_administrador(self):
+        hash_novo = "pbkdf2_sha256$200000$" + "a" * 32 + "$" + "b" * 64
+        statements = ddl_builder.build_seed_statements("openrisow", "tbsss_", admin_login="joao.silva",
+                                                       admin_name="Joao Silva", admin_password_hash=hash_novo)
+        sql = "\n".join(statements)
+        bloco = [b for b in sql.split("MERGE INTO") if "'joao.silva' AS login" in b]
+        self.assertEqual(len(bloco), 1)
+        self.assertIn("p.name = 'ADMINISTRATOR'", bloco[0])
+        self.assertIn("'Joao Silva', '%s'" % hash_novo, bloco[0])
+        admin = [b for b in sql.split("MERGE INTO") if "'admin' AS login" in b][0]
+        self.assertIn(ddl_builder.HOMOLOGATION_DEFAULT_PASSWORD_HASH, admin)
+        self.assertIn("'Super Administrador'", admin)
+
+    def test_init_db_grava_a_senha_no_novo_administrador(self):
+        from sss.core import security
+        mock_conn = mock.MagicMock()
+        mock_cursor = mock.MagicMock()
+        mock_conn.cursor.return_value = mock_cursor
+        init_db._run_seed(mock_conn, "openrisow", "tbsss_", admin_login="joao.silva", admin_name="Joao Silva",
+                          admin_password="Senha@Forte2026!", log_fn=lambda x: None)
+        usuarios = {}
+        for chamada in mock_cursor.execute.call_args_list:
+            binds = chamada[0][1] if len(chamada[0]) > 1 else {}
+            if isinstance(binds, dict) and "password_hash" in binds:
+                usuarios[binds["login"]] = binds
+        self.assertEqual(sorted(usuarios), sorted(["admin", "op.prod", "op.hml", "consulta", "joao.silva"]))
+        self.assertEqual(usuarios["joao.silva"]["profile"], "ADMINISTRATOR")
+        self.assertEqual(usuarios["joao.silva"]["name"], "Joao Silva")
+        self.assertTrue(security.verify_password("Senha@Forte2026!", usuarios["joao.silva"]["password_hash"]))
+        self.assertEqual(usuarios["admin"]["password_hash"], ddl_builder.HOMOLOGATION_DEFAULT_PASSWORD_HASH)
+
+    def test_clis_recusam_login_invalido_com_codigo_2(self):
+        from sss.cli import generate_sql
+        with tempfile.TemporaryDirectory() as tmp:
+            for login in ("op.hml", "AB"):
+                with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+                    self.assertEqual(generate_sql.main(["--admin-login", login, "--out-dir", tmp]), 2)
+                self.assertIn("--admin-login", err.getvalue())
+                with mock.patch("sys.stderr", new_callable=io.StringIO), \
+                        mock.patch("getpass.getpass", side_effect=AssertionError("nao pede senha")):
+                    self.assertEqual(init_db.main(["--config", _EXAMPLE_CONFIG, "--admin-login", login]), 2)
+            self.assertEqual(os.listdir(tmp), [])
+            with mock.patch("sys.stdout", new_callable=io.StringIO):
+                self.assertEqual(generate_sql.main(["--admin-login", "joao.silva", "--out-dir", tmp]), 0)
+            with open(os.path.join(tmp, "01_deploy_sss_openrisow_tbsss.sql"), encoding="ascii") as f:
+                self.assertIn("'joao.silva' AS login", f.read())
+
+
 class TestDdlSeedAndRollback(unittest.TestCase):
     """Testes unitarios da geracao de scripts DML Seed, Rollback e CLI de geracao SQL."""
 
