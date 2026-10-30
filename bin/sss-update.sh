@@ -37,13 +37,15 @@ if [ ! -f "${SUMS}" ]; then
     exit 2
 fi
 
-# 1. Nada do SSS rodando a partir desta pasta: um python cujo argumento e um dos comandos do SSS (os launchers
-# fazem exec de "<python> scripts/<comando>.py"), com o cwd na raiz.
+# 1. Nada do SSS rodando a partir desta pasta: um python (python* ou o executavel do PYTHON configurado, ex.: o
+# platform-python do RHEL 8) cujo argumento e um dos comandos do SSS (os launchers fazem exec de
+# "<python> scripts/<comando>.py"), com o cwd na raiz.
+PYTHON_BASE="$(basename "${PYTHON:-python3}")"
 for proc in /proc/[0-9]*; do
     args=()
     while IFS= read -r -d '' arg; do args+=("${arg}"); done < <(cat "${proc}/cmdline" 2>/dev/null || true)
     [ "${#args[@]}" -ge 2 ] || continue
-    case "$(basename "${args[0]}")" in python*) ;; *) continue ;; esac
+    case "$(basename "${args[0]}")" in python*|"${PYTHON_BASE}") ;; *) continue ;; esac
     sss=""
     for arg in "${args[@]:1}"; do
         case "${arg}" in

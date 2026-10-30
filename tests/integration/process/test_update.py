@@ -73,9 +73,10 @@ class TestUpdate(unittest.TestCase):
         _write(os.path.join(dist, "SHA256SUMS"), "%s  %s\n" % (_sha(tar), os.path.basename(tar)))
         return tar
 
-    def _run(self, *args):
+    def _run(self, *args, env=None):
         p = subprocess.run([os.path.join(self.app, "bin", "sss-update.sh")] + list(args),
-                           cwd="/", stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
+                           cwd="/", stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120,
+                           env=env)
         out, err = (b.decode("utf-8", "replace") for b in (p.stdout, p.stderr))
         return p.returncode, out, err
 
@@ -173,6 +174,21 @@ class TestUpdate(unittest.TestCase):
         self.assertEqual(code, 3, err)
         self.assertIn("processo do SSS em execucao", err)
         self.assertIn("v1", _read(os.path.join(self.app, "src", "sss", "versao.txt")))
+
+    def test_recusa_com_python_de_outro_nome(self):
+        """O executavel do PYTHON com nome que nao comeca por python (ex.: platform-python do
+        RHEL 8) tambem conta como processo do SSS no ar."""
+        _write(os.path.join(self.app, "scripts", "run_web.py"), "import time\ntime.sleep(30)\n")
+        link = os.path.join(self.app, "..", "platform-python")
+        os.symlink(sys.executable, link)
+        self.addCleanup(os.unlink, link)
+        proc = subprocess.Popen([link, "scripts/run_web.py"], cwd=self.app)
+        self.addCleanup(proc.wait)
+        self.addCleanup(proc.kill)
+        time.sleep(0.5)
+        code, _out, err = self._run(self._package("v2"), env=dict(os.environ, PYTHON=link))
+        self.assertEqual(code, 3, err)
+        self.assertIn("processo do SSS em execucao", err)
 
 
 if __name__ == "__main__":

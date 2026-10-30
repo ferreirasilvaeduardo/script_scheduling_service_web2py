@@ -55,6 +55,8 @@ _valid_ipv4() {
     return 0
 }
 
+PYTHON_BASE="$(basename "${PYTHON:-python3}")"
+
 # Algum python rodando scripts/<comando>.py --name <nome> a partir desta raiz?
 _running() {
     local name="$1" script="$2" proc args arg sss prev cwd
@@ -62,7 +64,8 @@ _running() {
         args=()
         while IFS= read -r -d '' arg; do args+=("${arg}"); done < <(cat "${proc}/cmdline" 2>/dev/null || true)
         [ "${#args[@]}" -ge 3 ] || continue
-        case "$(basename "${args[0]}")" in python*) ;; *) continue ;; esac
+        # Um python*, ou o executavel do PYTHON configurado com outro nome (ex.: o platform-python do RHEL 8).
+        case "$(basename "${args[0]}")" in python*|"${PYTHON_BASE}") ;; *) continue ;; esac
         sss=""
         prev=""
         for arg in "${args[@]:1}"; do

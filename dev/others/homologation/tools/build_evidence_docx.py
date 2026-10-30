@@ -822,6 +822,50 @@ RODADAS["20261029_r6"] = dict(RODADAS["20261029_r4"], **{
         u"O banco não foi recriado: o admin já estava com a senha escolhida (SSS_ADMIN_START=new).",
     ],
 })
+RODADAS["20261030_r2"] = dict(RODADAS["20261029_r5"], **{
+    "commit": u"78fcd99 (PATH do filho com a pasta do Python do agente, decisao 13 A) instalado no DEV do servidor "
+              u"brtlvlty3067sl pelo sss-update.sh; o roteiro remoto no mesmo commit",
+    "instalacao": u"DEV do servidor brtlvlty3067sl (CentOS 6), prefixo s3dev_",
+    "endereco": u"127.0.0.1:18000 no 3067, pelo túnel do bastion",
+    "python": u"3.8.5 (Sparta)",
+    "web": u"Servidor web do DEV do 3067 subido pelo bin/sss-keepalive.sh web0001:18000 (Python 3.8.5 do Sparta, "
+           u"driver cx_Oracle com o cliente 12.2), acessado desta máquina pelo túnel do bastion "
+           u"(dev/others/notas/sss-tunel-3067).",
+    "agente": u"Agentes agente0001 a agente0005 do 3067 (um por ambiente), subidos pelo bin/sss-keepalive.sh, com "
+              u"os avisos de locale (en_US.utf8 no lugar do C.UTF-8), de cliente 12.2 e de falta do call_timeout.",
+    "seed_scripts": u"Scripts do seed em scripts_ambiente/utilitarios (0444/0555) e os de diagnóstico em "
+                    u"scripts_ambiente/diagnostico, com o #! do interp_py36.py apontando para o Python 3.8.5 do Sparta.",
+    "defeitos": [
+        (u"Agente caía com locale -a em Latin-1", u"posix._run_short",
+         u"No CentOS 6 o locale -a lista nomes em Latin-1 (bokm\u00e5l): UnicodeDecodeError na subida.",
+         u"Saída lida em bytes e decodificada com substituição (37a1811)."),
+        (u"Agente recusava a subida sem C.UTF-8", u"scheduler_loop / posix.pick_child_locale",
+         u"O child_locale fixo C.UTF-8 não existe no CentOS 6.", u"Locale substituto com WARNING (decisão 9 B, 4b2f535)."),
+        (u"Cliente Oracle 12.2 recusado", u"db_conn", u"Exigia o Instant Client 19.",
+         u"Outra versão só avisa (decisão 10 A, 2a9b6fe)."),
+        (u"DPI-1050 na conexão com cliente 12.2", u"db_conn.configure_session",
+         u"O call_timeout exige cliente 18.1+; o hasattr já levantava o erro.",
+         u"Sessão sem call_timeout, com WARNING (decisão 11 B, 5543c31 e 724203d)."),
+        (u"#!/usr/bin/env python3 sem python3 no PATH do filho", u"env_builder",
+         u"A rodada 1 deste servidor teve 12 falhas: os utilitários Python do seed caíam com "
+         u"env: python3: No such file (o filho rodava com PATH=/usr/bin:/bin e o 3067 não tem /usr/bin/python3).",
+         u"PATH do filho com a pasta do Python do agente no fim (decisão 13 A, 78fcd99)."),
+    ],
+    "observacoes": [
+        u"Primeira homologação fora da máquina de desenvolvimento: o DEV do servidor brtlvlty3067sl (CentOS 6, "
+        u"Python 3.8.5 do Sparta, cliente Oracle 12.2), instalado pelo roteiro docs/DEPLOYMENT-SERVER.md. O "
+        u"roteiro rodou nesta máquina, com o navegador pelo túnel e o disco do servidor lido por ssh "
+        u"(SSS_REMOTE_HOST e SSS_REMOTE_JUMP). Marca %s." % STAMP,
+        u"CT-32 com os interpretadores do 3067: #! do Python 3.8.5 do Sparta, digitado /usr/bin/python2.6, "
+        u"nome python3.8 e o virtualenv ~/.sss_homolog_venv; o #!/usr/bin/env python3 acha o Python do agente.",
+        u"Massa reduzida: lote de 2 GB (o /portaloptrib tinha 7,4 GB livres), gerada no próprio servidor.",
+        u"A rodada 2 teve 350/352: a MASSA e o CT-04 contaram um script a mais (diag_pasta_arquivos, que a "
+        u"rodada 1 deixou ativo ao parar no CT-33 por uma falha de conexão do ssh). O CT-33 da rodada 2 o "
+        u"desativou; a MASSA e o CT-04 foram repetidos (11/11 e 8/8).",
+        u"O admin começou na senha inicial do seed na rodada 1 (trocada no CT-01) e na senha escolhida na rodada 2 "
+        u"(SSS_ADMIN_START=new).",
+    ],
+})
 RODADA = RODADAS[RUN_TAG]
 ADAPTACAO.update(RODADA["adaptacao"])
 RESSALVA = RODADA["ressalva"]

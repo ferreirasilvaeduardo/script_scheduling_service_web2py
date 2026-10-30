@@ -409,6 +409,7 @@ bin/sss-scheduler.sh agente0001            # instance/agente0001/config.ini (CR-
 * O launcher aceita o nome do processo ou `--config <arquivo>`. Sem nada, o `run_scheduler.py` sai com código 2 e lista os processos de `instance/` (CR-029: não há config padrão); qualquer outro argumento também sai com código 2.
 * Subida bem-sucedida, no log da aplicação (`var/<nome>/logs/internal/app/AAAA/MM/DD/HH/MI/sss_scheduler_<PID>.log`):
   ```text
+  INFO ... [action=INICIO] interpretadores no PATH do agente: python -> /usr/bin/python (3.12.3); python3 -> /usr/bin/python3 (3.12.3)
   INFO ... [action=INICIO] tempos do fencing: fence_timeout_s=90 node_offline_timeout_s=180
   INFO ... [action=INICIO] driver=oracledb modo=thin servidor=19.24.0.0.0 cliente=-
   INFO ... [action=INICIO] agente inicializado (versao 1.0.0-dev, 0 grupo(s) em encerramento, 0 pasta(s) preservada(s))
@@ -457,7 +458,7 @@ kill -TERM $(ps -eo pid,args | grep '[p]ython3 scripts/run_web.py --name web0001
 bin/sss-keepalive.sh --resume agente0001    # volta a subir na proxima passada
 ```
 
-* Para cada nome, confere se há um `python` rodando `scripts/run_web.py` ou `scripts/run_scheduler.py` com `--name <nome>` a partir da `<RAIZ>`. Se não houver, sobe pelo launcher, em segundo plano (`nohup`), e grava em `var/<nome>/logs/keepalive.log` uma linha por subida, recusa ou falha. A saída do processo vai para `var/<nome>/logs/<nome>.out`.
+* Para cada nome, confere se há um Python (`python*` ou o executável do `PYTHON` com outro nome, como o `platform-python` do RHEL 8) rodando `scripts/run_web.py` ou `scripts/run_scheduler.py` com `--name <nome>` a partir da `<RAIZ>`. Se não houver, sobe pelo launcher, em segundo plano (`nohup`), e grava em `var/<nome>/logs/keepalive.log` uma linha por subida, recusa ou falha. A saída do processo vai para `var/<nome>/logs/<nome>.out`.
 * O papel vem do `config.ini` (`[web]` sem `[agent]`: web). O web atende em `127.0.0.1` ou no endereço da linha, na porta informada (§10.4); um endereço que não é IPv4 é recusado (`recusado: endereco invalido`, código 3).
 * As linhas do `crontab` estão no §4.0 (`@reboot` e a cada 5 minutos). Recusa root (código 1) e uso inválido (2); sai com 3 se algum processo não subiu (veja o `.out`).
 * Na atualização (§18.1), pause os processos antes de parar e retome depois de subir.
@@ -726,7 +727,7 @@ O código é trocado **no lugar** pelo `bin/sss-update.sh`. `instance/`, `var/` 
    <RAIZ>/bin/sss-update.sh sss-<versao>.tar.gz
    # a última linha mostra o comando de retorno: <RAIZ>/bin/sss-update.sh <RAIZ>/var/update/<data>/sss-retorno-<data>.tar.gz
    ```
-   O comando confere o pacote (`SHA256SUMS` externo e interno) e recusa root (código 1), pacote inválido ou sem permissão para criar `var/update/` (código 2, nada muda) e um `python` rodando um comando do SSS a partir da `<RAIZ>` neste servidor (código 3, nada muda). Ele guarda o código atual num pacote de retorno, no mesmo formato, em `var/update/<data>/`, e troca só `bin/`, `docs/`, `scripts/`, `src/`, `AGENTS.md`, `README.md`, `SHA256SUMS` e `instance/exemplos/`. A extração e o código anterior ficam em `<RAIZ>/.update-<data>/` (mesma partição da raiz: a troca é por renomeação), apagada no sucesso. Código 4: falha no meio da troca; o código anterior fica em `.update-<data>/anterior/` e o retorno é o pacote impresso.
+   O comando confere o pacote (`SHA256SUMS` externo e interno) e recusa root (código 1), pacote inválido ou sem permissão para criar `var/update/` (código 2, nada muda) e um Python (`python*` ou o executável do `PYTHON`) rodando um comando do SSS a partir da `<RAIZ>` neste servidor (código 3, nada muda). Ele guarda o código atual num pacote de retorno, no mesmo formato, em `var/update/<data>/`, e troca só `bin/`, `docs/`, `scripts/`, `src/`, `AGENTS.md`, `README.md`, `SHA256SUMS` e `instance/exemplos/`. A extração e o código anterior ficam em `<RAIZ>/.update-<data>/` (mesma partição da raiz: a troca é por renomeação), apagada no sucesso. Código 4: falha no meio da troca; o código anterior fica em `.update-<data>/anterior/` e o retorno é o pacote impresso.
    * **`bin/` é trocado inteiro:** um arquivo local que você tenha posto em `bin/` some (fica só no pacote de retorno). Guarde scripts próprios fora do código, por exemplo em `scripts_ambiente/`.
    * **Pacotes de retorno:** `var/update/<data>/` não é apagado sozinho. Depois de validar a versão nova, apague à mão os que não quiser guardar.
 4. Compare o `instance/common.ini` e cada `instance/<nome>/config.ini` com os modelos novos (`diff instance/exemplos/agente0001/config.ini.example instance/agente0001/config.ini`). Chave obrigatória nova ou removida aparece na subida como `configuracao invalida` (§15.1); chave retirada só gera aviso.

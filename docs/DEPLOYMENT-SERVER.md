@@ -130,7 +130,14 @@ PYTHON=<caminho escolhido>
 "$PYTHON" -c "import hashlib, time; t=time.time(); hashlib.pbkdf2_hmac('sha256', b'a', b'b', 200000); print('PBKDF2 200000: %.1f s' % (time.time()-t))"
 ```
 
+Para onde apontam os nomes `python` e `python3` do cadastro de scripts (o agente os procura no `PATH` dele; o `crontab` do passo 14 põe a pasta do `PYTHON` na frente):
+
+```bash
+for i in python python3; do printf '%s -> ' $i; p=$(PATH="$(dirname "$PYTHON"):$PATH" command -v $i) && echo "$p ($("$p" -V 2>&1))" || echo "nao existe"; done
+```
+
 * `stdlib OK` é obrigatório. Sem ele, **pare**: o Python não serve.
+* Se `python` for o Python 2, cadastre os scripts Python 3 como `python3` (o `python` do cadastro rodaria no 2). O agente também avisa na subida: `WARNING ... o interpretador "python" do cadastro e o Python 2.x`.
 * PBKDF2 acima de 3 s: cada login demora isso. Registre e prefira outro Python, se houver.
 
 ### 3.3 Driver e cliente Oracle
@@ -714,6 +721,7 @@ O resto do arquivo (a parte "derivados" e a função `sss_tipo`) é o do passo 0
 | Cliente 12.2 | O agente exigia o Instant Client 19 e recusava a subida (`Exigido major 19`), embora o `check_env` conectasse. Decisão 10 A (30/10): outra versão só avisa (WARNING no log e AVISO no `check_env`) |
 | Cliente 12.2 e `call_timeout` | Com o aviso da decisão 10, os agentes chegaram à conexão e caíram com `DPI-1050` (o prazo por chamada exige cliente 18.1+). Decisão 11 B (30/10): abaixo do 18.1 a sessão segue sem `call_timeout`, com WARNING. Testado no 3067 com o cliente 12.2 (conexão, `SELECT` e pool com `ping_interval`); o `/opt/oracle/client_11` não tem `lib/` e não foi testado. O `/opt/oracle/19c` é só o instalador do cliente 32 bits; o Instant Client 19 de 64 bits exige glibc 2.14 |
 | `PATH` do cron | O `python3` dos scripts é o do Sparta (`/portaloptrib/TESHUVA/sparta/python3.8/bin`), fora do `PATH` curto do cron, e `python` é o 2.6 de `/usr/bin`. O passo 14 grava o `PATH` com a pasta do `PYTHON` na frente. Sem `/usr/bin/python3`, o `#!/usr/bin/env python3` dos utilitários do seed falhava (`env: python3: No such file`), porque o filho rodava com `PATH=/usr/bin:/bin`: a homologação de 30/10 achou isso em 11 verificações. Decisão 13 A: o `PATH` do filho ganha, no fim, a pasta do Python do agente |
+| `python` e `python3` | Pelo passo 3.2: `python -> /usr/bin/python (Python 2.6.6)`, `python3 -> /portaloptrib/TESHUVA/sparta/python3.8/bin/python3 (Python 3.8.5)`. Cadastre os scripts Python como `python3`; o agente avisa na subida (`WARNING ... o interpretador "python" do cadastro e o Python 2.6.6`) |
 | Umask da conta | `002` (os arquivos transferidos chegaram `664`): o passo 7 usa `umask 027` |
 | Locale | Sem `C.UTF-8`; existem `en_US.utf8` e `pt_BR.utf8` (escolhido `en_US.utf8`, que mantém ponto decimal e mensagens do sistema em inglês nos scripts). A sessão SSH mostra `Cannot set LC_CTYPE to default locale`: o locale da estação não existe no servidor, sem efeito no SSS, que exporta o seu |
 | SSS antigo | `web2py.py` na porta 8000 desde 17/10, pasta `/home/mastersafgf/sss/web2py` (anterior ao CR-021); `crontab` sem SSS |

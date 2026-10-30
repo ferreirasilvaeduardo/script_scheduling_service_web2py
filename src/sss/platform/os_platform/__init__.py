@@ -43,6 +43,7 @@ from sss.platform.os_platform.posix import (  # noqa: E402,F401
                                             clean_output,
                                             locale_available,
                                             pick_child_locale,
+                                            interpreter_versions,
                                             process_exists,
                                             reopen_group,
                                             signal_group,

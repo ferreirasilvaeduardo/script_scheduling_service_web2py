@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import resource
+import shutil
 import signal
 import stat
 import subprocess
@@ -275,11 +276,18 @@ def _normalize_locale(name):
     return (name or "").strip().lower().replace("-", "")
 
 
+def _locale_command():
+    """O `locale` em /usr/bin (o comum) ou, sem ele, o do PATH do agente (outros Unix)."""
+    if os.path.isfile("/usr/bin/locale"):
+        return "/usr/bin/locale"
+    return shutil.which("locale") or "/usr/bin/locale"
+
+
 def locale_available(name, run=None):
     """True se o locale consta em `locale -a` (README §8.12 passo 2; CR-007 R-17). C.UTF-8 = C.utf8."""
     run = run or _run_short
     try:
-        code, output = run(["/usr/bin/locale", "-a"])
+        code, output = run([_locale_command(), "-a"])
     except OSError:  # sem o comando locale: nao da para confirmar
         return False
     target = _normalize_locale(name)
@@ -295,7 +303,7 @@ def pick_child_locale(name, run=None):
     C, en_US, pt_BR e os demais em ordem alfabetica (ex.: CentOS 6, sem C.UTF-8). None: nenhum UTF-8."""
     run = run or _run_short
     try:
-        code, output = run(["/usr/bin/locale", "-a"])
+        code, output = run([_locale_command(), "-a"])
     except OSError:  # sem o comando locale: nao da para escolher
         return None
     if code != 0:
@@ -311,6 +319,27 @@ def pick_child_locale(name, run=None):
             return found[preferred]
     others = sorted(found[key] for key in found if key.endswith(".utf8"))
     return others[0] if others else None
+
+
+def interpreter_versions(names=("python", "python3"), run=None, which=None):
+    """Para cada nome, (nome, caminho no PATH do agente ou None, versao "X.Y.Z" ou None): o que o cadastro
+    python/python3 usaria neste servidor. O Python 2 escreve a versao no stderr (o _run_short junta os dois)."""
+    run = run or _run_short
+    which = which or shutil.which
+    found = []
+    for name in names:
+        path = which(name)
+        version = None
+        if path:
+            try:
+                code, output = run([path, "-V"])
+            except (OSError, subprocess.SubprocessError):  # sem como rodar: so o caminho
+                code, output = 1, ""
+            words = output.split()
+            if code == 0 and len(words) >= 2 and words[0] == "Python":
+                version = words[1]
+        found.append((name, path, version))
+    return found
 
 
 def is_privileged_user():

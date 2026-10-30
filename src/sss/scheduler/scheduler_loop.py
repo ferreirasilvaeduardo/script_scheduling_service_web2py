@@ -223,10 +223,22 @@ class Agent(object):
                              agent.child_locale, chosen)
             self.cfg = self.cfg._replace(agent=agent._replace(child_locale=chosen))
             agent = self.cfg.agent
+        self._log_interpreters()
         db_conn.connection_budget_s(self.cfg.oracle.dsn, sss_config.call_timeout_s(self.cfg.oracle.call_timeout_ms))
         # Conferencia entre nos no E2E (README §8.9, "Mesmos tempos em todos os nos").
         self.log.info("tempos do fencing: fence_timeout_s=%s node_offline_timeout_s=%s",
                       agent.fence_timeout_s, agent.node_offline_timeout_s)
+
+    def _log_interpreters(self):
+        """O python e o python3 do cadastro neste servidor (PATH do agente); python que e Python 2: WARNING."""
+        found = self.plat.interpreter_versions()
+        self.log.info("interpretadores no PATH do agente: %s", "; ".join(
+            "%s -> %s" % (name, "%s (%s)" % (path, version or "versao desconhecida") if path else "nao encontrado")
+            for name, path, version in found), extra={"action": "INICIO"})
+        for name, path, version in found:
+            if name == "python" and version and version.startswith("2."):
+                self.log.warning('o interpretador "python" do cadastro e o Python %s (%s): cadastre scripts '
+                                 'Python 3 como python3', version, path, extra={"action": "INICIO"})
 
     def _step3_secrets(self):
         if self.secrets is not None:

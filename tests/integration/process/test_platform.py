@@ -356,6 +356,40 @@ class TestLockStopPrivilege(unittest.TestCase):
         self.assertEqual(os_platform.pick_child_locale("C.UTF-8", run=run), "en_US.utf8")
         self.assertEqual(os_platform.pick_child_locale("pt_BR.UTF-8", run=run), "pt_BR.UTF-8")
 
+    def test_comando_locale_fora_de_usr_bin(self):
+        # Outros Unix: sem /usr/bin/locale, o do PATH do agente.
+        with mock.patch.object(posix.os.path, "isfile", return_value=True):
+            self.assertEqual(posix._locale_command(), "/usr/bin/locale")
+        with mock.patch.object(posix.os.path, "isfile", return_value=False), \
+                mock.patch.object(posix.shutil, "which", return_value="/opt/sfw/bin/locale"):
+            self.assertEqual(posix._locale_command(), "/opt/sfw/bin/locale")
+        seen = []
+
+        def run(argv):
+            seen.append(argv)
+            return 0, "C.utf8\n"
+        with mock.patch.object(posix, "_locale_command", return_value="/opt/sfw/bin/locale"):
+            self.assertEqual(os_platform.pick_child_locale("C.UTF-8", run=run), "C.UTF-8")
+        self.assertEqual(seen, [["/opt/sfw/bin/locale", "-a"]])
+
+    def test_versoes_dos_interpretadores_do_cadastro(self):
+        paths = {"python": "/usr/bin/python", "python3": "/opt/py/bin/python3"}
+        outputs = {"/usr/bin/python": (0, "Python 2.6.6\n"), "/opt/py/bin/python3": (0, "Python 3.8.5\n")}
+        found = os_platform.interpreter_versions(run=lambda argv: outputs[argv[0]], which=paths.get)
+        self.assertEqual(found, [("python", "/usr/bin/python", "2.6.6"), ("python3", "/opt/py/bin/python3", "3.8.5")])
+        # Ausente, saida estranha e erro ao rodar: caminho sem versao, sem excecao.
+
+        def broken(argv):
+            raise OSError("sem permissao")
+        self.assertEqual(os_platform.interpreter_versions(run=broken, which=paths.get),
+                         [("python", "/usr/bin/python", None), ("python3", "/opt/py/bin/python3", None)])
+        self.assertEqual(os_platform.interpreter_versions(run=lambda argv: (0, "x"), which=lambda n: None),
+                         [("python", None, None), ("python3", None, None)])
+        # O real desta maquina: o python3 dos testes responde com a versao.
+        real = dict((n, (p, v)) for n, p, v in os_platform.interpreter_versions(names=("python3",)))
+        if real["python3"][0]:
+            self.assertTrue(real["python3"][1] and real["python3"][1].startswith("3."), real)
+
     def test_escolha_do_locale_dos_scripts(self):
         def listing(text, code=0):
             return lambda argv: (code, text)

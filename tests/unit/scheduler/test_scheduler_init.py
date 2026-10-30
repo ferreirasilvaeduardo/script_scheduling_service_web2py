@@ -240,6 +240,24 @@ class TestSteps(_Base):
         # Sem nenhum locale UTF-8 no servidor: recusa.
         self.failure(sl.EXIT_CONFIG, self.agent(plat=_Plat(pick_child_locale=lambda name: None)))
 
+    def test_interpretadores_do_cadastro_no_log(self):
+        # python que e Python 2 (ex.: CentOS 6): WARNING; python3 so no log.
+        found = [("python", "/usr/bin/python", "2.6.6"), ("python3", "/opt/py/bin/python3", "3.8.5")]
+        ag = self.agent(plat=_Plat(interpreter_versions=lambda: found))
+        with self.assertLogs("sss_scheduler", "INFO") as logs:
+            ag.initialize()
+        text = "\n".join(logs.output)
+        self.assertIn("python -> /usr/bin/python (2.6.6); python3 -> /opt/py/bin/python3 (3.8.5)", text)
+        self.assertIn('WARNING:sss_scheduler:o interpretador "python" do cadastro e o Python 2.6.6', text)
+        ag.release_resources()
+        ag3 = self.agent(plat=_Plat(interpreter_versions=lambda: [("python", "/usr/bin/python", "3.12.1"),
+                                                                     ("python3", None, None)]))
+        with self.assertLogs("sss_scheduler", "INFO") as logs:
+            ag3.initialize()
+        text = "\n".join(logs.output)
+        self.assertIn("python3 -> nao encontrado", text)
+        self.assertNotIn("cadastre scripts", text)
+
     def test_locale_substituto(self):
         # Servidor sem C.UTF-8 (ex.: CentOS 6): os scripts usam o substituto, com WARNING.
         ag = self.agent(plat=_Plat(pick_child_locale=lambda name: "en_US.utf8"))

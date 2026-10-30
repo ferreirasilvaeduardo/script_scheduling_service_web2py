@@ -46,8 +46,8 @@ class TestKeepalive(unittest.TestCase):
             except OSError:
                 pass
 
-    def _run(self, *args):
-        env = dict(os.environ, PYTHON=sys.executable)
+    def _run(self, *args, python=None):
+        env = dict(os.environ, PYTHON=python or sys.executable)
         command = [os.path.join(self.root, "bin", "sss-keepalive.sh")] + list(args)
         p = subprocess.run(command, cwd="/", env=env, stdout=subprocess.PIPE,
                            stderr=subprocess.PIPE, timeout=60)
@@ -72,6 +72,16 @@ class TestKeepalive(unittest.TestCase):
         self.assertEqual(code, 0, err)
         self.assertEqual((len(self._log("agente0001")), len(self._log("web0001"))), (1, 1),
                          "ja no ar: nada a subir")
+
+    def test_python_com_outro_nome(self):
+        """O executavel do PYTHON com nome que nao comeca por python (ex.: platform-python do
+        RHEL 8) tambem e reconhecido no ar: a segunda passada nao sobe outro."""
+        link = os.path.join(self.root, "platform-python")
+        os.symlink(sys.executable, link)
+        for _ in range(2):
+            code, _out, err = self._run("agente0001", python=link)
+            self.assertEqual(code, 0, err)
+        self.assertEqual(len(self._log("agente0001")), 1, "ja no ar: nada a subir")
 
     def test_pausa_e_retomada(self):
         self.assertEqual(self._run("--pause", "agente0001")[0], 0)
