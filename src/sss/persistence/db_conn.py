@@ -67,6 +67,22 @@ def _get_password(secrets):
     return ""
 
 
+def client_version_warning(c_view):
+    """Texto do aviso quando o cliente Oracle nao e o 19 recomendado (README §2.3); None se for o 19 ou desconhecido.
+
+    Decisao 10 A (2026-10-30): outra versao so avisa; se ela nao servir para o banco, o erro aparece na conexao."""
+    major = c_view[0] if (isinstance(c_view, (tuple, list)) and c_view) else None
+    if major is None or major == 19:
+        return None
+    return "cliente Oracle %s; o recomendado e o Instant Client 19 (README §2.3)" % ".".join(str(x) for x in c_view)
+
+
+def _warn_client_version(driver):
+    text = client_version_warning(driver.clientversion()) if hasattr(driver, "clientversion") else None
+    if text:
+        logger.warning(text, extra={"agent": "-", "ticket": "-", "action": "SELECAO_DRIVER"})
+
+
 def _log_critical(msg, cfg=None):
     """Registra falha fatal em CRITICAL conforme README §13 e AGENTS §2.2."""
     log_dir = None
@@ -261,15 +277,7 @@ def initialize(selection, cfg=None):
                 except Exception as exc:
                     if "already been initialized" not in str(exc):
                         raise
-
-                # Validacao de versao major do Instant Client 19 (README §2.3)
-                if hasattr(driver, "clientversion"):
-                    c_view = driver.clientversion()
-                    major = c_view[0] if (isinstance(c_view, (tuple, list)) and c_view) else None
-                    if major is not None and major != 19:
-                        msg = "Falha de configuracao: Oracle Instant Client versao %s invalida. Exigido major 19 (README §2.3)" % (c_view,)
-                        _log_critical(msg, cfg)
-                        raise RuntimeError(msg)
+                _warn_client_version(driver)
 
         elif candidate == "cx_oracle":
             import cx_Oracle
@@ -279,15 +287,7 @@ def initialize(selection, cfg=None):
             except Exception as exc:
                 if "already been initialized" not in str(exc):
                     pass
-
-            # Validacao de versao major do Instant Client 19 (README §2.3)
-            if hasattr(driver, "clientversion"):
-                c_view = driver.clientversion()
-                major = c_view[0] if (isinstance(c_view, (tuple, list)) and c_view) else None
-                if major is not None and major != 19:
-                    msg = "Falha de configuracao: Oracle Instant Client versao %s invalida. Exigido major 19 (README §2.3)" % (c_view,)
-                    _log_critical(msg, cfg)
-                    raise RuntimeError(msg)
+            _warn_client_version(driver)
         else:
             raise RuntimeError("Candidato de driver desconhecido: %s" % candidate)
 

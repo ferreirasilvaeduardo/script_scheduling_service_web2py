@@ -73,6 +73,19 @@ class TestCheckEnvDriver(unittest.TestCase):
         self.assertIn("CONEXAO_ACIMA_DO_PRAZO", logs.output[0])
         self.assertIn("Todos os pre-requisitos", text, "AVISO nao reprova o ambiente")
 
+    def test_cliente_fora_do_19_e_aviso(self):
+        # Decisao 10 A (2026-10-30): o cliente 12.2 do 3067 conecta; o 19 e so o recomendado.
+        sel = types.SimpleNamespace(candidate="cx_oracle", server_version="19.0.0.0.0",
+                                    driver_version="8.3.0", client_version="12.2.0.1.0")
+        _secrets, text = self._run("agent", mock.Mock(return_value=sel))
+        line = [r for r in text.splitlines() if "Cliente Oracle" in r][0]
+        self.assertIn("AVISO", line)
+        self.assertIn("cliente Oracle 12.2.0.1.0; o recomendado e o Instant Client 19", line)
+        self.assertIn("Todos os pre-requisitos", text, "AVISO nao reprova o ambiente")
+        sel.client_version = "19.27.0.0.0"
+        _secrets, text = self._run("agent", mock.Mock(return_value=sel))
+        self.assertNotIn("Cliente Oracle", text)
+
     def test_sem_processo_sai_com_2(self):
         # README §12.1: sem --name nem --config (CR-029, sem config padrao), codigo 2 antes
         # da tabela

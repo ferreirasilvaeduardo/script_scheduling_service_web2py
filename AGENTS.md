@@ -68,7 +68,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
   | 3.6 | `python-oracledb 1.x` (`< 2.0`) | `cx_Oracle 8.3` |
   | 3.7 a 3.13 | `python-oracledb 2.x` | `cx_Oracle 8.3` (até 3.10) |
 
-  * Modos Thick e cx_Oracle usam o **Oracle Instant Client 19.x**, obrigatório em todos os nós.
+  * Modos Thick e cx_Oracle usam um cliente Oracle; o recomendado é o **Instant Client 19.x**. Outra versão só gera WARNING na carga do driver e AVISO no `check_env` (`db_conn.client_version_warning`, decisão 10 A de 2026-10-30), nunca recusa.
   * **A biblioteca `cryptography` não é usada nem pode virar dependência.** Só o modo Thin precisa dela; o projeto usa `driver_mode = thick` (recomendado nos modelos de `instance/exemplos/` e no DEV), e nenhum módulo importa `cryptography`.
   * A seleção é feita por `[oracle] driver_mode` (`auto` = Thin → Thick → cx_Oracle), sempre por **sondagem em subprocesso** antes da primeira conexão do processo (README §2.3). É proibido tentar um modo e "cair" para outro dentro do mesmo processo.
   * Erro de autenticação interrompe a cadeia (não pode consumir tentativas de login no banco).

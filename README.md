@@ -45,7 +45,7 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 |---|---|---|
 | Driver (Python 3.6) | `python-oracledb 1.x` (`< 2.0`); contingência `cx_Oracle 8.3` | A série 2.x exige Python 3.7+ |
 | Driver (Python 3.7 a 3.13) | `python-oracledb 2.x`; contingência `cx_Oracle 8.3` (até 3.10) | — |
-| Cliente C (modos Thick e cx_Oracle) | **Oracle Instant Client 19.x** (Linux ou Unix, conforme o nó) | Conecta do 11.2.0.4 ao 23ai. O IC 21c/23ai não conecta ao 11gR2. **Obrigatório em todos os nós**, inclusive no DEV: o projeto conecta pelo Thick ou pelo cx_Oracle |
+| Cliente C (modos Thick e cx_Oracle) | **Oracle Instant Client 19.x** recomendado (Linux ou Unix, conforme o nó) | Conecta do 11.2.0.4 ao 23ai. O IC 21c/23ai não conecta ao 11gR2. Um cliente em todos os nós, inclusive no DEV: o projeto conecta pelo Thick ou pelo cx_Oracle. **Outra versão só avisa** (decisão 10 A, 2026-10-30): WARNING `cliente Oracle <versao>; o recomendado e o Instant Client 19` na carga do driver e AVISO no `check_env`; se ela não servir para o banco, o erro aparece na conexão (ex.: o cliente 12.2 do servidor 3067 conecta ao banco 19c) |
 | `cryptography` | **não usada** | O projeto não depende da biblioteca `cryptography`. Só o modo Thin do `python-oracledb` precisa dela, e ele fica fora de uso (`driver_mode = thick`) |
 
 **Seleção do driver (CR-002, `[oracle] driver_mode`):**

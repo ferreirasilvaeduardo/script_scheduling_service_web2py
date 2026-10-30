@@ -274,8 +274,8 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
                 self.assertIn("python-oracledb 2.x nao e compativel com Python 3.6", str(ctx.exception))
                 self.assertTrue(any("CRITICAL" in m and "python-oracledb 2.x" in m for m in cm.output))
 
-    def test_recusa_instant_client_diferente_de_19(self):
-        """Thick e cx_Oracle recusam Instant Client diferente de 19 com CRITICAL (README §2.3)."""
+    def test_instant_client_diferente_de_19_so_avisa(self):
+        """Thick e cx_Oracle com Instant Client diferente de 19: WARNING, sem recusar (decisao 10 A; README §2.3)."""
         # Teste 1: oracledb Thick com IC 21
         mock_oracledb = mock.MagicMock()
         mock_oracledb.__version__ = "1.4.3"
@@ -283,23 +283,26 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
 
         with mock.patch.dict(sys.modules, {"oracledb": mock_oracledb}):
             selection = db_conn.DriverSelection("thick", "19.0.0.0.0", "1.4.3", "21.3")
-            with self.assertLogs("sss_db_conn", level="CRITICAL") as cm:
-                with self.assertRaises(RuntimeError) as ctx:
-                    db_conn.initialize(selection, cfg=self.cfg)
-            self.assertIn("Exigido major 19", str(ctx.exception))
-            self.assertTrue(any("CRITICAL" in m and "major 19" in m for m in cm.output))
+            with self.assertLogs("sss_db_conn", level="WARNING") as cm:
+                db_conn.initialize(selection, cfg=self.cfg)
+            self.assertTrue(any("WARNING" in m and "cliente Oracle 21.3.0.0.0; o recomendado e o Instant Client 19" in m
+                                for m in cm.output))
+            self.assertFalse(any("CRITICAL" in m for m in cm.output))
 
-        # Teste 2: cx_Oracle com IC 18
+        # Teste 2: cx_Oracle com IC 12.2 (o do 3067, que conecta ao banco 19c)
         db_conn.reset_selection()
         mock_cx = mock.MagicMock()
-        mock_cx.clientversion.return_value = (18, 5, 0, 0, 0)
+        mock_cx.clientversion.return_value = (12, 2, 0, 1, 0)
 
         with mock.patch.dict(sys.modules, {"cx_Oracle": mock_cx}):
-            selection = db_conn.DriverSelection("cx_oracle", "11.2.0.4.0", "8.3.0", "18.5")
-            with self.assertLogs("sss_db_conn", level="CRITICAL") as cm:
-                with self.assertRaises(RuntimeError) as ctx:
-                    db_conn.initialize(selection, cfg=self.cfg)
-            self.assertIn("Exigido major 19", str(ctx.exception))
+            selection = db_conn.DriverSelection("cx_oracle", "19.0.0.0.0", "8.3.0", "12.2")
+            with self.assertLogs("sss_db_conn", level="WARNING") as cm:
+                db_conn.initialize(selection, cfg=self.cfg)
+            self.assertTrue(any("cliente Oracle 12.2.0.1.0" in m for m in cm.output))
+
+        # Teste 3: o 19 nao gera aviso.
+        self.assertIsNone(db_conn.client_version_warning((19, 27, 0, 0, 0)))
+        self.assertIsNone(db_conn.client_version_warning(None))
 
     def test_mesma_api_tres_combinacoes(self):
         """Valida que conectar() configura autocommit=False, call_timeout, module e action nos 3 modos."""

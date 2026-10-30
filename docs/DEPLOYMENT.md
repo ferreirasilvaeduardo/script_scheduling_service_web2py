@@ -104,7 +104,7 @@ Tudo pertence à conta do SSS. As pastas saem do nome do processo, sem precisar 
 | Sistema operacional | Linux x86_64 ou outro Unix POSIX (CR-005). Validado em Oracle Linux 6.9 e Ubuntu 24.04 |
 | Python | **3.6.0 ou superior** (referência de produção: 3.6.8). Só a biblioteca padrão, mais o driver Oracle. Não use `pip install` no servidor |
 | Driver Oracle | `python-oracledb` (`< 2.0` no Python 3.6; `2.x` no 3.7+) e `cx_Oracle 8.3` como contingência, **pré-instalados** pela infraestrutura (AGENTS §2.2), com o **Oracle Instant Client 19.x**. A biblioteca `cryptography` não é usada (o modo Thin fica fora de uso; `driver_mode = thick`) |
-| Oracle Instant Client 19 | **Obrigatório se algum banco for 11g** (o modo Thin não conecta ao 11g: `DPY-3010`); recomendado sempre, como contingência da cadeia de driver (§6). Registrado no `ldconfig` |
+| Oracle Instant Client 19 | **Obrigatório se algum banco for 11g** (o modo Thin não conecta ao 11g: `DPY-3010`); recomendado sempre, como contingência da cadeia de driver (§6). Registrado no `ldconfig` (ou no `SSS_IC_DIR`). Outro cliente que conecte ao banco (ex.: o 12.2 completo do 3067 com o banco 19c) só gera aviso (README §2.3) |
 | Banco | Oracle 11gR2 (11.2.0.4) ou superior, charset AL32UTF8, servidor **sem horário de verão** (UTC recomendado) e NTP em modo *slew* em todas as instâncias (README §7.1) |
 | Rede | Dos nós web e agentes até o listener Oracle. Dos usuários até a porta do web, quando ele atende num endereço da rede (§10.4) |
 | Relógio dos servidores | NTP ativo. O fuso vem de `SSS_TZ` no launcher (§10) |
@@ -295,7 +295,7 @@ O seed cria os usuários de homologação `admin`, `op.prod`, `op.hml` e `consul
 * `[oracle] driver_mode = auto` (padrão) tenta, na ordem, **Thin → Thick → cx_Oracle**, cada um numa sondagem isolada, e usa o primeiro que conectar. A sondagem usa a conta que vai conectar: o `[oracle] user` do processo (no `health.py`, o do `--name`).
 * **Linha da combinação escolhida**, no log da aplicação de cada processo (ensaio, banco 19c):
   `INFO ... [action=INICIO] driver=oracledb modo=thin servidor=19.24.0.0.0 cliente=-`
-  Com Thick ou cx_Oracle, `cliente=` mostra a versão do Instant Client (precisa ser 19). Registre essa linha no checklist (§19).
+  Com Thick ou cx_Oracle, `cliente=` mostra a versão do cliente (o recomendado é o 19; outra versão aparece antes como WARNING `cliente Oracle <versao>; o recomendado e o Instant Client 19`). Registre essa linha no checklist (§19).
 * **Conferência antes de subir:** `python3 scripts/check_env.py --name <nome>`, a partir de `W`. Ela confere os arquivos e **conecta ao banco** com a conta e os segredos do processo, mostrando o driver, o modo e as versões (CR-033, D6), e o orçamento da abertura da conexão (`AVISO` com `CONEXAO_ACIMA_DO_PRAZO` quando passa do `call_timeout_s`, §5.4). Código 0 = tudo OK (avisos não reprovam), 1 = falta arquivo ou o banco não conectou (linha `FALHA`, com o motivo), 2 = sem processo (`--name` nem `--config`) ou Python menor que 3.6.0.
 * **Quando forçar:**
   * `driver_mode = thick` quando o banco é 11g. O Thin recusa com `DPY-3010` e a cadeia já pula para o Thick, mas forçar evita a sondagem a cada subida.
@@ -613,7 +613,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | `Falha fatal de autenticacao Oracle com candidato 'thin' (codigo=ORA-01017). Cadeia interrompida para proteger a conta.` | Usuário ou senha errados, ou conta bloqueada (`ORA-28000`) | Corrija a senha do papel no `secrets.cfg`. A cadeia para de propósito, para não bloquear a conta |
 | `Falha fatal: todos os candidatos de driver Oracle falharam (thin (NETWORK: DPY-6005); thick (NETWORK: ORA-12541); cx_oracle (NETWORK: ORA-12541))` (capturada no ensaio, com o túnel do banco fora) | Listener inacessível: rede, firewall, DSN ou banco parado | `tnsping`/`nc -z <host> 1521` a partir do servidor; confira o `dsn` |
 | `Falha de configuracao: python-oracledb 2.x nao e compativel com Python 3.6 ...` | Driver errado para o Python | Instale `python-oracledb < 2.0` ou use `driver_mode = cx_oracle` |
-| `Falha de configuracao: Oracle Instant Client versao X invalida. Exigido major 19 ...` | Outro Instant Client no `ldconfig` | Deixe só o 19 no caminho de bibliotecas |
+| WARNING `cliente Oracle X; o recomendado e o Instant Client 19` | Outro cliente no `ldconfig` ou no `SSS_IC_DIR` | Só aviso: o processo sobe. Se a conexão falhar, use o 19 no caminho de bibliotecas |
 | `Falha de configuracao: driver_mode '<x>' invalido ...` | Valor errado no `config.ini` | `auto`, `thin`, `thick` ou `cx_oracle` |
 
 ### 15.3 Banco durante a operação

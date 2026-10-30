@@ -708,6 +708,7 @@ O resto do arquivo (a parte "derivados" e a função `sss_tipo`) é o do passo 0
 | `locale -a` | Lista nomes em Latin-1 (`bokmål`, byte `0xe5`). Até a correção de 29/10 (`posix._run_short` lê em bytes e decodifica com substituição), os agentes caíam na subida com `UnicodeDecodeError` no passo 12; o web subia. Corrigido no código, com teste, e levado ao servidor pelo `sss-update.sh` |
 | Transferência | O meio usado troca a pasta `~/sss_pacote` inteira: os logs do passo 9 guardados nela se perderam na segunda transferência. Os registros passaram para `~/sss_registro` |
 | `C.UTF-8` | Não existe no CentOS 6. Até a decisão 9 B (30/10), os agentes recusavam a subida (`child_locale C.UTF-8 nao consta em locale -a`, código 11); agora sobem com um WARNING e os scripts usam o `en_US.utf8` |
+| Cliente 12.2 | O agente exigia o Instant Client 19 e recusava a subida (`Exigido major 19`), embora o `check_env` conectasse. Decisão 10 A (30/10): outra versão só avisa (WARNING no log e AVISO no `check_env`) |
 | Umask da conta | `002` (os arquivos transferidos chegaram `664`): o passo 7 usa `umask 027` |
 | Locale | Sem `C.UTF-8`; existem `en_US.utf8` e `pt_BR.utf8` (escolhido `en_US.utf8`, que mantém ponto decimal e mensagens do sistema em inglês nos scripts). A sessão SSH mostra `Cannot set LC_CTYPE to default locale`: o locale da estação não existe no servidor, sem efeito no SSS, que exporta o seu |
 | SSS antigo | `web2py.py` na porta 8000 desde 17/10, pasta `/home/mastersafgf/sss/web2py` (anterior ao CR-021); `crontab` sem SSS |

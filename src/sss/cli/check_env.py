@@ -91,6 +91,12 @@ def main(argv=None):
         if sel_desc:
             detail_driver = "%s | Selecionado: %s" % (chain_desc, sel_desc)
         results.append(("Driver Oracle (driver_mode)", status, detail_driver))
+        # Cliente fora do 19 recomendado: AVISO, como no processo (decisao 10 A), sem reprovar o ambiente.
+        if status == "OK" and sel.client_version:
+            parts = tuple(int(p) for p in str(sel.client_version).split(".") if p.isdigit())
+            warning = db_conn.client_version_warning(parts)
+            if warning:
+                results.append(("Cliente Oracle", "AVISO", warning))
         # Item 6: orcamento da abertura da conexao (README §2.3, CR-008 R-17): acima do call_timeout_s e AVISO,
         # com o WARN CONEXAO_ACIMA_DO_PRAZO, sem reprovar o ambiente.
         from sss.persistence import db_conn
