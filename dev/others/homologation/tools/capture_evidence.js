@@ -20,6 +20,10 @@
  * Saida: SSS_EVIDENCE_DIR (padrao dev/others/homologation/evidence_<data>[_r<n>]): <CT>_<n>.png, results.json, state.json.
  * Instalacao homologada: SSS_APP_ROOT (padrao este repositorio, o DEV); com a raiz de um PROD instalado pelo pacote
  *   (CR-033), o roteiro le instance/ e var/ de la e confere a tela do <TIPO> (a pasta acima da raiz).
+ * Instalacao em outro servidor (DEPLOYMENT-SERVER): SSS_REMOTE_HOST (conta@servidor) e, com salto,
+ *   SSS_REMOTE_JUMP (conta@bastion). O disco da instalacao (configs, pastas do agente) e lido por ssh, so com
+ *   chave; SSS_APP_ROOT e a raiz no servidor e SSS_BASE_URL chega ao web (ex.: um tunel). Os interpretadores
+ *   do CT-32 vem de SSS_HOM_* (ver HOM abaixo).
  */
 const fs = require('fs');
 const os = require('os');
@@ -35,6 +39,41 @@ function loadPuppeteer() {
     process.exit(2);
 }
 const puppeteer = loadPuppeteer();
+
+// Disco da instalacao homologada: local (fs) ou, com SSS_REMOTE_HOST, por ssh (so com chave, BatchMode).
+const { execFileSync } = require('child_process');
+const REMOTE_HOST = process.env.SSS_REMOTE_HOST || '';
+const REMOTE_JUMP = process.env.SSS_REMOTE_JUMP || '';
+function remoteSh(script) {
+    const opts = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15', '-o', 'HostKeyAlgorithms=+ssh-rsa',
+        '-o', 'PubkeyAcceptedAlgorithms=+ssh-rsa'];
+    const args = REMOTE_JUMP ? [...opts, REMOTE_JUMP, `ssh -o BatchMode=yes ${REMOTE_HOST} bash -s`]
+        : [...opts, REMOTE_HOST, 'bash -s'];
+    // Codigo 255 e falha da conexao (nao do comando): ate 3 tentativas, com 3 s entre elas (bastion com muitas
+    // conexoes seguidas).
+    for (let attempt = 1; ; attempt++) {
+        try {
+            return execFileSync('ssh', args, { input: script, stdio: ['pipe', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 });
+        } catch (e) {
+            if (e.status !== 255 || attempt >= 3) throw e;
+            execFileSync('sleep', ['3']);
+        }
+    }
+}
+const shq = (s) => "'" + String(s).replace(/'/g, "'\\''") + "'";
+const remoteFs = {
+    existsSync: (p) => remoteSh(`[ -e ${shq(p)} ] && echo 1 || echo 0`).toString().trim() === '1',
+    readFileSync: (p, enc) => { const b = remoteSh(`cat ${shq(p)}`); return enc ? b.toString(enc) : b; },
+    readdirSync: (p, o) => {
+        const lines = remoteSh(`find ${shq(p)} -mindepth 1 -maxdepth 1 -printf '%y %f\\n'`).toString()
+            .split('\n').filter(Boolean);
+        if (!(o && o.withFileTypes)) return lines.map((l) => l.slice(2));
+        return lines.map((l) => ({ name: l.slice(2), isDirectory: () => l[0] === 'd', isFile: () => l[0] === 'f' }));
+    },
+    statSync: (p) => ({ mode: parseInt(remoteSh(`stat -c %a ${shq(p)}`).toString().trim(), 8) }),
+    rmSync: (p) => { remoteSh(`rm -f ${shq(p)}`); },
+};
+const dfs = REMOTE_HOST ? remoteFs : fs;
 
 const APP = path.resolve(process.env.SSS_APP_ROOT || path.join(__dirname, '..', '..', '..', '..'));
 // <TIPO> da instalacao (CR-028, D12): DEV mostra a faixa de ambiente; PROD so o rodape.
@@ -55,7 +94,7 @@ const CHROME = process.env.SSS_CHROME ||
 function readAgentConfig(file) {
     const values = {};
     let section = '';
-    for (const raw of fs.readFileSync(file, 'utf8').split('\n')) {
+    for (const raw of dfs.readFileSync(file, 'utf8').split('\n')) {
         const line = raw.replace(/\s[;#].*$/, '').trim();
         const sec = line.match(/^\[(.+)\]$/);
         if (sec) { section = sec[1]; continue; }
@@ -71,10 +110,10 @@ const AGENT_ID = AGENT_CFG.agent_id || AGENT_CFG.name;
 // Um agente por ambiente no DEV (2026-10-29): o agente de cada ambiente, lido de instance/*/config.ini
 // (so os que tem [agent]); sem config para o ambiente, o AGENT_ID (instalacao com um agente para todos).
 const AGENT_BY_ENV = {};
-for (const dir of fs.readdirSync(path.join(APP, 'instance'))) {
+for (const dir of dfs.readdirSync(path.join(APP, 'instance'))) {
     const file = path.join(APP, 'instance', dir, 'config.ini');
-    if (dir === 'exemplos' || !fs.existsSync(file)) continue;
-    const text = fs.readFileSync(file, 'utf8');
+    if (dir === 'exemplos' || !dfs.existsSync(file)) continue;
+    const text = dfs.readFileSync(file, 'utf8');
     const envs = (text.match(/^environments\s*=\s*([^;\n]+)/m) || [])[1];
     const name = (text.match(/^name\s*=\s*(\S+)/m) || [])[1];
     if (envs && name) envs.split(',').map((e) => e.trim()).forEach((e) => { if (e) AGENT_BY_ENV[e] = name; });
@@ -91,7 +130,7 @@ if (!AGENT_ID || !INPUT || !SCRIPT_WORK) {
 const STAMP = `HOMOLOG_${RUN_DATE}${ROUND ? 'R' + ROUND : ''}`;
 const ADMIN_STARTS_NEW = process.env.SSS_ADMIN_START === 'new';
 
-const deployDoc = fs.readFileSync(path.join(APP, 'docs', 'DEPLOYMENT.md'), 'utf8');
+const deployDoc = dfs.readFileSync(path.join(APP, 'docs', 'DEPLOYMENT.md'), 'utf8');
 const SEED_PASS = (deployDoc.match(/senha inicial `([^`]+)`/) || [])[1];
 const NEW_PASS_FILE = process.env.SSS_ADMIN_NEW_PASSWORD_FILE || path.join(os.homedir(), '.sss_homolog_pw');
 const NEW_PASS = fs.existsSync(NEW_PASS_FILE) ? fs.readFileSync(NEW_PASS_FILE, 'utf8').replace(/\s+$/, '') : null;
@@ -1841,8 +1880,8 @@ CTS['CT-29'] = async () => {
     let row = await lastUpload();
     check(`Últimos envios: Entregue no ${AGENT_ID}`, row.includes('Entregue') && row.includes(`${folder}/${name}`), row);
     const disk = path.join(INPUT, 'gfpreprod', 'contar_linhas_arquivo', folder, name);
-    check('Arquivo na pasta de entrada do agente, igual ao enviado e com 0600', fs.existsSync(disk) &&
-        fs.readFileSync(disk).equals(fs.readFileSync(local)) && (fs.statSync(disk).mode & 0o777) === 0o600, disk.replace(APP, ''));
+    check('Arquivo na pasta de entrada do agente, igual ao enviado e com 0600', dfs.existsSync(disk) &&
+        dfs.readFileSync(disk).equals(fs.readFileSync(local)) && (dfs.statSync(disk).mode & 0o777) === 0o600, disk.replace(APP, ''));
     await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), page.click('form[action*="/inputs/refresh"] button')]);
     await expectText('Atualizar retrato: pedido ao servidor', 'Pedimos um retrato novo a 1 servidor(es)');
     let seen = false;
@@ -1907,11 +1946,11 @@ CTS['CT-30'] = async () => {
     const p2 = (n) => String(n).padStart(2, '0');
     const base = path.join(SCRIPT_WORK, 'gfpreprod', 'diag_pasta_trabalho', String(d.getFullYear()), p2(d.getMonth() + 1), p2(d.getDate()));
     const found = [];
-    const walk = (dir) => { if (!fs.existsSync(dir)) return; for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const walk = (dir) => { if (!dfs.existsSync(dir)) return; for (const e of dfs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, e.name); if (e.isDirectory()) { if (e.name === `ticket_${tid}`) found.push(full); else walk(full); } } };
     walk(base);
     check('A pasta de trabalho ficou no disco depois do ticket, com 0700 e o diagnostico.txt', found.length === 1 &&
-        (fs.statSync(found[0]).mode & 0o777) === 0o700 && fs.existsSync(path.join(found[0], 'diagnostico.txt')),
+        (dfs.statSync(found[0]).mode & 0o777) === 0o700 && dfs.existsSync(path.join(found[0], 'diagnostico.txt')),
         found[0] ? found[0].replace(APP, '') : 'nao encontrada');
     check('Script de diagnóstico desativado ao final', await deactivateScript(sid));
     note('A pasta de trabalho dos scripts sai do nome do agente (var/<nome>/script_works) e é criada pelo próprio agente, em DEV e PROD (CR-032, D12).');
@@ -1947,12 +1986,27 @@ CTS['CT-31'] = async () => {
     note('Agente sem pasta base (NO_BASE_DIR) e link para fora da pasta base: cobertos pelos testes automatizados (o DEV tem um agente só, com pasta base).');
 };
 
+// CT-32: interpretadores do servidor homologado. Padrao: os do DEV desta maquina (pyenv e /usr/bin).
+// SSS_HOM_SHEBANG (+ _VER): o #! do diagnostico/interp_py36.py; SSS_HOM_TYPED (+ _VER): caminho completo
+// digitado; SSS_HOM_NAME (+ _PATH): so o nome, achado no PATH do agente; SSS_HOM_ENV_PYTHON3: o python3 do
+// PATH fixo do filho (/usr/bin:/bin), vazio quando nao existe (o #!/usr/bin/env python3 falha); SSS_HOM_VENV.
+const HOM = {
+    shebang: process.env.SSS_HOM_SHEBANG || '/home/eduardof/.pyenv/versions/3.6.0/bin/python3.6',
+    shebangVer: process.env.SSS_HOM_SHEBANG_VER || '3.6.0',
+    typed: process.env.SSS_HOM_TYPED || '/home/eduardof/.pyenv/versions/3.13.2/bin/python3.13',
+    typedVer: process.env.SSS_HOM_TYPED_VER || '3.13.2',
+    name: process.env.SSS_HOM_NAME || 'python3.12',
+    namePath: process.env.SSS_HOM_NAME_PATH || '/usr/bin/python3.12',
+    envPython3: process.env.SSS_HOM_ENV_PYTHON3 !== undefined ? process.env.SSS_HOM_ENV_PYTHON3 : '/usr/bin/python3',
+    // 025d: virtualenv sem pip criado fora do repositorio (<python3> -m venv --without-pip ~/.sss_homolog_venv)
+    venv: process.env.SSS_HOM_VENV || '/home/eduardof/.sss_homolog_venv',
+};
+
 CTS['CT-32'] = async () => {
     begin('CT-32', 'CR-025 a CR-027: interpretador do disparo, do #! e do cadastro');
-    const PY36 = '/home/eduardof/.pyenv/versions/3.6.0/bin/python3.6';
-    const PY313 = '/home/eduardof/.pyenv/versions/3.13.2/bin/python3.13';
-    // 025d: virtualenv sem pip criado fora do repositorio (/usr/bin/python3 -m venv --without-pip ~/.sss_homolog_venv)
-    const VENV = '/home/eduardof/.sss_homolog_venv';
+    const PY36 = HOM.shebang;
+    const PY313 = HOM.typed;
+    const VENV = HOM.venv;
     await login('admin');
     await go('/admin_scripts/form');
     const opcoes = await page.$$eval('#field-interpreter option', (os) => os.map((o) => o.value).filter((v) => v));
@@ -1985,7 +2039,7 @@ CTS['CT-32'] = async () => {
     const t2 = ticketFromUrl();
     // (3) so o nome, no PATH do agente; (4) nome que nao existe: pulado, vale o cadastro (CR-027);
     // (5) sem #! e sem digitado: cadastro (sh)
-    const t3 = await runDirect(info, 'GFPREPROD', {}, 'python3.12');
+    const t3 = await runDirect(info, 'GFPREPROD', {}, HOM.name);
     const t4 = await runDirect(info, 'GFPREPROD', {}, 'python9.99');
     const t5 = await runDirect(sem, 'GFPREPROD', {});
     // (6) #!/usr/bin/env python3; (7) Python de virtualenv digitado (link, sem resolver)
@@ -2005,18 +2059,22 @@ CTS['CT-32'] = async () => {
     }
     await sleep(3000);
     const casos = [
-        [t1, true, ['Não informado', PY36], ['interpretador usado: ' + PY36, 'Interpretador: ' + PY36 + ' 3.6.0'],
-            '#! do Python 3.6, nada digitado'],
-        [t2, true, [PY313, PY313], ['Interpretador: ' + PY313 + ' 3.13.2'], 'sem #!, caminho completo digitado (3.13)'],
-        [t3, true, ['python3.12', '/usr/bin/python3.12'], ['Interpretador: /usr/bin/python3.12'], 'sem #!, só o nome digitado'],
+        [t1, true, ['Não informado', PY36], ['interpretador usado: ' + PY36, 'Interpretador: ' + PY36 + ' ' + HOM.shebangVer],
+            `#! do Python ${HOM.shebangVer}, nada digitado`],
+        [t2, true, [PY313, PY313], ['Interpretador: ' + PY313 + ' ' + HOM.typedVer],
+            `sem #!, caminho completo digitado (${HOM.typedVer})`],
+        [t3, true, [HOM.name, HOM.namePath], ['Interpretador: ' + HOM.namePath], 'sem #!, só o nome digitado'],
         [t4, true, ['python9.99'], ['interpretador informado nao encontrado neste servidor: python9.99',
             'interpretador usado: '], 'nome digitado que não existe: pulado, vale o cadastro (CR-027)'],
         [t5, true, ['Não informado'], ['interpretador usado: ', 'Diagnostico do CR-026: script sem #!'],
             'sem #! e sem digitado: o cadastro (sh)'],
-        [t6, true, ['Não informado', '/usr/bin/env'], ['Interpretador: /usr/bin/python3 '], '#!/usr/bin/env python3'],
+        HOM.envPython3
+            ? [t6, true, ['Não informado', '/usr/bin/env'], ['Interpretador: ' + HOM.envPython3 + ' '], '#!/usr/bin/env python3']
+            : [t6, false, ['Não informado', '/usr/bin/env'], ['python3: No such file'],
+                '#!/usr/bin/env python3 sem python3 no PATH fixo do filho (/usr/bin:/bin)'],
         [t7, true, [VENV + '/bin/python3', VENV + '/bin/python3'], ['Interpretador: ' + VENV + '/bin/python3', 'Prefixo: ' + VENV],
             'Python de virtualenv digitado (link)'],
-        [t8, true, [PY313, PY313], ['interpretador usado: ' + PY313, 'Interpretador: ' + PY313 + ' 3.13.2'],
+        [t8, true, [PY313, PY313], ['interpretador usado: ' + PY313, 'Interpretador: ' + PY313 + ' ' + HOM.typedVer],
             'o digitado vence o #! existente (CR-027)'],
         [t9, true, ['Não informado'], ['#! ignorado: /nao/existe/python3', 'interpretador usado: '],
             '#! inexistente ignorado, vale o cadastro (python3)'],
@@ -2045,7 +2103,7 @@ CTS['CT-32'] = async () => {
     for (const sid of [py36, info, sem, envpy, ausente]) {
         check(`Script de diagnóstico ${sid} desativado ao final`, await deactivateScript(sid));
     }
-    note('Risco aceito pelo responsável (README §8.5): quem dispara escolhe o executável, e o digitado vence o #! (CR-027). A troca python <-> python3 do cadastro não é reproduzível aqui (o servidor tem os dois); está coberta pelos testes automatizados. No DEV, o agente herda o PATH do terminal que o subiu; os casos usam caminhos do pyenv e o python3.12 do sistema.');
+    note(`Risco aceito pelo responsável (README §8.5): quem dispara escolhe o executável, e o digitado vence o #! (CR-027). A troca python <-> python3 do cadastro não é reproduzível aqui (o servidor tem os dois); está coberta pelos testes automatizados. O agente herda o PATH de quem o subiu (terminal ou crontab); os casos usam os interpretadores deste servidor (#!: ${HOM.shebang}; digitado: ${HOM.typed}; nome: ${HOM.name}).`);
 };
 
 // CR-037: Pasta de Arquivos (inputs e outputs so em disco, var/<agente>/files/<ambiente>/<script>/).
@@ -2058,7 +2116,7 @@ CTS['CT-33'] = async () => {
     fs.writeFileSync(local, 'conta;valor\n' + '7;70\n'.repeat(500));
     const name = path.basename(local);
     // Rodada repetida no mesmo dia: o arquivo da passada anterior sai, para o primeiro envio ser novo.
-    fs.rmSync(path.join(folderDisk, 'inputs', name), { force: true });
+    dfs.rmSync(path.join(folderDisk, 'inputs', name), { force: true });
     const base = `/files/index?environment=GFPREPROD&script_id=${sid}`;
     const send = async (replace) => {
         const input = await page.$('#field-file');
@@ -2090,9 +2148,9 @@ CTS['CT-33'] = async () => {
     await send(false);
     await expectText('Envio gravado direto na pasta inputs', `Arquivo gravado em inputs/${name}`);
     const disk = path.join(folderDisk, 'inputs', name);
-    check('Arquivo no disco do agente, igual ao enviado, sem temporário', fs.existsSync(disk) &&
-        fs.readFileSync(disk).equals(fs.readFileSync(local)) &&
-        fs.readdirSync(path.dirname(disk)).every((n) => !n.startsWith('.sss_files_')), disk.replace(APP, ''));
+    check('Arquivo no disco do agente, igual ao enviado, sem temporário', dfs.existsSync(disk) &&
+        dfs.readFileSync(disk).equals(fs.readFileSync(local)) &&
+        dfs.readdirSync(path.dirname(disk)).every((n) => !n.startsWith('.sss_files_')), disk.replace(APP, ''));
     await snap('Pasta de Arquivos: arquivo enviado', { full: true });
     await send(false);
     await expectText('Mesmo nome sem substituir: recusado com explicação', 'Já existe um arquivo com esse nome');
@@ -2100,9 +2158,9 @@ CTS['CT-33'] = async () => {
     fs.appendFileSync(local, '8;80\n');
     await snap('Pasta de Arquivos: antes de substituir');
     await send(true);
-    check('Substituído: o arquivo no disco é o novo', fs.readFileSync(disk).equals(fs.readFileSync(local)));
+    check('Substituído: o arquivo no disco é o novo', dfs.readFileSync(disk).equals(fs.readFileSync(local)));
     // A pasta inputs e permanente (CR-037, D8): o script copia tudo o que houver, inclusive de rodadas anteriores.
-    const inputsNow = fs.readdirSync(path.join(folderDisk, 'inputs')).filter((n) => !n.startsWith('.')).length;
+    const inputsNow = dfs.readdirSync(path.join(folderDisk, 'inputs')).filter((n) => !n.startsWith('.')).length;
     const tid = await runDirect(sid, 'GFPREPROD', {});
     state.tickets.ct33 = tid;
     saveState();
@@ -2112,7 +2170,7 @@ CTS['CT-33'] = async () => {
     check(`Ticket #${tid} (diag_pasta_arquivos) deu certo`, fim.includes('Deu certo'));
     await expectText(`Log: o script recebeu as duas pastas e copiou os ${inputsNow} arquivo(s) de inputs`, 'inputs: ',
         'outputs: ', 'diag_pasta_arquivos/inputs', `arquivos copiados de inputs para outputs: ${inputsNow}`);
-    check('O arquivo enviado nesta rodada está entre as cópias em outputs', fs.existsSync(
+    check('O arquivo enviado nesta rodada está entre as cópias em outputs', dfs.existsSync(
         path.join(folderDisk, 'outputs', `ticket_${tid}`, 'copias', name)));
     await snap('Log do ticket com as pastas de arquivos', { full: true });
     await go(`${base}&area=outputs`);

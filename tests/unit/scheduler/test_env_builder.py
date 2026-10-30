@@ -42,7 +42,8 @@ class TestEnvBuilder(unittest.TestCase):
                                      dict(environ), "LINUX")
 
     def test_variaveis_exatas_dev(self):
-        with self.assertLogs("sss_scheduler", "WARNING"):
+        with self.assertLogs("sss_scheduler", "WARNING"), \
+                mock.patch.object(env_builder.sys, "executable", "/usr/bin/python3"):
             env = self.build()
         home = os.path.join(WORK, "exec")
         self.assertEqual(env, {
@@ -54,6 +55,18 @@ class TestEnvBuilder(unittest.TestCase):
             "SSS_SCRIPT_FILE": SCRIPT, "SSS_PLATFORM": "LINUX", "SSS_EXECUTION_TYPE": "MANUAL",
             "SSS_ENVIRONMENT_DSN": "dbprod:1521/FAT",
             "ORACLE_HOME": "/opt/oracle", "NLS_LANG": "AMERICAN_AMERICA.AL32UTF8"})
+
+    def test_path_com_a_pasta_do_python_do_agente_no_fim(self):
+        """Decisao 13 A: a pasta do Python do agente entra no fim do PATH do filho, sem repetir /usr/bin."""
+        sparta = "/portaloptrib/TESHUVA/sparta/python3.8/bin/python3"
+        self.assertEqual(env_builder.child_path(sparta), "/usr/bin:/bin:/portaloptrib/TESHUVA/sparta/python3.8/bin")
+        self.assertEqual(env_builder.child_path("/usr/bin/python3"), "/usr/bin:/bin")
+        self.assertEqual(env_builder.child_path("/bin/python3"), "/usr/bin:/bin")
+        self.assertEqual(env_builder.child_path(""), "/usr/bin:/bin")
+        self.assertEqual(env_builder.child_path("python3"), "/usr/bin:/bin", "caminho relativo nao entra")
+        with self.assertLogs("sss_scheduler", "WARNING"), mock.patch.object(env_builder.sys, "executable", sparta):
+            env = self.build()
+        self.assertEqual(env["PATH"], "/usr/bin:/bin:/portaloptrib/TESHUVA/sparta/python3.8/bin")
 
     def test_sem_home_real_nem_path_do_daemon_nem_heranca(self):
         with self.assertLogs("sss_scheduler", "WARNING"):

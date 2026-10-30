@@ -9,6 +9,7 @@ parametro) e nao toca no sistema de arquivos. So monta caminhos e o dicionario d
 """
 import logging
 import os
+import sys
 
 from sss.core import masking, params_compiler
 from sss.config import sss_config
@@ -20,6 +21,17 @@ CONNECTION_VAR = "PADRAO_VALOR_RUN_CONEXAO_BD"
 SSS_CONNECTION_VAR = "SSS_ENVIRONMENT_CONNECTION"
 _DATE_FMT = "%Y-%m-%d %H:%M:%S"
 PLATFORMS = ("LINUX", "UNIX")
+
+
+def child_path(executable=None):
+    """PATH do filho: o fixo /usr/bin:/bin e, no fim, a pasta do Python que roda o agente (decisao 13 A,
+    2026-10-30). Onde existe /usr/bin/python3, ele continua vencendo; num servidor sem ele (ex.: CentOS 6 com
+    o Python fora de /usr/bin), o #!/usr/bin/env python3 dos scripts acha o Python do agente."""
+    parts = CHILD_PATH.split(":")
+    folder = os.path.dirname(executable if executable is not None else (sys.executable or ""))
+    if folder and os.path.isabs(folder) and folder not in parts:
+        parts.append(folder)
+    return ":".join(parts)
 
 
 def script_work_dir(work_dir_ticket):
@@ -96,7 +108,7 @@ def build(cfg, secrets, ticket, environment, script_real, work_dir_ticket, envir
 
     env = _passthrough(agent.env_passthrough, environ_daemon)
     env.update({
-        "PATH": CHILD_PATH,
+        "PATH": child_path(),
         "HOME": home,
         "TMPDIR": os.path.join(home, "tmp"),
         "LANG": agent.child_locale,

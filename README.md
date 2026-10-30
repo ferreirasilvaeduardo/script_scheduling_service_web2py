@@ -1185,7 +1185,7 @@ O catálogo guarda o **nome do interpretador** (`python`, `python3`, `sh` ou `ba
 * **3. Cadastro:** o nome, procurado no `PATH` do processo do agente. `python` e `python3` servem um ao outro (CR-027): cadastro `python` sem `python` no servidor usa o `python3`, e vice-versa, com a linha `[SSS] python nao encontrado neste servidor; usando python3`. `sh` e `bash` não têm troca.
 * Nenhum dos três existe: `PRECHECK_FAILED` com `INTERPRETER_NOT_FOUND`. Não há mais `[agent] interpreters` (CR-026).
 * **Python:** reconhecido pelo nome do executável (`python`, `python3`, `python3.13`...; no `#!` com `env`, pelo argumento). Só o `python3` achado pelo cadastro roda com `-I` (inclusive quando o cadastro diz `python` e o agente usa o `python3`, CR-027); os demais (o `python`, que pode ser o Python 2, inclusive quando o cadastro diz `python3`; o do `#!`; o digitado, de versão desconhecida) rodam com `-E -s`, que também isolam das variáveis `PYTHON*` e do site do usuário e existem no Python 2 e no 3.
-* O executável usado vai para `tbsss_tickets.interpreter_used` e para a linha `[SSS] interpretador usado: ...` do log do ticket (depois das linhas das tentativas puladas, se houver). Com `#!/usr/bin/env python3`, o registrado é `/usr/bin/env` (o argumento do `#!` está no comando). Regras e riscos no §8.5.
+* O executável usado vai para `tbsss_tickets.interpreter_used` e para a linha `[SSS] interpretador usado: ...` do log do ticket (depois das linhas das tentativas puladas, se houver). Com `#!/usr/bin/env python3`, o registrado é `/usr/bin/env` (o argumento do `#!` está no comando), e o `env` procura o `python3` no `PATH` do filho (§8.6: `/usr/bin:/bin` e a pasta do Python do agente). Regras e riscos no §8.5.
 * `<script_real>` é o `realpath` de `path_file`: o caminho absoluto cadastrado (CR-005, D2) ou o relativo junto da `[agent] script_base_dir` do agente (CR-023), conferido pelo `path_guard` do agente (§8.5).
 * A UI mostra o `argv` **lógico**, por exemplo `python3 -I /opt/automacoes/scripts/carga.py --data 2026-10-13`, com o caminho cadastrado para todos (CR-005, D8). Com caminho relativo, aparece o relativo (`python3 -I faturamento/carga.py ...`); com interpretador digitado, aparece o digitado (`python3.13 -E -s ...`, CR-025). O `#!` e a troca `python` ↔ `python3` só o agente decide, no servidor: o comando mostrado antes da execução não os considera. O caminho real executado fica em "Caminho executado" e o interpretador em "Interpretador usado", no detalhe do ticket.
 * O `argv` é executado com a conta do agente, sem `sudo` (§8.0, §8.4; CR-032, D7).
@@ -1807,7 +1807,7 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
 
 | Variável | Valor |
 |---|---|
-| `PATH` | `/usr/bin:/bin` |
+| `PATH` | `/usr/bin:/bin` e, no fim, a pasta do Python que roda o agente (`env_builder.child_path`, decisão 13 A de 2026-10-30): onde existe `/usr/bin/python3` ele continua vencendo; num servidor sem ele (ex.: CentOS 6 com o Python em `/portaloptrib/TESHUVA/sparta/python3.8/bin`), o `#!/usr/bin/env python3` acha o Python do agente. Um programa ausente de `/usr/bin` e `/bin` pode ser achado nessa pasta (risco baixo, aceito) |
 | `HOME` | diretório de trabalho do script (§8.4, passo 2) |
 | `TMPDIR` | `tmp/` dentro dele |
 | `LANG`, `LC_ALL` | `child_locale` (`C.UTF-8`, fixo); num servidor sem ele, o substituto escolhido na subida (§8.12, passo 2) |

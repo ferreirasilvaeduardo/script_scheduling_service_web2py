@@ -539,6 +539,7 @@ O bloco gera as linhas do SSS (variáveis, keepalive com `@reboot` e a cada 5 mi
 . ~/sss_pacote/sss_vars.sh
 { echo "# --- SSS (DEPLOYMENT-SERVER), gerado em $(date '+%Y-%m-%d %H:%M') ---"
   echo "PYTHON=$PYTHON"; echo "SSS_TZ=$SSS_TZ"
+  echo "PATH=$(dirname "$PYTHON"):/usr/local/bin:/usr/bin:/bin"
   [ -n "$ORACLE_HOME" ] && echo "ORACLE_HOME=$ORACLE_HOME"
   [ -n "$SSS_IC_DIR" ] && { echo "SSS_IC_DIR=$SSS_IC_DIR"; echo "LD_LIBRARY_PATH=$SSS_IC_DIR"; }
   [ -n "${SSS_LOCALE:-}" ] && echo "SSS_LOCALE=$SSS_LOCALE"
@@ -549,6 +550,8 @@ O bloco gera as linhas do SSS (variáveis, keepalive com `@reboot` e a cada 5 mi
   done; } > ~/sss_registro/crontab_sss.txt
 cat ~/sss_registro/crontab_sss.txt
 ```
+
+O `PATH` do cron é curto (`/usr/bin:/bin`); os agentes o herdam e procuram nele os interpretadores dos scripts (DEPLOYMENT §9). Por isso a pasta do `PYTHON` entra na frente: sem ela, num servidor em que o `python3` não está em `/usr/bin` (o 3067), todo script `python3` termina em `INTERPRETER_NOT_FOUND` depois do primeiro reboot. Acrescente outras pastas se os scripts usarem outros interpretadores.
 
 Revise e acrescente ao fim do `crontab` atual (as variáveis valem para as linhas abaixo delas). Se o bloco do SSS já estiver lá, ele não é repetido: para trocá-lo, apague o bloco antigo com `crontab -e` e rode de novo.
 
@@ -710,6 +713,7 @@ O resto do arquivo (a parte "derivados" e a função `sss_tipo`) é o do passo 0
 | `C.UTF-8` | Não existe no CentOS 6. Até a decisão 9 B (30/10), os agentes recusavam a subida (`child_locale C.UTF-8 nao consta em locale -a`, código 11); agora sobem com um WARNING e os scripts usam o `en_US.utf8` |
 | Cliente 12.2 | O agente exigia o Instant Client 19 e recusava a subida (`Exigido major 19`), embora o `check_env` conectasse. Decisão 10 A (30/10): outra versão só avisa (WARNING no log e AVISO no `check_env`) |
 | Cliente 12.2 e `call_timeout` | Com o aviso da decisão 10, os agentes chegaram à conexão e caíram com `DPI-1050` (o prazo por chamada exige cliente 18.1+). Decisão 11 B (30/10): abaixo do 18.1 a sessão segue sem `call_timeout`, com WARNING. Testado no 3067 com o cliente 12.2 (conexão, `SELECT` e pool com `ping_interval`); o `/opt/oracle/client_11` não tem `lib/` e não foi testado. O `/opt/oracle/19c` é só o instalador do cliente 32 bits; o Instant Client 19 de 64 bits exige glibc 2.14 |
+| `PATH` do cron | O `python3` dos scripts é o do Sparta (`/portaloptrib/TESHUVA/sparta/python3.8/bin`), fora do `PATH` curto do cron, e `python` é o 2.6 de `/usr/bin`. O passo 14 grava o `PATH` com a pasta do `PYTHON` na frente. Sem `/usr/bin/python3`, o `#!/usr/bin/env python3` dos utilitários do seed falhava (`env: python3: No such file`), porque o filho rodava com `PATH=/usr/bin:/bin`: a homologação de 30/10 achou isso em 11 verificações. Decisão 13 A: o `PATH` do filho ganha, no fim, a pasta do Python do agente |
 | Umask da conta | `002` (os arquivos transferidos chegaram `664`): o passo 7 usa `umask 027` |
 | Locale | Sem `C.UTF-8`; existem `en_US.utf8` e `pt_BR.utf8` (escolhido `en_US.utf8`, que mantém ponto decimal e mensagens do sistema em inglês nos scripts). A sessão SSH mostra `Cannot set LC_CTYPE to default locale`: o locale da estação não existe no servidor, sem efeito no SSS, que exporta o seu |
 | SSS antigo | `web2py.py` na porta 8000 desde 17/10, pasta `/home/mastersafgf/sss/web2py` (anterior ao CR-021); `crontab` sem SSS |
