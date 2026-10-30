@@ -540,35 +540,38 @@ Em cada tipo:
 
 ## 14. Permanência (`crontab` da conta)
 
-O bloco gera as linhas do SSS (variáveis, keepalive com `@reboot` e a cada 5 minutos, e um `health.py` por tipo) num arquivo para revisão:
+Um bloco por tipo, guardado na própria raiz em `var/crontab_sss/crontab_sss.txt` (o `var/` é preservado pelo `sss-update.sh` e não vai no pacote): variáveis, keepalive com `@reboot` e a cada 5 minutos, e um `health.py`. O bloco começa em `# --- SSS <TIPO> ---` e termina em `# --- fim SSS <TIPO> ---`, para instalar ou retirar um tipo sem tocar no outro. Em cada tipo que o cron deve manter no ar:
 
 ```bash
-. ~/sss_pacote/sss_vars.sh
-{ echo "# --- SSS (DEPLOYMENT-SERVER), gerado em $(date '+%Y-%m-%d %H:%M') ---"
+. ~/sss_pacote/sss_vars.sh; sss_tipo DEV && cd "$R"            # depois, sss_tipo PROD
+mkdir -m 0700 -p var/crontab_sss
+{ echo "# --- SSS $T --- (DEPLOYMENT-SERVER, gerado em $(date '+%Y-%m-%d %H:%M'))"
   echo "PYTHON=$PYTHON"; echo "SSS_TZ=$SSS_TZ"
   echo "PATH=$(dirname "$PYTHON"):/usr/local/bin:/usr/bin:/bin"
   [ -n "$ORACLE_HOME" ] && echo "ORACLE_HOME=$ORACLE_HOME"
   [ -n "$SSS_IC_DIR" ] && { echo "SSS_IC_DIR=$SSS_IC_DIR"; echo "LD_LIBRARY_PATH=$SSS_IC_DIR"; }
   [ -n "${SSS_LOCALE:-}" ] && echo "SSS_LOCALE=$SSS_LOCALE"
-  for t in $SSS_TIPOS; do sss_tipo $t >/dev/null
-    echo "@reboot      cd $R && bin/sss-keepalive.sh $SSS_WEB:$PORT $SSS_NOMES_AGENTES"
-    echo "*/5 * * * *  cd $R && bin/sss-keepalive.sh $SSS_WEB:$PORT $SSS_NOMES_AGENTES"
-    echo "*/5 * * * *  cd $R && \$PYTHON scripts/health.py --name $SSS_AGENTE_HEALTH > var/$SSS_AGENTE_HEALTH/logs/health.txt 2>&1"
-  done; } > ~/sss_registro/crontab_sss.txt
-cat ~/sss_registro/crontab_sss.txt
+  echo "@reboot      cd $R && bin/sss-keepalive.sh $SSS_WEB:$PORT $SSS_NOMES_AGENTES"
+  echo "*/5 * * * *  cd $R && bin/sss-keepalive.sh $SSS_WEB:$PORT $SSS_NOMES_AGENTES"
+  echo "*/5 * * * *  cd $R && \$PYTHON scripts/health.py --name $SSS_AGENTE_HEALTH > var/$SSS_AGENTE_HEALTH/logs/health.txt 2>&1"
+  echo "# --- fim SSS $T ---"; } > var/crontab_sss/crontab_sss.txt
+chmod 0600 var/crontab_sss/crontab_sss.txt; cat var/crontab_sss/crontab_sss.txt
 ```
 
-O `PATH` do cron é curto (`/usr/bin:/bin`); os agentes o herdam e procuram nele os interpretadores dos scripts (DEPLOYMENT §9). Por isso a pasta do `PYTHON` entra na frente: sem ela, num servidor em que o `python3` não está em `/usr/bin` (o 3067), todo script `python3` termina em `INTERPRETER_NOT_FOUND` depois do primeiro reboot. Acrescente outras pastas se os scripts usarem outros interpretadores.
+O `PATH` do cron é curto (`/usr/bin:/bin`); os agentes o herdam e procuram nele os interpretadores dos scripts (DEPLOYMENT §9). Por isso a pasta do `PYTHON` entra na frente: sem ela, num servidor em que o `python3` não está em `/usr/bin` (o 3067), todo script `python3` termina em `INTERPRETER_NOT_FOUND` depois do primeiro reboot. Acrescente outras pastas se os scripts usarem outros interpretadores. As variáveis valem para as linhas abaixo delas: com os mesmos valores nos blocos de cada tipo, a ordem dos blocos não importa.
 
-Revise e acrescente ao fim do `crontab` atual (as variáveis valem para as linhas abaixo delas). Se o bloco do SSS já estiver lá, ele não é repetido: para trocá-lo, apague o bloco antigo com `crontab -e` e rode de novo.
+Revise e acrescente ao fim do `crontab` atual. Se o bloco do tipo já estiver lá, ele não é repetido:
 
 ```bash
-if crontab -l 2>/dev/null | grep -q '^# --- SSS (DEPLOYMENT-SERVER)'; then echo "ja existe um bloco do SSS no crontab (nada acrescentado)"
-else (crontab -l 2>/dev/null; cat ~/sss_registro/crontab_sss.txt) | crontab - && echo "bloco do SSS acrescentado"; fi
-crontab -l | grep -c sss-keepalive; echo $(( $(echo $SSS_TIPOS | wc -w) * 2 ))   # os dois números iguais
+crontab -l > ~/sss_registro/crontab_antes_$(date +%Y%m%d_%H%M%S).txt 2>/dev/null
+if crontab -l 2>/dev/null | grep -q "^# --- SSS $T ---"; then echo "ja existe o bloco do SSS $T (nada acrescentado)"
+else (crontab -l 2>/dev/null; cat var/crontab_sss/crontab_sss.txt) | crontab - && echo "bloco do SSS $T acrescentado"; fi
+crontab -l | grep -c "cd $R && bin/sss-keepalive.sh"      # esperado: 2
 ```
 
-A limpeza dos logs e saídas antigos é manual (README §11.3). Para agendá-la, use a linha `find` do DEPLOYMENT §4.0, uma para cada raiz, começando só com `-print`.
+* **Trocar o bloco de um tipo:** retire-o e acrescente de novo. **Retirar:** `crontab -l | sed "/^# --- SSS $T ---/,/^# --- fim SSS $T ---/d" | crontab -`.
+* Depois de 5 minutos, `cat var/$SSS_AGENTE_HEALTH/logs/health.txt` mostra `SSS OK`, e nenhum processo aparece em dobro (o keepalive só sobe o que caiu).
+* A limpeza dos logs e saídas antigos é manual (README §11.3). Para agendá-la, use a linha `find` do DEPLOYMENT §4.0, uma para cada raiz, começando só com `-print`.
 
 ---
 
@@ -632,7 +635,7 @@ Depois, as conferências do passo 12. **Retorno:** pare como no item 1 e rode o 
 Em cada tipo a desfazer, com autorização:
 
 ```bash
-crontab -e                                    # apague as linhas deste tipo (passo 14)
+crontab -l | sed "/^# --- SSS $T ---/,/^# --- fim SSS $T ---/d" | crontab -   # retira o bloco deste tipo (passo 14)
 . ~/sss_pacote/sss_vars.sh; sss_tipo <TIPO> && cd "$R"
 for n in $SSS_WEB $SSS_NOMES_AGENTES; do bin/sss-keepalive.sh --pause $n; done
 for n in $SSS_NOMES_AGENTES; do bin/sss-stop.sh $n; done
@@ -667,7 +670,7 @@ Copie esta tabela para o registro da janela e preencha cada linha (uma coluna de
 | 11 | `check_env` código 0 em todos os processos, com o driver selecionado; `CONFIG_OK` | todos | |
 | 12 | 1 web e um processo por agente; porta em `127.0.0.1`; `healthy_agents` | todos os tipos | |
 | 13 | HTTP 303/200/4/403; senhas trocadas; ticket de teste `SUCCESS` | todos os tipos | |
-| 14 | `crontab` com 2 keepalives e 1 `health.py` por tipo | conferido | |
+| 14 | `var/crontab_sss/crontab_sss.txt` de cada tipo; 2 keepalives por tipo no `crontab`; `health.txt` com `SSS OK` depois de 5 min | conferido | |
 
 ---
 
