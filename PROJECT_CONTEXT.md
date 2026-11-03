@@ -10,7 +10,7 @@
     - **Web** (`web0001`): `bin/sss-web.sh` → `scripts/run_web.py`. UI, login, RBAC, tickets, cadastros, downloads e envio de arquivos.
     - **Agente** (`agente0001`…): `bin/sss-scheduler.sh <nome>` → `scripts/run_scheduler.py`. Desdobro de agendamentos, claim da fila, execução, heartbeat, coleta de log, saída e entrada. Thread única, com laço de eventos e prazos do relógio monotônico.
     - Os processos coordenam-se **só pelo banco**: claim por `UPDATE` condicional com `rowcount`, heartbeat, *fencing* e detecção de nó offline. O web nunca sinaliza processos do SO.
-  - Projeto SSS (Script Scheduling Service); este resumo é de 30/10/2026 (base `acd412e`) e **não substitui as fontes normativas**: o `README.md` (negócio, dados e algoritmos) e o `AGENTS.md` (regras de código e de entrega), nesta ordem. O `CLAUDE.md` traz as diretrizes do agente de IA.
+  - Projeto SSS (Script Scheduling Service); este resumo é de 30/10/2026 (base `acd412e` / `3983f8a`) e **não substitui as fontes normativas**: o `README.md` (negócio, dados e algoritmos) e o `AGENTS.md` (regras de código e de entrega), nesta ordem. O `CLAUDE.md` traz as diretrizes do agente de IA e o `GEMINI.md` consolida na raiz as regras completas do `AGENTS.md` (§§3.3–9) e o mapa arquitetural para carregamento automático sem truncamento em cada conversa.
 - **Stack Tecnológico:**
   - Linguagem / Runtime: **Python 3.6.0 ou superior**, com sintaxe e biblioteca padrão da 3.6.0; validado em 3.6.0, 3.6.15 e 3.13.2 (referência de produção 3.6.8; no servidor 3067, 3.8.5).
   - Frameworks / Bibliotecas: **nenhum framework**. Só a biblioteca padrão e o driver Oracle: `python-oracledb` (`< 2.0` no 3.6, `2.x` no 3.7+) e `cx_Oracle 8.3` como contingência. Servidor web, roteador, sessão e templates próprios (`src/sss/web/framework/`). Frontend com Bootstrap 5.3.8 local e JavaScript próprio, sem CDN nem script inline.
@@ -206,3 +206,89 @@ O porquê completo de cada decisão está em `docs/architecture/CR-*.md` (CR-001
   - `test_ha_agentes_reais` (CRON) pode estourar o prazo sob carga na bateria completa (passa isolado).
   - A bateria Oracle disputa o banco com o DEV local: pare o DEV antes (R-23) e confira `find var -maxdepth 2` antes e depois.
   - O 3067 não comporta o Instant Client 19 (exige glibc 2.14); segue com o cliente 12.2, sem `call_timeout`. Ali, as invariantes I3 e I4 dependem da rede e do `SQLNET.EXPIRE_TIME`.
+
+---
+
+## 6. Mapa Detalhado de Módulos, Esquema Oracle e Documentação
+
+### 6.1 Hierarquia de Camadas e Módulos (`src/sss/`)
+
+A ordem das camadas é verificada estaticamente por AST em `tests/architecture/test_layers.py` (`platform < core < config < persistence < ui < services < web`; `scheduler` acima de `persistence`; `cli` no topo):
+
+| Camada (`src/sss/`) | Módulos Principais | Responsabilidade |
+|---|---|---|
+| `platform/` | `os_platform/` (`posix.py`, `ticket_files.py`), `path_guard.py`, `env_builder.py`, `files_area.py` | Primitivas POSIX isoladas (spawn `start_process` sem shell, grupos de processo, sinais, lock de instância, identidade de PID, locale), operações isoladas de pasta de ticket (`pack`, `clean-output`, `put-input`, `list-input`), guarda de caminhos/interpretadores, montagem limpa de `env` e operações atômicas da Pasta de Arquivos (`CR-037`). |
+| `core/` | `sql_ident.py`, `cron_parser.py`, `recurrence.py`, `params_compiler.py`, `masking.py`, `rbac.py`, `password_hasher.py`, `input_names.py` | Regras de negócio puras sem I/O: registro e validação de identificadores SQL (`<= 30` chars), parser CRON de 5 campos, cálculo de ocorrências e *misfire*, compilador de parâmetros/snapshot v7 e regex segura, mascaramento em fluxo de segredos, matriz pura de RBAC e hash `PBKDF2-HMAC-SHA256` (`>= 310.000` iterações). |
+| `config/` | `sss_config.py`, `sss_context.py`, `sss_logging.py`, `log_paths.py` | Leitura e validação de `instance/common.ini`, `instance/<nome>/config.ini` e `instance/secrets.cfg`, validação das invariantes `I1–I4`, contexto de execução, caminhos determinísticos de log/saída/entrada/trabalho e logger com rotação por minuto e tamanho. |
+| `persistence/` | `db_conn.py`, `ddl_builder.py`, `contracts/` (`dto.py`, `exceptions.py`, `repos.py`), `oracle/*`, `fake/*` | Sondagem e conexão adaptativa (`Thin -> Thick -> cx_Oracle`), geração de DDL/seed/validação (`ascii_sql` com `UNISTR`), contratos e exceções (`RepoNotFound`, `RepoConflict`, `RepoViolation`, `RepoUnavailable`) e implementações paritárias em Oracle 11gR2 e em memória (`FAKE`). |
+| `ui/` | `ui_helpers.py`, `ui_menu.py` | Catálogo único de mensagens em duas partes ("o que aconteceu" + "o que fazer agora"), rótulos amigáveis de situações/motivos, mascaramento de atores (`visible_actor`), barras empilhadas em SVG e montagem do menu conforme o perfil. |
+| `services/` | `auth_service.py`, `catalog_service.py`, `ticket_service.py`, `schedules_service.py`, `files_service.py`, `input_browse_service.py`, `output_browse_service.py`, `audit_service.py`, `permissions_service.py`, `health_service.py`, `admin_*_service.py` | Regras de negócio das telas e ferramentas, orquestrando repositórios, validações, RBAC, tradução de `RepoViolation` (por constraint lógica `tbsss_*`) e registro transacional de auditoria (`audit=`). |
+| `scheduler/` | `loop.py`, `executor.py`, `log_pump.py`, `schedule_expansion.py`, `output_phase.py`, `input_phase.py`, `startup.py`, `state.py` | Daemon do agente (thread única, prazos monotônicos): startup check e reconciliação de órfãos, expansão de agendamentos, claim em 3 leituras, execução e encerramento escalonado, bombeamento de log em caracteres para `CLOB`, empacotamento/envio de saídas (`BLOB`), entrega de entradas e publicação de retratos. |
+| `web/` | `framework/` (`server.py`, `wsgi.py`, `router.py`, `request.py`, `response.py`, `multipart.py`, `session.py`, `template.py`, `static.py`, `html.py`), `app/` (`factory.py`, `context.py`, `security.py`, `layout.py`, `errors.py`), `controllers/`, `templates/`, `static/` | Servidor HTTP/WSGI próprio, roteador, parser multipart em streaming para disco, sessão em cookie assinado HMAC-SHA256, motor de templates restrito a `templates/`, guarda CSRF/Origin/CSP/limites de corpo, 13 controllers, views HTML/`.load` e JS/CSS herméticos (`SSS.component`, Bootstrap 5.3.8 local). |
+| `cli/` | `run_web.py`, `run_scheduler.py`, `init_db.py`, `generate_sql.py`, `check_env.py`, `health.py`, `probe_driver.py` | Ferramentas de operação invocadas pelos invólucros fixos de `scripts/<nome>.py` (`test_entry_points.py`). |
+
+### 6.2 Esquema do Banco de Dados Oracle (21 Tabelas, 14 Funcionalidades e 5 Agentes)
+
+* **Dimensões do DDL (`SCHEMA_VERSION = 1`):** 21 tabelas, 21 sequences, 23 triggers (`BEFORE INSERT` de PK/auditoria + condicionais), 138 constraints (`PK`, `UK`, `FK`, `CK`) e 31 índices explícitos.
+* **As 21 Tabelas (nomes lógicos em `src/sss/core/sql_ident.py`):**
+  1. `tbsss_control` — controle de versão do esquema (`id = 1`, `schema_version`).
+  2. `tbsss_users` — usuários, hash PBKDF2, tentativas de login, bloqueio e `session_epoch`.
+  3. `tbsss_profiles` — perfis de acesso (`is_admin`, `max_priority`, `is_active`).
+  4. `tbsss_features` — catálogo das 14 funcionalidades do sistema.
+  5. `tbsss_environments` — ambientes cadastrados (`name`, `dsn`, `is_production`, `is_active`).
+  6. `tbsss_scripts` — scripts (`name`, `path_file`, `interpreter`, `timeout_seconds`, `max_concurrent`, `is_active`).
+  7. `tbsss_parameters` — parâmetros globais (`param_type`: `TEXT`, `NUMBER`, `DATE`, `SELECT`, `CHECKBOX`; `arg_style`: `NAMED`, `POSITIONAL`, `NONE`; `validation_regex`; `is_sensitive`).
+  8. `tbsss_script_Params` — vínculo ordenado script × parâmetro (`param_order`, `is_required`, `default_value`).
+  9. `tbsss_profile_features` — matriz perfil × funcionalidade.
+  10. `tbsss_profile_envs` — matriz perfil × ambiente.
+  11. `tbsss_profile_scripts` — matriz perfil × script.
+  12. `tbsss_script_envs` — homologação de script por ambiente (`approved_by`, `approved_at`).
+  13. `tbsss_schedules` — regras de agendamento (`ONCE`, `DAILY`, `WEEKLY`, `MONTHLY`, `CRON`, `misfire_policy`, `status`, `pause_reason`, `next_run_at`, `params_json`).
+  14. `tbsss_tickets` — fila e histórico de execuções (`status`, `status_reason`, `priority`, `effective_priority_at`, `scheduled_at`, `snapshot_json`, `agent_id`, `pid`, `exit_code`, `log_text` CLOB, `interpreter_path`, `interpreter_used`, `script_path`).
+  15. `tbsss_ticket_params` — respostas de parâmetros por ticket (valores sensíveis limpos ao final).
+  16. `tbsss_ticket_output` — arquivo `.zip` da pasta de saída do ticket (`status`, `zip_blob` BLOB, `sha256`, `file_count`, `total_bytes`).
+  17. `tbsss_agents` — registro e estado dos agentes (`status`, `last_heartbeat`, `hostname`, `pid`, `version`, `critical_config`).
+  18. `tbsss_agent_envs` — ambientes atendidos por cada agente.
+  19. `tbsss_inputs` — fila de arquivos enviados pela tela de Entrada para entrega pelos agentes (`blob_content` BLOB, `sha256`, `status`).
+  20. `tbsss_input_Snapshot` — retrato JSON dos arquivos presentes em `SSS_INPUT_DIR` publicado pelos agentes.
+  21. `tbsss_audit_logs` — trilha imutável de auditoria (`actor_login`, `action`, `entity_type`, `entity_id`, `details_json`, `ip_address`).
+* **As 14 Funcionalidades (`tbsss_features`):**
+  * Operação: `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `MANAGE_SCHEDULES`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD`.
+  * Administração e Governança: `MANAGE_USERS`, `MANAGE_PROFILES`, `MANAGE_ENVIRONMENTS`, `MANAGE_SCRIPTS`, `MANAGE_PARAMETERS`, `VIEW_AUDIT`.
+* **Mapeamento Padrão de Processos × Ambientes:**
+  * `web0001` → servidor web da instalação.
+  * `agente0001` → `GFPREPROD` | `agente0002` → `CLONE2` | `agente0003` → `CLONE1` | `agente0004` → `CLONE6` | `agente0005` → `CLONE7`.
+
+### 6.3 Catálogo Completo da Pasta `docs/`
+
+* **Manuais Principais (`docs/*.md`):**
+  * `docs/DEPLOYMENT.md` — manual geral normativo de implantação e operação em produção (validado por `test_deployment_doc.py`).
+  * `docs/DEPLOYMENT-SERVER.md` — runbook passo a passo para implantação em servidor único (Web + 5 Agentes) e Apêndice A com histórico de decisões do servidor `brtlvlty3067sl`.
+  * `docs/DEV_ENVIRONMENT.md` — guia do ambiente de desenvolvimento local (WSL, Pythons 3.6.0/3.6.15/3.11/3.13, Instant Client 19.25 e tabela dos 34 alvos do `Makefile`).
+  * `docs/HOMOLOGATION_RUNBOOK.md` — roteiro de homologação manual e automatizada.
+  * `docs/UTILITY_SCRIPTS.md` — catálogo de todas as ferramentas em `bin/`, `scripts/`, `tools/` e `dev/`.
+  * `docs/ADMIN_CRUD_PATTERN.md` — padrão arquitetural das 5 telas administrativas.
+* **Série Explicativa (`docs/explain/`):**
+  * `00-indice-geral.md` — índice e jornada de leitura.
+  * `01-visao-geral-do-sistema.md` — propósito, atores e conceitos fundamentais.
+  * `02-arquitetura-e-camadas.md` — camadas, fronteiras e decisões estruturais.
+  * `03-modelo-de-dados-e-banco.md` — esquema Oracle 11gR2, transações, locks e índices.
+  * `04-fluxos-de-execucao.md` — ciclo de vida do ticket, agendamento, arquivos e HA.
+  * `05-seguranca-e-governanca.md` — autenticação, RBAC, execução segura, mascaramento e auditoria.
+  * `06-testes-qualidade-e-operacao.md` — pirâmide de testes, catraca de qualidade e operação.
+* **Histórico de Change Requests (`docs/architecture/`):**
+  * `CR-001` a `CR-005`: separação web/daemon, somente Oracle 11gR2 com driver adaptativo, catálogo de parâmetros, linguagem simples em duas partes, agente somente POSIX e logs por minuto.
+  * `CR-006` a `CR-010`: colunas de auditoria nas 21 tabelas, hardening de HA/fencing/orçamento (`SCHEMA_VERSION`), fechamento da revisão R2, reserva da pasta `internal` e variáveis `SSS_*` dos scripts.
+  * `CR-011` a `CR-015`: retirada de hash/dono de script e de credencial em parâmetro, pasta de saída (`SSS_OUTPUT_DIR` + BLOB zip), índice e busca de fila escalável, pasta de entrada (`SSS_INPUT_DIR`) e padronização de nomes em inglês.
+  * `CR-016` a `CR-020`: código e banco em inglês (`CR-016a..e`), melhorias de UX no catálogo/menu/disparo (`CR-017`, `CR-018`), pasta de trabalho (`SSS_WORK_DIR`, `CR-019`) e telas de Saídas e Entrada via banco (`CR-020a..d`).
+  * `CR-021` e `CR-022`: remoção completa do `web2py` e do Alpine.js com framework próprio (`CR-021a..f`) e reorganização no pacote `src/sss/` com portões `flake8` + `mypy` estrito (`CR-022a..b9`).
+  * `CR-023` a `CR-027`: `script_base_dir` e caminhos relativos, interpretador informado no disparo ou `#!`, simplificação dos interpretadores (`python3`, `python`, `sh`, `bash`) e ordem de precedência (digitado → `#!` → cadastro).
+  * `CR-028` a `CR-035`: estrutura `instance/<nome>/` e `var/<nome>/` com `sss-update.sh`, obrigatoriedade de `--name`/`--config`, retirada do purge e criação do `sss-keepalive.sh`, correções de `check_env`/`init_db`/`generate_sql` e simplificação de uma conta de SO e uma conta Oracle por servidor (`CR-032`).
+  * `CR-036` a `CR-039`: limites operacionais flexíveis (avisos em vez de recusas), Pasta de Arquivos (`files/<ambiente>/<script>/{inputs,outputs}`, `CR-037`/`CR-037b`), guia `DEPLOYMENT-SERVER.md` (`CR-038`) e `bin/sss-ctl.sh` (`CR-039`).
+  * `DEPLOYMENT-history.md` — arquivo histórico de revisões anteriores do guia de implantação.
+* **Scripts SQL para o DBA (`docs/sql/`):**
+  * 4 conjuntos (`tbsss_`, `ssdev_`, `s3dev_`, `s3prd_`) × 3 arquivos (`01_deploy.sql`, `02_rollback.sql`, `99_validate.sql`), gerados por `make sql-all` em ASCII puro (`UNISTR`).
+* **Roteiros de Fases e Evidências de Homologação (`docs/prompts/` e `docs/homologation/`):**
+  * `docs/prompts/F0_kickoff.md` a `F9_2_e2e.md` — prompts históricos de construção incremental do SSS.
+  * `docs/homologation/*.docx` e `*.md` — relatórios e evidências de homologação automatizada (mais recente: `SSS_Homologation_Evidence_2026-10-30_r4.docx`, 356/356 passos OK).
+
