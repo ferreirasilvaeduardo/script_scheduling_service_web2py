@@ -249,4 +249,4 @@ homolog-docx: ## Documento de evidencias da rodada (build_evidence_docx.py; SSS_
 	cd $(HOMOLOG_TOOLS) && $(PYTHON) build_evidence_docx.py
 
 tunel-3067: ## Tunel ate o web do 3067 pelo bastion: CMD=status (padrao), start ou stop
-	dev/others/notas/sss-tunel-3067/sss-tunel-3067.sh $(CMD)
+	dev/others/notas/sss-tunel-local-3067/sss-tunel-3067.sh $(CMD)
