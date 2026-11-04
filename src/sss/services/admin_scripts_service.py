@@ -94,7 +94,7 @@ MSG_LINK_DUPLICATE = u"O parâmetro \"%s\" aparece mais de uma vez."
 MSG_LINK_INACTIVE = u"O parâmetro \"%s\" está inativo e não pode ser vinculado."
 MSG_LINK_NONE = u"Scripts \"Sem argumentos\" não aceitam parâmetros."
 MSG_HOMOLOG_INVALID = u"A seleção de ambientes é inválida. Recarregue a página e tente novamente."
-MSG_HOMOLOG_INACTIVE = u"Ambientes inativos não podem ser homologados."
+MSG_HOMOLOG_INACTIVE = u"Ambientes inativos não podem ser liberados."
 DEACTIVATION_WARNING = u"Agendamentos que usam este script serão pausados no próximo ciclo."
 
 _FIELD_BY_CONSTRAINT = {

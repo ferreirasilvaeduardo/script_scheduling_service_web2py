@@ -53,7 +53,7 @@ pass
   <div class="sss-actions">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_scripts', f='index')}}">Voltar à lista</a>
     {{if not _new:}}
-    <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_scripts', f='homologation', args=[_s['id']])}}">Homologação</a>
+    <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_scripts', f='homologation', args=[_s['id']])}}">Ambientes</a>
     <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_scripts', f='parameters', args=[_s['id']])}}">Parâmetros</a>
     {{modal = _modal_active}}
     {{include 'components/confirm_modal.html'}}
@@ -112,7 +112,7 @@ pass
     <ul class="mb-3">
       {{for _m in _ready['missing']:}}
       <li>{{=_m['text']}}
-        {{if _m['code'] == 'homologation':}} <a href="{{=URL(c='admin_scripts', f='homologation', args=[_s['id']])}}">Abrir a homologação</a>
+        {{if _m['code'] == 'homologation':}} <a href="{{=URL(c='admin_scripts', f='homologation', args=[_s['id']])}}">Abrir os ambientes</a>
         {{elif _m['code'] == 'profiles' and _ready['can_manage_profiles']:}} <a href="{{=URL(c='admin_profiles', f='index')}}">Abrir os perfis</a>
         {{elif _m['code'] == 'users' and _ready['can_manage_users']:}} <a href="{{=URL(c='admin_users', f='index')}}">Abrir os usuários</a>
         {{elif _m['code'] == 'inactive':}} Use o botão Reativar no topo da página.

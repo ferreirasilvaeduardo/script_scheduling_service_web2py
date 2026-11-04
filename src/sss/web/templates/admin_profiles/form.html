@@ -68,7 +68,7 @@ pass
     <div class="form-check mb-3">
       <input class="form-check-input" type="checkbox" id="field-is_admin" name="is_admin" value="Y" aria-describedby="field-is_admin-help"{{if profile.get('is_admin') == 'Y':}} checked{{pass}}>
       <label class="form-check-label" for="field-is_admin">Perfil administrativo</label>
-      <div class="form-text" id="field-is_admin-help">Dispensa funcionalidades, ambientes e scripts; não dispensa a homologação nem as flags de ativo. O sistema nunca fica sem administrador ativo.</div>
+      <div class="form-text" id="field-is_admin-help">Dispensa funcionalidades, ambientes e scripts; não dispensa os ambientes do script nem as flags de ativo. O sistema nunca fica sem administrador ativo.</div>
     </div>
     <div class="sss-form-actions">
       <button type="submit" class="btn btn-primary">{{='Incluir perfil' if _new else u'Salvar alterações'}}</button>

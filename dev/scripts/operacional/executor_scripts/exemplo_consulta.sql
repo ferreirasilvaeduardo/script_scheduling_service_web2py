@@ -1,0 +1,2 @@
+select * from openrisow.filial where '1' = '[a]' AND 'b' = '[b]' -- [trcx] - [trscript] - [trdirscript] - [trrel] - [trdirrel] - [trst] - [trzip] - [trkp] - [trdl] - [trtpex] - [trfertpex] - [trnlsl] - [trql] -
+;

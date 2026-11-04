@@ -7,7 +7,7 @@ _sc = _h['script']
 }}
 <div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-title">Homologação de <span class="sss-mono">{{=_sc['name']}}</span></h1>
+    <h1 class="sss-page-title">Ambientes de <span class="sss-mono">{{=_sc['name']}}</span></h1>
     <p class="sss-page-sub">Ambientes em que o script pode rodar. Vale também para perfis administrativos.</p>
   </div>
   <div class="sss-actions">
@@ -16,7 +16,7 @@ _sc = _h['script']
   </div>
 </div>
 
-<form class="sss-card" method="post" action="{{=URL(c='admin_scripts', f='save_homologation')}}" data-component="scriptHomologation" aria-label="Homologação por ambiente">
+<form class="sss-card" method="post" action="{{=URL(c='admin_scripts', f='save_homologation')}}" data-component="scriptHomologation" aria-label="Ambientes do script">
   {{=csrf_field()}}
   <input type="hidden" name="id" value="{{=_sc['id']}}">
   <input type="hidden" name="version" value="{{=_h['version']}}">
@@ -41,17 +41,17 @@ _sc = _h['script']
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content">
             <div class="modal-header">
-              <h2 class="modal-title fs-5" id="modal-homologation-title">Confirmar homologação de {{=_sc['name']}}</h2>
+              <h2 class="modal-title fs-5" id="modal-homologation-title">Confirmar ambientes de {{=_sc['name']}}</h2>
               <button type="button" class="btn-close" aria-label="Fechar" data-action="close"></button>
             </div>
             <div class="modal-body">
-              <p class="mb-2" data-ref="noChanges">Nenhuma alteração em relação à homologação atual.</p>
+              <p class="mb-2" data-ref="noChanges">Nenhuma alteração em relação aos ambientes atuais.</p>
               <ul class="sss-matrix-summary sss-mono" data-ref="summary" hidden></ul>
               <div class="alert alert-warning sss-alert mt-2 mb-0" role="note" data-ref="affected" hidden><span data-ref="affectedText"></span></div>
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-sm btn-outline-secondary" data-ref="cancel" data-action="close">Cancelar</button>
-              <button type="submit" class="btn btn-sm btn-primary" data-ref="save" disabled>Salvar homologação</button>
+              <button type="submit" class="btn btn-sm btn-primary" data-ref="save" disabled>Salvar ambientes</button>
             </div>
           </div>
         </div>

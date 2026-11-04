@@ -16,7 +16,7 @@ if not _new:
     _deactivate = env.get('active') == 'Y'
     _count = env.get('active_schedules') or 0
     if _deactivate:
-        _modal_text = u'%s Agendamentos ativos afetados: %d. Scripts homologados neste ambiente, que deixam de poder rodar nele: %d.' % (deactivation_warning, _count, env.get('homologated_scripts') or 0)
+        _modal_text = u'%s Agendamentos ativos afetados: %d. Scripts liberados neste ambiente, que deixam de poder rodar nele: %d.' % (deactivation_warning, _count, env.get('homologated_scripts') or 0)
     else:
         _modal_text = u'O ambiente voltará a aceitar tickets e agendamentos.'
     pass

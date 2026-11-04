@@ -154,7 +154,7 @@ def homologation():
         _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
         _denied()
-    response.title = u"Homologação de %s — SSS" % data["script"]["name"]
+    response.title = u"Ambientes de %s — SSS" % data["script"]["name"]
     response.sss_scripts = [_JS]
     return dict(homologation=data)
 
@@ -178,7 +178,7 @@ def save_homologation():
     if errors:
         session.flash = {"kind": "error", "message": errors[admin_crud.GENERAL_FIELD]}
     elif diff:
-        session.flash = {"kind": "success", "message": u"Homologação salva: %s" % diff}
+        session.flash = {"kind": "success", "message": u"Ambientes salvos: %s" % diff}
     else:
         session.flash = {"kind": "warning", "message": u"Nenhuma alteração para salvar."}
     redirect(URL(c="admin_scripts", f="homologation", args=[script_id]))

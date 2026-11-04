@@ -22,7 +22,7 @@ for _s in result['items']:
         'active': _s['active'],
         'action': [
             {'href': URL(c='admin_scripts', f='form', args=[_s['id']]), 'label': 'Editar', 'description': u'Editar script %s' % _s['name']},
-            {'href': URL(c='admin_scripts', f='homologation', args=[_s['id']]), 'label': u'Homologação', 'description': u'Homologação do script %s' % _s['name']},
+            {'href': URL(c='admin_scripts', f='homologation', args=[_s['id']]), 'label': 'Ambientes', 'description': u'Ambientes do script %s' % _s['name']},
             {'href': URL(c='admin_scripts', f='parameters', args=[_s['id']]), 'label': u'Parâmetros', 'description': u'Parâmetros do script %s' % _s['name']},
         ],
     })
@@ -32,7 +32,7 @@ table = {'caption': 'Scripts cadastrados', 'error': error, 'rows': _rows, 'empty
     {'key': 'script_group', 'label': 'Grupo / categoria'},
     {'key': 'cmd', 'label': 'Interpretador', 'kind': 'mono'},
     {'key': 'path', 'label': 'Caminho do arquivo', 'kind': 'mono'},
-    {'key': 'environments', 'label': 'Ambientes homologados'},
+    {'key': 'environments', 'label': 'Ambientes'},
     {'key': 'parameters', 'label': u'Parâmetros'},
     {'key': 'active', 'label': u'Situação', 'kind': 'active'},
     {'key': 'action', 'label': u'Ações', 'kind': 'action'},
@@ -46,7 +46,7 @@ url_base = ('admin_scripts', 'index')
 <div class="sss-page-header sss-detail-header">
   <div>
     <h1 class="sss-page-title">Scripts</h1>
-    <p class="sss-page-sub">Script é a rotina que o sistema roda. Aqui ficam o cadastro, onde cada um pode rodar (homologação) e as perguntas que faz. Arquivos nunca são enviados nem editados pela interface.</p>
+    <p class="sss-page-sub">Script é a rotina que o sistema roda. Aqui ficam o cadastro, onde cada um pode rodar (ambientes) e as perguntas que faz. Arquivos nunca são enviados nem editados pela interface.</p>
   </div>
   <div class="sss-actions">
     <a class="btn btn-sm btn-primary" href="{{=URL(c='admin_scripts', f='form')}}">Novo script</a>

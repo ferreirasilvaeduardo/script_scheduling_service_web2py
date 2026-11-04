@@ -38,8 +38,8 @@ AFFECTED_MAX = 20
 MSG_MATRIX_ID_INVALID = u"A seleção contém itens inexistentes. Recarregue a página e tente novamente."
 MSG_MATRIX_INACTIVE = u"Itens inativos não podem ser adicionados ao perfil. Recarregue a página e tente novamente."
 DEACTIVATION_WARNING = u"Os usuários deste perfil perdem o acesso e têm a sessão encerrada no próximo clique."
-ADMIN_WARNING = (u"Perfil administrativo: dispensa funcionalidades, ambientes e scripts, mas não a homologação "
-               u"do script no ambiente nem as flags de ativo. A matriz abaixo fica registrada e passa a valer "
+ADMIN_WARNING = (u"Perfil administrativo: dispensa funcionalidades, ambientes e scripts, mas não os ambientes "
+               u"do script nem as flags de ativo. A matriz abaixo fica registrada e passa a valer "
                u"se o perfil deixar de ser administrativo.")
 
 _FIELD_BY_CONSTRAINT = {
