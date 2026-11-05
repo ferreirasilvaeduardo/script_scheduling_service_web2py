@@ -1,10 +1,16 @@
-# Diretórios de backup e caches
-.bkp/
+# ==========================================
+# Caches e Bytecode Python
+# ==========================================
 __pycache__/
+*.py[cod]
+*$py.class
 .mypy_cache/
-*.pyc
+.pytest_cache/
+.ruff_cache/
 
-# Logs, saídas de execução e locks de processo
+# ==========================================
+# Logs, Saídas e Controle de Processo / Locks
+# ==========================================
 *.log
 *.out
 *.pause
@@ -12,21 +18,40 @@ __pycache__/
 .lock.*
 *.lock
 
-# Evidências geradas em homologação
+# ==========================================
+# Pastas Operacionais, Dados e Backups Locais
+# ==========================================
+.bkp/
+bkp/
+inputs/
+outputs/
+logs/
+works/
+script_works/
+
+# ==========================================
+# Evidências de Homologação
+# ==========================================
 dev/others/homologation/screens/
 dev/others/homologation/evidence_*/
-dev/others/homologation/evidence_*/*.png
-dev/others/homologation/evidence_*/state.json
 
-bkp/
-bkp/**/*
-outputs/
-outputs/**/*
-inputs/
-inputs/**/*
-script_works/
-script_works/**/*
-logs/
-logs/**/*
-works/
-works/**/*
+# ==========================================
+# Ambientes Virtuais (venv / conda)
+# ==========================================
+.venv/
+venv/
+ENV/
+env/
+
+# ==========================================
+# Editores e Sistema Operacional
+# ==========================================
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
