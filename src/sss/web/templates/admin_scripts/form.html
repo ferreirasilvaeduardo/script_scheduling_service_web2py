@@ -55,6 +55,7 @@ pass
     {{if not _new:}}
     <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_scripts', f='homologation', args=[_s['id']])}}">Ambientes</a>
     <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_scripts', f='parameters', args=[_s['id']])}}">Parâmetros</a>
+    <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_profiles', f='who_can', vars=dict(script=_s['id']))}}">Perfis</a>
     {{modal = _modal_active}}
     {{include 'components/confirm_modal.html'}}
     {{pass}}

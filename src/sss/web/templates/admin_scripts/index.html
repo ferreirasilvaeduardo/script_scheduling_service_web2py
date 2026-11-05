@@ -24,6 +24,7 @@ for _s in result['items']:
             {'href': URL(c='admin_scripts', f='form', args=[_s['id']]), 'label': 'Editar', 'description': u'Editar script %s' % _s['name']},
             {'href': URL(c='admin_scripts', f='homologation', args=[_s['id']]), 'label': 'Ambientes', 'description': u'Ambientes do script %s' % _s['name']},
             {'href': URL(c='admin_scripts', f='parameters', args=[_s['id']]), 'label': u'Parâmetros', 'description': u'Parâmetros do script %s' % _s['name']},
+            {'href': URL(c='admin_profiles', f='who_can', vars=dict(script=_s['id'])), 'label': 'Perfis', 'description': u'Perfis com acesso ao script %s' % _s['name']},
         ],
     })
 pass
