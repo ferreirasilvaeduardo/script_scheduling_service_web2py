@@ -2145,7 +2145,18 @@ Pasta permanente por ambiente e script, independente de ticket, para trocar arqu
 
 ## 9. Convenção de Identificadores (Oracle 11g ≤ 30 caracteres)
 
-### 9.1 Template
+### 9.1 Template e distinção entre prefixo lógico e físico
+
+> [!IMPORTANT]
+> **Distinção entre `tbsss_` (prefixo lógico) e `{table_prefix}` (prefixo físico):**
+> 
+> * **`tbsss_` é o prefixo lógico e canônico da aplicação:** é adotado como padrão documental neste README, no modelo de dados conceitual e no tratamento de integridade (`RepoViolation.constraint` traduz qualquer constraint física `uk_<prefixo>_*` para `uk_tbsss_*`).
+> * **No banco de dados real, o prefixo é dinâmico e configurável:** definido pela chave `table_prefix` na seção `[oracle]` do arquivo de configuração (`config.ini`/`common.ini`). Todo objeto físico é qualificado dinamicamente via `sql_ident` como `{owner}.{table_prefix}{objeto}`.
+> * **Prefixos ativos nos ambientes do projeto:**
+>   * `ssdev_` : DEV local (máquina de desenvolvimento atual, conectando no Oracle `GFPR` via túnel);
+>   * `tbsss_` : PROD de referência;
+>   * `s3dev_` : DEV no servidor corporativo (`brtlvlty3067sl`, porta 18000);
+>   * `s3prd_` : PROD no servidor corporativo (`brtlvlty3067sl`, porta 18001).
 
 ```text
 tabela      = {prefixo}{fisico}                 tbsss_tickets
