@@ -1,69 +1,32 @@
+# Diretórios de backup e caches
 .bkp/
-
-# Byte-compiled / cache files
-*.pyc
 __pycache__/
+.mypy_cache/
+*.pyc
 
-# SSS instance configuration (only .example is tracked)
-/instance/config.ini
-/instance/web.env
-
-# Pastas de execucao do DEV (logs, trabalho do agente, entrada, saida e pasta de trabalho dos scripts)
-/logs/
-/work/
-/input/
-/output/
-/script_work/
-/dist/
-
-# Logs and secrets
+# Logs, saídas de execução e locks de processo
 *.log
-secrets.cfg
-.env
-*.env
-# Launchers locais de desenvolvimento (podem conter dados da maquina do desenvolvedor)
-bin/sss-web-*_v*.sh
-dev/others/notas/sss-web-*_v*.sh
-# Sobras do web2py (removido no CR-021f) numa copia antiga: parameters_<porta>.py guarda o hash da
-# senha do painel dele e nunca pode ir para o git
-/parameters_*.py
-/httpserver.pid
-/cron.master
-/welcome.w2p
-/gluon/
-/applications/
+*.out
+*.pause
+.lock
+.lock.*
+*.lock
 
-# Pacotes de implantacao gerados (binarios)
-/docs/sss_packages/*.tar.gz
-/docs/sss_packages/*.sha256
-/docs/sss_dev_script_examples/
-# Capturas do manual de homologacao: ja ficam dentro do .docx (dev/others/homologation/README.md)
-/dev/others/homologation/screens/
-# Evidencias reais (2026-10-22): capturas e estado da rodada; o .docx e o results.json sao versionados
-/dev/others/homologation/evidence_*/*.png
-/dev/others/homologation/evidence_*/state.json
-# Senha da homologacao do DEV (~/.sss_homolog_pw): nunca no git, nem copiada para dentro do repositorio
-.sss_homolog_pw
+# Evidências geradas em homologação
+dev/others/homologation/screens/
+dev/others/homologation/evidence_*/
+dev/others/homologation/evidence_*/*.png
+dev/others/homologation/evidence_*/state.json
 
-# Pastas de execucao do DEV quando o config.ini aponta para dev/ (CR-026d): massa de teste e saidas, nunca versionadas
-/dev/input/
-/dev/output/
-/dev/work/
-/dev/logs/
-
-# CR-028: estrutura por processo. Config e segredos reais (instance/<nome>/), dados (var/) e scripts dos
-# ambientes (scripts_ambiente/) sao de cada servidor; os exemplos (instance/exemplos/) vao para o git.
-/var/
-/.update-*/
-/instance/*/
-!/instance/exemplos/
-# CR-032 (D18): o [oracle] comum do servidor, como o secrets.cfg
-/instance/common.ini
-/scripts_ambiente/
-
-# Notas pessoais de desenvolvimento: nunca versionadas (as antigas ja commitadas ficam como estao)
-/dev/others/notas/*
-# Excecao: scripts de tunel SSH ate o web (sem senha; so hosts e portas), versionados a pedido
-!/dev/others/notas/sss-tunel-*/
-# Id do pacote, gravado so dentro do pacote pelo tools/package.py --build (versao <base>+<build>)
-/src/sss/BUILD
+bkp/
+bkp/**/*
+outputs/
+outputs/**/*
+inputs/
+inputs/**/*
+script_works/
+script_works/**/*
+logs/
+logs/**/*
+works/
+works/**/*

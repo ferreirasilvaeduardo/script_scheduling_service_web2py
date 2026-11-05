@@ -1,0 +1,89 @@
+Ran check status of local SSS processes
+Analyzed config.ini:L1-9
+Analyzed sss-ctl.sh:L1-220
+Analyzed start_local.sh:L1-198
+
+Na sua máquina (`/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`), você pode subir **tudo junto com um único comando** ou **processo por processo**.
+
+---
+
+### Opção 1 (Recomendada): Subir Web + todos os 5 Agentes de uma vez
+O [`bin/sss-ctl.sh`](file:///portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/bin/sss-ctl.sh) (ou o alvo `make ctl` do [`Makefile`](file:///portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/Makefile#L214-L215)) gerencia automaticamente o `web0001` e os 5 agentes (`agente0001` a `agente0005`):
+
+```bash
+# 1. Subir web0001 e agente0001..0005 em segundo plano:
+make ctl CMD=start
+# (ou: bin/sss-ctl.sh start)
+
+# 2. Conferir se estão no ar e ver os PIDs:
+make ctl CMD=status
+# (ou: bin/sss-ctl.sh status)
+
+# 3. Reiniciar todos (útil após alterar código Python/templates):
+make ctl CMD=restart
+
+# 4. Parar todos:
+make ctl CMD=stop
+```
+
+* **Endereço do Web local:** como no seu [`instance/web0001/config.ini`](file:///portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/instance/web0001/config.ini#L9) está configurado `allowed_origins = http://127.0.0.1:1900` (para não conflitar com a porta `18000` usada pelo túnel SSH do servidor `3067`), o `sss-ctl.sh start` sobe o web local em:
+  * **`http://127.0.0.1:1900/script_scheduling_service`**
+
+---
+
+### Opção 2: Subir apenas o Web ou apenas um Agente específico
+
+* **Subir somente o Web local** (pelo [`bin/start_local.sh`](file:///portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/bin/start_local.sh)):
+  ```bash
+  # Na porta 1900 (que bate com o allowed_origins do instance/web0001/config.ini):
+  make dev-start PORT=1900
+  # (ou em primeiro plano no terminal para ver logs na hora: bin/start_local.sh 1900 -f)
+
+  # Para parar só o web local:
+  make dev-stop
+  ```
+
+* **Subir ou parar um único Agente específico** (ex.: `agente0001` = `GFPREPROD`, `agente0003` = `CLONE1`):
+  ```bash
+  # Subir em segundo plano pelo keepalive:
+  bin/sss-keepalive.sh agente0001
+
+  # Ou rodar em primeiro plano no terminal (Ctrl+C para parar):
+  python3 scripts/run_scheduler.py --name agente0001
+
+  # Parar um agente específico em segundo plano:
+  bin/sss-stop.sh agente0001
+  ```
+
+---
+
+### Dica rápida de pré-checagem (caso algum processo não suba)
+Se quiser validar a conexão com o Oracle e as pastas antes de subir:
+```bash
+make check-env NAME=web0001
+make check-env NAME=agente0001
+```
+
+```text
+==================================================
+RELATÓRIO DE EXECUÇÃO
+==================================================
+1. Arquivos Criados:
+   - Nenhum
+
+2. Arquivos Alterados:
+   - Nenhum
+
+3. Testes Executados:
+   - make ctl CMD=status (OK - verificado estado atual dos processos locais)
+
+4. Checklist §8:
+   - Todos os itens OK | Itens não aplicáveis: alteração de código/banco/testes | Itens violados: nenhum
+
+5. Veredito:
+   - PASS
+
+6. Observações / Anomalias:
+   - Atualmente todos os processos locais (web0001 e agente0001..0005) estão parados.
+==================================================
+```
