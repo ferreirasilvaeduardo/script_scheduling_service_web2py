@@ -16,8 +16,8 @@ from sss.services.ticket_service import TicketService
 
 SESSIONS = {
     "admin": {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0},
-    "op.hml": {"user_id": 3, "login": "op.hml", "profile_id": 3, "perm_version": 1, "session_epoch": 0},
-    "consulta": {"user_id": 4, "login": "consulta", "profile_id": 4, "perm_version": 1, "session_epoch": 0},
+    "op.prod": {"user_id": 2, "login": "op.prod", "profile_id": 2, "perm_version": 1, "session_epoch": 0},
+    "consulta": {"user_id": 3, "login": "consulta", "profile_id": 3, "perm_version": 1, "session_epoch": 0},
 }
 
 
@@ -71,14 +71,14 @@ class TestPermissions(unittest.TestCase):
 
     def test_scripts_iguais_aos_do_disparo(self):
         # CR-018b: a tela so conta os scripts; os ambientes de cada um ficam nos cartoes de Rodar um script.
-        ctx = self.ctx["op.hml"]
+        ctx = self.ctx["op.prod"]
         d = self.svc.build(ctx)
         expected = sorted(s["id"] for g in self.trigger.available_scripts(ctx) for s in g["scripts"])
         self.assertEqual(sorted(s["id"] for s in d["scripts"]), expected)
         self.assertTrue(all(set(s) == {"id", "name"} for s in d["scripts"]))
 
     def test_motivos_e_catalogo_nao_vazado(self):
-        ctx = dict(self.ctx["op.hml"])
+        ctx = dict(self.ctx["op.prod"])
         # Script do perfil desativado e script do perfil sem homologacao nos ambientes dele.
         sid_inactive = sorted(ctx["scripts"])[0]
         self.catalog.scripts_update(sid_inactive, {"active": "N"}, actor="teste")
@@ -100,7 +100,7 @@ class TestPermissions(unittest.TestCase):
         self.assertFalse(outside & set(s["name"] for s in d["scripts"]))
 
     def test_nao_grava_nem_audita(self):
-        self.svc.build(self.ctx["op.hml"])
+        self.svc.build(self.ctx["op.prod"])
         self.assertEqual(repo_factory.get("audit").list(page=1, size=1)["total"], self.n_audit)
 
 

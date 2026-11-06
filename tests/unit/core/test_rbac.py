@@ -206,11 +206,11 @@ IP = "10.1.1.1"
 SESSIONS = {
     "admin": {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0},
     "op.prod": {"user_id": 2, "login": "op.prod", "profile_id": 2, "perm_version": 1, "session_epoch": 0},
-    "consulta": {"user_id": 4, "login": "consulta", "profile_id": 4, "perm_version": 1, "session_epoch": 0},
+    "consulta": {"user_id": 3, "login": "consulta", "profile_id": 3, "perm_version": 1, "session_epoch": 0},
 }
-# Seed FAKE: perfil 1 ADMINISTRADOR (unico admin), 3 OPERATOR_HML (ambiente DESENV inativo associado),
-# 4 CONSULTA (VIEW_LOGS; PRODUCAO e HOMOLOGACAO). Funcionalidades 1 EXEC_SCRIPT, 2 VIEW_LOGS, 3 CANCEL_TICKET.
-PERFIL_ADMIN, PERFIL_HML, PERFIL_CONSULTA = 1, 3, 4
+# Seed FAKE: perfil 1 ADMINISTRADOR (unico admin), 2 OPERADOR,
+# 3 CONSULTA (VIEW_LOGS; PRODUCAO e HOMOLOGACAO). Funcionalidades 1 EXEC_SCRIPT, 2 VIEW_LOGS, 3 CANCEL_TICKET.
+PERFIL_ADMIN, PERFIL_OPERADOR, PERFIL_CONSULTA = 1, 2, 3
 F_EXEC, F_VER_LOGS = 1, 2
 AMB_PRODUCAO, AMB_HOMOLOGACAO, AMB_DESENV = 1, 2, 3
 
@@ -317,17 +317,23 @@ class TestMatrix(_BaseProfiles):
 
     def test_inativo_associado_pode_sair_e_novo_inativo_rejeitado(self):
         # CR-003 D9: associacao a item inativo pode ser removida; nunca readicionada.
-        m = self._matrix(PERFIL_HML)
+        nid = self.rbac_repo._store.next_id("tbsss_profile_env")
+        self.rbac_repo._store.profile_env[nid] = {"id": nid, "profile_id": PERFIL_OPERADOR, "environment_id": AMB_DESENV}
+        rem = [k for k, v in self.rbac_repo._store.profile_env.items()
+               if v["profile_id"] == PERFIL_OPERADOR and v["environment_id"] == AMB_PRODUCAO]
+        for k in rem:
+            del self.rbac_repo._store.profile_env[k]
+        m = self._matrix(PERFIL_OPERADOR)
         self.assertIn(AMB_DESENV, m["ambs"])
-        diff, errors = self._save_matrix(PERFIL_HML, m["funcs"], m["ambs"] + [AMB_PRODUCAO], m["scrs"])
+        diff, errors = self._save_matrix(PERFIL_OPERADOR, m["funcs"], m["ambs"] + [AMB_PRODUCAO], m["scrs"])
         self.assertEqual((diff, errors), ("+amb:PRODUCAO", {}))
-        self.assertIn(AMB_DESENV, self._matrix(PERFIL_HML)["ambs"])
-        m = self._matrix(PERFIL_HML)
+        self.assertIn(AMB_DESENV, self._matrix(PERFIL_OPERADOR)["ambs"])
+        m = self._matrix(PERFIL_OPERADOR)
         without_dev = [a for a in m["ambs"] if a != AMB_DESENV]
-        diff, errors = self._save_matrix(PERFIL_HML, m["funcs"], without_dev, m["scrs"])
+        diff, errors = self._save_matrix(PERFIL_OPERADOR, m["funcs"], without_dev, m["scrs"])
         self.assertEqual((diff, errors), ("-amb:DESENV", {}))
-        self.assertNotIn(AMB_DESENV, self._matrix(PERFIL_HML)["ambs"])
-        diff, errors = self._save_matrix(PERFIL_HML, m["funcs"], without_dev + [AMB_DESENV], m["scrs"])
+        self.assertNotIn(AMB_DESENV, self._matrix(PERFIL_OPERADOR)["ambs"])
+        diff, errors = self._save_matrix(PERFIL_OPERADOR, m["funcs"], without_dev + [AMB_DESENV], m["scrs"])
         self.assertEqual(errors, {GENERAL_FIELD: perfis_mod.MSG_MATRIX_INACTIVE})
         m = self._matrix(PERFIL_CONSULTA)
         diff, errors = self._save_matrix(PERFIL_CONSULTA, m["funcs"], m["ambs"] + [AMB_DESENV], m["scrs"])
@@ -342,7 +348,9 @@ class TestMatrix(_BaseProfiles):
         self.assertEqual(sorted(self._matrix(PERFIL_CONSULTA)["funcs"]), [F_EXEC, F_VER_LOGS])
 
     def test_tela_da_matriz(self):
-        screen = self.svc.matrix(self.ctx["admin"], str(PERFIL_HML))
+        nid = self.rbac_repo._store.next_id("tbsss_profile_env")
+        self.rbac_repo._store.profile_env[nid] = {"id": nid, "profile_id": PERFIL_OPERADOR, "environment_id": AMB_DESENV}
+        screen = self.svc.matrix(self.ctx["admin"], str(PERFIL_OPERADOR))
         envs = [i for g in screen["ambs"] for i in g["items"]]
         dev = [i for i in envs if i["label"] == "DESENV"][0]
         self.assertTrue(dev["checked"] and dev["inactive"])
@@ -378,7 +386,7 @@ class TestLastAdmin(_BaseProfiles):
     def test_com_outro_admin_ativo_a_operacao_passa(self):
         new_id, errors = self.svc.save(self.ctx["admin"], IP, None, {"name": "ADMIN_RESERVA", "is_admin": "Y"})
         self.assertEqual(errors, {})
-        u = self.users.get_by_login("op.hml")
+        u = self.users.get_by_login("op.prod")
         self.users.update(u["id"], {"profile_id": new_id}, actor="teste")
         form = self._form(PERFIL_ADMIN)
         changed = self.svc.toggle_active(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["version"])
@@ -417,7 +425,7 @@ class TestProfileRegistration(_BaseProfiles):
 
     def test_inclusao_validacoes_e_auditoria(self):
         for name, msg in (("", perfis_mod.MSG_NAME_REQUIRED), ("auditor", perfis_mod.MSG_NAME_INVALID),
-                          ("READ_ONLY", perfis_mod.MSG_NAME_DUPLICATE)):
+                          ("CONSULTA", perfis_mod.MSG_NAME_DUPLICATE)):
             _id, errors = self.svc.save(self.ctx["admin"], IP, None, {"name": name})
             self.assertEqual(errors, {"name": msg}, name)
         pid, errors = self.svc.save(self.ctx["admin"], IP, None, {"name": "AUDITOR", "description": "Leitura"})
@@ -434,11 +442,11 @@ class TestProfileRegistration(_BaseProfiles):
                                      {"name": "CONSULTA_GERAL", "description": aba2["description"], "version": aba2["version"]})
         self.assertEqual(errors, {})
         _id, errors = self.svc.save(self.ctx["admin"], IP, str(PERFIL_CONSULTA),
-                                     {"name": "READ_ONLY", "description": "x", "version": aba1["version"]})
+                                     {"name": "CONSULTA", "description": "x", "version": aba1["version"]})
         self.assertEqual(errors, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
         aud = self._audits("UPDATE")
         self.assertEqual(len(aud), 1)
-        self.assertIn(u"name: READ_ONLY \u2192 CONSULTA_GERAL", aud[0]["detail"])
+        self.assertIn(u"name: CONSULTA \u2192 CONSULTA_GERAL", aud[0]["detail"])
         self.assertEqual(self._version(PERFIL_CONSULTA), 2)
 
     def test_reativar(self):
@@ -451,8 +459,8 @@ class TestProfileRegistration(_BaseProfiles):
 
     def test_acesso_negado_e_nao_encontrado(self):
         for call in (lambda c: self.svc.list(c, {}, 1, 20), lambda c: self.svc.matrix(c, "1"),
-                        lambda c: self.svc.save_matrix(c, IP, "4", [], [], [], "1"),
-                        lambda c: self.svc.toggle_active(c, IP, "4", "x")):
+                        lambda c: self.svc.save_matrix(c, IP, "3", [], [], [], "1"),
+                        lambda c: self.svc.toggle_active(c, IP, "3", "x")):
             with self.assertRaises(AccessDenied):
                 call(self.ctx["op.prod"])
         for pid in ("999", "abc", "0"):

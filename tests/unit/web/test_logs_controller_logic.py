@@ -16,8 +16,8 @@ from sss.services.ticket_service import LOG_MAX_CHARS, DOWNLOAD_INTERRUPTED_MARK
 
 SESSIONS = {
     "admin": {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0},
-    "op.hml": {"user_id": 3, "login": "op.hml", "profile_id": 3, "perm_version": 1, "session_epoch": 0},
-    "consulta": {"user_id": 4, "login": "consulta", "profile_id": 4, "perm_version": 1, "session_epoch": 0},
+    "op.prod": {"user_id": 2, "login": "op.prod", "profile_id": 2, "perm_version": 1, "session_epoch": 0},
+    "consulta": {"user_id": 3, "login": "consulta", "profile_id": 3, "perm_version": 1, "session_epoch": 0},
 }
 # Seed FAKE: 13 RUNNING (PRODUCAO, op.prod, carga_diaria com documento_cliente sensivel, 8 s/etapa),
 # 17 SUCCESS com log de ~2 MB, 35 FAILED/LOG_LIMIT com log_truncated = 'Y'.
@@ -69,6 +69,8 @@ class _BaseLog(unittest.TestCase):
             repo_factory.get("users"), repo_factory.get("rbac"), catalog,
             repo_factory.get("audit"), 5, 900, self.log)
         self.ctx = dict((login, auth.revalidate(session)) for login, session in SESSIONS.items())
+        self.ctx["op_sem_prod"] = dict(self.ctx["op.prod"], login="outro_op", user_id=99,
+                                       environments=frozenset(["HOMOLOGACAO"]))
         self.svc = TicketService(catalog, self.tickets, self.log)
 
     def _full_log(self, ticket_id):
@@ -110,11 +112,11 @@ class TestReadLogValidation(_BaseLog):
                 self.svc.read_log(self.ctx["admin"], tid, "0")
 
     def test_fora_do_escopo_e_404(self):
-        # op.hml enxerga HOMOLOGACAO/DESENV e seus proprios; o 13 e PRODUCAO de op.prod.
+        # Operador sem PRODUCAO e ticket 13 e PRODUCAO de op.prod.
         with self.assertRaises(RepoNotFound):
-            self.svc.read_log(self.ctx["op.hml"], str(TCK_RUNNING), "0")
+            self.svc.read_log(self.ctx["op_sem_prod"], str(TCK_RUNNING), "0")
         with self.assertRaises(RepoNotFound):
-            self.svc.log_chunks(self.ctx["op.hml"], str(TCK_RUNNING))
+            self.svc.log_chunks(self.ctx["op_sem_prod"], str(TCK_RUNNING))
 
     def test_dentro_do_escopo(self):
         r = self.svc.read_log(self.ctx["consulta"], str(TCK_RUNNING), "0")
@@ -219,7 +221,7 @@ class TestLogChunks(_BaseLog):
     def test_escopo_validado_antes_do_streaming(self):
         with mock.patch.object(self.tickets, "log_read") as log_read:
             with self.assertRaises(RepoNotFound):
-                self.svc.log_chunks(self.ctx["op.hml"], str(TCK_RUNNING))
+                self.svc.log_chunks(self.ctx["op_sem_prod"], str(TCK_RUNNING))
             log_read.assert_not_called()
 
     def test_falha_no_meio_encerra_com_marcador(self):

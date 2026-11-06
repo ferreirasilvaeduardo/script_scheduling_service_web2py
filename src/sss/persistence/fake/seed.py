@@ -172,7 +172,7 @@ def _seed_inputs(store, base_dt):
     import json
     h = datetime.timedelta(hours=1)
     files = ((1, "PRODUCAO", 1, "lotes", "clientes_outubro.csv", b"cliente;valor\n1;10\n2;20\n", "op.prod", 3),
-             (2, "HOMOLOGACAO", 2, None, "parametros.txt", b"modo=simulacao\n", "op.hml", 2))
+             (2, "HOMOLOGACAO", 2, None, "parametros.txt", b"modo=simulacao\n", "op.prod", 2))
     for uid, env, sid, folder, name, data, actor, hours in files:
         store.input_upload[uid] = {
             "id": uid, "environment": env, "script_id": sid, "relative_dir": folder, "file_name": name,
@@ -262,28 +262,26 @@ def load_seed(store, force=False, dev_password=None):
                                 store.seqs["tbsss_features"] = 14
 
                                 # ---------------------------------------------------------
-                                # 3. Perfis (4)
+                                # 3. Perfis (3)
                                 # ---------------------------------------------------------
                                 profiles = [
-                                    {"id": 1, "name": "ADMINISTRATOR", "description": "Administrador Geral do Sistema", "is_admin": "Y", "perm_version": 1, "active": "Y"},
-                                    {"id": 2, "name": "OPERATOR_PROD", "description": "Operador de Ambientes de Producao", "is_admin": "N", "perm_version": 1, "active": "Y"},
-                                    {"id": 3, "name": "OPERATOR_HML", "description": "Operador de Ambientes de Homologacao", "is_admin": "N", "perm_version": 1, "active": "Y"},
-                                    {"id": 4, "name": "READ_ONLY", "description": "Perfil de Apenas Leitura e Consulta", "is_admin": "N", "perm_version": 1, "active": "Y"},
+                                    {"id": 1, "name": "ADMINISTRADOR", "description": "Administrador Geral do Sistema", "is_admin": "Y", "perm_version": 1, "active": "Y"},
+                                    {"id": 2, "name": "OPERADOR", "description": "Operador de Ambientes de Producao", "is_admin": "N", "perm_version": 1, "active": "Y"},
+                                    {"id": 3, "name": "CONSULTA", "description": "Perfil de Apenas Leitura e Consulta", "is_admin": "N", "perm_version": 1, "active": "Y"},
                                 ]
                                 for p in profiles:
                                     store.profiles[p["id"]] = p
-                                store.seqs["tbsss_profiles"] = 4
+                                store.seqs["tbsss_profiles"] = 3
 
                                 # ---------------------------------------------------------
-                                # 4. Usuarios (6)
+                                # 4. Usuarios (5)
                                 # ---------------------------------------------------------
                                 users = [
                                     {"id": 1, "login": "admin", "name": "Administrador Geral", "password_hash": "!", "profile_id": 1, "failed_attempts": 0, "locked_until": None, "last_login_at": base_dt - datetime.timedelta(hours=1), "password_changed_at": base_dt - datetime.timedelta(days=30), "active": "Y"},
                                     {"id": 2, "login": "op.prod", "name": "Operador Producao", "password_hash": "!", "profile_id": 2, "failed_attempts": 0, "locked_until": None, "last_login_at": base_dt - datetime.timedelta(hours=2), "password_changed_at": base_dt - datetime.timedelta(days=20), "active": "Y"},
-                                    {"id": 3, "login": "op.hml", "name": "Operador Homologacao", "password_hash": "!", "profile_id": 3, "failed_attempts": 0, "locked_until": None, "last_login_at": base_dt - datetime.timedelta(hours=3), "password_changed_at": base_dt - datetime.timedelta(days=15), "active": "Y"},
-                                    {"id": 4, "login": "consulta", "name": "Auditor e Consulta", "password_hash": "!", "profile_id": 4, "failed_attempts": 0, "locked_until": None, "last_login_at": base_dt - datetime.timedelta(days=1), "password_changed_at": base_dt - datetime.timedelta(days=10), "active": "Y"},
-                                    {"id": 5, "login": "inativo", "name": "Usuario Desativado", "password_hash": "!", "profile_id": 4, "failed_attempts": 0, "locked_until": None, "last_login_at": base_dt - datetime.timedelta(days=60), "password_changed_at": base_dt - datetime.timedelta(days=60), "active": "N"},
-                                    {"id": 6, "login": "bloqueado", "name": "Usuario Temporariamente Bloqueado", "password_hash": "!", "profile_id": 2, "failed_attempts": 5, "locked_until": base_dt + datetime.timedelta(minutes=30), "last_login_at": base_dt - datetime.timedelta(hours=4), "password_changed_at": base_dt - datetime.timedelta(days=5), "active": "Y"},
+                                    {"id": 3, "login": "consulta", "name": "Auditor e Consulta", "password_hash": "!", "profile_id": 3, "failed_attempts": 0, "locked_until": None, "last_login_at": base_dt - datetime.timedelta(days=1), "password_changed_at": base_dt - datetime.timedelta(days=10), "active": "Y"},
+                                    {"id": 4, "login": "inativo", "name": "Usuario Desativado", "password_hash": "!", "profile_id": 3, "failed_attempts": 0, "locked_until": None, "last_login_at": base_dt - datetime.timedelta(days=60), "password_changed_at": base_dt - datetime.timedelta(days=60), "active": "N"},
+                                    {"id": 5, "login": "bloqueado", "name": "Usuario Temporariamente Bloqueado", "password_hash": "!", "profile_id": 2, "failed_attempts": 5, "locked_until": base_dt + datetime.timedelta(minutes=30), "last_login_at": base_dt - datetime.timedelta(hours=4), "password_changed_at": base_dt - datetime.timedelta(days=5), "active": "Y"},
                                 ]
                                 for u in users:
                                     u["created_at"] = base_dt - datetime.timedelta(days=60)
@@ -291,7 +289,7 @@ def load_seed(store, force=False, dev_password=None):
                                     if dev_password is not None and u["login"] not in _NO_PASSWORD_DEV:
                                         u["password_hash"] = security.hash_password(dev_password)
                                     store.users[u["id"]] = u
-                                store.seqs["tbsss_users"] = 6
+                                store.seqs["tbsss_users"] = 5
 
                                 # ---------------------------------------------------------
                                 # 5. Scripts (6)
@@ -337,7 +335,7 @@ def load_seed(store, force=False, dev_password=None):
                                     nid = store.next_id("tbsss_profile_script")
                                     store.profile_script[nid] = {"id": nid, "profile_id": 1, "script_id": s["id"]}
 
-                                # OPERATOR_PROD (id 2) -> EXEC_SCRIPT(1), VIEW_LOGS(2), CANCEL_TICKET(3), DOWNLOAD_OUTPUT(11), UPLOAD_INPUT(12), FILES_UPLOAD(13), FILES_DOWNLOAD(14)
+                                # OPERADOR (id 2) -> EXEC_SCRIPT(1), VIEW_LOGS(2), CANCEL_TICKET(3), DOWNLOAD_OUTPUT(11), UPLOAD_INPUT(12), FILES_UPLOAD(13), FILES_DOWNLOAD(14)
                                 for fid in (1, 2, 3, 11, 12, 13, 14):
                                     nid = store.next_id("tbsss_profile_feature")
                                     store.profile_feature[nid] = {"id": nid, "profile_id": 2, "feature_id": fid}
@@ -348,26 +346,15 @@ def load_seed(store, force=False, dev_password=None):
                                     nid = store.next_id("tbsss_profile_script")
                                     store.profile_script[nid] = {"id": nid, "profile_id": 2, "script_id": sid}
 
-                                # OPERATOR_HML (id 3) -> EXEC_SCRIPT(1), VIEW_LOGS(2), CANCEL_TICKET(3), DOWNLOAD_OUTPUT(11), UPLOAD_INPUT(12), FILES_UPLOAD(13), FILES_DOWNLOAD(14)
-                                for fid in (1, 2, 3, 11, 12, 13, 14):
-                                    nid = store.next_id("tbsss_profile_feature")
-                                    store.profile_feature[nid] = {"id": nid, "profile_id": 3, "feature_id": fid}
-                                for aid in (2, 3):
-                                    nid = store.next_id("tbsss_profile_env")
-                                    store.profile_env[nid] = {"id": nid, "profile_id": 3, "environment_id": aid}
-                                for sid in (1, 2, 3, 4):
-                                    nid = store.next_id("tbsss_profile_script")
-                                    store.profile_script[nid] = {"id": nid, "profile_id": 3, "script_id": sid}
-
-                                # CONSULTA (id 4) -> VIEW_LOGS(2)
+                                # CONSULTA (id 3) -> VIEW_LOGS(2)
                                 nid = store.next_id("tbsss_profile_feature")
-                                store.profile_feature[nid] = {"id": nid, "profile_id": 4, "feature_id": 2}
+                                store.profile_feature[nid] = {"id": nid, "profile_id": 3, "feature_id": 2}
                                 for aid in (1, 2):
                                     nid = store.next_id("tbsss_profile_env")
-                                    store.profile_env[nid] = {"id": nid, "profile_id": 4, "environment_id": aid}
+                                    store.profile_env[nid] = {"id": nid, "profile_id": 3, "environment_id": aid}
                                 for sid in (1, 2, 3, 4, 6):
                                     nid = store.next_id("tbsss_profile_script")
-                                    store.profile_script[nid] = {"id": nid, "profile_id": 4, "script_id": sid}
+                                    store.profile_script[nid] = {"id": nid, "profile_id": 3, "script_id": sid}
 
                                 # ---------------------------------------------------------
                                 # 8. Parametros (10)
@@ -436,7 +423,7 @@ def load_seed(store, force=False, dev_password=None):
                                     {"id": 1, "name": "Execucao Avulsa Carga", "script_id": 1, "environment": "PRODUCAO", "user_id": 1, "priority": 2, "recurrence_type": "ONCE", "cron_expression": None, "run_time": None, "week_days": None, "month_day": None, "params_json": '{"data_ref":"2026-10-15"}', "start_date": base_dt + datetime.timedelta(days=1), "end_date": None, "next_run_at": base_dt + datetime.timedelta(days=1), "last_run_at": None, "last_ticket_id": 31, "pause_reason": None, "active": "Y"},
                                     {"id": 2, "name": "Carga Diaria Madrugada", "script_id": 1, "environment": "HOMOLOGACAO", "user_id": 2, "priority": 2, "recurrence_type": "DAILY", "cron_expression": None, "run_time": "03:00", "week_days": None, "month_day": None, "params_json": '{"modo_exec":"SIMULACAO"}', "start_date": base_dt - datetime.timedelta(days=5), "end_date": None, "next_run_at": base_dt + datetime.timedelta(days=1), "last_run_at": base_dt - datetime.timedelta(hours=5), "last_ticket_id": 32, "pause_reason": None, "active": "Y"},
                                     {"id": 3, "name": "Relatorio Semanal Seg/Qua/Sex", "script_id": 2, "environment": "PRODUCAO", "user_id": 1, "priority": 1, "recurrence_type": "WEEKLY", "cron_expression": None, "run_time": "04:00", "week_days": "1,3,5", "month_day": None, "params_json": '{"formato_saida":"CSV"}', "start_date": base_dt - datetime.timedelta(days=10), "end_date": None, "next_run_at": base_dt + datetime.timedelta(days=2), "last_run_at": base_dt - datetime.timedelta(days=2), "last_ticket_id": 33, "pause_reason": None, "active": "Y"},
-                                    {"id": 4, "name": "Fechamento Mensal Dia 1", "script_id": 2, "environment": "HOMOLOGACAO", "user_id": 3, "priority": 3, "recurrence_type": "MONTHLY", "cron_expression": None, "run_time": "01:00", "week_days": None, "month_day": 1, "params_json": '{"formato_saida":"JSON"}', "start_date": base_dt - datetime.timedelta(days=30), "end_date": None, "next_run_at": base_dt + datetime.timedelta(days=15), "last_run_at": base_dt - datetime.timedelta(days=15), "last_ticket_id": 34, "pause_reason": None, "active": "Y"},
+                                    {"id": 4, "name": "Fechamento Mensal Dia 1", "script_id": 2, "environment": "HOMOLOGACAO", "user_id": 1, "priority": 3, "recurrence_type": "MONTHLY", "cron_expression": None, "run_time": "01:00", "week_days": None, "month_day": 1, "params_json": '{"formato_saida":"JSON"}', "start_date": base_dt - datetime.timedelta(days=30), "end_date": None, "next_run_at": base_dt + datetime.timedelta(days=15), "last_run_at": base_dt - datetime.timedelta(days=15), "last_ticket_id": 34, "pause_reason": None, "active": "Y"},
                                     {"id": 5, "name": "Limpeza Cron Periódica (Pausado)", "script_id": 3, "environment": "PRODUCAO", "user_id": 1, "priority": 2, "recurrence_type": "CRON", "cron_expression": "0 */4 * * *", "run_time": None, "week_days": None, "month_day": None, "params_json": "{}", "start_date": base_dt - datetime.timedelta(days=2), "end_date": None, "next_run_at": base_dt + datetime.timedelta(hours=4), "last_run_at": base_dt, "last_ticket_id": 35, "pause_reason": "MANUAL", "active": "N"},
                                 ]
                                 now_sch = recurrence.truncate_seconds(base_dt)
@@ -474,7 +461,7 @@ def load_seed(store, force=False, dev_password=None):
                                     script_id = ((tid - 1) % 4) + 1  # rotaciona scripts 1..4
                                     scr = store.scripts[script_id]
                                     env = "PRODUCAO" if tid % 2 == 1 else "HOMOLOGACAO"
-                                    requester = "admin" if tid % 3 == 0 else ("op.prod" if tid % 2 == 1 else "op.hml")
+                                    requester = "admin" if tid % 2 == 0 else "op.prod"
                                     prio = ((tid - 1) % 4) + 1
                                     if prio == 1 and requester != "admin":
                                         prio = 2  # prioridade 1 e reservada a admin (README §5.3)
@@ -632,16 +619,15 @@ def load_seed(store, force=False, dev_password=None):
                                 actions = [
                                     ("admin", "LOGIN_OK", "tbsss_users", 1, "Login bem-sucedido via web"),
                                     ("op.prod", "LOGIN_OK", "tbsss_users", 2, "Login bem-sucedido via web"),
-                                    ("op.hml", "LOGIN_OK", "tbsss_users", 3, "Login bem-sucedido via web"),
-                                    ("consulta", "LOGIN_OK", "tbsss_users", 4, "Login bem-sucedido via web"),
-                                    ("bloqueado", "LOGIN_FAILED", "tbsss_users", 6, "Tentativa de login com senha incorreta"),
-                                    ("bloqueado", "LOGIN_LOCKED", "tbsss_users", 6, "Conta bloqueada apos atingir limite de falhas"),
+                                    ("consulta", "LOGIN_OK", "tbsss_users", 3, "Login bem-sucedido via web"),
+                                    ("bloqueado", "LOGIN_FAILED", "tbsss_users", 5, "Tentativa de login com senha incorreta"),
+                                    ("bloqueado", "LOGIN_LOCKED", "tbsss_users", 5, "Conta bloqueada apos atingir limite de falhas"),
                                     ("admin", "CREATE", "tbsss_environments", 1, "Ambiente PRODUCAO cadastrado"),
                                     ("admin", "CREATE", "tbsss_environments", 2, "Ambiente HOMOLOGACAO cadastrado"),
                                     ("admin", "CREATE", "tbsss_environments", 3, "Ambiente DESENV cadastrado"),
                                     ("admin", "DEACTIVATE", "tbsss_environments", 3, "Ambiente DESENV desativado"),
                                     ("admin", "CREATE", "tbsss_profiles", 1, "Perfil ADMINISTRADOR cadastrado"),
-                                    ("admin", "CREATE", "tbsss_profiles", 2, "Perfil OPERATOR_PROD cadastrado"),
+                                    ("admin", "CREATE", "tbsss_profiles", 2, "Perfil OPERADOR cadastrado"),
                                     ("admin", "PERM_UPDATE", "tbsss_profiles", 2, "Matriz de permissoes atualizada: +EXEC_SCRIPT, +VIEW_LOGS"),
                                     ("admin", "CREATE", "tbsss_scripts", 1, "Script carga_diaria cadastrado"),
                                     ("admin", "CREATE", "tbsss_scripts", 2, "Script relatorio_mensal cadastrado"),
@@ -653,13 +639,13 @@ def load_seed(store, force=False, dev_password=None):
                                     ("admin", "CREATE", "tbsss_schedules", 5, "Regra Limpeza Cron Periodica cadastrada"),
                                     ("admin", "SCHEDULE_PAUSE", "tbsss_schedules", 5, "Agendamento pausado manualmente"),
                                     ("op.prod", "TICKET_CREATE", "tbsss_tickets", 1, "Ticket criado para carga_diaria em PRODUCAO"),
-                                    ("op.hml", "TICKET_CREATE", "tbsss_tickets", 2, "Ticket criado para relatorio_mensal em HOMOLOGACAO"),
+                                    ("op.prod", "TICKET_CREATE", "tbsss_tickets", 2, "Ticket criado para relatorio_mensal em HOMOLOGACAO"),
                                     ("op.prod", "TICKET_CREATE", "tbsss_tickets", 11, "Ticket criado para carga_diaria em PRODUCAO"),
                                     ("admin", "TICKET_CANCEL", "tbsss_tickets", 37, "Cancelamento solicitado para ticket 37"),
                                     ("admin", "TICKET_CANCEL", "tbsss_tickets", 38, "Cancelamento solicitado para ticket 38"),
                                     ("SYSTEM:agt-host01", "AGENT_START", "tbsss_agents", 1, "Agente agt-host01 iniciado no host worker01.internal"),
                                     ("SYSTEM:agt-host02", "AGENT_START", "tbsss_agents", 2, "Agente agt-host02 iniciado no host worker02.internal"),
-                                    ("admin", "UPDATE", "tbsss_users", 6, "Conta desbloqueada pelo administrador"),
+                                    ("admin", "UPDATE", "tbsss_users", 5, "Conta desbloqueada pelo administrador"),
                                 ]
                                 for i, (actor, action, ent, ent_id, det) in enumerate(actions, 1):
                                     store.audit[i] = {

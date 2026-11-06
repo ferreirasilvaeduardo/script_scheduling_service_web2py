@@ -481,12 +481,12 @@ class TestAdminLogin(unittest.TestCase):
         self.assertEqual([u[0] for u in padrao], [u[0] for u in ddl_builder.DEFAULT_USERS])
         self.assertEqual([u[0] for u in padrao if u[3]], ["admin"])
         renomeado = ddl_builder.seed_users("admin", "Fulano")
-        self.assertEqual(renomeado[0], ("admin", "Fulano", "ADMINISTRATOR", True))
+        self.assertEqual(renomeado[0], ("admin", "Fulano", "ADMINISTRADOR", True))
         novo = ddl_builder.seed_users("joao.silva", "Joao Silva")
-        self.assertEqual(novo[-1], ("joao.silva", "Joao Silva", "ADMINISTRATOR", True))
-        self.assertEqual(novo[0], ("admin", "Super Administrador", "ADMINISTRATOR", False))
+        self.assertEqual(novo[-1], ("joao.silva", "Joao Silva", "ADMINISTRADOR", True))
+        self.assertEqual(novo[0], ("admin", "Super Administrador", "ADMINISTRADOR", False))
         self.assertEqual(ddl_builder.seed_users("ana")[-1][1], "Administrador")
-        for login in ("ab", "Joao", "joao silva", "x" * 31, "op.prod", "op.hml", "consulta"):
+        for login in ("ab", "Joao", "joao silva", "x" * 31, "op.prod", "consulta"):
             with self.assertRaises(ValueError, msg=login):
                 ddl_builder.seed_users(login)
 
@@ -497,7 +497,7 @@ class TestAdminLogin(unittest.TestCase):
         sql = "\n".join(statements)
         bloco = [b for b in sql.split("MERGE INTO") if "'joao.silva' AS login" in b]
         self.assertEqual(len(bloco), 1)
-        self.assertIn("p.name = 'ADMINISTRATOR'", bloco[0])
+        self.assertIn("p.name = 'ADMINISTRADOR'", bloco[0])
         self.assertIn("'Joao Silva', '%s'" % hash_novo, bloco[0])
         admin = [b for b in sql.split("MERGE INTO") if "'admin' AS login" in b][0]
         self.assertIn(ddl_builder.HOMOLOGATION_DEFAULT_PASSWORD_HASH, admin)
@@ -515,8 +515,8 @@ class TestAdminLogin(unittest.TestCase):
             binds = chamada[0][1] if len(chamada[0]) > 1 else {}
             if isinstance(binds, dict) and "password_hash" in binds:
                 usuarios[binds["login"]] = binds
-        self.assertEqual(sorted(usuarios), sorted(["admin", "op.prod", "op.hml", "consulta", "joao.silva"]))
-        self.assertEqual(usuarios["joao.silva"]["profile"], "ADMINISTRATOR")
+        self.assertEqual(sorted(usuarios), sorted(["admin", "op.prod", "consulta", "joao.silva"]))
+        self.assertEqual(usuarios["joao.silva"]["profile"], "ADMINISTRADOR")
         self.assertEqual(usuarios["joao.silva"]["name"], "Joao Silva")
         self.assertTrue(security.verify_password("Senha@Forte2026!", usuarios["joao.silva"]["password_hash"]))
         self.assertEqual(usuarios["admin"]["password_hash"], ddl_builder.HOMOLOGATION_DEFAULT_PASSWORD_HASH)
@@ -524,7 +524,7 @@ class TestAdminLogin(unittest.TestCase):
     def test_clis_recusam_login_invalido_com_codigo_2(self):
         from sss.cli import generate_sql
         with tempfile.TemporaryDirectory() as tmp:
-            for login in ("op.hml", "AB"):
+            for login in ("op.prod", "AB"):
                 with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
                     self.assertEqual(generate_sql.main(["--admin-login", login, "--out-dir", tmp]), 2)
                 self.assertIn("--admin-login", err.getvalue())
@@ -642,7 +642,7 @@ class TestDdlSeedAndRollback(unittest.TestCase):
         seed = ddl_builder.build_seed_statements(self.owner, self.prefixo)
         count = ddl_builder._seed_rows_by_table(self.owner, self.prefixo)
         self.assertEqual(sum(count.values()), sum(1 for c in seed if c.lstrip().upper().startswith("MERGE INTO")))
-        self.assertEqual(count["users"], 4)
+        self.assertEqual(count["users"], 3)
         self.assertIn("'LINHAS TBSSS_SCRIPT_ENV' AS verificacao, '>=' AS regra, {} AS esperado".format(
             count["script_env"]), sql)
         # Resumo final com OK/FALHA em cada secao de verificacao.

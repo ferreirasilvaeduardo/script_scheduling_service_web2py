@@ -26,7 +26,7 @@ _RE_NAME = re.compile(r"[A-Z0-9_]{1,30}")
 _RE_NAME_FILTER = re.compile(r"[A-Za-z0-9_]{1,30}")
 
 MSG_NAME_REQUIRED = u"Informe o nome do perfil."
-MSG_NAME_INVALID = u"Use de 1 a 30 caracteres: letras maiúsculas, dígitos e _ (ex.: OPERATOR_PROD)."
+MSG_NAME_INVALID = u"Use de 1 a 30 caracteres: letras maiúsculas, dígitos e _ (ex.: OPERADOR)."
 MSG_NAME_DUPLICATE = u"Já existe um perfil com este nome."
 MSG_DESCRIPTION_LENGTH = u"A descrição deve ter no máximo %d caracteres." % DESCRIPTION_MAX_LENGTH
 MSG_LAST_ADMIN = ui_helpers.message("last_admin")

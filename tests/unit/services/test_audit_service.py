@@ -67,7 +67,7 @@ class _Base(unittest.TestCase):
         auth = auth_service.AuthService(
             repo_factory.get("users"), self.rbac, self.catalog, self.audit, 5, 900, self.log)
         self.ctx = {}
-        for uid, login, profile_id in ((1, "admin", 1), (2, "op.prod", 2), (4, "consulta", 4)):
+        for uid, login, profile_id in ((1, "admin", 1), (2, "op.prod", 2), (3, "consulta", 3)):
             session = {"user_id": uid, "login": login, "profile_id": profile_id,
                       "perm_version": self.rbac.profiles_get(profile_id)["perm_version"], "session_epoch": 0}
             self.ctx[login] = auth.revalidate(session)
@@ -161,7 +161,7 @@ class TestList(_Base):
     def test_seed_nos_ultimos_7_dias_e_ordenacao(self):
         res = self.svc.list(self.ctx["admin"], {}, 1, 100)
         self.assertEqual(res["errors"], {})
-        self.assertEqual(res["total"], 30)
+        self.assertEqual(res["total"], 29)
         keys = [(i["created_at"], i["id"]) for i in res["items"]]
         self.assertEqual(keys, sorted(keys, reverse=True))
 
@@ -175,11 +175,11 @@ class TestList(_Base):
 
     def test_filtros(self):
         cases = (
-            ({"action": "LOGIN_OK"}, 4),
-            ({"actor": "op.prod"}, 3),
+            ({"action": "LOGIN_OK"}, 3),
+            ({"actor": "op.prod"}, 4),
             ({"actor": "system:agt"}, 2),
-            ({"entity": "tbsss_users", "entity_id": "6"}, 3),
-            ({"ip": "127.0"}, 30),
+            ({"entity": "tbsss_users", "entity_id": "5"}, 3),
+            ({"ip": "127.0"}, 29),
             ({"ip": "10.9"}, 0),
         )
         for input_value, total in cases:
@@ -253,7 +253,7 @@ class TestExport(_Base):
     def test_respeita_filtros(self):
         _, rows, chunks = self.svc.export_csv(self.ctx["admin"], IP, {"action": "LOGIN_OK"})
         _, table = _read_csv(chunks)
-        self.assertEqual(rows, 4)
+        self.assertEqual(rows, 3)
         self.assertEqual(set(r[4] for r in table[1:]), {"LOGIN_OK"})
 
     def test_exportacao_auditada_e_fora_do_proprio_arquivo(self):

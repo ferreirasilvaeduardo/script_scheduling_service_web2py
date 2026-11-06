@@ -24,7 +24,7 @@ IP = "10.4.5.6"
 NOW = datetime.datetime(2026, 1, 15, 10, 0, 0, 123456)
 HORIZON = 1461
 SECRET = "tok-ultra-secreto-77"
-PERFIL_OP_PROD, PERFIL_OP_HML = 2, 3
+PERFIL_OP_PROD = 2
 FUNC_EXEC, FUNC_LOGS, FUNC_CANC, FUNC_CAD_AGD = 1, 2, 3, 9
 ARROW = u" → "
 
@@ -55,13 +55,17 @@ class _Base(unittest.TestCase):
 
         # MANAGE_SCHEDULES para os operadores (no seed, so o admin a tem).
         self.rbac.matrix_save(PERFIL_OP_PROD, [FUNC_EXEC, FUNC_LOGS, FUNC_CANC, FUNC_CAD_AGD], [1, 2], [1, 2, 3, 6], actor="teste")
-        self.rbac.matrix_save(PERFIL_OP_HML, [FUNC_EXEC, FUNC_LOGS, FUNC_CANC, FUNC_CAD_AGD], [2, 3], [1, 2, 3, 4], actor="teste")
         self.ctx = {
             "admin": self._ctx(1, "admin", 1),
             "op.prod": self._ctx(2, "op.prod", PERFIL_OP_PROD),
-            "op.hml": self._ctx(3, "op.hml", PERFIL_OP_HML),
-            "consulta": self._ctx(4, "consulta", 4),
+            "consulta": self._ctx(3, "consulta", 3),
         }
+        # Operador restrito a HOMOLOGACAO para testes de escopo
+        self.ctx["op.hml"] = dict(
+            self.ctx["op.prod"],
+            environments=frozenset(["HOMOLOGACAO"]),
+            scripts=frozenset([1, 2, 3]),
+        )
         self.now = NOW
         self.tickets = repo_factory.get("tickets")
         trigger = TicketService(self.catalog, self.tickets, self.log)
@@ -269,7 +273,7 @@ class TestEdit(_Base):
         self.assertIn(u"user_id: 2 (op.prod)%s1 (admin)" % ARROW, changes[0]["detail"])
 
     def test_edicao_de_regra_do_seed_por_outro_usuario(self):
-        # Regra 4: MENSAL, script 2 em HOMOLOGACAO, criada por op.hml (id 3).
+        # Regra 4: MENSAL, script 2 em HOMOLOGACAO, criada por admin (id 1).
         reg = self.agd.get(4)
         data = {"id": "4", "version": self._version(reg), "name": reg["name"], "recurrence_type": "MONTHLY",
                  "run_time": "01:00", "month_day": "1", "priority": "3",
@@ -278,7 +282,7 @@ class TestEdit(_Base):
         _id, errors = self.svc.save(self.ctx["op.prod"], IP, data)
         self.assertEqual(errors, {})
         self.assertEqual(self.agd.get(4)["user_id"], 2)
-        self.assertIn(u"user_id: 3 (op.hml)%s2 (op.prod)" % ARROW, self._audits("UPDATE")[0]["detail"])
+        self.assertIn(u"user_id: 1 (admin)%s2 (op.prod)" % ARROW, self._audits("UPDATE")[0]["detail"])
 
     def test_mesmo_editor_sem_mudanca_nao_audita(self):
         aid, _errors = self._save()
@@ -511,7 +515,7 @@ class TestPauseResume(_Base):
                                    respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
         self.svc.pause(self.ctx["admin"], IP, str(aid))
         users = repo_factory.get("users")
-        users.update(3, {"active": "N"}, actor="teste")
+        users.update(2, {"active": "N"}, actor="teste")
         with self.assertRaises(OperationDenied) as cm:
             self.svc.resume(self.ctx["admin"], IP, str(aid))
         self.assertIn(svc_mod.PAUSE_REASONS["USER_INACTIVE"], cm.exception.message)
@@ -618,7 +622,7 @@ class TestPreviewList(_Base):
         self.assertEqual(weekly["recurrence"], u"Às 04:00, seg, qua, sex")
         self.assertEqual(weekly["responsible"], "admin")
         self.assertEqual(weekly["script"], "relatorio_mensal")
-        self.assertEqual([i for i in all_value["items"] if i["id"] == 4][0]["responsible"], "op.hml")
+        self.assertEqual([i for i in all_value["items"] if i["id"] == 4][0]["responsible"], "admin")
 
     def test_lista_filtros(self):
         filters = svc_mod.normalize_filters({"environment": "producao", "active": "N", "name": " Limpeza "})

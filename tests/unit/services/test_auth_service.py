@@ -72,7 +72,7 @@ class TestAuthService(unittest.TestCase):
             users=self.users, rbac_repo=self.rbac, catalog=repo_factory.get("catalog"),
             audit=self.audit, max_attempts=MAX, lockout_s=LOCKOUT_S, log=log,
         )
-        self.users.update(5, {"password_hash": security.hash_password(self.password)}, actor="teste")
+        self.users.update(4, {"password_hash": security.hash_password(self.password)}, actor="teste")
         self.aud_base = max(a["id"] for a in self.audit.list(size=1000)["items"])
 
     def _actions(self, actor):
@@ -201,22 +201,22 @@ class TestAuthService(unittest.TestCase):
         self.assertIn("LOGIN_LOCKED", self._actions("fantasma"))
 
     def test_seed_bloqueado(self):
-        self.users.update(6, {"password_hash": security.hash_password(self.password),
+        self.users.update(5, {"password_hash": security.hash_password(self.password),
                                   "locked_until": START + datetime.timedelta(minutes=5)}, actor="teste")
         self.assertEqual(self.service.authenticate("bloqueado", self.password, "10.0.0.1"), (None, self.service.lockout_message))
 
     def test_usuario_inativo(self):
         self.assertEqual(self.service.authenticate("inativo", self.password, "10.0.0.1"), (None, MSG_GENERIC))
-        self.assertEqual(self.users.get_by_id(5)["failed_attempts"], 0)
+        self.assertEqual(self.users.get_by_id(4)["failed_attempts"], 0)
         self.assertEqual(self._actions("inativo"), ["LOGIN_FAILED"])
 
     def test_perfil_inativo(self):
-        self.rbac.profiles_update(4, {"active": "N"}, actor="teste")
+        self.rbac.profiles_update(3, {"active": "N"}, actor="teste")
         self.assertEqual(self.service.authenticate("consulta", self.password, "10.0.0.1"), (None, MSG_GENERIC))
 
     def test_hash_inutilizavel(self):
         self.users.update(3, {"password_hash": "!"}, actor="teste")
-        self.assertEqual(self.service.authenticate("op.hml", "!", "10.0.0.1"), (None, MSG_GENERIC))
+        self.assertEqual(self.service.authenticate("consulta", "!", "10.0.0.1"), (None, MSG_GENERIC))
 
     def test_rehash(self):
         self.users.update(1, {"password_hash": _hash_with_iterations(self.password, ITER_TESTE // 2)}, actor="teste")
@@ -286,8 +286,8 @@ class TestAuthService(unittest.TestCase):
     def test_revalidar_recarrega_com_perm_versao(self):
         session = self._session("consulta")
         self.assertNotIn("EXEC_SCRIPT", self.service.revalidate(session)["features"])
-        matrix = self.rbac.matrix_get(4)
-        self.rbac.matrix_save(4, list(matrix["funcs"]) + [1], matrix["ambs"], matrix["scrs"], actor="teste")
+        matrix = self.rbac.matrix_get(3)
+        self.rbac.matrix_save(3, list(matrix["funcs"]) + [1], matrix["ambs"], matrix["scrs"], actor="teste")
         ctx = self.service.revalidate(session)
         self.assertIn("EXEC_SCRIPT", ctx["features"])
         self.assertGreater(ctx["perm_version"], session["perm_version"])
@@ -307,7 +307,7 @@ class TestAuthService(unittest.TestCase):
 
     def test_revalidar_perfil_inativo(self):
         session = self._session("consulta")
-        self.rbac.profiles_update(4, {"active": "N"}, actor="teste")
+        self.rbac.profiles_update(3, {"active": "N"}, actor="teste")
         self.assertIsNone(self.service.revalidate(session))
         self.assertEqual(self._last_logout("consulta")["detail"],
                          u"sessão encerrada pela revalidação: perfil inativo")
@@ -364,7 +364,7 @@ class TestSeedDev(unittest.TestCase):
         password = secrets.token_urlsafe(16)
         with mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: password}):
             hashes = self._hashes()
-        for login in ("admin", "op.prod", "op.hml", "consulta"):
+        for login in ("admin", "op.prod", "consulta"):
             self.assertTrue(security.verify_password(password, hashes[login]), login)
         self.assertEqual(hashes["inativo"], "!")
         self.assertEqual(hashes["bloqueado"], "!")

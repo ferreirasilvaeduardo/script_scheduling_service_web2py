@@ -466,10 +466,9 @@ class TestReadiness(_Base):
         profiles = AdminProfilesService(self.rbac, self.catalog, repo_factory.get("users"), self.log)
         self.svc = AdminScriptsService(self.catalog, repo_factory.get("schedules"), self.log,
                                        lambda: NOW, runners=profiles.script_runners)
-        # So o op.hml (perfil 3) tem o script 1, em HOMOLOGACAO; os demais nao administradores, nada.
-        self.rbac.matrix_save(2, [1], [1], [], actor="teste")
-        self.rbac.matrix_save(3, [1], [2], [1], actor="teste")
-        self.rbac.matrix_save(4, [2], [1, 2], [], actor="teste")
+        # So o operador (perfil 2) tem o script 1, em HOMOLOGACAO; os demais nao administradores, nada.
+        self.rbac.matrix_save(2, [1], [2], [1], actor="teste")
+        self.rbac.matrix_save(3, [2], [1, 2], [], actor="teste")
 
     def _ready(self):
         return self.svc.form(self.ctx["admin"], "1")["readiness"]
@@ -478,11 +477,11 @@ class TestReadiness(_Base):
         r = self._ready()
         self.assertEqual((r["state"], r["css_class"], r["missing"]), (scr_mod.MSG_READY_OK, "success", []))
         names = dict((p["name"], p["details"]) for p in r["profiles"])
-        self.assertEqual(names["OPERATOR_HML"], ["HOMOLOGACAO"])
+        self.assertEqual(names["OPERADOR"], ["HOMOLOGACAO"])
         self.assertTrue(r["can_manage_profiles"])
 
     def test_so_administradores(self):
-        self.rbac.matrix_save(3, [1], [2], [], actor="teste")
+        self.rbac.matrix_save(2, [1], [2], [], actor="teste")
         r = self._ready()
         self.assertEqual((r["state"], [m["code"] for m in r["missing"]]), (scr_mod.MSG_READY_ADMIN_ONLY, ["profiles"]))
 

@@ -1767,7 +1767,7 @@ WHEN NOT MATCHED THEN
   VALUES (openrisow.sq_tbsprd_environments.NEXTVAL, 'GFPREPROD', 'BRTLVLTY3067SL (10.129.177.188)', '10.129.177.188/GFPR', 'Y', 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsprd_profiles dst
-USING (SELECT 'ADMINISTRATOR' AS name FROM DUAL) src
+USING (SELECT 'ADMINISTRADOR' AS name FROM DUAL) src
 ON (dst.name = src.name)
 WHEN MATCHED THEN
   UPDATE SET dst.description = 'Acesso irrestrito a todas as funcionalidades e ambientes',
@@ -1780,13 +1780,13 @@ WHEN MATCHED THEN
      OR NVL(dst.description, '~') <> 'Acesso irrestrito a todas as funcionalidades e ambientes'
 WHEN NOT MATCHED THEN
   INSERT (id, name, description, is_admin, perm_version, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profiles.NEXTVAL, 'ADMINISTRATOR', 'Acesso irrestrito a todas as funcionalidades e ambientes', 'Y', 1, 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsprd_profiles.NEXTVAL, 'ADMINISTRADOR', 'Acesso irrestrito a todas as funcionalidades e ambientes', 'Y', 1, 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'ADMINISTRATOR' AND f.code = 'EXEC_SCRIPT'
+   WHERE p.name = 'ADMINISTRADOR' AND f.code = 'EXEC_SCRIPT'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -1797,7 +1797,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'ADMINISTRATOR' AND f.code = 'VIEW_LOGS'
+   WHERE p.name = 'ADMINISTRADOR' AND f.code = 'VIEW_LOGS'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -1808,7 +1808,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'ADMINISTRATOR' AND f.code = 'CANCEL_TICKET'
+   WHERE p.name = 'ADMINISTRADOR' AND f.code = 'CANCEL_TICKET'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -1819,7 +1819,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'ADMINISTRATOR' AND f.code = 'DOWNLOAD_OUTPUT'
+   WHERE p.name = 'ADMINISTRADOR' AND f.code = 'DOWNLOAD_OUTPUT'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -1830,7 +1830,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'ADMINISTRATOR' AND f.code = 'UPLOAD_INPUT'
+   WHERE p.name = 'ADMINISTRADOR' AND f.code = 'UPLOAD_INPUT'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -1841,7 +1841,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'ADMINISTRATOR' AND f.code = 'FILES_UPLOAD'
+   WHERE p.name = 'ADMINISTRADOR' AND f.code = 'FILES_UPLOAD'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -1852,7 +1852,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'ADMINISTRATOR' AND f.code = 'FILES_DOWNLOAD'
+   WHERE p.name = 'ADMINISTRADOR' AND f.code = 'FILES_DOWNLOAD'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -1863,7 +1863,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'ADMINISTRATOR' AND f.code = 'MANAGE_USERS'
+   WHERE p.name = 'ADMINISTRADOR' AND f.code = 'MANAGE_USERS'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -1874,7 +1874,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'ADMINISTRATOR' AND f.code = 'MANAGE_PROFILES'
+   WHERE p.name = 'ADMINISTRADOR' AND f.code = 'MANAGE_PROFILES'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -1885,7 +1885,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'ADMINISTRATOR' AND f.code = 'MANAGE_ENVIRONMENTS'
+   WHERE p.name = 'ADMINISTRADOR' AND f.code = 'MANAGE_ENVIRONMENTS'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -1896,7 +1896,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'ADMINISTRATOR' AND f.code = 'MANAGE_SCRIPTS'
+   WHERE p.name = 'ADMINISTRADOR' AND f.code = 'MANAGE_SCRIPTS'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -1907,7 +1907,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'ADMINISTRATOR' AND f.code = 'MANAGE_PARAMETERS'
+   WHERE p.name = 'ADMINISTRADOR' AND f.code = 'MANAGE_PARAMETERS'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -1918,7 +1918,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'ADMINISTRATOR' AND f.code = 'MANAGE_SCHEDULES'
+   WHERE p.name = 'ADMINISTRADOR' AND f.code = 'MANAGE_SCHEDULES'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -1929,7 +1929,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'ADMINISTRATOR' AND f.code = 'VIEW_AUDIT'
+   WHERE p.name = 'ADMINISTRADOR' AND f.code = 'VIEW_AUDIT'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -1940,7 +1940,7 @@ MERGE INTO openrisow.tbsprd_profile_env dst
 USING (
   SELECT p.id AS profile_id, a.id AS environment_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_environments a
-   WHERE p.name = 'ADMINISTRATOR' AND a.name = 'CLONE2'
+   WHERE p.name = 'ADMINISTRADOR' AND a.name = 'CLONE2'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
 WHEN NOT MATCHED THEN
@@ -1951,7 +1951,7 @@ MERGE INTO openrisow.tbsprd_profile_env dst
 USING (
   SELECT p.id AS profile_id, a.id AS environment_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_environments a
-   WHERE p.name = 'ADMINISTRATOR' AND a.name = 'CLONE1'
+   WHERE p.name = 'ADMINISTRADOR' AND a.name = 'CLONE1'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
 WHEN NOT MATCHED THEN
@@ -1962,7 +1962,7 @@ MERGE INTO openrisow.tbsprd_profile_env dst
 USING (
   SELECT p.id AS profile_id, a.id AS environment_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_environments a
-   WHERE p.name = 'ADMINISTRATOR' AND a.name = 'CLONE6'
+   WHERE p.name = 'ADMINISTRADOR' AND a.name = 'CLONE6'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
 WHEN NOT MATCHED THEN
@@ -1973,7 +1973,7 @@ MERGE INTO openrisow.tbsprd_profile_env dst
 USING (
   SELECT p.id AS profile_id, a.id AS environment_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_environments a
-   WHERE p.name = 'ADMINISTRATOR' AND a.name = 'CLONE7'
+   WHERE p.name = 'ADMINISTRADOR' AND a.name = 'CLONE7'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
 WHEN NOT MATCHED THEN
@@ -1984,7 +1984,7 @@ MERGE INTO openrisow.tbsprd_profile_env dst
 USING (
   SELECT p.id AS profile_id, a.id AS environment_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_environments a
-   WHERE p.name = 'ADMINISTRATOR' AND a.name = 'GFPREPROD'
+   WHERE p.name = 'ADMINISTRADOR' AND a.name = 'GFPREPROD'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
 WHEN NOT MATCHED THEN
@@ -1992,26 +1992,26 @@ WHEN NOT MATCHED THEN
   VALUES (openrisow.sq_tbsprd_profile_env.NEXTVAL, src.profile_id, src.environment_id, SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsprd_profiles dst
-USING (SELECT 'OPERATOR_PROD' AS name FROM DUAL) src
+USING (SELECT 'OPERADOR' AS name FROM DUAL) src
 ON (dst.name = src.name)
 WHEN MATCHED THEN
-  UPDATE SET dst.description = 'Operador de Ambientes de Producao',
+  UPDATE SET dst.description = 'Operador Geral de Ambientes',
              dst.is_admin = 'N',
              dst.active = 'Y',
              dst.updated_at = SYSDATE,
              dst.updated_by = 'SYSTEM:init_db'
   WHERE dst.is_admin <> 'N'
      OR dst.active <> 'Y'
-     OR NVL(dst.description, '~') <> 'Operador de Ambientes de Producao'
+     OR NVL(dst.description, '~') <> 'Operador Geral de Ambientes'
 WHEN NOT MATCHED THEN
   INSERT (id, name, description, is_admin, perm_version, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profiles.NEXTVAL, 'OPERATOR_PROD', 'Operador de Ambientes de Producao', 'N', 1, 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsprd_profiles.NEXTVAL, 'OPERADOR', 'Operador Geral de Ambientes', 'N', 1, 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'OPERATOR_PROD' AND f.code = 'EXEC_SCRIPT'
+   WHERE p.name = 'OPERADOR' AND f.code = 'EXEC_SCRIPT'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -2022,7 +2022,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'OPERATOR_PROD' AND f.code = 'VIEW_LOGS'
+   WHERE p.name = 'OPERADOR' AND f.code = 'VIEW_LOGS'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -2033,7 +2033,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'OPERATOR_PROD' AND f.code = 'CANCEL_TICKET'
+   WHERE p.name = 'OPERADOR' AND f.code = 'CANCEL_TICKET'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -2044,7 +2044,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'OPERATOR_PROD' AND f.code = 'DOWNLOAD_OUTPUT'
+   WHERE p.name = 'OPERADOR' AND f.code = 'DOWNLOAD_OUTPUT'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -2055,7 +2055,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'OPERATOR_PROD' AND f.code = 'UPLOAD_INPUT'
+   WHERE p.name = 'OPERADOR' AND f.code = 'UPLOAD_INPUT'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -2066,7 +2066,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'OPERATOR_PROD' AND f.code = 'FILES_UPLOAD'
+   WHERE p.name = 'OPERADOR' AND f.code = 'FILES_UPLOAD'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -2077,7 +2077,7 @@ MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'OPERATOR_PROD' AND f.code = 'FILES_DOWNLOAD'
+   WHERE p.name = 'OPERADOR' AND f.code = 'FILES_DOWNLOAD'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -2088,7 +2088,7 @@ MERGE INTO openrisow.tbsprd_profile_env dst
 USING (
   SELECT p.id AS profile_id, a.id AS environment_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_environments a
-   WHERE p.name = 'OPERATOR_PROD' AND a.name = 'CLONE2'
+   WHERE p.name = 'OPERADOR' AND a.name = 'CLONE2'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
 WHEN NOT MATCHED THEN
@@ -2099,7 +2099,7 @@ MERGE INTO openrisow.tbsprd_profile_env dst
 USING (
   SELECT p.id AS profile_id, a.id AS environment_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_environments a
-   WHERE p.name = 'OPERATOR_PROD' AND a.name = 'CLONE1'
+   WHERE p.name = 'OPERADOR' AND a.name = 'CLONE1'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
 WHEN NOT MATCHED THEN
@@ -2110,7 +2110,7 @@ MERGE INTO openrisow.tbsprd_profile_env dst
 USING (
   SELECT p.id AS profile_id, a.id AS environment_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_environments a
-   WHERE p.name = 'OPERATOR_PROD' AND a.name = 'CLONE6'
+   WHERE p.name = 'OPERADOR' AND a.name = 'CLONE6'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
 WHEN NOT MATCHED THEN
@@ -2121,7 +2121,7 @@ MERGE INTO openrisow.tbsprd_profile_env dst
 USING (
   SELECT p.id AS profile_id, a.id AS environment_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_environments a
-   WHERE p.name = 'OPERATOR_PROD' AND a.name = 'CLONE7'
+   WHERE p.name = 'OPERADOR' AND a.name = 'CLONE7'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
 WHEN NOT MATCHED THEN
@@ -2132,7 +2132,7 @@ MERGE INTO openrisow.tbsprd_profile_env dst
 USING (
   SELECT p.id AS profile_id, a.id AS environment_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_environments a
-   WHERE p.name = 'OPERATOR_PROD' AND a.name = 'GFPREPROD'
+   WHERE p.name = 'OPERADOR' AND a.name = 'GFPREPROD'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
 WHEN NOT MATCHED THEN
@@ -2140,133 +2140,7 @@ WHEN NOT MATCHED THEN
   VALUES (openrisow.sq_tbsprd_profile_env.NEXTVAL, src.profile_id, src.environment_id, SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsprd_profiles dst
-USING (SELECT 'OPERATOR_HML' AS name FROM DUAL) src
-ON (dst.name = src.name)
-WHEN MATCHED THEN
-  UPDATE SET dst.description = 'Operador de Ambientes de Homologacao',
-             dst.is_admin = 'N',
-             dst.active = 'Y',
-             dst.updated_at = SYSDATE,
-             dst.updated_by = 'SYSTEM:init_db'
-  WHERE dst.is_admin <> 'N'
-     OR dst.active <> 'Y'
-     OR NVL(dst.description, '~') <> 'Operador de Ambientes de Homologacao'
-WHEN NOT MATCHED THEN
-  INSERT (id, name, description, is_admin, perm_version, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profiles.NEXTVAL, 'OPERATOR_HML', 'Operador de Ambientes de Homologacao', 'N', 1, 'Y', SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_feature dst
-USING (
-  SELECT p.id AS profile_id, f.id AS feature_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'OPERATOR_HML' AND f.code = 'EXEC_SCRIPT'
-) src
-ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, feature_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_feature.NEXTVAL, src.profile_id, src.feature_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_feature dst
-USING (
-  SELECT p.id AS profile_id, f.id AS feature_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'OPERATOR_HML' AND f.code = 'VIEW_LOGS'
-) src
-ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, feature_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_feature.NEXTVAL, src.profile_id, src.feature_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_feature dst
-USING (
-  SELECT p.id AS profile_id, f.id AS feature_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'OPERATOR_HML' AND f.code = 'CANCEL_TICKET'
-) src
-ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, feature_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_feature.NEXTVAL, src.profile_id, src.feature_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_feature dst
-USING (
-  SELECT p.id AS profile_id, f.id AS feature_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'OPERATOR_HML' AND f.code = 'DOWNLOAD_OUTPUT'
-) src
-ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, feature_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_feature.NEXTVAL, src.profile_id, src.feature_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_feature dst
-USING (
-  SELECT p.id AS profile_id, f.id AS feature_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'OPERATOR_HML' AND f.code = 'UPLOAD_INPUT'
-) src
-ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, feature_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_feature.NEXTVAL, src.profile_id, src.feature_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_feature dst
-USING (
-  SELECT p.id AS profile_id, f.id AS feature_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'OPERATOR_HML' AND f.code = 'FILES_UPLOAD'
-) src
-ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, feature_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_feature.NEXTVAL, src.profile_id, src.feature_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_feature dst
-USING (
-  SELECT p.id AS profile_id, f.id AS feature_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'OPERATOR_HML' AND f.code = 'FILES_DOWNLOAD'
-) src
-ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, feature_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_feature.NEXTVAL, src.profile_id, src.feature_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_env dst
-USING (
-  SELECT p.id AS profile_id, a.id AS environment_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_environments a
-   WHERE p.name = 'OPERATOR_HML' AND a.name = 'CLONE6'
-) src
-ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, environment_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_env.NEXTVAL, src.profile_id, src.environment_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_env dst
-USING (
-  SELECT p.id AS profile_id, a.id AS environment_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_environments a
-   WHERE p.name = 'OPERATOR_HML' AND a.name = 'CLONE7'
-) src
-ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, environment_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_env.NEXTVAL, src.profile_id, src.environment_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_env dst
-USING (
-  SELECT p.id AS profile_id, a.id AS environment_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_environments a
-   WHERE p.name = 'OPERATOR_HML' AND a.name = 'GFPREPROD'
-) src
-ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, environment_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_env.NEXTVAL, src.profile_id, src.environment_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profiles dst
-USING (SELECT 'READ_ONLY' AS name FROM DUAL) src
+USING (SELECT 'CONSULTA' AS name FROM DUAL) src
 ON (dst.name = src.name)
 WHEN MATCHED THEN
   UPDATE SET dst.description = 'Perfil de Apenas Leitura e Consulta',
@@ -2279,13 +2153,13 @@ WHEN MATCHED THEN
      OR NVL(dst.description, '~') <> 'Perfil de Apenas Leitura e Consulta'
 WHEN NOT MATCHED THEN
   INSERT (id, name, description, is_admin, perm_version, active, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profiles.NEXTVAL, 'READ_ONLY', 'Perfil de Apenas Leitura e Consulta', 'N', 1, 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsprd_profiles.NEXTVAL, 'CONSULTA', 'Perfil de Apenas Leitura e Consulta', 'N', 1, 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsprd_profile_feature dst
 USING (
   SELECT p.id AS profile_id, f.id AS feature_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_features f
-   WHERE p.name = 'READ_ONLY' AND f.code = 'VIEW_LOGS'
+   WHERE p.name = 'CONSULTA' AND f.code = 'VIEW_LOGS'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)
 WHEN NOT MATCHED THEN
@@ -2296,7 +2170,7 @@ MERGE INTO openrisow.tbsprd_profile_env dst
 USING (
   SELECT p.id AS profile_id, a.id AS environment_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_environments a
-   WHERE p.name = 'READ_ONLY' AND a.name = 'CLONE2'
+   WHERE p.name = 'CONSULTA' AND a.name = 'CLONE2'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
 WHEN NOT MATCHED THEN
@@ -2307,7 +2181,7 @@ MERGE INTO openrisow.tbsprd_profile_env dst
 USING (
   SELECT p.id AS profile_id, a.id AS environment_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_environments a
-   WHERE p.name = 'READ_ONLY' AND a.name = 'CLONE1'
+   WHERE p.name = 'CONSULTA' AND a.name = 'CLONE1'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
 WHEN NOT MATCHED THEN
@@ -2318,7 +2192,7 @@ MERGE INTO openrisow.tbsprd_profile_env dst
 USING (
   SELECT p.id AS profile_id, a.id AS environment_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_environments a
-   WHERE p.name = 'READ_ONLY' AND a.name = 'CLONE6'
+   WHERE p.name = 'CONSULTA' AND a.name = 'CLONE6'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
 WHEN NOT MATCHED THEN
@@ -2329,7 +2203,7 @@ MERGE INTO openrisow.tbsprd_profile_env dst
 USING (
   SELECT p.id AS profile_id, a.id AS environment_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_environments a
-   WHERE p.name = 'READ_ONLY' AND a.name = 'CLONE7'
+   WHERE p.name = 'CONSULTA' AND a.name = 'CLONE7'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
 WHEN NOT MATCHED THEN
@@ -2340,7 +2214,7 @@ MERGE INTO openrisow.tbsprd_profile_env dst
 USING (
   SELECT p.id AS profile_id, a.id AS environment_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_environments a
-   WHERE p.name = 'READ_ONLY' AND a.name = 'GFPREPROD'
+   WHERE p.name = 'CONSULTA' AND a.name = 'GFPREPROD'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)
 WHEN NOT MATCHED THEN
@@ -2911,7 +2785,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'ADMINISTRATOR' AND s.name = 'zipar_arquivos'
+   WHERE p.name = 'ADMINISTRADOR' AND s.name = 'zipar_arquivos'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -2922,7 +2796,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_PROD' AND s.name = 'zipar_arquivos'
+   WHERE p.name = 'OPERADOR' AND s.name = 'zipar_arquivos'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -2933,18 +2807,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_HML' AND s.name = 'zipar_arquivos'
-) src
-ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, script_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_script.NEXTVAL, src.profile_id, src.script_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_script dst
-USING (
-  SELECT p.id AS profile_id, s.id AS script_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'READ_ONLY' AND s.name = 'zipar_arquivos'
+   WHERE p.name = 'CONSULTA' AND s.name = 'zipar_arquivos'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -3100,7 +2963,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'ADMINISTRATOR' AND s.name = 'descompactar_zip'
+   WHERE p.name = 'ADMINISTRADOR' AND s.name = 'descompactar_zip'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -3111,7 +2974,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_PROD' AND s.name = 'descompactar_zip'
+   WHERE p.name = 'OPERADOR' AND s.name = 'descompactar_zip'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -3122,18 +2985,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_HML' AND s.name = 'descompactar_zip'
-) src
-ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, script_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_script.NEXTVAL, src.profile_id, src.script_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_script dst
-USING (
-  SELECT p.id AS profile_id, s.id AS script_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'READ_ONLY' AND s.name = 'descompactar_zip'
+   WHERE p.name = 'CONSULTA' AND s.name = 'descompactar_zip'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -3269,7 +3121,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'ADMINISTRATOR' AND s.name = 'quebrar_arquivo'
+   WHERE p.name = 'ADMINISTRADOR' AND s.name = 'quebrar_arquivo'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -3280,7 +3132,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_PROD' AND s.name = 'quebrar_arquivo'
+   WHERE p.name = 'OPERADOR' AND s.name = 'quebrar_arquivo'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -3291,18 +3143,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_HML' AND s.name = 'quebrar_arquivo'
-) src
-ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, script_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_script.NEXTVAL, src.profile_id, src.script_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_script dst
-USING (
-  SELECT p.id AS profile_id, s.id AS script_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'READ_ONLY' AND s.name = 'quebrar_arquivo'
+   WHERE p.name = 'CONSULTA' AND s.name = 'quebrar_arquivo'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -3458,7 +3299,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'ADMINISTRATOR' AND s.name = 'juntar_arquivos'
+   WHERE p.name = 'ADMINISTRADOR' AND s.name = 'juntar_arquivos'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -3469,7 +3310,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_PROD' AND s.name = 'juntar_arquivos'
+   WHERE p.name = 'OPERADOR' AND s.name = 'juntar_arquivos'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -3480,18 +3321,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_HML' AND s.name = 'juntar_arquivos'
-) src
-ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, script_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_script.NEXTVAL, src.profile_id, src.script_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_script dst
-USING (
-  SELECT p.id AS profile_id, s.id AS script_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'READ_ONLY' AND s.name = 'juntar_arquivos'
+   WHERE p.name = 'CONSULTA' AND s.name = 'juntar_arquivos'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -3627,7 +3457,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'ADMINISTRATOR' AND s.name = 'converter_encoding'
+   WHERE p.name = 'ADMINISTRADOR' AND s.name = 'converter_encoding'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -3638,7 +3468,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_PROD' AND s.name = 'converter_encoding'
+   WHERE p.name = 'OPERADOR' AND s.name = 'converter_encoding'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -3649,18 +3479,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_HML' AND s.name = 'converter_encoding'
-) src
-ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, script_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_script.NEXTVAL, src.profile_id, src.script_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_script dst
-USING (
-  SELECT p.id AS profile_id, s.id AS script_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'READ_ONLY' AND s.name = 'converter_encoding'
+   WHERE p.name = 'CONSULTA' AND s.name = 'converter_encoding'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -3836,7 +3655,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'ADMINISTRATOR' AND s.name = 'substituir_texto'
+   WHERE p.name = 'ADMINISTRADOR' AND s.name = 'substituir_texto'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -3847,7 +3666,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_PROD' AND s.name = 'substituir_texto'
+   WHERE p.name = 'OPERADOR' AND s.name = 'substituir_texto'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -3858,18 +3677,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_HML' AND s.name = 'substituir_texto'
-) src
-ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, script_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_script.NEXTVAL, src.profile_id, src.script_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_script dst
-USING (
-  SELECT p.id AS profile_id, s.id AS script_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'READ_ONLY' AND s.name = 'substituir_texto'
+   WHERE p.name = 'CONSULTA' AND s.name = 'substituir_texto'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -4045,7 +3853,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'ADMINISTRATOR' AND s.name = 'remover_duplicadas'
+   WHERE p.name = 'ADMINISTRADOR' AND s.name = 'remover_duplicadas'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -4056,7 +3864,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_PROD' AND s.name = 'remover_duplicadas'
+   WHERE p.name = 'OPERADOR' AND s.name = 'remover_duplicadas'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -4067,18 +3875,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_HML' AND s.name = 'remover_duplicadas'
-) src
-ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, script_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_script.NEXTVAL, src.profile_id, src.script_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_script dst
-USING (
-  SELECT p.id AS profile_id, s.id AS script_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'READ_ONLY' AND s.name = 'remover_duplicadas'
+   WHERE p.name = 'CONSULTA' AND s.name = 'remover_duplicadas'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -4234,7 +4031,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'ADMINISTRATOR' AND s.name = 'gerar_hash_arquivo'
+   WHERE p.name = 'ADMINISTRADOR' AND s.name = 'gerar_hash_arquivo'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -4245,7 +4042,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_PROD' AND s.name = 'gerar_hash_arquivo'
+   WHERE p.name = 'OPERADOR' AND s.name = 'gerar_hash_arquivo'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -4256,18 +4053,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_HML' AND s.name = 'gerar_hash_arquivo'
-) src
-ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, script_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_script.NEXTVAL, src.profile_id, src.script_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_script dst
-USING (
-  SELECT p.id AS profile_id, s.id AS script_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'READ_ONLY' AND s.name = 'gerar_hash_arquivo'
+   WHERE p.name = 'CONSULTA' AND s.name = 'gerar_hash_arquivo'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -4403,7 +4189,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'ADMINISTRATOR' AND s.name = 'compactar_targz'
+   WHERE p.name = 'ADMINISTRADOR' AND s.name = 'compactar_targz'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -4414,7 +4200,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_PROD' AND s.name = 'compactar_targz'
+   WHERE p.name = 'OPERADOR' AND s.name = 'compactar_targz'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -4425,18 +4211,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_HML' AND s.name = 'compactar_targz'
-) src
-ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, script_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_script.NEXTVAL, src.profile_id, src.script_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_script dst
-USING (
-  SELECT p.id AS profile_id, s.id AS script_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'READ_ONLY' AND s.name = 'compactar_targz'
+   WHERE p.name = 'CONSULTA' AND s.name = 'compactar_targz'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -4572,7 +4347,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'ADMINISTRATOR' AND s.name = 'descompactar_targz'
+   WHERE p.name = 'ADMINISTRADOR' AND s.name = 'descompactar_targz'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -4583,7 +4358,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_PROD' AND s.name = 'descompactar_targz'
+   WHERE p.name = 'OPERADOR' AND s.name = 'descompactar_targz'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -4594,18 +4369,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_HML' AND s.name = 'descompactar_targz'
-) src
-ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, script_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_script.NEXTVAL, src.profile_id, src.script_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_script dst
-USING (
-  SELECT p.id AS profile_id, s.id AS script_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'READ_ONLY' AND s.name = 'descompactar_targz'
+   WHERE p.name = 'CONSULTA' AND s.name = 'descompactar_targz'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -4741,7 +4505,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'ADMINISTRATOR' AND s.name = 'contar_linhas_arquivo'
+   WHERE p.name = 'ADMINISTRADOR' AND s.name = 'contar_linhas_arquivo'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -4752,7 +4516,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_PROD' AND s.name = 'contar_linhas_arquivo'
+   WHERE p.name = 'OPERADOR' AND s.name = 'contar_linhas_arquivo'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -4763,18 +4527,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_HML' AND s.name = 'contar_linhas_arquivo'
-) src
-ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, script_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_script.NEXTVAL, src.profile_id, src.script_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_script dst
-USING (
-  SELECT p.id AS profile_id, s.id AS script_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'READ_ONLY' AND s.name = 'contar_linhas_arquivo'
+   WHERE p.name = 'CONSULTA' AND s.name = 'contar_linhas_arquivo'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -4890,7 +4643,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'ADMINISTRATOR' AND s.name = 'filtrar_linhas'
+   WHERE p.name = 'ADMINISTRADOR' AND s.name = 'filtrar_linhas'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -4901,7 +4654,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_PROD' AND s.name = 'filtrar_linhas'
+   WHERE p.name = 'OPERADOR' AND s.name = 'filtrar_linhas'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -4912,18 +4665,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_HML' AND s.name = 'filtrar_linhas'
-) src
-ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, script_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_script.NEXTVAL, src.profile_id, src.script_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_script dst
-USING (
-  SELECT p.id AS profile_id, s.id AS script_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'READ_ONLY' AND s.name = 'filtrar_linhas'
+   WHERE p.name = 'CONSULTA' AND s.name = 'filtrar_linhas'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -5099,7 +4841,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'ADMINISTRATOR' AND s.name = 'ordenar_arquivo'
+   WHERE p.name = 'ADMINISTRADOR' AND s.name = 'ordenar_arquivo'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -5110,7 +4852,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_PROD' AND s.name = 'ordenar_arquivo'
+   WHERE p.name = 'OPERADOR' AND s.name = 'ordenar_arquivo'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -5121,18 +4863,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_HML' AND s.name = 'ordenar_arquivo'
-) src
-ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, script_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_script.NEXTVAL, src.profile_id, src.script_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_script dst
-USING (
-  SELECT p.id AS profile_id, s.id AS script_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'READ_ONLY' AND s.name = 'ordenar_arquivo'
+   WHERE p.name = 'CONSULTA' AND s.name = 'ordenar_arquivo'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -5308,7 +5039,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'ADMINISTRATOR' AND s.name = 'limpar_linhas_vazias'
+   WHERE p.name = 'ADMINISTRADOR' AND s.name = 'limpar_linhas_vazias'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -5319,7 +5050,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_PROD' AND s.name = 'limpar_linhas_vazias'
+   WHERE p.name = 'OPERADOR' AND s.name = 'limpar_linhas_vazias'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -5330,18 +5061,7 @@ MERGE INTO openrisow.tbsprd_profile_script dst
 USING (
   SELECT p.id AS profile_id, s.id AS script_id
     FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'OPERATOR_HML' AND s.name = 'limpar_linhas_vazias'
-) src
-ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
-WHEN NOT MATCHED THEN
-  INSERT (id, profile_id, script_id, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_profile_script.NEXTVAL, src.profile_id, src.script_id, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_profile_script dst
-USING (
-  SELECT p.id AS profile_id, s.id AS script_id
-    FROM openrisow.tbsprd_profiles p, openrisow.tbsprd_scripts s
-   WHERE p.name = 'READ_ONLY' AND s.name = 'limpar_linhas_vazias'
+   WHERE p.name = 'CONSULTA' AND s.name = 'limpar_linhas_vazias'
 ) src
 ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)
 WHEN NOT MATCHED THEN
@@ -5399,7 +5119,7 @@ MERGE INTO openrisow.tbsprd_users dst
 USING (
   SELECT 'admin' AS login, p.id AS profile_id
     FROM openrisow.tbsprd_profiles p
-   WHERE p.name = 'ADMINISTRATOR'
+   WHERE p.name = 'ADMINISTRADOR'
 ) src
 ON (dst.login = src.login)
 WHEN MATCHED THEN
@@ -5419,7 +5139,7 @@ MERGE INTO openrisow.tbsprd_users dst
 USING (
   SELECT 'op.prod' AS login, p.id AS profile_id
     FROM openrisow.tbsprd_profiles p
-   WHERE p.name = 'OPERATOR_PROD'
+   WHERE p.name = 'OPERADOR'
 ) src
 ON (dst.login = src.login)
 WHEN MATCHED THEN
@@ -5437,29 +5157,9 @@ WHEN NOT MATCHED THEN
 
 MERGE INTO openrisow.tbsprd_users dst
 USING (
-  SELECT 'op.hml' AS login, p.id AS profile_id
-    FROM openrisow.tbsprd_profiles p
-   WHERE p.name = 'OPERATOR_HML'
-) src
-ON (dst.login = src.login)
-WHEN MATCHED THEN
-  UPDATE SET dst.name = 'Operador Homologacao',
-             dst.profile_id = src.profile_id,
-             dst.active = 'Y',
-             dst.updated_at = SYSDATE,
-             dst.updated_by = 'SYSTEM:init_db'
-  WHERE dst.name <> 'Operador Homologacao'
-     OR dst.profile_id <> src.profile_id
-     OR dst.active <> 'Y'
-WHEN NOT MATCHED THEN
-  INSERT (id, login, name, password_hash, profile_id, active, session_epoch, failed_attempts, created_at, created_by)
-  VALUES (openrisow.sq_tbsprd_users.NEXTVAL, 'op.hml', 'Operador Homologacao', 'pbkdf2_sha256$200000$8007db1bd770663178d0f1b1a129140c$9d9604af27e21326e982e5e7c64bfdd868c0995a97181b5a9695149755852d63', src.profile_id, 'Y', 0, 0, SYSDATE, 'SYSTEM:init_db');
-
-MERGE INTO openrisow.tbsprd_users dst
-USING (
   SELECT 'consulta' AS login, p.id AS profile_id
     FROM openrisow.tbsprd_profiles p
-   WHERE p.name = 'READ_ONLY'
+   WHERE p.name = 'CONSULTA'
 ) src
 ON (dst.login = src.login)
 WHEN MATCHED THEN

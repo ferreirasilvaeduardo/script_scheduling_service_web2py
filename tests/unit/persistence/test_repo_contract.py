@@ -674,8 +674,8 @@ class BaseRepoContractTest(object):
                              "next_run_at": datetime.datetime(2030, 1, 16, 3, 0)}, actor="ana")
         self.m.note("schedules", rule["id"])
         self._check_insert(rule, "ana")
-        edited = sch.update(rule["id"], {"name": "TST %s REG2" % suf, "user_id": c["u2"]["id"]}, actor="op.hml")
-        self._check_update(rule, edited, "op.hml")
+        edited = sch.update(rule["id"], {"name": "TST %s REG2" % suf, "user_id": c["u2"]["id"]}, actor="op.prod")
+        self._check_update(rule, edited, "op.prod")
         self.assertEqual(edited["created_by"], "ana", "o criador original nunca muda (R-g)")
         paused = sch.pause(rule["id"], "MANUAL", old_date=edited["next_run_at"], actor="bia")
         self._check_update(rule, paused, "bia")
@@ -745,7 +745,7 @@ class BaseLastAdminTest(object):
 
     def test_perfil_ultimo_admin_recusado_sem_alterar(self):
         rbac = self.obter_repo("rbac")
-        admin = rbac.profiles_list(filters={"name": "ADMINISTRATOR"})["items"][0]
+        admin = rbac.profiles_list(filters={"name": "ADMINISTRADOR"})["items"][0]
         version = admin["perm_version"]
         for data in ({"active": "N"}, {"is_admin": "N"}):
             with self.assertRaises(RepoViolation) as ctx:
@@ -830,13 +830,13 @@ class TestRepoContractFake(unittest.TestCase, BaseRepoContractTest):
         self.assertEqual([v["created_by"] for v in new], ["ana"])
         self.assertEqual(cat.scripts_get(sid)["updated_by"], "ana")
 
-        matrix = rbac.matrix_get(4)
-        before = self._lines("profile_env", profile_id=4)
-        rbac.matrix_save(4, matrix["funcs"], matrix["ambs"], matrix["scrs"] + [5], actor="bia")
-        after = self._lines("profile_env", profile_id=4)
+        matrix = rbac.matrix_get(3)
+        before = self._lines("profile_env", profile_id=3)
+        rbac.matrix_save(3, matrix["funcs"], matrix["ambs"], matrix["scrs"] + [5], actor="bia")
+        after = self._lines("profile_env", profile_id=3)
         self.assertEqual(after, before, "dimensao sem mudanca fica intacta")
-        self.assertEqual(rbac.profiles_get(4)["updated_by"], "bia")
-        self.assertEqual([v["created_by"] for k, v in self._lines("profile_script", profile_id=4).items()
+        self.assertEqual(rbac.profiles_get(3)["updated_by"], "bia")
+        self.assertEqual([v["created_by"] for k, v in self._lines("profile_script", profile_id=3).items()
                           if v["script_id"] == 5], ["bia"])
 
         links = cat.script_params_get(sid)

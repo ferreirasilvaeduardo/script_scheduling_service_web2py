@@ -23,10 +23,10 @@ IP = "10.7.7.7"
 SESSIONS = {
     "admin": {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0},
     "op.prod": {"user_id": 2, "login": "op.prod", "profile_id": 2, "perm_version": 1, "session_epoch": 0},
-    "consulta": {"user_id": 4, "login": "consulta", "profile_id": 4, "perm_version": 1, "session_epoch": 0},
+    "consulta": {"user_id": 3, "login": "consulta", "profile_id": 3, "perm_version": 1, "session_epoch": 0},
 }
-# Seed FAKE: perfil 1 ADMINISTRADOR (unico admin, usuario admin), 4 CONSULTA (usuario consulta).
-PERFIL_ADMIN, PERFIL_CONSULTA = 1, 4
+# Seed FAKE: perfil 1 ADMINISTRADOR (unico admin, usuario admin), 3 CONSULTA (usuario consulta).
+PERFIL_ADMIN, PERFIL_CONSULTA = 1, 3
 
 
 class _Base(unittest.TestCase):
@@ -73,7 +73,7 @@ class _Base(unittest.TestCase):
     def _new_admin_with_user(self):
         new_id, errors = self.svc.save(self.ctx["admin"], IP, None, {"name": "ADMIN_RESERVA", "is_admin": "Y"})
         self.assertEqual(errors, {})
-        u = self.users.get_by_login("op.hml")
+        u = self.users.get_by_login("op.prod")
         self.users.update(u["id"], {"profile_id": new_id}, actor="teste")
         return new_id
 
@@ -187,7 +187,7 @@ class TestWhoCan(_Base):
         from sss.core import rbac
         q = self.svc.who_can(self.ctx["admin"], script_id="1")
         profiles = self._names(q["profiles"])
-        self.assertEqual(profiles["ADMINISTRATOR"]["reason"], u"administrador")
+        self.assertEqual(profiles["ADMINISTRADOR"]["reason"], u"administrador")
         # Cada perfil listado tem um usuario cujo contexto can_execute no ambiente indicado.
         catalog = self.svc._catalog
         script = catalog.scripts_get(1)
@@ -205,9 +205,9 @@ class TestWhoCan(_Base):
         env = [a for a in self.svc._catalog.environments_list(page=1, size=50)["items"]
                if a["name"] == "HOMOLOGACAO"][0]
         q = self.svc.who_can(self.ctx["admin"], environment_id=str(env["id"]))
-        self.assertIn("READ_ONLY", self._names(q["inactive_items"]))
-        self.assertNotIn("READ_ONLY", self._names(q["profiles"]))
-        self.assertTrue(self._names(q["profiles"])["ADMINISTRATOR"]["details"])
+        self.assertIn("CONSULTA", self._names(q["inactive_items"]))
+        self.assertNotIn("CONSULTA", self._names(q["profiles"]))
+        self.assertTrue(self._names(q["profiles"])["ADMINISTRADOR"]["details"])
 
     def test_script_inativo_avisa_e_acesso(self):
         self.svc._catalog.scripts_update(5, {"active": "N"}, actor="teste")

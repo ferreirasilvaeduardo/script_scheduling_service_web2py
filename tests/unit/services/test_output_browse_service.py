@@ -21,8 +21,7 @@ IP = "10.1.2.3"
 SESSIONS = {
     "admin": {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0},
     "op.prod": {"user_id": 2, "login": "op.prod", "profile_id": 2, "perm_version": 1, "session_epoch": 0},
-    "op.hml": {"user_id": 3, "login": "op.hml", "profile_id": 3, "perm_version": 1, "session_epoch": 0},
-    "consulta": {"user_id": 4, "login": "consulta", "profile_id": 4, "perm_version": 1, "session_epoch": 0},
+    "consulta": {"user_id": 3, "login": "consulta", "profile_id": 3, "perm_version": 1, "session_epoch": 0},
 }
 # Seed FAKE: o ticket 17 (carga_diaria em PRODUCAO, do op.prod) tem a unica saida AVAILABLE.
 TID, SID, ENV = 17, 1, "PRODUCAO"
@@ -49,6 +48,7 @@ class _Base(unittest.TestCase):
         auth = auth_service.AuthService(repo_factory.get("users"), repo_factory.get("rbac"),
                                         repo_factory.get("catalog"), self.audit, 5, 900, log)
         self.ctx = dict((login, auth.revalidate(session)) for login, session in SESSIONS.items())
+        self.ctx["op_sem_prod"] = dict(self.ctx["op.prod"], environments=frozenset(["HOMOLOGACAO"]))
         self.svc = OutputBrowseService(self.tickets, repo_factory.get("catalog"), self.audit, log)
         # O seed monta as datas a partir de store.now(): o dia da saida vem do started_at do ticket (README §5.9).
         self.day_start = self.tickets.get(TID)["started_at"].replace(hour=0, minute=0, second=0, microsecond=0)
@@ -82,14 +82,14 @@ class TestNavegacao(_Base):
         self.assertEqual(sum(e["count"] for e in everything), 1)
 
     def test_escopo_e_funcionalidade(self):
-        # op.hml nao tem PRODUCAO: nada a listar e 404 (nunca 403) ao forcar o ambiente ou o ticket.
-        self.assertEqual(self.svc.environments(self.ctx["op.hml"]), [])
-        for call in (lambda: self.svc.scripts(self.ctx["op.hml"], ENV),
-                     lambda: self.svc.days(self.ctx["op.hml"], ENV, SID),
-                     lambda: self.svc.tickets(self.ctx["op.hml"], ENV, SID, self.day),
-                     lambda: self.svc.files(self.ctx["op.hml"], TID),
-                     lambda: self.svc.zip_download(self.ctx["op.hml"], IP, TID),
-                     lambda: self.svc.file_download(self.ctx["op.hml"], IP, TID, "resumo.txt")):
+        # Operador sem PRODUCAO: nada a listar e 404 (nunca 403) ao forcar o ambiente ou o ticket.
+        self.assertEqual(self.svc.environments(self.ctx["op_sem_prod"]), [])
+        for call in (lambda: self.svc.scripts(self.ctx["op_sem_prod"], ENV),
+                     lambda: self.svc.days(self.ctx["op_sem_prod"], ENV, SID),
+                     lambda: self.svc.tickets(self.ctx["op_sem_prod"], ENV, SID, self.day),
+                     lambda: self.svc.files(self.ctx["op_sem_prod"], TID),
+                     lambda: self.svc.zip_download(self.ctx["op_sem_prod"], IP, TID),
+                     lambda: self.svc.file_download(self.ctx["op_sem_prod"], IP, TID, "resumo.txt")):
             with self.assertRaises(RepoNotFound):
                 call()
         # consulta (READ_ONLY) nao tem Baixar Saidas.

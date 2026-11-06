@@ -24,10 +24,10 @@ SESSIONS = {
     "admin": {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0},
     "op.prod": {"user_id": 2, "login": "op.prod", "profile_id": 2, "perm_version": 1, "session_epoch": 0},
 }
-# Seed FAKE: admin (1, perfil ADMINISTRADOR, unico admin), op.prod (2), op.hml (3), consulta (4),
-# inativo (5) e bloqueado (6, 5 tentativas, bloqueado por 30 min). Perfis 1-4 ativos.
-U_ADMIN, U_OPPROD, U_BLOQUEADO = 1, 2, 6
-P_ADMIN, P_OPPROD, P_CONSULTA = 1, 2, 4
+# Seed FAKE: admin (1, perfil ADMINISTRADOR, unico admin), op.prod (2), consulta (3),
+# inativo (4) e bloqueado (5, 5 tentativas, bloqueado por 30 min). Perfis 1-3 ativos.
+U_ADMIN, U_OPPROD, U_BLOQUEADO = 1, 2, 5
+P_ADMIN, P_OPPROD, P_CONSULTA = 1, 2, 3
 NOW = datetime.datetime(2026, 10, 15, 9, 0, 0)
 
 
@@ -94,7 +94,7 @@ class TestInsert(_Base):
         uid, errors = self._insert()
         self.assertEqual(errors, {})
         detail = [a for a in self._audits("CREATE") if a["entity_id"] == uid][0]["detail"]
-        self.assertIn("profile: READ_ONLY", detail)
+        self.assertIn("profile: CONSULTA", detail)
         self.assertNotIn("profile_id", detail)
 
     def test_inclusao_ok_com_hash_e_auditoria_sem_senha(self):
@@ -132,7 +132,7 @@ class TestInsert(_Base):
         self.assertEqual(errors, {"profile_id": usr_mod.MSG_PROFILE_INVALID})
         _uid, errors = self._insert(profile_id="999")
         self.assertEqual(errors, {"profile_id": usr_mod.MSG_PROFILE_INVALID})
-        self.assertEqual(form["name"], "READ_ONLY")
+        self.assertEqual(form["name"], "CONSULTA")
 
 
 class TestEditAndLastAdmin(_Base):
@@ -296,12 +296,12 @@ class TestListAndAccess(_Base):
 
     def test_lista_sem_hash_com_bloqueio_e_filtros(self):
         page = self.svc.list(self.ctx["admin"], {}, 1, 20)
-        self.assertEqual(page["total"], 6)
+        self.assertEqual(page["total"], 5)
         for item in page["items"]:
             self.assertNotIn("password_hash", item)
         locked = [i for i in page["items"] if i["login"] == "bloqueado"][0]
         self.assertTrue(locked["locked"])
-        self.assertEqual(locked["profile_name"], "OPERATOR_PROD")
+        self.assertEqual(locked["profile_name"], "OPERADOR")
         self.assertEqual([i["login"] for i in self.svc.list(self.ctx["admin"], {"state": "B"}, 1, 20)["items"]],
                          ["bloqueado"])
         self.assertEqual([i["login"] for i in self.svc.list(self.ctx["admin"], {"state": "N"}, 1, 20)["items"]],
@@ -314,9 +314,9 @@ class TestListAndAccess(_Base):
     def test_acesso_negado_e_nao_encontrado(self):
         ctx = self.ctx["op.prod"]
         for call in (lambda: self.svc.list(ctx, {}, 1, 20), lambda: self.svc.form(ctx),
-                        lambda: self.svc.save(ctx, IP, None, {}), lambda: self.svc.unlock(ctx, IP, "6"),
-                        lambda: self.svc.reset_password(ctx, IP, "6", NEW_PASSWORD, NEW_PASSWORD),
-                        lambda: self.svc.toggle_active(ctx, IP, "6", "x")):
+                        lambda: self.svc.save(ctx, IP, None, {}), lambda: self.svc.unlock(ctx, IP, "5"),
+                        lambda: self.svc.reset_password(ctx, IP, "5", NEW_PASSWORD, NEW_PASSWORD),
+                        lambda: self.svc.toggle_active(ctx, IP, "5", "x")):
             with self.assertRaises(AccessDenied):
                 call()
         for uid in ("999", "abc", "0"):

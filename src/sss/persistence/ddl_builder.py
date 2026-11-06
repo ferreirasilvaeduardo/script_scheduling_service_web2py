@@ -47,28 +47,24 @@ DEFAULT_ENVIRONMENTS = (
 
 # Catalogo padrao de perfis operacionais e administrativos (nome, descricao, is_admin, funcionalidades, ambientes)
 DEFAULT_PROFILES = (
-    ("ADMINISTRATOR", "Acesso irrestrito a todas as funcionalidades e ambientes", "Y", (
+    ("ADMINISTRADOR", "Acesso irrestrito a todas as funcionalidades e ambientes", "Y", (
         "EXEC_SCRIPT", "VIEW_LOGS", "CANCEL_TICKET", "DOWNLOAD_OUTPUT", "UPLOAD_INPUT", "FILES_UPLOAD", "FILES_DOWNLOAD",
         "MANAGE_USERS", "MANAGE_PROFILES", "MANAGE_ENVIRONMENTS", "MANAGE_SCRIPTS", "MANAGE_PARAMETERS", "MANAGE_SCHEDULES",
         "VIEW_AUDIT"
     ), ("CLONE2", "CLONE1", "CLONE6", "CLONE7", "GFPREPROD")),
-    ("OPERATOR_PROD", "Operador de Ambientes de Producao", "N", (
+    ("OPERADOR", "Operador Geral de Ambientes", "N", (
         "EXEC_SCRIPT", "VIEW_LOGS", "CANCEL_TICKET", "DOWNLOAD_OUTPUT", "UPLOAD_INPUT", "FILES_UPLOAD", "FILES_DOWNLOAD"
     ), ("CLONE2", "CLONE1", "CLONE6", "CLONE7", "GFPREPROD")),
-    ("OPERATOR_HML", "Operador de Ambientes de Homologacao", "N", (
-        "EXEC_SCRIPT", "VIEW_LOGS", "CANCEL_TICKET", "DOWNLOAD_OUTPUT", "UPLOAD_INPUT", "FILES_UPLOAD", "FILES_DOWNLOAD"
-    ), ("CLONE6", "CLONE7", "GFPREPROD")),
-    ("READ_ONLY", "Perfil de Apenas Leitura e Consulta", "N", (
+    ("CONSULTA", "Perfil de Apenas Leitura e Consulta", "N", (
         "VIEW_LOGS",
     ), ("CLONE2", "CLONE1", "CLONE6", "CLONE7", "GFPREPROD")),
 )
 
 # Catalogo padrao de usuarios de homologacao e demonstracao (login, nome, nome do perfil)
 DEFAULT_USERS = (
-    ("admin", "Super Administrador", "ADMINISTRATOR"),
-    ("op.prod", "Operador Producao", "OPERATOR_PROD"),
-    ("op.hml", "Operador Homologacao", "OPERATOR_HML"),
-    ("consulta", "Auditor e Consulta", "READ_ONLY"),
+    ("admin", "Super Administrador", "ADMINISTRADOR"),
+    ("op.prod", "Operador Producao", "OPERADOR"),
+    ("consulta", "Auditor e Consulta", "CONSULTA"),
 )
 
 # Login do --admin-login: a mesma regra dos logins da tela (admin_users_service).
@@ -77,17 +73,17 @@ _RE_SEED_LOGIN = re.compile(r"[a-z0-9._-]{3,30}")
 
 def seed_users(admin_login=None, admin_name=None):
     """Usuarios do seed: (login, nome, perfil, alvo). O alvo recebe a senha e o nome informados (decisao 18 B):
-    o admin sem --admin-login ou com --admin-login admin; com outro login, um usuario a mais no perfil ADMINISTRATOR,
+    o admin sem --admin-login ou com --admin-login admin; com outro login, um usuario a mais no perfil ADMINISTRADOR,
     e o admin fica como os demais. ValueError com login invalido ou de outro usuario do seed."""
     target = admin_login or "admin"
     if not _RE_SEED_LOGIN.fullmatch(target):
         raise ValueError("--admin-login invalido: use de 3 a 30 caracteres a-z, 0-9, ponto, _ ou -")
-    if any(login == target and profile != "ADMINISTRATOR" for login, _name, profile in DEFAULT_USERS):
+    if any(login == target and profile != "ADMINISTRADOR" for login, _name, profile in DEFAULT_USERS):
         raise ValueError("--admin-login %s e um usuario do seed com outro perfil" % target)
     users = [(login, admin_name if (login == target and admin_name) else name, profile, login == target)
              for login, name, profile in DEFAULT_USERS]
     if target not in [u[0] for u in DEFAULT_USERS]:
-        users.append((target, admin_name or "Administrador", "ADMINISTRATOR", True))
+        users.append((target, admin_name or "Administrador", "ADMINISTRADOR", True))
     return users
 
 

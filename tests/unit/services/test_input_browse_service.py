@@ -20,8 +20,7 @@ IP = "10.1.2.3"
 SESSIONS = {
     "admin": {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0},
     "op.prod": {"user_id": 2, "login": "op.prod", "profile_id": 2, "perm_version": 1, "session_epoch": 0},
-    "op.hml": {"user_id": 3, "login": "op.hml", "profile_id": 3, "perm_version": 1, "session_epoch": 0},
-    "consulta": {"user_id": 4, "login": "consulta", "profile_id": 4, "perm_version": 1, "session_epoch": 0},
+    "consulta": {"user_id": 3, "login": "consulta", "profile_id": 3, "perm_version": 1, "session_epoch": 0},
 }
 # Seed FAKE: carga_diaria (id 1) homologado em PRODUCAO; retrato do agt-host01 com lotes/clientes_outubro.csv.
 ENV, SID = "PRODUCAO", 1
@@ -47,6 +46,7 @@ class _Base(unittest.TestCase):
         auth = auth_service.AuthService(repo_factory.get("users"), repo_factory.get("rbac"),
                                         repo_factory.get("catalog"), self.audit, 5, 900, log)
         self.ctx = dict((login, auth.revalidate(session)) for login, session in SESSIONS.items())
+        self.ctx["op_sem_prod"] = dict(self.ctx["op.prod"], environments=frozenset(["HOMOLOGACAO"]))
         self.inputs = repo_factory.get("inputs")
         self.svc = InputBrowseService(repo_factory.get("catalog"), self.inputs, log, 1024, 300)
 
@@ -59,7 +59,7 @@ class TestNavegacao(_Base):
         self.assertIn("carga_diaria", scripts)
         self.assertNotIn("sync_tabelas", scripts, "fora do perfil do op.prod")
         with self.assertRaises(RepoNotFound):
-            self.svc.scripts(self.ctx["op.hml"], ENV)  # ambiente fora do perfil
+            self.svc.scripts(self.ctx["op_sem_prod"], ENV)  # ambiente fora do perfil
         with self.assertRaises(RepoNotFound):
             self.svc.folder(self.ctx["op.prod"], ENV, 4)  # script fora do perfil
         with self.assertRaises(admin_crud.AccessDenied):
@@ -131,7 +131,7 @@ class TestEnvio(_Base):
         self.assertEqual(self.svc.refresh(self.ctx["op.prod"], ENV, SID), 1)
         self.assertIn(SID, [d["script_id"] for d in self.inputs.listings_due("agt-host01")])
         with self.assertRaises(RepoNotFound):
-            self.svc.refresh(self.ctx["op.hml"], ENV, SID)
+            self.svc.refresh(self.ctx["op_sem_prod"], ENV, SID)
 
     def test_nome_enviado_pelo_navegador(self):
         self.assertEqual(browse.upload_name("C:\\pasta\\relatório.csv"), u"relatório.csv")

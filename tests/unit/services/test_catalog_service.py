@@ -15,7 +15,7 @@ from sss.services.ticket_service import TicketService
 
 SESSIONS = {
     "admin": {"user_id": 1, "login": "admin", "profile_id": 1, "perm_version": 1, "session_epoch": 0},
-    "op.hml": {"user_id": 3, "login": "op.hml", "profile_id": 3, "perm_version": 1, "session_epoch": 0},
+    "op.prod": {"user_id": 2, "login": "op.prod", "profile_id": 2, "perm_version": 1, "session_epoch": 0},
 }
 
 
@@ -61,9 +61,9 @@ class TestLastRuns(_Base):
         r = self.tickets.last_runs([1, 2, 3, 4], ["HOMOLOGACAO"])
         self.assertEqual(dict((k, v["id"]) for k, v in r.items()), dict((k, v["id"]) for k, v in expected.items()))
         self.assertNotIn("log_output", list(r.values())[0])
-        only_mine = self.tickets.last_runs([1, 2, 3, 4], None, "op.hml")
+        only_mine = self.tickets.last_runs([1, 2, 3, 4], None, "op.prod")
         for sid, u in only_mine.items():
-            self.assertEqual(self.tickets.get(u["id"])["requested_by"], "op.hml")
+            self.assertEqual(self.tickets.get(u["id"])["requested_by"], "op.prod")
         self.assertEqual(self.tickets.last_runs([], None), {})
 
 
@@ -104,7 +104,7 @@ class TestQueries(_Base):
     def test_disparo_e_permissoes_com_tres_leituras(self):
         counting = _Counting(self.catalog)
         svc = TicketService(counting, self.tickets, self.svc._log)
-        svc.available_scripts(self.ctx["op.hml"])
+        svc.available_scripts(self.ctx["op.prod"])
         self.assertEqual(sum(counting.calls.values()), 3, counting.calls)
 
 
@@ -113,12 +113,12 @@ class TestRoutineCatalog(_Base):
     def test_agendar_so_com_manage_schedules(self):
         # CR-017c: o atalho Agendar dos cartoes segue MANAGE_SCHEDULES (admin tem todas).
         self.assertTrue(self.svc.can_schedule(self.ctx["admin"]))
-        self.assertFalse(self.svc.can_schedule(self.ctx["op.hml"]))
-        self.assertTrue(self.svc.can_schedule(dict(self.ctx["op.hml"],
+        self.assertFalse(self.svc.can_schedule(self.ctx["op.prod"]))
+        self.assertTrue(self.svc.can_schedule(dict(self.ctx["op.prod"],
                                                    features=frozenset(["EXEC_SCRIPT", "MANAGE_SCHEDULES"]))))
 
     def test_cartoes_iguais_ao_disparo_e_ultima_no_escopo(self):
-        ctx = self.ctx["op.hml"]
+        ctx = self.ctx["op.prod"]
         groups = self.svc.routine_catalog(ctx)
         ids = sorted(c["id"] for g in groups for c in g["cards"])
         self.assertEqual(ids, sorted(s["id"] for g in self.svc.available_scripts(ctx) for s in g["scripts"]))
@@ -131,11 +131,11 @@ class TestRoutineCatalog(_Base):
                     self.assertTrue(c["last_run"]["when"].startswith(u"há "))
 
     def test_sem_ver_logs_so_os_proprios(self):
-        ctx = self._without("op.hml", "VIEW_LOGS")
+        ctx = self._without("op.prod", "VIEW_LOGS")
         for g in self.svc.routine_catalog(ctx):
             for c in g["cards"]:
                 if c["last_run"]:
-                    self.assertEqual(self.tickets.get(c["last_run"]["id"])["requested_by"], "op.hml")
+                    self.assertEqual(self.tickets.get(c["last_run"]["id"])["requested_by"], "op.prod")
 
     def test_perguntas_com_obrigatorio(self):
         cards = dict((c["name"], c) for g in self.svc.routine_catalog(self.ctx["admin"]) for c in g["cards"])
@@ -143,7 +143,7 @@ class TestRoutineCatalog(_Base):
         self.assertIn({"label": u"Data de Referencia", "required": True}, questions)
 
     def test_sem_exec_script_vazio(self):
-        self.assertEqual(self.svc.routine_catalog(self._without("op.hml", "EXEC_SCRIPT")), [])
+        self.assertEqual(self.svc.routine_catalog(self._without("op.prod", "EXEC_SCRIPT")), [])
 
 
 
@@ -189,14 +189,14 @@ class TestScriptHistory(_Base):
     def test_fora_das_rotinas_e_404(self):
         from sss.persistence.repo_errors import RepoNotFound
         with self.assertRaises(RepoNotFound):
-            self.svc.script_history(self.ctx["op.hml"], "5")  # backup_extra: inativo
+            self.svc.script_history(self.ctx["op.prod"], "5")  # backup_extra: inativo
         with self.assertRaises(RepoNotFound):
-            self.svc.script_history(self._without("op.hml", "EXEC_SCRIPT"), "1")
+            self.svc.script_history(self._without("op.prod", "EXEC_SCRIPT"), "1")
 
     def test_escopo_sem_ver_logs_so_os_proprios(self):
-        h = self.svc.script_history(self._without("op.hml", "VIEW_LOGS"), "1")
+        h = self.svc.script_history(self._without("op.prod", "VIEW_LOGS"), "1")
         since = self.tickets.now() - datetime.timedelta(days=30)
-        self.assertEqual(h["total"], len(self.tickets.script_history(1, since, None, "op.hml")))
+        self.assertEqual(h["total"], len(self.tickets.script_history(1, since, None, "op.prod")))
 
 
 class TestStackedBars(unittest.TestCase):

@@ -6,7 +6,7 @@ _new = not profile.get('id')
 _state = ui_helpers.active_info(profile.get('active'))
 _fields = [
     {'name': 'name', 'label': 'Nome', 'value': profile.get('name'), 'error': errors.get('name'), 'required': True, 'maxlength': 30,
-     'help': u'Letras maiúsculas, dígitos e _ (ex.: OPERATOR_PROD).'},
+     'help': u'Letras maiúsculas, dígitos e _ (ex.: OPERADOR).'},
     {'name': 'description', 'label': u'Descrição', 'value': profile.get('description'), 'error': errors.get('description'), 'maxlength': 100},
 ]
 if not _new:

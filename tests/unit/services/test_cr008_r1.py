@@ -25,8 +25,8 @@ IP = "10.8.8.8"
 DEV_PASSWORD = "senha-dev-de-teste-123"
 NEW_PASSWORD = "Nova-Senha-Forte-2026"
 NOW = datetime.datetime(2026, 10, 17, 9, 0, 0)
-U_ADMIN, U_OPPROD, U_OPHML = 1, 2, 3
-P_ADMIN, P_OPPROD, P_CONSULTA = 1, 2, 4
+U_ADMIN, U_OPPROD, U_CONSULTA = 1, 2, 3
+P_ADMIN, P_OPPROD, P_CONSULTA = 1, 2, 3
 
 
 def _session(uid, login, profile_id):
@@ -93,9 +93,9 @@ class TestAdminOnlyByAdmin(_Base):
         self.assertEqual((admin["active"], admin["session_epoch"]), ("Y", 0))
 
     def test_gestor_altera_usuario_comum_e_admin_altera_admin(self):
-        self.assertEqual(self.svc_usr.reset_password(self.ctx["gestor"], IP, str(U_OPHML), NEW_PASSWORD, NEW_PASSWORD), {})
-        form = self.svc_usr.form(self.ctx["admin"], str(U_OPHML))
-        _id, errors = self.svc_usr.save(self.ctx["admin"], IP, str(U_OPHML),
+        self.assertEqual(self.svc_usr.reset_password(self.ctx["gestor"], IP, str(U_CONSULTA), NEW_PASSWORD, NEW_PASSWORD), {})
+        form = self.svc_usr.form(self.ctx["admin"], str(U_CONSULTA))
+        _id, errors = self.svc_usr.save(self.ctx["admin"], IP, str(U_CONSULTA),
                                          {"name": form["name"], "profile_id": str(P_ADMIN), "version": form["version"]})
         self.assertEqual(errors, {})
 
@@ -126,21 +126,21 @@ class TestRevocableSession(_Base):
         return self.users.get_by_id(uid)["session_epoch"]
 
     def test_eventos_que_revogam(self):
-        session = _session(U_OPHML, "op.hml", 3)
+        session = _session(U_CONSULTA, "consulta", P_CONSULTA)
         self.assertIsNotNone(self.auth.revalidate(session))
-        self.svc_usr.reset_password(self.ctx["admin"], IP, str(U_OPHML), NEW_PASSWORD, NEW_PASSWORD)
-        self.assertEqual(self._epoch(U_OPHML), 1)
+        self.svc_usr.reset_password(self.ctx["admin"], IP, str(U_CONSULTA), NEW_PASSWORD, NEW_PASSWORD)
+        self.assertEqual(self._epoch(U_CONSULTA), 1)
         self.assertIsNone(self.auth.revalidate(session))
         session["session_epoch"] = 1
         self.assertIsNotNone(self.auth.revalidate(session))
-        form = self.svc_usr.form(self.ctx["admin"], str(U_OPHML))
-        self.svc_usr.save(self.ctx["admin"], IP, str(U_OPHML),
-                            {"name": "Outro nome", "profile_id": str(3), "version": form["version"]})
-        self.assertEqual(self._epoch(U_OPHML), 1, "so o nome mudou")
-        self.svc_usr.save(self.ctx["admin"], IP, str(U_OPHML),
-                            {"name": "Outro nome", "profile_id": str(P_CONSULTA),
-                             "version": self.svc_usr.form(self.ctx["admin"], str(U_OPHML))["version"]})
-        self.assertEqual(self._epoch(U_OPHML), 2)
+        form = self.svc_usr.form(self.ctx["admin"], str(U_CONSULTA))
+        self.svc_usr.save(self.ctx["admin"], IP, str(U_CONSULTA),
+                            {"name": "Outro nome", "profile_id": str(P_CONSULTA), "version": form["version"]})
+        self.assertEqual(self._epoch(U_CONSULTA), 1, "so o nome mudou")
+        self.svc_usr.save(self.ctx["admin"], IP, str(U_CONSULTA),
+                            {"name": "Outro nome", "profile_id": str(P_OPPROD),
+                             "version": self.svc_usr.form(self.ctx["admin"], str(U_CONSULTA))["version"]})
+        self.assertEqual(self._epoch(U_CONSULTA), 2)
 
     def test_logout_derruba_todas_as_sessoes_e_audita(self):
         other = _session(U_OPPROD, "op.prod", P_OPPROD)
