@@ -106,7 +106,7 @@ package: ## Gera em ./.bkp/pacote_<data> os arquivos para o servidor: sss-<versa
 	$(PYTHON) "$$TMP/tools/package.py" --source "$$TMP" --out-dir "$$DEST" --build "$$(git rev-parse --short=7 HEAD)"; \
 	git rev-parse HEAD > "$$DEST/COMMIT"; \
 	UTIL_ROOT="$$TMP"; \
-	tar -czf "$$DEST/utilitarios.tar.gz" --exclude=__pycache__ --exclude='*.pyc' -C "$$UTIL_ROOT" dev/scripts/utilitarios; \
+	tar -czf "$$DEST/utilitarios.tar.gz" --exclude=__pycache__ --exclude='*.pyc' -C "$$UTIL_ROOT" scripts_ambiente/utilitarios; \
 	VARS="$${SSS_VARS:-$$HOME/sss_pacote/sss_vars.sh}"; \
 	if [ -f "$$VARS" ]; then cp "$$VARS" "$$DEST/sss_vars.sh"; chmod 0600 "$$DEST/sss_vars.sh"; \
 	else echo "[!] Sem sss_vars.sh ($$VARS): o pacote sai sem ele (defina SSS_VARS=<arquivo>)."; fi; \
@@ -137,7 +137,7 @@ package-local: ## O mesmo a partir dos arquivos locais (sem git; BUILD = AAMMDDH
 		git status --short -- bin docs instance/exemplos scripts src AGENTS.md README.md; \
 	  fi; } > "$$DEST/ORIGEM"; \
 	UTIL_ROOT="$$(pwd)"; \
-	tar -czf "$$DEST/utilitarios.tar.gz" --exclude=__pycache__ --exclude='*.pyc' -C "$$UTIL_ROOT" dev/scripts/utilitarios; \
+	tar -czf "$$DEST/utilitarios.tar.gz" --exclude=__pycache__ --exclude='*.pyc' -C "$$UTIL_ROOT" scripts_ambiente/utilitarios; \
 	VARS="$${SSS_VARS:-$$HOME/sss_pacote/sss_vars.sh}"; \
 	if [ -f "$$VARS" ]; then cp "$$VARS" "$$DEST/sss_vars.sh"; chmod 0600 "$$DEST/sss_vars.sh"; \
 	else echo "[!] Sem sss_vars.sh ($$VARS): o pacote sai sem ele (defina SSS_VARS=<arquivo>)."; fi; \
