@@ -50,7 +50,6 @@ works/
 script_works/
 /var/
 /.update-*/
-/scripts_ambiente/
 
 # ==========================================
 # Sobras do web2py (removido no CR-021f)
