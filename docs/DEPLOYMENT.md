@@ -288,7 +288,7 @@ EXIT
 
 ### 5.3 Usuários iniciais
 
-O seed cria os usuários de homologação `admin`, `op.prod`, `op.hml` e `consulta` com a senha inicial `Sss@Homolog2026!` (PBKDF2-SHA256). **Troque essa senha no primeiro acesso** (checklist do §19). O `MERGE` do seed preserva senhas já alteradas.
+O seed cria os usuários de homologação `admin`, `op.prod` e `consulta` com a senha inicial `Sss@Homolog2026!` (PBKDF2-SHA256). **Troque essa senha no primeiro acesso** (checklist do §19). O `MERGE` do seed preserva senhas já alteradas.
 
 ### 5.4 DSN com RAC e Data Guard (CR-007, R-12; CR-008, R-17)
 
@@ -758,7 +758,7 @@ O código é trocado **no lugar** pelo `bin/sss-update.sh`. `instance/`, `var/` 
 Do mais novo para o mais antigo. Quem vem de uma versão anterior aplica na ordem cronológica. As notas da instalação anterior ao CR-028 (`/opt/sss/app`) estão em `docs/architecture/DEPLOYMENT-history.md`.
 
 * **CR-037: Pasta de Arquivos, só em disco (sem mudança de esquema; muda o catálogo).**
-  * Duas funcionalidades novas no catálogo, `FILES_UPLOAD` e `FILES_DOWNLOAD`, e no seed dos perfis `ADMINISTRATOR`, `OPERATOR_PROD` e `OPERATOR_HML`. Numa instalação nova, o `01_deploy` já as traz. **Num banco em uso, não rode o `init_db`**: ele refaz o seed inteiro e devolve ao padrão ambientes, parâmetros, scripts, perfis e usuários do seed (reativa e sobrescreve o que foi mudado pela tela). Aplique só os blocos `MERGE` das duas funcionalidades e das marcas dos três perfis, copiados do `docs/sql/01_deploy_sss_<owner>_<prefixo>.sql` da versão (procure por `FILES_UPLOAD` e `FILES_DOWNLOAD`), com `COMMIT` no fim.
+  * Duas funcionalidades novas no catálogo, `FILES_UPLOAD` e `FILES_DOWNLOAD`, e no seed dos perfis `ADMINISTRADOR` e `OPERADOR`. Numa instalação nova, o `01_deploy` já as traz. **Num banco em uso, não rode o `init_db`**: ele refaz o seed inteiro e devolve ao padrão ambientes, parâmetros, scripts, perfis e usuários do seed (reativa e sobrescreve o que foi mudado pela tela). Aplique só os blocos `MERGE` das duas funcionalidades e das marcas dos perfis, copiados do `docs/sql/01_deploy_sss_<owner>_<prefixo>.sql` da versão (procure por `FILES_UPLOAD` e `FILES_DOWNLOAD`), com `COMMIT` no fim.
   * Pastas novas, criadas na subida: `var/<agente>/files` (agente) e `var/<web>/tmp` (web). Chave opcional nova: `[web] files_upload_max_bytes` (1 GiB por padrão).
   * O script recebe `SSS_FILES_INPUTS_DIR` e `SSS_FILES_OUTPUTS_DIR`. A tela exige o web no mesmo servidor do agente ou na raiz compartilhada (§4.1, §8).
   * **Retorno:** o pacote de retorno; as funcionalidades novas ficam no banco, sem efeito na versão anterior (os perfis podem desmarcá-las).
@@ -844,7 +844,7 @@ O esquema do banco é removido com o `02_rollback_sss_<owner>_<prefixo>.sql` (§
 
 O DEV é a mesma instalação, na pasta `DEV` (`<RAIZ>` = `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`), com o mesmo comportamento do PROD (CR-032, D11). O que muda é só o que se pode desenvolver:
 
-* a `<RAIZ>` do DEV é o repositório git: tem `dev/` (scripts de exemplo em `dev/scripts`, usados como `script_base_dir`), os testes, a vitrine `/dev/...` e o FAKE dos testes, que o pacote não leva;
+* a `<RAIZ>` do DEV é o repositório git: tem `scripts_ambiente/` (scripts operacionais e utilitários usados como `script_base_dir`), os testes, a vitrine `/dev/...` e o FAKE dos testes, que o pacote não leva;
 * a tela mostra `[DEV]` no título da aba, o cabeçalho em outra cor e a faixa de ambiente não produtivo;
 * `bin/start_local.sh` e `bin/stop_local.sh` sobem e param o web na máquina de desenvolvimento e não vêm no pacote;
 * a bateria Oracle (`SSS_TEST_ORACLE=1`) usa o `instance/common.ini`, o `instance/secrets.cfg` e o `instance/agente0001/` do DEV, com o DEV parado;

@@ -633,15 +633,15 @@ Responde às duas perguntas mais comuns do administrador, sem abrir perfil por p
 | `OPERATION` | `EXEC_SCRIPT` | Rodar Scripts | Preencher questionários e abrir tickets |
 | `OPERATION` | `VIEW_LOGS` | Consultar Tickets | Acompanhar os tickets e ler o log em tempo quase real |
 | `OPERATION` | `CANCEL_TICKET` | Cancelar Tickets | Cancelar tickets de terceiros nos ambientes consultados (com Consultar Tickets) |
-| `OPERATION` | `UPLOAD_INPUT` | Enviar Arquivos | Enviar arquivos para a pasta de entrada dos scripts do perfil, nos ambientes do perfil (CR-020d; no seed, com ADMINISTRATOR, OPERATOR_PROD e OPERATOR_HML) |
-| `OPERATION` | `DOWNLOAD_OUTPUT` | Baixar Saídas | Navegar pelas saídas dos tickets nos ambientes do perfil e baixar o zip ou um arquivo (CR-020a; no seed, com ADMINISTRATOR, OPERATOR_PROD e OPERATOR_HML) |
-| `OPERATION` | `FILES_UPLOAD` | Enviar para Pasta de Arquivos | Enviar arquivos para a pasta inputs dos scripts do perfil, sem gravar no banco (CR-037; no seed, com ADMINISTRATOR, OPERATOR_PROD e OPERATOR_HML) |
-| `OPERATION` | `FILES_DOWNLOAD` | Baixar da Pasta de Arquivos | Navegar e baixar a pasta outputs dos scripts do perfil, sem gravar no banco (CR-037; no seed, com ADMINISTRATOR, OPERATOR_PROD e OPERATOR_HML) |
+| `OPERATION` | `UPLOAD_INPUT` | Enviar Arquivos | Enviar arquivos para a pasta de entrada dos scripts do perfil, nos ambientes do perfil (CR-020d; no seed, com ADMINISTRADOR e OPERADOR) |
+| `OPERATION` | `DOWNLOAD_OUTPUT` | Baixar Saídas | Navegar pelas saídas dos tickets nos ambientes do perfil e baixar o zip ou um arquivo (CR-020a; no seed, com ADMINISTRADOR e OPERADOR) |
+| `OPERATION` | `FILES_UPLOAD` | Enviar para Pasta de Arquivos | Enviar arquivos para a pasta inputs dos scripts do perfil, sem gravar no banco (CR-037; no seed, com ADMINISTRADOR e OPERADOR) |
+| `OPERATION` | `FILES_DOWNLOAD` | Baixar da Pasta de Arquivos | Navegar e baixar a pasta outputs dos scripts do perfil, sem gravar no banco (CR-037; no seed, com ADMINISTRADOR e OPERADOR) |
 | `ADMIN` | `MANAGE_USERS` | Gestão de Usuários | Gerenciar operadores e credenciais |
 | `ADMIN` | `MANAGE_PROFILES` | Gestão de Perfis | Gerenciar perfis e matrizes de permissão |
 | `ADMIN` | `MANAGE_ENVIRONMENTS` | Gestão de Ambientes | Gerenciar ambientes e DSNs |
 | `ADMIN` | `MANAGE_SCRIPTS` | Gestão de Scripts | Cadastrar rotinas e homologação por ambiente |
-| `ADMIN` | `MANAGE_PARAMETERS` | Dicionário de Parâmetros | Gerenciar perguntas e flags reutilizáveis |
+| `ADMIN` | `MANAGE_PARAMETERS` | Gestão de Parâmetros | Gerenciar perguntas e flags reutilizáveis |
 | `ADMIN` | `MANAGE_SCHEDULES` | Regras de Agendamento | Criar e gerenciar recorrências |
 | `ADMIN` | `VIEW_AUDIT` | Auditoria | Consultar a trilha de auditoria e os agentes |
 
@@ -654,16 +654,16 @@ Responde às duas perguntas mais comuns do administrador, sem abrir perfil por p
 O processo de inicialização do banco (`init_db.py` e script SQL de implantação) cadastra de forma idempotente a matriz operacional inicial e os usuários para demonstração e homologação das telas (UI Freeze):
 
 1. **Perfis de Acesso (`tbsss_profiles`):**
-   * **`ADMINISTRATOR`:** Super Administrador (`is_admin = 'Y'`). Acesso total a todas as 14 funcionalidades, a todos os ambientes atendidos e a todas as rotinas homologadas.
-   * **`OPERATOR_PROD`:** Operacional de Produção (`is_admin = 'N'`). Acesso a `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD` e `FILES_DOWNLOAD` em todos os ambientes operacionais (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`).
-   * **`OPERATOR_HML`:** Operacional de Homologação (`is_admin = 'N'`). Acesso a `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD` e `FILES_DOWNLOAD` restrito ao subconjunto `CLONE6`, `CLONE7` e `GFPREPROD` (no seed, todos os ambientes estão marcados como produção, CR-017a).
-   * **`READ_ONLY`:** Auditoria e Consulta (`is_admin = 'N'`). Perfil de somente leitura, restrito a `VIEW_LOGS` em todos os ambientes, sem permissão de disparo ou alteração de cadastros.
+   * **`ADMINISTRADOR`:** Super Administrador (`is_admin = 'Y'`). Acesso total a todas as 14 funcionalidades, a todos os ambientes atendidos e a todas as rotinas homologadas.
+   * **`OPERADOR`:** Operacional (`is_admin = 'N'`). Acesso a `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD` e `FILES_DOWNLOAD` em todos os ambientes operacionais (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`). (Substituiu `OPERATOR_PROD`).
+   * **`CONSULTA`:** Auditoria e Consulta (`is_admin = 'N'`). Perfil de somente leitura, restrito a `VIEW_LOGS` em todos os ambientes, sem permissão de disparo ou alteração de cadastros. (Substituiu `READ_ONLY`).
+   * *(Nota: o perfil `OPERATOR_HML` foi aposentado e removido do seed).*
 
 2. **Usuários Padrão Homologados (`tbsss_users`):**
-   * **`admin`** (`Super Administrador`): vinculado ao perfil `ADMINISTRATOR`.
-   * **`op.prod`** (`Operador Producao`): vinculado ao perfil `OPERATOR_PROD`.
-   * **`op.hml`** (`Operador Homologacao`): vinculado ao perfil `OPERATOR_HML`.
-   * **`consulta`** (`Auditor e Consulta`): vinculado ao perfil `READ_ONLY`.
+   * **`admin`** (`Super Administrador`): vinculado ao perfil `ADMINISTRADOR`.
+   * **`op.prod`** (`Operador Producao`): vinculado ao perfil `OPERADOR`.
+   * **`consulta`** (`Auditor e Consulta`): vinculado ao perfil `CONSULTA`.
+   * *(Nota: o usuário `op.hml` foi aposentado e removido do seed).*
    * **Credencial Inicial de Homologação:** senha `Sss@Homolog2026!` (hash PBKDF2-SHA256, 200k iterações: `pbkdf2_sha256$200000$8007db1bd770663178d0f1b1a129140c$9d9604af27e21326e982e5e7c64bfdd868c0995a97181b5a9695149755852d63`).
    * **Idempotência:** o `MERGE` do seed atualiza nome e perfil de acesso, mas preserva a senha existente caso tenha sido redefinida pelo operador.
 
@@ -731,7 +731,7 @@ O campo `detail` nunca contém segredos nem valores de parâmetros sensíveis.
 
 | Situação | Ação | `detail` |
 |---|---|---|
-| Inclusão | `CREATE` | `campo: valor` **somente dos campos preenchidos**: campos vazios são omitidos. Todos os campos do formulário entram, inclusive `description` (parâmetros e scripts) e `stage` (scripts). Referências aparecem pelo nome, e o campo pelo nome técnico, em inglês: `profile: OPERATOR_PROD` |
+| Inclusão | `CREATE` | `campo: valor` **somente dos campos preenchidos**: campos vazios são omitidos. Todos os campos do formulário entram, inclusive `description` (parâmetros e scripts) e `stage` (scripts). Referências aparecem pelo nome, e o campo pelo nome técnico, em inglês: `profile: OPERADOR` |
 | Alteração | `UPDATE` | `campo: antigo → novo`, só dos campos que mudaram (salvar sem mudança não audita) |
 | Desativação | `DEACTIVATE` | `active: Y → N`, mais o impacto (ex.: `agendamentos ativos afetados: 2`) |
 | Reativação | `UPDATE` | `active: N → Y` (não existe ação de reativação própria) |
@@ -1128,7 +1128,7 @@ Para todos os tipos, **nesta ordem**:
   Exemplos aceitos: `^[A-Z]{2}\d{6}$`, `^\d{3}\.\d{3}\.\d{3}-\d{2}$`, `^(PF|PJ)$`, `^\d+(\.\d{1,2})?$`, `^[\w.]+@[\w.]+$`, `^\w{0,10}$`. Recusados: `(a|a)*b`, `^(\w|\d)+$`, `(a+)+`, `\w{0,100}\w{0,100}\w{0,100}x` (3 ilimitados), `\w*\w{0,10}\w{0,10}\w{0,10}\w{0,10}\w?x` (6 escolhas com ilimitado). Com essas regras, o `fullmatch` no tamanho máximo do valor (500 caracteres) fica abaixo de 0,2 s no pior caso medido no Python 3.6.8; a promessa anterior, "no máximo quadrático", não valia para quantificadores limitados largos (auditoria final, F-06). Uma regex gravada antes do CR-007 que não atenda continua valendo até a próxima gravação do parâmetro, que exige a correção; o `init_db`/migração não a altera.
 * Somente admin cadastra padrões.
 
-**Cadastro no dicionário de parâmetros** (UI `admin_parameters`, F4.4):
+**Cadastro na gestão de parâmetros** (UI `admin_parameters`, F4.4):
 
 * **`code` imutável depois de criado:** ele é a chave de `answers` no snapshot (§6.5) e de `tbsss_schedules.params_json` (§6.1). Renomeá-lo faria agendamentos perderem respostas sem aviso.
 * **`options_json`** (somente `SELECT`) é validado no servidor:
@@ -2759,32 +2759,32 @@ END;
   * `--dry-run` imprime o DDL sem executar;
   * `--lob-basicfile` aplica o fallback de LOB;
   * `--generate-sql <pasta>` (ou via `scripts/generate_sql.py`): gera scripts SQL puros e autocontidos (`01_deploy_sss_<owner>_<prefixo>.sql` com DDL/DML de seed/estatísticas, `02_rollback_sss_<owner>_<prefixo>.sql` para desinstalação total e `99_validate_deploy_<owner>_<prefixo>.sql`, só de leitura) para execução direta por DBAs via SQL*Plus em homologação/produção sem execução Python no servidor de banco;
-  * **Nome dos arquivos (CR-024):** `<base>_<owner>_<prefixo>.sql`, com o owner em minúsculas e o prefixo sem o `_` final (ex.: owner `OPENRISOW` e prefixo `tbsss_` geram `01_deploy_sss_openrisow_tbsss.sql`, `02_rollback_sss_openrisow_tbsss.sql`, `99_validate_deploy_openrisow_tbsss.sql` e, com `--grants-to`, `03_grants_sss_openrisow_tbsss.sql`). Esquemas diferentes ficam lado a lado na mesma pasta; gerar de novo para o mesmo owner e prefixo sobrescreve. O deploy cita o nome do rollback correspondente. Os arquivos versionados em `docs/sql/` são os do PROD (`openrisow`, `tbsss_`) e os do DEV (`openrisow`, `ssdev_`) desta máquina, e os do DEV e do PROD do servidor 3067 (`s3dev_` e `s3prd_`, `docs/DEPLOYMENT-SERVER.md`, Apêndice A), lado a lado.
+  * **Nome dos arquivos (CR-024):** `<base>_<owner>_<prefixo>.sql`, com o owner em minúsculas e o prefixo sem o `_` final (ex.: owner `OPENRISOW` e prefixo `tbsprd_` geram `01_deploy_sss_openrisow_tbsprd.sql`, `02_rollback_sss_openrisow_tbsprd.sql`, `99_validate_deploy_openrisow_tbsprd.sql` e, com `--grants-to`, `03_grants_sss_openrisow_tbsprd.sql`). Esquemas diferentes ficam lado a lado na mesma pasta; gerar de novo para o mesmo owner e prefixo sobrescreve. O deploy cita o nome do rollback correspondente. Os arquivos versionados em `docs/sql/` são os do PROD (`openrisow`, `tbsprd_`) e os do DEV (`openrisow`, `tbsdev_`) desta máquina, lado a lado.
   * **Só ASCII (decisão 16 A, 30/10/2026):** os scripts gerados não têm byte acima de 127. Os literais com acento saem em `UNISTR('Gest\00E3o ...')`, e comentários e `PROMPT`, sem acento. Assim o SQL*Plus grava o mesmo texto com qualquer `NLS_LANG` do cliente e qualquer conjunto de caracteres do banco (no 3067, o arquivo em UTF-8 lido com `NLS_LANG=...WE8MSWIN1252` gravou `GestÃ£o` no lugar de `Gestão`). O `init_db` pelo driver não passa por isso: o texto vai como Unicode;
   * não há opção de `DROP` nem `--recreate`, inclusive em DEV. Objetos existentes nunca são removidos automaticamente por `init_db.py`.
 * **Seed Completo** via `MERGE` (idempotente):
   * **Funcionalidades e Controle:** catálogo canônico de 14 funcionalidades (§4.3.D) e a linha de `tbsss_control` (versão do esquema e auditoria de versão).
   * **Ambientes Padrão (`tbsss_environments`):** os 5 ambientes homologados (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`), todos com `is_production = 'Y'` (CR-017). A marcação só é gravada na inclusão: o `MERGE` não desfaz uma alteração feita no cadastro.
-  * **Dicionário de Parâmetros (`tbsss_parameters`):** 19 parâmetros reutilizáveis (`TEXT`, `NUMBER`, `SELECT`).
+  * **Gestão de Parâmetros (`tbsss_parameters`):** 19 parâmetros reutilizáveis (`TEXT`, `NUMBER`, `SELECT`).
   * **Catálogo de Scripts Utilitários (`tbsss_scripts`):** 14 rotinas de manipulação de arquivos em Python 3, `sh` e `bash` (`zipar_arquivos`, `descompactar_zip`, `quebrar_arquivo`, `juntar_arquivos`, `converter_encoding`, `substituir_texto`, `remover_duplicadas`, `gerar_hash_arquivo`, `compactar_targz`, `descompactar_targz`, `contar_linhas_arquivo`, `filtrar_linhas`, `ordenar_arquivo`, `limpar_linhas_vazias`). Especificação completa em `docs/UTILITY_SCRIPTS.md`.
   * **Homologação por Ambiente (`tbsss_script_env`):** todas as 14 rotinas homologadas para os 5 ambientes (70 registros).
   * **Parâmetros de Rotinas (`tbsss_script_param`):** 38 vínculos com ordens e valores padrão específicos.
-  * **Perfis de Acesso (`tbsss_profiles`):** os 4 perfis padrão (`ADMINISTRATOR`, `OPERATOR_PROD`, `OPERATOR_HML`, `READ_ONLY`), suas matrizes funcionais (`tbsss_profile_feature`), escopos de ambiente (`tbsss_profile_env`) e a liberação das 14 rotinas para todos os perfis (`tbsss_profile_script`, total de 56 registros).
-  * **Usuários de Demonstração e Homologação (`tbsss_users`):** os 4 operadores padrão do UI Freeze (`admin`, `op.prod`, `op.hml`, `consulta`) com senha padrão `Sss@Homolog2026!` (hash PBKDF2 com 200.000 iterações). O `MERGE` preserva senhas já trocadas.
+  * **Perfis de Acesso (`tbsss_profiles`):** os 3 perfis padrão (`ADMINISTRADOR`, `OPERADOR`, `CONSULTA`), suas matrizes funcionais (`tbsss_profile_feature`), escopos de ambiente (`tbsss_profile_env`) e a liberação das 14 rotinas para todos os perfis (`tbsss_profile_script`, total de 42 registros).
+  * **Usuários de Demonstração e Homologação (`tbsss_users`):** os 3 operadores padrão do UI Freeze (`admin`, `op.prod`, `consulta`) com senha padrão `Sss@Homolog2026!` (hash PBKDF2 com 200.000 iterações). O `MERGE` preserva senhas já trocadas.
   * **Governança de Dados:** metadados descritivos aplicados via `COMMENT ON TABLE` e `COMMENT ON COLUMN` para todas as tabelas e colunas, além de comentários em todas as triggers de integridade.
   * **Atores de Auditoria:** a inclusão grava `created_by = 'SYSTEM:init_db'`; quando o `MERGE` muda uma linha existente, grava `updated_*` com o mesmo ator; uma linha igual ao seed não é tocada (§10, CR-006).
-* **Administrador inicial (decisão 18 B, 30/10/2026):** o seed cria sempre os 4 usuários padrão, com a senha inicial do DEPLOYMENT §5.3 (o `admin` no perfil `ADMINISTRATOR`). Com `--admin-login`, o login informado é o administrador inicial (`ddl_builder.seed_users`, a mesma lista no `init_db` e no SQL gerado):
+* **Administrador inicial (decisão 18 B, 30/10/2026):** o seed cria sempre os 3 usuários padrão, com a senha inicial do DEPLOYMENT §5.3 (o `admin` no perfil `ADMINISTRADOR`). Com `--admin-login`, o login informado é o administrador inicial (`ddl_builder.seed_users`, a mesma lista no `init_db` e no SQL gerado):
   * `--admin-login admin`: o `admin` recebe a senha informada e, com `--admin-name`, o nome;
-  * outro login: o seed cria **mais um** usuário nesse login, no perfil `ADMINISTRATOR`, com o nome de `--admin-name` (padrão "Administrador") e a senha informada; o `admin` fica com a senha inicial, como os demais;
+  * outro login: o seed cria **mais um** usuário nesse login, no perfil `ADMINISTRADOR`, com o nome de `--admin-name` (padrão "Administrador") e a senha informada; o `admin` fica com a senha inicial, como os demais;
   * a senha vem de `getpass` (duas vezes) ou de `SSS_BOOTSTRAP_ADMIN_PASSWORD` no `init_db`, com a política do §4.2, e de `--admin-password-hash` (hash PBKDF2) no `generate_sql`, sem o qual o usuário novo recebe a senha inicial;
-  * o login segue a regra da tela (3 a 30 caracteres `a-z`, `0-9`, `.`, `_`, `-`) e não pode ser `op.prod`, `op.hml` nem `consulta`; fora disso, os dois comandos saem com código 2 antes de pedir senha;
+  * o login segue a regra da tela (3 a 30 caracteres `a-z`, `0-9`, `.`, `_`, `-`) e não pode ser `op.prod` nem `consulta`; fora disso, os dois comandos saem com código 2 antes de pedir senha;
   * o `MERGE` nunca troca a senha de um usuário que já existe; nome, perfil e ativo voltam ao do seed.
-* **Script SQL de Produção Autônomo:** gerado em `docs/sql/01_deploy_sss_openrisow_tbsss.sql` para implantação direta via SQL*Plus por DBAs, contendo DDL, comentários de governança, DML de seed completo, coleta de estatísticas pelo otimizador e, quando gerado com as contas dos papéis, os GRANTs da tabela abaixo (os `01_deploy` versionados em `docs/sql/` são de instalações com a conta única, dona do esquema, e não têm GRANT, só o comentário `conta nao informada`), parando no primeiro erro (`WHENEVER SQLERROR EXIT FAILURE ROLLBACK`). Script de desinstalação total em `docs/sql/02_rollback_sss_openrisow_tbsss.sql`.
+* **Script SQL de Produção Autônomo:** gerado em `docs/sql/01_deploy_sss_openrisow_tbsprd.sql` para implantação direta via SQL*Plus por DBAs, contendo DDL, comentários de governança, DML de seed completo, coleta de estatísticas pelo otimizador e, quando gerado com as contas dos papéis, os GRANTs da tabela abaixo (os `01_deploy` versionados em `docs/sql/` são de instalações com a conta única, dona do esquema, e não têm GRANT, só o comentário `conta nao informada`), parando no primeiro erro (`WHENEVER SQLERROR EXIT FAILURE ROLLBACK`). Script de desinstalação total em `docs/sql/02_rollback_sss_openrisow_tbsprd.sql`.
   * **Nenhum GRANT a PUBLIC:** `tbsss_users` guarda `password_hash`, e o banco pode ser compartilhado com outros sistemas.
   * **Contas dos papéis:** sem `--grants-to`, o `scripts/generate_sql.py --name`/`--config` usa o `config.ini` (o `init_db --generate-sql` só repassa owner, prefixo e o `--grants-to`; sem ele, sai sem GRANT): web e agente vêm de `[oracle] user` (CR-030: sem o papel purge; CR-032, D8: sem o monitor). Cada conta é validada como identificador Oracle, e `PUBLIC` é recusado.
   * Um papel sem conta, ou cuja conta é a dona do esquema, não recebe GRANT: o owner já tem todos os privilégios, e GRANT para si mesmo falha (ORA-01749). Cada caso fica registrado como comentário no script.
   * Uma instalação antiga que já tenha GRANTs a PUBLIC os perde no rollback (o `DROP TABLE` remove as concessões). Sem rollback, o DBA precisa revogá-los à mão.
-* **Validação da implantação (`docs/sql/99_validate_deploy_openrisow_tbsss.sql`):** gerada com os outros dois scripts, a partir do mesmo registro, com o owner e o prefixo do `config.ini` ou de `--owner`/`--prefix`. Só faz leituras.
+* **Validação da implantação (`docs/sql/99_validate_deploy_openrisow_tbsprd.sql`):** gerada com os outros dois scripts, a partir do mesmo registro, com o owner e o prefixo do `config.ini` ou de `--owner`/`--prefix`. Só faz leituras.
   * **Dicionário:** confere, pelos nomes do registro, as tabelas, sequences, triggers habilitadas, constraints habilitadas e índices válidos; e exige zero objetos inválidos e zero GRANTs a PUBLIC.
   * **Dados:** confere a versão do esquema contra `sql_ident.SCHEMA_VERSION` e o mínimo de linhas que o seed grava em cada tabela.
   * Cada verificação sai como "esperado × encontrado" com OK ou FALHA, e cada seção termina com um resumo.

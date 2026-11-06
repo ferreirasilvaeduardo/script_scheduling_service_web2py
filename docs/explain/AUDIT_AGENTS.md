@@ -2,7 +2,7 @@
 
 Consultas SQL estáticas do `RepoAuditOracle` e do `RepoAgentsOracle` (`src/sss/persistence/oracle/audit.py` e `agents.py`) no Oracle 11gR2+.
 
-> **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` de `[oracle] table_prefix` (ex.: `tbsss_` no PROD, `ssdev_` no DEV). Os dois são validados por `sql_ident` e qualificados **uma vez**, na criação do repositório. Todo valor entra por bind, com as datas como `TIPO_DATE` (README §7.5).
+> **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` é fixo pelo ambiente (`tbsdev_` em DEV, `tbsprd_` em PROD; não mais parametrizado). Os dois são validados por `sql_ident` e qualificados **uma vez**, na criação do repositório. Todo valor entra por bind, com as datas como `TIPO_DATE` (README §7.5).
 >
 > **Expressões dos índices por função (AGENTS §4.8):** `tickets_running`, `running_without_pid` e `unattended_queue` repetem as expressões de `ix_{prefixo}tck_run` (`CASE`) e `ix_{prefixo}tck_queue` (`GREATEST(scheduled_at, created_at)`, CR-013), importadas do `sql_ident`. Nenhuma das três lê CLOB.
 

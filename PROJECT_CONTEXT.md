@@ -49,7 +49,7 @@
   - Tipagem: `mypy` **estrito** em todo arquivo novo ou alterado. A dívida antiga está listada no `pyproject.toml` e no `.flake8` e só diminui.
   - Proibido em código (AGENTS §2.1): qualquer recurso de Python 3.7+ (dataclasses, walrus, pos-only, f-string com `=`). F-strings simples são permitidas.
   - SQL:
-    - binds sempre; nomes físicos só via `sql_ident` (prefixo configurável, até 30 caracteres);
+    - binds sempre; nomes físicos só via `sql_ident` (prefixo fixo pelo ambiente: `tbsdev_` em DEV, `tbsprd_` em PROD; até 30 caracteres);
     - `rowcount` conferido em toda transição; `FOR UPDATE WAIT n` com n ≤ 5;
     - sem sintaxe 12c+; paginação por `ROWNUM`;
     - SQL só em `persistence/oracle/`, `init_db` e `ddl_builder`.
@@ -99,7 +99,7 @@ O porquê completo de cada decisão está em `docs/architecture/CR-*.md` (CR-001
 
 - **ADR 001 - Somente Oracle, com piso no 11gR2 (CR-002):**
   - *Contexto:* o banco da empresa é Oracle, com instâncias de 11g a 19c.
-  - *Decisão Tomada:* SQL 11gR2 escrito à mão nos repositórios, sem camada de dialeto; prefixo de tabela configurável para várias instalações no mesmo owner.
+  - *Decisão Tomada:* SQL 11gR2 escrito à mão nos repositórios, sem camada de dialeto; prefixo de tabela fixo pelo ambiente (`tbsdev_` em DEV, `tbsprd_` em PROD), não parametrizado, permitindo que instalações coexistam no mesmo owner.
   - *Impacto:* proibida sintaxe 12c+ (`FETCH FIRST`, `IDENTITY`, JSON no banco); identificadores ≤ 30 caracteres após o prefixo; o `test_sql_oracle11g` varre o código.
 - **ADR 002 - Driver adaptativo (CR-002, F7.0):**
   - *Contexto:* servidores com Pythons e clientes Oracle diferentes; o modo Thin não conecta ao 11g.
@@ -135,8 +135,8 @@ O porquê completo de cada decisão está em `docs/architecture/CR-*.md` (CR-001
   - *Impacto:* constraint nova que vire mensagem de campo entra no `_FIELD_BY_CONSTRAINT` com `tbsss_`.
 - **ADR 010 - Administrador inicial por `--admin-login` (decisão 18 B):**
   - *Contexto:* a opção existia, mas não tinha efeito.
-  - *Decisão Tomada:* `--admin-login X` cria X no perfil `ADMINISTRATOR`, além dos 4 usuários do seed, pela mesma lista (`ddl_builder.seed_users`) no `init_db` e no SQL gerado.
-  - *Impacto:* login inválido, ou igual a `op.prod`, `op.hml` ou `consulta`, sai com código 2.
+  - *Decisão Tomada:* `--admin-login X` cria X no perfil `ADMINISTRADOR`, além dos 3 usuários do seed (`admin`, `op.prod`, `consulta`), pela mesma lista (`ddl_builder.seed_users`) no `init_db` e no SQL gerado.
+  - *Impacto:* login inválido, ou igual a `op.prod` ou `consulta`, sai com código 2 (o perfil `OPERATOR_HML` e o usuário `op.hml` foram aposentados).
 - **ADR 011 - Espera no `stop_ticket` dentro do laço (decisão 19 C):**
   - *Contexto:* a regra proíbe espera dentro de operação do agente.
   - *Decisão Tomada:* aceita a exceção do ticket "talvez iniciado" achado na varredura, que é um caso raro (até `kill_grace_s`, 5 s).
@@ -252,7 +252,7 @@ A ordem das camadas é verificada estaticamente por AST em `tests/architecture/t
   21. `tbsss_audit_logs` — trilha imutável de auditoria (`actor_login`, `action`, `entity_type`, `entity_id`, `details_json`, `ip_address`).
 * **As 14 Funcionalidades (`tbsss_features`):**
   * Operação: `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `MANAGE_SCHEDULES`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD`.
-  * Administração e Governança: `MANAGE_USERS`, `MANAGE_PROFILES`, `MANAGE_ENVIRONMENTS`, `MANAGE_SCRIPTS`, `MANAGE_PARAMETERS`, `VIEW_AUDIT`.
+  * Administração e Governança: `MANAGE_USERS`, `MANAGE_PROFILES`, `MANAGE_ENVIRONMENTS`, `MANAGE_SCRIPTS`, `MANAGE_PARAMETERS` (Gestão de Parâmetros), `VIEW_AUDIT`.
 * **Mapeamento Padrão de Processos × Ambientes:**
   * `web0001` → servidor web da instalação.
   * `agente0001` → `GFPREPROD` | `agente0002` → `CLONE2` | `agente0003` → `CLONE1` | `agente0004` → `CLONE6` | `agente0005` → `CLONE7`.

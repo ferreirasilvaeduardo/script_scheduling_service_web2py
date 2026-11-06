@@ -48,8 +48,7 @@ As senhas nunca vão para o código, o comando ou o log:
    - `scripts/health.py --name agente0001` mostra `SSS OK - 0 problemas | healthy_agents=5`.
    - `scripts/check_env.py --name agente0001` termina com `Todos os pre-requisitos foram atendidos`.
 3. **Scripts do seed e de diagnóstico na pasta base** (`[agent] script_base_dir`). O seed cadastra caminhos relativos (`utilitarios/zipar_arquivos.py`, `diagnostico/gerar_saida.sh`).
-   - No DEV local, a pasta base é `dev/scripts` do repositório.
-   - No servidor, é `scripts_ambiente/`, com `utilitarios/` (do `utilitarios.tar.gz` do pacote) e `diagnostico/`.
+   - No DEV local e no servidor, a pasta base padrão é `scripts_ambiente/`, com `utilitarios/` e `diagnostico/`.
 4. **Massa de teste** na pasta `inputs` do `agente0001` (GFPREPROD): textos para o `contar_linhas_arquivo` e o `gerar_hash_arquivo` e um lote grande para o ticket longo do `zipar_arquivos` (as telas de "Rodando" e o cancelamento em execução precisam dele).
    - Gere com `make homolog-massa` (DEV local; `LOTE_MB=` troca o tamanho do lote, padrão 4.608 MB).
    - No servidor, rode o `gerar_massa.py` lá, na raiz: `python3 gerar_massa.py --config instance/agente0001/config.ini --lote-mb 2048`.

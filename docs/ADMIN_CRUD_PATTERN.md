@@ -60,7 +60,7 @@ As entidades mestras nunca são excluídas, apenas desativadas (README §10).
 
 | Situação | Ação | Detalhe |
 |---|---|---|
-| Inclusão | `CREATE` | `campo: valor` somente dos campos preenchidos (vazios omitidos), com todos os campos do formulário e referências pelo nome (ex.: `profile: OPERATOR_PROD`; o nome do campo é o técnico, em inglês) |
+| Inclusão | `CREATE` | `campo: valor` somente dos campos preenchidos (vazios omitidos), com todos os campos do formulário e referências pelo nome (ex.: `profile: OPERADOR`; o nome do campo é o técnico, em inglês) |
 | Alteração | `UPDATE` | `campo: antigo → novo`, só dos campos que mudaram. Se nada mudou, nada é gravado nem auditado. |
 | Desativação | `DEACTIVATE` | `active: Y → N` mais o impacto (por exemplo, `agendamentos ativos afetados: 2`) |
 | Reativação | `UPDATE` | `active: N → Y` |

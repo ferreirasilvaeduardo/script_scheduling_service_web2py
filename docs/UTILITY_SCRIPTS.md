@@ -14,8 +14,8 @@ Para atender aos cenários operacionais frequentes de manipulação de arquivos 
   - Leitura em *streaming* / blocos (*chunks*) para arquivos de grande porte, com baixo uso de memória;
   - Parâmetros sanitizados sem injeção de comandos.
 - **Localização dos Fontes:**
-  - **Repositório (DEV):** `dev/scripts/utilitarios/`; o agente do DEV usa `[agent] script_base_dir = <RAIZ>/dev/scripts`.
-  - **Instalação pelo pacote (PROD):** `<RAIZ>/scripts_ambiente/utilitarios/`, na pasta base padrão do agente (`scripts_ambiente/`, sem `script_base_dir` no `config.ini`; CR-028 e CR-032). O pacote não leva `dev/`: os scripts são copiados à parte (§6.1).
+  - **Repositório (DEV):** `scripts_ambiente/utilitarios/`; o agente usa a pasta base `<RAIZ>/scripts_ambiente`.
+  - **Instalação pelo pacote (PROD):** `<RAIZ>/scripts_ambiente/utilitarios/`, na pasta base padrão do agente (`scripts_ambiente/`, sem `script_base_dir` no `config.ini`; CR-028 e CR-032). O pacote preserva `scripts_ambiente/`.
 - **Cadastro no catálogo (CR-023):** o seed cadastra os 14 scripts com caminho relativo à pasta base do agente (`utilitarios/<arquivo>`). O mesmo cadastro vale no DEV e no PROD; só a pasta base muda.
 
 ---
@@ -41,7 +41,7 @@ Para atender aos cenários operacionais frequentes de manipulação de arquivos 
 
 ---
 
-## 3. Dicionário de Parâmetros Homologados (`tbsss_parameters`)
+## 3. Gestão de Parâmetros Homologados (`tbsss_parameters`)
 
 Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de dados e vinculados a cada rotina conforme as necessidades de entrada:
 
@@ -239,27 +239,29 @@ Todos os 14 scripts são automaticamente homologados para execução nos **5 amb
 *Totalizando 70 registros de homologação técnica (14 scripts × 5 ambientes).*
 
 ### 5.2 Perfis de Acesso e Matriz de Autorização (`tbsss_profiles`, `tbsss_profile_feature`, `tbsss_profile_env`)
-Foram configurados **4 perfis de acesso** com escopos operacionais e administrativos bem delineados:
+Foram configurados **3 perfis de acesso** (com nomes em português) com escopos operacionais e administrativos bem delineados:
 
 | Perfil | Tipo | Funcionalidades Autorizadas (`tbsss_profile_feature`) | Ambientes Autorizados (`tbsss_profile_env`) |
 |:---|:---:|:---|:---|
-| `ADMINISTRATOR` | Super Administrador (`is_admin = 'Y'`) | Todas as 14 funcionalidades (`EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD`, `MANAGE_USERS`, `MANAGE_PROFILES`, `MANAGE_ENVIRONMENTS`, `MANAGE_SCRIPTS`, `MANAGE_PARAMETERS`, `MANAGE_SCHEDULES`, `VIEW_AUDIT`) | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
-| `OPERATOR_PROD` | Operacional Produção (`is_admin = 'N'`) | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD` | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
-| `OPERATOR_HML` | Operacional Homologação (`is_admin = 'N'`) | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD` | Subconjunto `CLONE6`, `CLONE7` e `GFPREPROD` (no seed, todos os ambientes estão marcados como produção) |
-| `READ_ONLY` | Auditoria / Leitura (`is_admin = 'N'`) | Apenas leitura de logs e tickets (`VIEW_LOGS`) | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
+| `ADMINISTRADOR` | Super Administrador (`is_admin = 'Y'`) | Todas as 14 funcionalidades (`EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD`, `MANAGE_USERS`, `MANAGE_PROFILES`, `MANAGE_ENVIRONMENTS`, `MANAGE_SCRIPTS`, `MANAGE_PARAMETERS`, `MANAGE_SCHEDULES`, `VIEW_AUDIT`) | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
+| `OPERADOR` | Operacional (`is_admin = 'N'`) | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD` | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
+| `CONSULTA` | Auditoria / Leitura (`is_admin = 'N'`) | Apenas leitura de logs e tickets (`VIEW_LOGS`) | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
+
+*(Nota: o perfil `OPERATOR_HML` foi aposentado e retirado do catálogo e do seed).*
 
 ### 5.3 Liberação de Scripts por Perfil (`tbsss_profile_script`)
-Todos os 14 scripts utilitários foram liberados para os 4 perfis operacionais cadastrados, totalizando **56 registros de permissão** (4 perfis × 14 scripts).
+Todos os 14 scripts utilitários foram liberados para os 3 perfis operacionais cadastrados, totalizando **42 registros de permissão** (3 perfis × 14 scripts).
 
 ### 5.4 Usuários Padrão Cadastrados para Homologação e Demonstração (`tbsss_users`)
-Para viabilizar a demonstração operacional e os testes de interface (conforme matriz utilizada na homologação das telas / UI Freeze), foram cadastrados **4 usuários padrão**:
+Para viabilizar a demonstração operacional e os testes de interface (conforme matriz utilizada na homologação das telas / UI Freeze), foram cadastrados **3 usuários padrão**:
 
 | Login | Nome Completo | Perfil Atribuído | Privilégio Administrativo | Finalidade de Teste / Demonstração |
 |:---|:---|:---|:---:|:---|
-| `admin` | Super Administrador | `ADMINISTRATOR` | Sim (`is_admin = 'Y'`) | Acesso total a painéis administrativos, cadastros, agendamentos, trilha de auditoria e disparo de rotinas |
-| `op.prod` | Operador Producao | `OPERATOR_PROD` | Não (`is_admin = 'N'`) | Disparo e acompanhamento de rotinas em ambientes de produção e clones |
-| `op.hml` | Operador Homologacao | `OPERATOR_HML` | Não (`is_admin = 'N'`) | Validação de restrição de escopo de ambientes (apenas Clones 6/7 e Preprod) |
-| `consulta` | Auditor e Consulta | `READ_ONLY` | Não (`is_admin = 'N'`) | Validação de acesso somente leitura, sem permissão para disparar scripts ou alterar cadastros |
+| `admin` | Super Administrador | `ADMINISTRADOR` | Sim (`is_admin = 'Y'`) | Acesso total a painéis administrativos, cadastros, agendamentos, trilha de auditoria e disparo de rotinas |
+| `op.prod` | Operador Producao | `OPERADOR` | Não (`is_admin = 'N'`) | Disparo e acompanhamento de rotinas em ambientes de produção e clones |
+| `consulta` | Auditor e Consulta | `CONSULTA` | Não (`is_admin = 'N'`) | Validação de acesso somente leitura, sem permissão para disparar scripts ou alterar cadastros |
+
+*(Nota: o usuário `op.hml` foi descontinuado e removido do seed).*
 
 > [!IMPORTANT]
 > **Credenciais Padrão de Homologação / Demonstração:**
@@ -267,7 +269,7 @@ Para viabilizar a demonstração operacional e os testes de interface (conforme 
 > - **Hash no Banco:** Criptografado com PBKDF2-SHA256 (200.000 iterações): `pbkdf2_sha256$200000$8007db1bd770663178d0f1b1a129140c$9d9604af27e21326e982e5e7c64bfdd868c0995a97181b5a9695149755852d63`.
 > - **Idempotência:** A rotina de seed em SQL e Python utiliza `MERGE INTO`, atualizando nome, perfil e reativando o usuário, mas **preserva o hash da senha existente** caso o operador já tenha trocado sua senha.
 
-### 5.5 Vínculos no Dicionário de Parâmetros (`tbsss_script_param`)
+### 5.5 Vínculos no Catálogo de Parâmetros (`tbsss_script_param`)
 Foram criados **38 vínculos de parâmetros**, estabelecendo ordem de exibição no formulário, obrigatoriedade e valores de substituição padrão para cada uma das 14 rotinas.
 
 ---

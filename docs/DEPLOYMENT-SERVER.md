@@ -461,7 +461,7 @@ grep 'OK: nenhuma falha' ~/sss_registro/${P}_99_validate.log     # esperado: as 
 
 * O `01` para no primeiro erro (`WHENEVER SQLERROR EXIT FAILURE ROLLBACK`). Se ele parar, guarde o log, rode o `02_rollback_sss_${O}_${P}.sql` (só o do prefixo deste passo) e repita.
 * **Sem `sqlplus`:** `"$PYTHON" scripts/init_db.py --name $SSS_AGENTE_HEALTH --real-schema` cria o mesmo esquema e o seed, com a conta e os segredos do agente (passo 11 antes, para conferir o acesso). `--dry-run` imprime o DDL sem conectar.
-* O seed cria os usuários `admin`, `op.prod`, `op.hml` e `consulta` com a senha inicial do DEPLOYMENT §5.3. Ela é trocada no passo 13.
+* O seed cria os usuários `admin`, `op.prod` e `consulta` com a senha inicial do DEPLOYMENT §5.3. Ela é trocada no passo 13.
 
 ---
 
@@ -538,7 +538,7 @@ curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origi
 Na estação do usuário: o web atende só em `127.0.0.1` do servidor. O navegador chega a ele por um túnel SSH que encaminhe a porta local `<PORT>` para `127.0.0.1:<PORT>` do servidor, ou por um proxy da empresa (DEPLOYMENT §10.4). Com o túnel nas mesmas portas, a URL é `http://127.0.0.1:<PORT>/`: o DEV mostra a faixa amarela "AMBIENTE DEV"; o PROD, sem faixa.
 
 Em cada tipo:
-1. Entre com `admin` e troque a senha inicial. Troque também as de `op.prod`, `op.hml` e `consulta`, ou inative os que não forem usados.
+1. Entre com `admin` e troque a senha inicial. Troque também as de `op.prod` e `consulta`, ou inative os que não forem usados.
 2. **Agentes:** todos `OK`, cada um com o seu ambiente, o hostname `$SSS_SERVIDOR` e a pasta base `<RAIZ>/scripts_ambiente`.
 3. **Teste de execução:** crie um arquivo (`printf 'a\nb\nc\n' > $SSS_BASE/$T/teste_sss.txt`) e dispare `contar_linhas_arquivo` no ambiente do `$SSS_AGENTE_HEALTH` com esse caminho. O ticket termina em `SUCCESS` nesse agente, e o log mostra 3 linhas.
 4. `health.py` com código 0 (passo 12).
@@ -731,7 +731,7 @@ O resto do arquivo (a parte "derivados" e a função `sss_tipo`) é o do passo 0
 | 3 A | O DEV usa o DSN direto do GFPR (o `localhost:2424` do pedido é um túnel da máquina de desenvolvimento) |
 | 4 B, 5 A | Prefixos novos, `s3dev_` e `s3prd_`, independentes do `tbsss_` e do `ssdev_` |
 | — | Transferência manual pela equipe; pacote dos arquivos locais (sem git); acesso pelo meio habitual; `driver_mode = auto` |
-| 15 (risco aceito) | Os quatro usuários do seed (`admin`, `op.prod`, `op.hml`, `consulta`) ficam na senha inicial do DEPLOYMENT §5.3 no DEV e no PROD, por decisão do responsável (30/10). A senha está num documento público; o que reduz o risco é o web atender só em `127.0.0.1` do servidor (acesso só pela conta do servidor ou por túnel pelo bastion). Uma homologação no DEV troca a senha do `admin` no CT-01 (passo 13); depois dela, o `admin` volta à senha inicial pela tela |
+| 15 (risco aceito) | Os três usuários do seed (`admin`, `op.prod`, `consulta`) ficam na senha inicial do DEPLOYMENT §5.3 no DEV e no PROD, por decisão do responsável (30/10). A senha está num documento público; o que reduz o risco é o web atender só em `127.0.0.1` do servidor (acesso só pela conta do servidor ou por túnel pelo bastion). Uma homologação no DEV troca a senha do `admin` no CT-01 (passo 13); depois dela, o `admin` volta à senha inicial pela tela |
 | 16 A | SQL gerado só em ASCII, com os literais acentuados em `UNISTR` (30/10), para valer com qualquer `NLS_LANG` e conjunto de caracteres, em qualquer servidor |
 | 17 B | Os textos com mojibake do seed (6 linhas de `features` em cada esquema) saem refazendo os esquemas `s3dev_` e `s3prd_` com o SSS parado (passo 15.2), não por `MERGE` no lugar. Os dados de homologação e de teste se perdem, e os usuários do seed voltam à senha inicial (decisão 15). Executada em 30/10 com o pacote `2610301342` (base `c0c2bfd`): DEV às 13:56 e PROD às 13:59, `02`/`01`/`99` sem erro, os dois no ar com `SSS OK` e `healthy_agents=5`, `features` sem mojibake |
 | 7 A | SSS antigo (web2py, porta 8000, `/home/mastersafgf/sss/web2py`): parado no passo 6, sem apagar nada; a pasta `~/sss` fica como histórico |

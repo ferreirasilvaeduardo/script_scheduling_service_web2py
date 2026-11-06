@@ -2,7 +2,7 @@
 
 Consultas do `RepoSchedulerQueue` (`src/sss/persistence/oracle/scheduler_queue.py`) no Oracle 11gR2+.
 
-> **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` de `[oracle] table_prefix`, validados por `sql_ident` e qualificados uma vez, na criação do repositório. As listas `IN` (`:amb0..`, `:int0..`) são geradas por contagem e todo valor entra por bind.
+> **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` é fixo pelo ambiente (`tbsdev_` em DEV, `tbsprd_` em PROD; não mais parametrizado), validados por `sql_ident` e qualificados uma vez, na criação do repositório. As listas `IN` (`:amb0..`, `:int0..`) são geradas por contagem e todo valor entra por bind.
 >
 > **Índices:** `candidates` lê `ix_{prefixo}tck_queue (status, environment, priority, GREATEST(scheduled_at, created_at), id, script_id)` pela janela do CR-013 (README §8.2); `own_sweep`/`tickets_running_do_agente` a de `ix_{prefixo}tck_run`, textualmente iguais às do `sql_ident` e sem alias de tabela (CR-007, R-32).
 

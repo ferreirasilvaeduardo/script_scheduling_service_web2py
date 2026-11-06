@@ -122,7 +122,7 @@ cd /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
 
 **Prefixo do DEV:** o DEV usa automaticamente `tbsdev_` e o PROD `tbsprd_`, no mesmo owner (prefixos fixos pelo ambiente, não parametrizados). O esquema `tbsdev_` é criado pelo `init_db --name agente0001 --real-schema` ou pelos scripts em `docs/sql/` (`01_deploy_sss_openrisow_tbsdev.sql`, `02_rollback_sss_openrisow_tbsdev.sql`, `99_validate_deploy_openrisow_tbsdev.sql`), gerados por `make sql-all`. Para recriar o esquema do DEV: `02_rollback` e `01_deploy` do `tbsdev` (apaga os dados), ou um `DROP` das tabelas `tbsdev_*` seguido do `init_db`. Os comentários de coluna das FKs citam `tbsss_<tabela>` em todos os prefixos (texto fixo do dicionário lógico).
 
-**Um agente por ambiente no DEV (2026-10-29):** `agente0001` = GFPREPROD (o de antes, que ficou só com ele: a massa de teste e a pasta de entrada do GFPREPROD continuam em `var/agente0001/`), `agente0002` = CLONE2, `agente0003` = CLONE1, `agente0004` = CLONE6 e `agente0005` = CLONE7. Cada um com o mesmo config enxuto (`max_parallel_jobs = 4`, `script_base_dir` = `dev/scripts`, `env_passthrough`, `level = DEBUG`) e as suas pastas em `var/agente000N/`; o `secrets.cfg` único já tem as credenciais dos cinco ambientes. Subida: `bin/sss-keepalive.sh web0001:18000 agente0001 agente0002 agente0003 agente0004 agente0005` (e `bin/sss-stop.sh` de cada um para parar). O PROD tem a mesma divisão desde o CR-039 (parado, sem `crontab`).
+**Um agente por ambiente no DEV (2026-10-29):** `agente0001` = GFPREPROD (o de antes, que ficou só com ele: a massa de teste e a pasta de entrada do GFPREPROD continuam em `var/agente0001/`), `agente0002` = CLONE2, `agente0003` = CLONE1, `agente0004` = CLONE6 e `agente0005` = CLONE7. Cada um com o mesmo config enxuto (`max_parallel_jobs = 4`, `script_base_dir` = `scripts_ambiente`, `env_passthrough`, `level = DEBUG`) e as suas pastas em `var/agente000N/`; o `secrets.cfg` único já tem as credenciais dos cinco ambientes. Subida: `bin/sss-keepalive.sh web0001:18000 agente0001 agente0002 agente0003 agente0004 agente0005` (e `bin/sss-stop.sh` de cada um para parar). O PROD tem a mesma divisão desde o CR-039 (parado, sem `crontab`).
 
 **Estrutura por processo (CR-028):** o DEV tem a mesma estrutura do PROD (DEPLOYMENT §1; não há HOM, CR-030), com `<RAIZ>` = `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`: `instance/web0001/` e `instance/agente0001/` a `instance/agente0005/` (cada um com o seu `config.ini`; o `[oracle]` num único `instance/common.ini` e os segredos num único `instance/secrets.cfg` `0600`, os dois fora do git), logs do web em `var/web0001/logs` e as pastas de cada agente em `var/agente000N/` (`logs`, `works`, `outputs`, `inputs`, `script_works`, `files`). Para criar do zero, copie os modelos de `instance/exemplos/` (o `[oracle]` com owner, prefixo e DSN; não há `sss_env` desde o CR-032: o ambiente mostrado vem da pasta `DEV`), as pastas são criadas na subida (CR-032) e siga o `docs/DEPLOYMENT.md` §7. O `bin/start_local.sh` sobe o `web0001` (outro nome com `SSS_WEB_NAME`) e carrega `instance/web0001/web.env` (`SSS_DEV_SEED_PASSWORD` e `SSS_TZ`; `0600`, fora do git). Não há config padrão (CR-029): as ferramentas de banco rodam com `--name agente0001` (`init_db.py`, `generate_sql.py`, `check_env.py`), e a bateria Oracle lê `instance/agente0001/` (config e segredos).
 
@@ -149,7 +149,7 @@ Para subir como nos servidores via launcher oficial:
 
 ### Usuários de homologação
 
-* **No Oracle:** os usuários `admin`, `op.prod`, `op.hml` e `consulta` vêm do seed do `01_deploy_sss_<owner>_<prefixo>.sql`, com a senha padrão de homologação do README §11.1. Troque-as depois da implantação.
+* **No Oracle:** os usuários `admin`, `op.prod` e `consulta` vêm do seed do `01_deploy_sss_<owner>_<prefixo>.sql`, com a senha padrão de homologação do README §11.1. Troque-as depois da implantação.
 * **`SSS_DEV_SEED_PASSWORD`:** só vale para o FAKE dos testes automáticos. A aplicação não usa mais essa variável.
 * **Perfis, permissões e dados de apoio de cada usuário:** `docs/homologation/SSS_Homologation_Manual_UI_Freeze.docx`, capítulo 3.
 
@@ -220,9 +220,9 @@ Arquivo novo ou alterado segue 99 colunas e tipos estritos; a dívida antiga est
 
 ---
 
-## 6. Árvore de Scripts de Exemplo (`dev/scripts/`)
+## 6. Árvore de Scripts dos Ambientes (`scripts_ambiente/`)
 
-A pasta `dev/scripts/` contém scripts de exemplo **sem lógica perigosa**, usados pelo `path_guard` (README §8.5), pela compilação do snapshot (README §6) e, mais adiante, pelos testes do executor:
+A pasta `scripts_ambiente/` contém scripts de negócio, utilitários e diagnósticos **sem lógica perigosa**, usados pelo `path_guard` (README §8.5), pela compilação do snapshot (README §6) e pelos testes do executor:
 
 | Arquivo | Comportamento |
 |---|---|
@@ -257,10 +257,10 @@ O script fica num **caminho absoluto** em qualquer lugar do servidor ou num cami
 
 ```ini
 [agent]
-script_base_dir = /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/dev/scripts
+script_base_dir = /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/scripts_ambiente
 ```
 
-Os arquivos precisam de modo `0644` ou `0755` (`chmod -R go-w dev/scripts`). Uma pasta do seu `$HOME` também serve, com caminho absoluto.
+Os arquivos precisam de modo `0644` ou `0755` (`chmod -R go-w scripts_ambiente`). Uma pasta do seu `$HOME` também serve, com caminho absoluto.
 
 * As chaves `script_owner_uids` e `ambientes_exigem_hash` foram retiradas (CR-011). Se ainda estiverem no seu `config.ini`, a subida segue com o aviso "... ignorada: ...; apague a linha" (CR-036, D6). Apague a linha.
 * As chaves `base_script_dirs` e a antiga `base_script_dir` foram retiradas (CR-005). Se ainda estiverem no seu `config.ini`, a subida aborta com "Chave desconhecida na secao [agent]". Apague a linha.
@@ -280,7 +280,7 @@ Os arquivos precisam de modo `0644` ou `0755` (`chmod -R go-w dev/scripts`). Uma
 
 ### 6.3 Agente em DEV (a partir do F8, CR-007)
 
-* **Config enxuto (CR-026, CR-028):** o `instance/agente0001/config.ini` do DEV só tem as chaves obrigatórias e as que fogem do padrão (`name = agente0001`, `environments`, `max_parallel_jobs`, `script_base_dir = <RAIZ>/dev/scripts`, `env_passthrough` e `level = DEBUG`); o do `web0001`, `name`, `level` e `allowed_origins`; o `[oracle]` dos dois fica no `instance/common.ini` (CR-032, D18). As pastas saem do nome. Não há `[agent] interpreters`: o agente procura `python3`, `bash`... no `PATH` do terminal que o subiu. O agente sobe pelo nome: `PYTHON=~/.pyenv/versions/3.6.15/bin/python3 bin/sss-scheduler.sh agente0001`. Para parar, `bin/sss-stop.sh agente0001` ou `SIGTERM` no PID do agente: ele encerra pela máquina de estados (README §8.11).
+* **Config enxuto (CR-026, CR-028):** o `instance/agente0001/config.ini` do DEV só tem as chaves obrigatórias e as que fogem do padrão (`name = agente0001`, `environments`, `max_parallel_jobs`, `script_base_dir = <RAIZ>/scripts_ambiente`, `env_passthrough` e `level = DEBUG`); o do `web0001`, `name`, `level` e `allowed_origins`; o `[oracle]` dos dois fica no `instance/common.ini` (CR-032, D18). As pastas saem do nome. Não há `[agent] interpreters`: o agente procura `python3`, `bash`... no `PATH` do terminal que o subiu. O agente sobe pelo nome: `PYTHON=~/.pyenv/versions/3.6.15/bin/python3 bin/sss-scheduler.sh agente0001`. Para parar, `bin/sss-stop.sh agente0001` ou `SIGTERM` no PID do agente: ele encerra pela máquina de estados (README §8.11).
 * **Pasta de trabalho dos scripts (CR-019, CR-028):** no DEV é `var/agente0001/script_works` (padrão do nome; fora do git; criada pelo agente na subida, CR-032). Cada ticket recebe `SSS_WORK_DIR` em `script_works/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, que fica depois do ticket até a limpeza manual (README §11.3, CR-030).
 * **DEV igual ao PROD (CR-032, D7, D8, D11):** os scripts rodam com a conta do agente, sem `sudo` nem helper, no DEV e no PROD; não há `sss_env` nem papel monitor. As linhas antigas (`sss_env`, `exec_users`, `exec_work_dir`, `helper_path`, `[monitor]`) só geram aviso.
 * `cron_horizon_days` é fixo em 1.461 desde o CR-032 (uma linha antiga só gera aviso); `max_log_size_bytes` vai até 64 MiB e o prefixo de tabela é fixo por ambiente (`tbsdev_` em DEV, `tbsprd_` em PROD; `table_prefix` no config é ignorado com aviso).
@@ -320,10 +320,9 @@ Para testes interativos na interface web (a aplicação usa sempre o Oracle; o F
 
 | Login | Perfil | Permissões Principais | Escopo de Ambientes |
 |---|---|---|---|
-| `admin` | `ADMINISTRATOR` | Acesso irrestrito a todas as 14 funcionalidades | Todos os 5 ambientes |
-| `op.prod` | `OPERATOR_PROD` | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD` | Todos os 5 ambientes |
-| `op.hml` | `OPERATOR_HML` | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD` | `CLONE6`, `CLONE7`, `GFPREPROD` |
-| `consulta` | `READ_ONLY` | Apenas consulta (`VIEW_LOGS`) | Todos os 5 ambientes |
+| `admin` | `ADMINISTRADOR` | Acesso irrestrito a todas as 14 funcionalidades | Todos os 5 ambientes |
+| `op.prod` | `OPERADOR` | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD` | Todos os 5 ambientes |
+| `consulta` | `CONSULTA` | Apenas consulta (`VIEW_LOGS`) | Todos os 5 ambientes |
 
 * **Senha Inicial Padrão:** `Sss@Homolog2026!` (hash PBKDF2-SHA256 com 200.000 iterações).
 * **Troca de Senha:** Disponível na interface em "Minha senha" no cabeçalho.

@@ -124,10 +124,17 @@ cli (topo: run_web, run_scheduler, init_db, generate_sql, check_env, health, pro
   * Vínculos RBAC e Homologação (4): `tbsss_profile_features`, `tbsss_profile_envs`, `tbsss_profile_scripts`, `tbsss_script_envs`.
   * Operação, Fila, Agentes e Arquivos (8): `tbsss_schedules`, `tbsss_tickets`, `tbsss_ticket_params`, `tbsss_ticket_output`, `tbsss_agents`, `tbsss_agent_envs`, `tbsss_inputs`, `tbsss_input_Snapshot`.
   * Auditoria (1): `tbsss_audit_logs`.
-* **14 Funcionalidades RBAC (`tbsss_features`):** `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `MANAGE_SCHEDULES`, `MANAGE_USERS`, `MANAGE_PROFILES`, `MANAGE_ENVIRONMENTS`, `MANAGE_SCRIPTS`, `MANAGE_PARAMETERS`, `VIEW_AUDIT`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD`.
+* **14 Funcionalidades RBAC (`tbsss_features`):** `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `MANAGE_SCHEDULES`, `MANAGE_USERS`, `MANAGE_PROFILES`, `MANAGE_ENVIRONMENTS`, `MANAGE_SCRIPTS`, `MANAGE_PARAMETERS` ("Gestão de Parâmetros"), `VIEW_AUDIT`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD`.
+* **3 Perfis Padrão Homologados (em português):**
+  * `ADMINISTRADOR`: Super Administrador (`is_admin = 'Y'`). Acesso total a todas as funcionalidades e ambientes.
+  * `OPERADOR`: Operacional (`is_admin = 'N'`). Acesso a execução, cancelamento, logs, entradas, saídas e pasta de arquivos nos ambientes operacionais.
+  * `CONSULTA`: Auditoria e Consulta (`is_admin = 'N'`). Apenas consulta de logs e tickets (`VIEW_LOGS`).
+  * *(Nota: o perfil `OPERATOR_HML` e o usuário `op.hml` foram aposentados e removidos do seed).*
+* **3 Usuários Padrão Homologados do Seed:** `admin` (`ADMINISTRADOR`), `op.prod` (`OPERADOR`) e `consulta` (`CONSULTA`).
 * **Prefixos de Tabela Oficiais por Ambiente:**
-  * `tbsdev_` (Ambiente de desenvolvimento - `DEV`)
-  * `tbsprd_` (Ambiente de produção - `PROD`)
+  * `tbsdev_` (Ambiente de desenvolvimento - `DEV`, não parametrizado)
+  * `tbsprd_` (Ambiente de produção - `PROD`, não parametrizado)
+* **Scripts dos Ambientes:** residem na pasta base `<RAIZ>/scripts_ambiente/`.
 * **Processos por Instalação (1 Web + 5 Agentes):**
   * `web0001` (interface web)
   * `agente0001` (`GFPREPROD`), `agente0002` (`CLONE2`), `agente0003` (`CLONE1`), `agente0004` (`CLONE6`), `agente0005` (`CLONE7`).
