@@ -249,7 +249,7 @@ def load_seed(store, force=False, dev_password=None):
                                     {"id": 5, "code": "MANAGE_PROFILES", "name": "Gestão de Perfis", "module": "ADMIN", "description": "Gerenciar perfis e matrizes de permissão", "active": "Y"},
                                     {"id": 6, "code": "MANAGE_ENVIRONMENTS", "name": "Gestão de Ambientes", "module": "ADMIN", "description": "Gerenciar ambientes e DSNs", "active": "Y"},
                                     {"id": 7, "code": "MANAGE_SCRIPTS", "name": "Gestão de Scripts", "module": "ADMIN", "description": "Cadastrar rotinas e homologação por ambiente", "active": "Y"},
-                                    {"id": 8, "code": "MANAGE_PARAMETERS", "name": "Dicionário de Parâmetros", "module": "ADMIN", "description": "Gerenciar perguntas e flags reutilizáveis", "active": "Y"},
+                                    {"id": 8, "code": "MANAGE_PARAMETERS", "name": "Gestão de Parâmetros", "module": "ADMIN", "description": "Gerenciar perguntas e flags reutilizáveis", "active": "Y"},
                                     {"id": 9, "code": "MANAGE_SCHEDULES", "name": "Regras de Agendamento", "module": "ADMIN", "description": "Criar e gerenciar recorrências", "active": "Y"},
                                     {"id": 10, "code": "VIEW_AUDIT", "name": "Auditoria", "module": "ADMIN", "description": "Consultar a trilha de auditoria e os agentes", "active": "Y"},
                                     {"id": 12, "code": "UPLOAD_INPUT", "name": "Enviar Arquivos", "module": "OPERATION", "description": "Enviar arquivos para a pasta de entrada dos scripts do perfil, nos ambientes do perfil", "active": "Y"},

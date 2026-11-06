@@ -227,3 +227,69 @@ class RepoRbacFake(RepoRbac):
             items = list(self._store.features.values())
             items.sort(key=lambda x: (x.get("module", ""), x.get("code", ""), x["id"]))
             return copy.deepcopy(items)
+
+    def script_profiles_get(self, script_id):
+        """Retorna lista de profile_id associados ao script."""
+        with self._store.lock_rbac:
+            with self._store.lock_catalog:
+                sid = int(script_id)
+                if sid not in self._store.scripts:
+                    raise RepoNotFound("Script ID %s nao encontrado" % sid)
+                prfs = [
+                    ps["profile_id"]
+                    for ps in self._store.profile_script.values()
+                    if ps["script_id"] == sid
+                ]
+                prfs.sort()
+                return copy.deepcopy(prfs)
+
+    def script_profiles_save(self, script_id, profile_ids, expected=None, audit=None, actor=None):
+        """Substitui perfis do script por diferenca, incrementando perm_version dos afetados."""
+        with self._store.lock_rbac:
+            with self._store.lock_catalog:
+                actor = self._store.record_actor(audit, actor)
+                sid = int(script_id)
+                if sid not in self._store.scripts:
+                    raise RepoNotFound("Script ID %s nao encontrado" % sid)
+
+                current = dict(
+                    (v["profile_id"], k)
+                    for k, v in self._store.profile_script.items()
+                    if v["script_id"] == sid
+                )
+                if expected is not None and sorted(int(x) for x in expected) != sorted(current):
+                    raise RepoConflict("Perfis do script ID %s alterados por outra operacao" % sid)
+
+                target_ids = sorted(set(int(x) for x in (profile_ids or [])))
+                for pid in target_ids:
+                    if pid not in self._store.profiles:
+                        raise RepoViolation("Perfil ID %s nao existe" % pid, constraint="fk_tbsss_pscr_prf")
+
+                p_del = [current[p] for p in current if p not in target_ids]
+                p_ins = [p for p in target_ids if p not in current]
+
+                for k in p_del:
+                    del self._store.profile_script[k]
+                for pid in p_ins:
+                    nid = self._store.next_id("tbsss_profile_script")
+                    self._store.profile_script[nid] = self._store.stamp_insert(
+                        {"id": nid, "profile_id": pid, "script_id": sid}, actor
+                    )
+
+                affected_profiles = sorted(set(p for p in current if p not in target_ids) | set(p_ins))
+                for pid in affected_profiles:
+                    p = self._store.profiles[pid]
+                    p["perm_version"] += 1
+                    self._store.stamp_update(p, actor)
+
+                if (p_del or p_ins) and audit:
+                    self._store.register_internal_audit(
+                        actor=audit.get("actor"),
+                        ip=audit.get("ip"),
+                        action=audit["action"],
+                        entity="tbsss_scripts",
+                        entity_id=sid,
+                        detail=audit.get("detail"),
+                    )
+
+                return copy.deepcopy(self.script_profiles_get(sid))

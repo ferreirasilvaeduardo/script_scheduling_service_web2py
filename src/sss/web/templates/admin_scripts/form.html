@@ -2,6 +2,7 @@
 {{
 # Inclusão e edição de script. interpretador é um select fixo dos quatro nomes (python3, python, bash, sh; CR-026; o servidor revalida o valor exato);
 # o caminho é absoluto, em qualquer pasta fora das do sistema (README §8.5, CR-005).
+import json
 from sss.ui import ui_helpers
 _s = scr
 _new = not _s.get('id')
@@ -23,7 +24,7 @@ _fields_c = [
     {'name': 'interpreter', 'label': 'Interpretador', 'kind': 'select', 'value': _s.get('interpreter'), 'error': errors.get('interpreter'), 'required': True, 'options': list(interpreters),
      'help': u'Na execução vale, nesta ordem: o interpretador informado no disparo; o #! da primeira linha do script (ex.: #!/opt/py311/bin/python3); e este, procurado no PATH do servidor. Quem não existir no servidor é pulado. python e python3 servem um ao outro quando só um deles existir.'},
     {'name': 'path_file', 'label': 'Arquivo do script', 'value': _s.get('path_file'), 'error': errors.get('path_file'), 'required': True, 'maxlength': 500, 'help': _help_path},
-    {'name': 'param_type', 'label': u'Montagem dos argumentos', 'kind': 'select', 'value': _s.get('param_type'), 'error': errors.get('param_type'), 'required': True, 'options': list(param_types),
+    {'name': 'param_type', 'label': u'Montagem dos argumentos', 'kind': 'select', 'value': _s.get('param_type'), 'error': errors.get('param_type'), 'required': True, 'options': list(param_types), 'action': 'paramType',
      'help': u'Trocar a montagem revalida os parâmetros já vinculados.'},
 ]
 _fields_d = [
@@ -53,9 +54,6 @@ pass
   <div class="sss-actions">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_scripts', f='index')}}">Voltar à lista</a>
     {{if not _new:}}
-    <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_scripts', f='homologation', args=[_s['id']])}}">Ambientes</a>
-    <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_scripts', f='parameters', args=[_s['id']])}}">Parâmetros</a>
-    <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_profiles', f='who_can', vars=dict(script=_s['id']))}}">Perfis</a>
     {{modal = _modal_active}}
     {{include 'components/confirm_modal.html'}}
     {{pass}}
@@ -92,6 +90,106 @@ pass
       {{include 'components/form_field.html'}}
       {{pass}}
     </div>
+    <div class="sss-field mt-4 mb-4" data-component="scriptLinks"
+         data-url-preview="{{=URL(c='admin_scripts', f='preview')}}"
+         data-links="{{=json.dumps(_s.get('parameters_links', []))}}"
+         data-available="{{=json.dumps(_s.get('parameters_available', []))}}">
+      <input type="hidden" name="links_json" data-ref="linksJson">
+      <input type="hidden" name="parameters_version" value="{{=_s.get('parameters_version', '')}}">
+
+      <label class="form-label d-block"><strong>Parâmetros vinculados ao script</strong></label>
+      <div class="form-text mb-2">A ordem da lista é a ordem dos argumentos na linha de comando. Use Subir e Descer para ordenar.</div>
+
+      <div class="alert alert-info sss-alert" role="note" data-ref="noneAlert"{{if _s.get('param_type') != 'NONE':}} hidden{{pass}}>
+        <span>Este script não recebe argumentos (NENHUM): não é possível vincular parâmetros.</span>
+      </div>
+
+      <div data-ref="linksBody"{{if _s.get('param_type') == 'NONE':}} hidden{{pass}}>
+        <p class="sss-text-muted" data-ref="noLinks" hidden>Nenhum parâmetro vinculado.</p>
+        <template data-ref="rowTemplate">
+          <li class="sss-link">
+            <div class="sss-link-title">
+              <span class="sss-mono" data-part="code"></span>
+              <span class="sss-text-muted" data-part="label"></span>
+              <span class="badge text-bg-secondary sss-mono" data-part="flag"></span>
+              <span class="badge text-bg-warning" data-part="sensitive">sigiloso</span>
+            </div>
+            <div class="sss-link-fields">
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" data-part="required" data-action="toggleRequired">
+                <label class="form-check-label" data-part="requiredLabel">Obrigatório</label>
+              </div>
+              <input class="form-control form-control-sm" maxlength="100" aria-label="Valor padrão específico" data-part="sub" data-action="editSub">
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-part="clear" data-action="clearSecret">Remover valor</button>
+            </div>
+            <div class="sss-link-actions">
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-part="up" data-delta="-1" data-action="move">Subir</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-part="down" data-delta="1" data-action="move">Descer</button>
+              <button type="button" class="btn btn-sm btn-outline-danger" data-part="remove" data-action="remove">Remover</button>
+            </div>
+          </li>
+        </template>
+        <ol class="sss-links" data-ref="rows"></ol>
+
+        <fieldset class="sss-test mb-3">
+          <legend class="form-label fs-6">Adicionar parâmetro do dicionário</legend>
+          <input type="search" class="form-control form-control-sm mb-2" id="search-parameter" maxlength="60" placeholder="Código ou rótulo" aria-label="Buscar parâmetro" data-ref="search" data-action="search">
+          <p class="sss-text-muted mb-0" data-ref="noResults" hidden>Nenhum parâmetro ativo disponível para a busca.</p>
+          <template data-ref="resultTemplate">
+            <li>
+              <button type="button" class="btn btn-sm btn-link" data-part="add" data-action="add"><span class="sss-mono" data-part="code"></span> — <span data-part="label"></span><span class="sss-mono" data-part="flag"></span></button>
+            </li>
+          </template>
+          <ul class="sss-search-parameters" data-ref="results"></ul>
+        </fieldset>
+
+        <fieldset class="sss-test mb-3">
+          <legend class="form-label fs-6">Prévia do comando (valores padrão, sem salvar)</legend>
+          <button type="button" class="btn btn-sm btn-outline-primary" data-ref="previewButton" data-action="preview">Gerar prévia</button>
+          <pre class="sss-argv mt-2" data-ref="previewText" hidden></pre>
+          <ul class="sss-test-error mt-2 mb-0" data-ref="previewErrors" hidden></ul>
+          <p class="sss-text-muted mt-2 mb-0" data-ref="previewWarning" hidden></p>
+        </fieldset>
+      </div>
+    </div>
+    {{if _s.get('environments_selection'):}}
+    <div class="sss-field mt-3 mb-4">
+      <label class="form-label d-block"><strong>Ambientes homologados para este script</strong></label>
+      <div class="form-text mb-2">Marque os ambientes em que o script pode rodar. Vale também para perfis administrativos.</div>
+      <div class="row g-2">
+        {{for _a in _s['environments_selection']:}}
+        <div class="col-12 col-sm-6 col-md-4">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="environments" value="{{=_a['id']}}" id="env-{{=_a['id']}}"{{if _a['checked']:}} checked{{pass}}>
+            <label class="form-check-label" for="env-{{=_a['id']}}">
+              <span class="sss-mono">{{=_a['name']}}</span>{{if _a.get('inactive'):}} <span class="badge text-bg-warning">inativo</span>{{pass}}
+              {{if _a.get('description'):}}<span class="d-block sss-text-muted small">{{=_a['description']}}</span>{{pass}}
+            </label>
+          </div>
+        </div>
+        {{pass}}
+      </div>
+    </div>
+    {{pass}}
+    {{if _s.get('profiles_selection'):}}
+    <div class="sss-field mt-3 mb-4">
+      <label class="form-label d-block"><strong>Perfis com permissão para executar este script</strong></label>
+      <div class="form-text mb-2">Marque os perfis autorizados a disparar este script. Perfis com acesso de administrador possuem permissão irrestrita a todos os scripts.</div>
+      <div class="row g-2">
+        {{for _p in _s['profiles_selection']:}}
+        <div class="col-12 col-sm-6 col-md-4">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="profiles" value="{{=_p['id']}}" id="prof-{{=_p['id']}}"{{if _p['checked']:}} checked{{pass}}>
+            <label class="form-check-label" for="prof-{{=_p['id']}}">
+              <span class="sss-mono">{{=_p['name']}}</span>{{if _p['is_admin']:}} <span class="badge text-bg-secondary">administrador</span>{{pass}}{{if _p.get('inactive'):}} <span class="badge text-bg-warning">inativo</span>{{pass}}
+              {{if _p.get('description'):}}<span class="d-block sss-text-muted small">{{=_p['description']}}</span>{{pass}}
+            </label>
+          </div>
+        </div>
+        {{pass}}
+      </div>
+    </div>
+    {{pass}}
     <div class="sss-form-actions">
       <button type="submit" class="btn btn-primary">{{=u'Incluir script' if _new else u'Salvar alterações'}}</button>
       <a class="btn btn-outline-secondary" href="{{=URL(c='admin_scripts', f='index')}}">Cancelar</a>
@@ -99,52 +197,8 @@ pass
   </form>
 </section>
 
-{{_ready = _s.get('readiness')}}
-{{if not _new and _ready:}}
-<section class="sss-card" aria-labelledby="title-readiness">
-  <h2 class="sss-card-title" id="title-readiness">Quem pode rodar</h2>
-  <div class="sss-card-body">
-    <div class="alert alert-{{=_ready['css_class']}} sss-alert mb-2" role="status">
-      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{='icon-play' if _ready['css_class'] == 'success' else 'icon-alert'}}"></use></svg>
-      <strong>{{=_ready['state']}}</strong>
-    </div>
-    {{if _ready['missing']:}}
-    <p class="mb-1"><strong>O que falta:</strong></p>
-    <ul class="mb-3">
-      {{for _m in _ready['missing']:}}
-      <li>{{=_m['text']}}
-        {{if _m['code'] == 'homologation':}} <a href="{{=URL(c='admin_scripts', f='homologation', args=[_s['id']])}}">Abrir os ambientes</a>
-        {{elif _m['code'] == 'profiles' and _ready['can_manage_profiles']:}} <a href="{{=URL(c='admin_profiles', f='index')}}">Abrir os perfis</a>
-        {{elif _m['code'] == 'users' and _ready['can_manage_users']:}} <a href="{{=URL(c='admin_users', f='index')}}">Abrir os usuários</a>
-        {{elif _m['code'] == 'inactive':}} Use o botão Reativar no topo da página.
-        {{pass}}
-      </li>
-      {{pass}}
-    </ul>
-    {{pass}}
-    {{if _ready['profiles']:}}
-    <div class="table-responsive">
-      <table class="table table-sm sss-table mb-2">
-        <caption class="visually-hidden">Perfis que podem rodar este script</caption>
-        <thead><tr><th scope="col">Perfil</th><th scope="col">Onde pode rodar</th><th scope="col">Usuários ativos</th></tr></thead>
-        <tbody>
-          {{for _p in _ready['profiles']:}}
-          <tr>
-            <td>{{=_p['name']}}{{if _p['is_admin']:}} <span class="badge text-bg-secondary">administrador</span>{{pass}}</td>
-            <td>{{=', '.join(_p['details'])}}</td>
-            <td>{{=_p['active_users']}}</td>
-          </tr>
-          {{pass}}
-        </tbody>
-      </table>
-    </div>
-    {{pass}}
-    {{if _ready['can_manage_profiles']:}}<p class="mb-0"><a href="{{=URL(c='admin_profiles', f='who_can', vars=dict(script=_s['id']))}}">Ver em Quem pode o quê</a></p>{{pass}}
-  </div>
-</section>
-{{pass}}
-
 {{if not _new and _s.get('record'):}}
 {{record = _s['record']}}
 {{include 'components/record.html'}}
 {{pass}}
+

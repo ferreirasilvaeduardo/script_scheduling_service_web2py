@@ -1636,19 +1636,19 @@ MERGE INTO openrisow.s3dev_features dst
 USING (SELECT 'MANAGE_PARAMETERS' AS code FROM DUAL) src
 ON (dst.code = src.code)
 WHEN MATCHED THEN
-  UPDATE SET dst.name = UNISTR('Dicion\00E1rio de Par\00E2metros'),
+  UPDATE SET dst.name = UNISTR('Gest\00E3o de Par\00E2metros'),
              dst.module = 'ADMIN',
              dst.description = UNISTR('Gerenciar perguntas e flags reutiliz\00E1veis'),
              dst.active = 'Y',
              dst.updated_at = SYSDATE,
              dst.updated_by = 'SYSTEM:init_db'
   WHERE dst.active <> 'Y'
-     OR dst.name <> UNISTR('Dicion\00E1rio de Par\00E2metros')
+     OR dst.name <> UNISTR('Gest\00E3o de Par\00E2metros')
      OR dst.module <> 'ADMIN'
      OR dst.description <> UNISTR('Gerenciar perguntas e flags reutiliz\00E1veis')
 WHEN NOT MATCHED THEN
   INSERT (id, code, module, name, description, active, created_at, created_by)
-  VALUES (openrisow.sq_s3dev_features.NEXTVAL, 'MANAGE_PARAMETERS', 'ADMIN', UNISTR('Dicion\00E1rio de Par\00E2metros'), UNISTR('Gerenciar perguntas e flags reutiliz\00E1veis'), 'Y', SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_s3dev_features.NEXTVAL, 'MANAGE_PARAMETERS', 'ADMIN', UNISTR('Gest\00E3o de Par\00E2metros'), UNISTR('Gerenciar perguntas e flags reutiliz\00E1veis'), 'Y', SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.s3dev_features dst
 USING (SELECT 'MANAGE_SCHEDULES' AS code FROM DUAL) src

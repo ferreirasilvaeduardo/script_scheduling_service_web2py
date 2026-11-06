@@ -3,6 +3,7 @@
 # Lista de scripts (padrão de CRUD administrativo). O caminho completo do arquivo é exibido (README §8.5, CR-005 D8).
 _opt_cmd = [('', 'Todos')] + [(_c, _c) for _c, _r in interpreters]
 _opt_active = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
+_param_type_label = {'NAMED': 'NOMEADO', 'POSITIONAL': 'SEQUENCIAL', 'NONE': 'NENHUM'}
 filters = {'id': 'filter-scripts', 'url_base': ('admin_scripts', 'index'), 'keep': {'size': size}, 'fields': [
     {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': active_filters.get('name')},
     {'name': 'script_group', 'label': 'Grupo', 'kind': 'text', 'value': active_filters.get('script_group')},
@@ -18,13 +19,12 @@ for _s in result['items']:
         'cmd': _s['interpreter'],
         'path': _s['path_file'],
         'environments': ', '.join(_s.get('homologated_environments') or []) or u'Nenhum',
-        'parameters': str(_s.get('param_count') or 0),
+        'profiles': ', '.join(_s.get('profile_names') or []) or u'Nenhum',
+        'param_type': _param_type_label.get(_s.get('param_type'), _s.get('param_type') or '-'),
+        'parameters': ', '.join(_s.get('param_names') or []) or u'Nenhum',
         'active': _s['active'],
         'action': [
             {'href': URL(c='admin_scripts', f='form', args=[_s['id']]), 'label': 'Editar', 'description': u'Editar script %s' % _s['name']},
-            {'href': URL(c='admin_scripts', f='homologation', args=[_s['id']]), 'label': 'Ambientes', 'description': u'Ambientes do script %s' % _s['name']},
-            {'href': URL(c='admin_scripts', f='parameters', args=[_s['id']]), 'label': u'Parâmetros', 'description': u'Parâmetros do script %s' % _s['name']},
-            {'href': URL(c='admin_profiles', f='who_can', vars=dict(script=_s['id'])), 'label': 'Perfis', 'description': u'Perfis com acesso ao script %s' % _s['name']},
         ],
     })
 pass
@@ -34,7 +34,9 @@ table = {'caption': 'Scripts cadastrados', 'error': error, 'rows': _rows, 'empty
     {'key': 'cmd', 'label': 'Interpretador', 'kind': 'mono'},
     {'key': 'path', 'label': 'Caminho do arquivo', 'kind': 'mono'},
     {'key': 'environments', 'label': 'Ambientes'},
-    {'key': 'parameters', 'label': u'Parâmetros'},
+    {'key': 'profiles', 'label': 'Perfis'},
+    {'key': 'param_type', 'label': u'Montagem dos argumentos', 'kind': 'mono'},
+    {'key': 'parameters', 'label': u'Parâmetros', 'kind': 'mono'},
     {'key': 'active', 'label': u'Situação', 'kind': 'active'},
     {'key': 'action', 'label': u'Ações', 'kind': 'action'},
 ]}

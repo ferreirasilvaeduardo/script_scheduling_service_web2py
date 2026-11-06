@@ -531,3 +531,96 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                 return [self.tuple_to_dict(_COLS_FUNC, r) for r in cur.fetchall()]
             finally:
                 cur.close()
+
+    def script_profiles_get(self, script_id, conn=None):
+        """Retorna lista ordenada de profile_id associados ao script."""
+        with self.read_context(conn=conn) as c:
+            cur = c.cursor()
+            try:
+                cur.execute(
+                    "SELECT profile_id FROM " + self._tabela_perfil_scr() + " "
+                    "WHERE script_id = :sid ORDER BY profile_id ASC",
+                    {"sid": int(script_id)},
+                )
+                return [r[0] for r in cur.fetchall()]
+            finally:
+                cur.close()
+
+    def script_profiles_save(self, script_id, profile_ids, expected=None, audit=None,
+                             actor=None, conn=None):
+        """Substitui os perfis associados ao script por diferenca, incrementando perm_version."""
+        actor_clean = validate_record_actor(audit, actor)
+        sid = int(script_id)
+        target_ids = sorted(set(int(x) for x in (profile_ids or [])))
+
+        with self.write_transaction(conn=conn) as c:
+            cur = c.cursor()
+            try:
+                cur.execute(
+                    "SELECT id FROM " + self._tabela_scripts() + " WHERE id = :id FOR UPDATE WAIT 5",
+                    {"id": sid},
+                )
+                if not cur.fetchone():
+                    raise repo_errors.RepoNotFound("Script ID %s nao encontrado" % sid)
+
+                cur.execute(
+                    "SELECT id, profile_id FROM " + self._tabela_perfil_scr() + " "
+                    "WHERE script_id = :sid",
+                    {"sid": sid},
+                )
+                current = dict((r[1], r[0]) for r in cur.fetchall())
+
+                if expected is not None and sorted(int(x) for x in expected) != sorted(current):
+                    raise repo_errors.RepoConflict(
+                        "Perfis do script ID %s alterados por outra operacao" % sid
+                    )
+
+                for pid in target_ids:
+                    cur.execute(
+                        "SELECT id FROM " + self._tabela_perfis() + " WHERE id = :id",
+                        {"id": pid},
+                    )
+                    if not cur.fetchone():
+                        raise repo_errors.RepoViolation(
+                            "Perfil ID %s nao existe" % pid,
+                            constraint=self.constraint_name("fk", "profile_script", "prf"),
+                        )
+
+                p_del = [current[p] for p in current if p not in target_ids]
+                p_ins = [p for p in target_ids if p not in current]
+
+                for rid in p_del:
+                    cur.execute(
+                        "DELETE FROM " + self._tabela_perfil_scr() + " WHERE id = :rid",
+                        {"rid": rid},
+                    )
+                for pid in p_ins:
+                    nid = db_conn.next_id(c, self._seq_perfil_scr())
+                    cur.execute(
+                        "INSERT INTO " + self._tabela_perfil_scr() + " "
+                        "(id, profile_id, script_id, created_at, created_by, "
+                        "updated_at, updated_by) "
+                        "VALUES (:id, :pid, :sid, SYSDATE, :actor, NULL, NULL)",
+                        {"id": nid, "pid": pid, "sid": sid, "actor": actor_clean},
+                    )
+
+                affected_profiles = sorted(
+                    set(p for p in current if p not in target_ids) | set(p_ins)
+                )
+                for pid in affected_profiles:
+                    cur.execute(
+                        "UPDATE " + self._tabela_perfis() + " "
+                        "SET perm_version = perm_version + 1, updated_at = SYSDATE, "
+                        "updated_by = :actor WHERE id = :id",
+                        {"id": pid, "actor": actor_clean},
+                    )
+
+                if (p_del or p_ins) and audit:
+                    write_audit(
+                        c, self._tabela_auditoria(), self._seq_auditoria(), audit,
+                        "tbsss_scripts", sid
+                    )
+
+                return self.script_profiles_get(sid, conn=c)
+            finally:
+                cur.close()

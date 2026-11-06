@@ -101,7 +101,8 @@ class _Base(unittest.TestCase):
         self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["items"]] or [0])
 
     def _service(self):
-        return AdminScriptsService(self.catalog, repo_factory.get("schedules"), self.log, lambda: NOW)
+        return AdminScriptsService(self.catalog, repo_factory.get("schedules"), self.log, lambda: NOW,
+                                   rbac=repo_factory.get("rbac"))
 
     def _p(self, name):
         return os.path.join(self.base, name)
@@ -570,6 +571,127 @@ class TestNoHashAndLink(_Base):
         os.chmod(self.base, 0o555)
         _sid, errors, _a = self._insert(path_file=link)
         self.assertEqual(errors, {"path_file": scr_mod.PATH_MESSAGES[path_guard.Code.SYSTEM_DIR]})
+
+
+@_SKIP_ROOT
+class TestScriptProfiles(_Base):
+
+    def test_form_exibe_selecao_de_perfis(self):
+        f = self.svc.form(self.ctx["admin"], str(S_CARGA))
+        self.assertIn("profiles_selection", f)
+        self.assertTrue(len(f["profiles_selection"]) > 0)
+        checked = [p["name"] for p in f["profiles_selection"] if p["checked"]]
+        self.assertTrue(len(checked) > 0)
+
+    def test_associacao_e_desassociacao_de_perfis_ao_salvar(self):
+        rbac = repo_factory.get("rbac")
+        f = self.svc.form(self.ctx["admin"], str(S_CARGA))
+        data = dict((c, "" if f[c] is None else str(f[c])) for c in scr_mod.EDITABLE_FIELDS)
+        data["version"] = f["version"]
+
+        # Associa apenas perfil 1 e 2
+        sid, errors, _w = self.svc.save(self.ctx["admin"], IP, str(S_CARGA), data,
+                                         profile_ids=["1", "2"])
+        self.assertEqual(errors, {})
+        linked = rbac.script_profiles_get(S_CARGA)
+        self.assertEqual(linked, [1, 2])
+
+        # Desassocia perfil 2 e associa perfil 3
+        f = self.svc.form(self.ctx["admin"], str(S_CARGA))
+        data["version"] = f["version"]
+        sid, errors, _w = self.svc.save(self.ctx["admin"], IP, str(S_CARGA), data,
+                                         profile_ids=["1", "3"])
+        self.assertEqual(errors, {})
+        linked = rbac.script_profiles_get(S_CARGA)
+        self.assertEqual(linked, [1, 3])
+
+        # Confere auditoria com diff de perfis
+        audits = self._audits("UPDATE")
+        prof_audits = [a for a in audits if "perfis:" in a["detail"]]
+        self.assertTrue(len(prof_audits) > 0)
+
+    def test_form_exibe_selecao_de_ambientes(self):
+        f = self.svc.form(self.ctx["admin"], str(S_CARGA))
+        self.assertIn("environments_selection", f)
+        self.assertTrue(len(f["environments_selection"]) > 0)
+        checked = [a["name"] for a in f["environments_selection"] if a["checked"]]
+        self.assertTrue(len(checked) > 0)
+
+    def test_associacao_e_desassociacao_de_ambientes_ao_salvar(self):
+        f = self.svc.form(self.ctx["admin"], str(S_CARGA))
+        data = dict((c, "" if f[c] is None else str(f[c])) for c in scr_mod.EDITABLE_FIELDS)
+        data["version"] = f["version"]
+
+        # Associa apenas AMB_PROD
+        sid, errors, _w = self.svc.save(self.ctx["admin"], IP, str(S_CARGA), data,
+                                         environment_ids=[str(AMB_PROD)])
+        self.assertEqual(errors, {})
+        linked = self.catalog.homologation_get(S_CARGA)
+        self.assertEqual(linked, [AMB_PROD])
+
+        # Desassocia AMB_PROD e associa AMB_HML
+        f = self.svc.form(self.ctx["admin"], str(S_CARGA))
+        data["version"] = f["version"]
+        sid, errors, _w = self.svc.save(self.ctx["admin"], IP, str(S_CARGA), data,
+                                         environment_ids=[str(AMB_HML)])
+        self.assertEqual(errors, {})
+        linked = self.catalog.homologation_get(S_CARGA)
+        self.assertEqual(linked, [AMB_HML])
+
+        # Confere auditoria com diff de homologacao
+        audits = self._audits("UPDATE")
+        env_audits = [a for a in audits if "homologação:" in a["detail"]]
+        self.assertTrue(len(env_audits) > 0)
+
+
+@_SKIP_ROOT
+class TestScriptParametersInForm(_Base):
+
+    def test_form_exibe_selecao_de_parametros(self):
+        f = self.svc.form(self.ctx["admin"], str(S_CARGA))
+        self.assertIn("parameters_links", f)
+        self.assertIn("parameters_available", f)
+        self.assertIn("parameters_version", f)
+        self.assertTrue(len(f["parameters_available"]) > 0)
+
+    def test_associacao_e_desassociacao_de_parametros_ao_salvar(self):
+        import json
+        f = self.svc.form(self.ctx["admin"], str(S_CARGA))
+        data = dict((c, "" if f[c] is None else str(f[c])) for c in scr_mod.EDITABLE_FIELDS)
+        data["version"] = f["version"]
+
+        # Vincula 1 parametro
+        p_id = f["parameters_available"][0]["id"]
+        links_data = [{"parameter_id": p_id, "required": True, "default_value_override": ""}]
+        sid, errors, _w = self.svc.save(self.ctx["admin"], IP, str(S_CARGA), data,
+                                         links_json=json.dumps(links_data),
+                                         parameters_version=f["parameters_version"])
+        self.assertEqual(errors, {})
+        current = self.catalog.script_params_get(S_CARGA)
+        self.assertEqual(len(current), 1)
+        self.assertEqual(current[0]["parameter_id"], p_id)
+        self.assertEqual(current[0]["required"], "Y")
+
+        # Limpa parametros (passando lista vazia)
+        f = self.svc.form(self.ctx["admin"], str(S_CARGA))
+        data["version"] = f["version"]
+        sid, errors, _w = self.svc.save(self.ctx["admin"], IP, str(S_CARGA), data,
+                                         links_json="[]",
+                                         parameters_version=f["parameters_version"])
+        self.assertEqual(errors, {})
+        current = self.catalog.script_params_get(S_CARGA)
+        self.assertEqual(len(current), 0)
+
+    def test_salvar_script_conflito_versao_parametros(self):
+        f = self.svc.form(self.ctx["admin"], str(S_CARGA))
+        data = dict((c, "" if f[c] is None else str(f[c])) for c in scr_mod.EDITABLE_FIELDS)
+        data["version"] = f["version"]
+
+        sid, errors, _w = self.svc.save(self.ctx["admin"], IP, str(S_CARGA), data,
+                                         links_json="[]",
+                                         parameters_version="versao_invalida_conflito")
+        self.assertIn(admin_crud.GENERAL_FIELD, errors)
+        self.assertEqual(errors[admin_crud.GENERAL_FIELD], admin_crud.MSG_CONFLICT)
 
 
 if __name__ == "__main__":

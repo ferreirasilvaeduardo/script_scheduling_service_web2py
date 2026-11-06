@@ -384,7 +384,7 @@ class TestBuildMenu(unittest.TestCase):
 
     def test_rotulos_do_catalogo_canonico(self):
         labels = {i["code"]: i["label"] for s in ui_menu.build_menu([], True) for i in s["items"]}
-        self.assertEqual(labels["MANAGE_PARAMETERS"], u"Dicionário de Parâmetros")
+        self.assertEqual(labels["MANAGE_PARAMETERS"], u"Gestão de Parâmetros")
         self.assertEqual(labels["MANAGE_USERS"], u"Gestão de Usuários")
         self.assertEqual(ui_menu.build_menu([], True)[1]["title"], u"Administração")
 

@@ -187,11 +187,35 @@ class RepoCatalogFake(RepoCatalog):
 
             items.sort(key=lambda x: (x.get("name", ""), x["id"]))
             page_ = paginate(items, page=page, size=size)
+            admin_profiles = [p["name"] for p in self._store.profiles.values()
+                              if p.get("is_admin") == "Y" and p.get("active") == "Y"]
             for item in page_["items"]:
                 item["homologated_environments"] = sorted(
-                    self._store.environments[sa["environment_id"]]["name"] for sa in self._store.script_env.values()
-                    if sa["script_id"] == item["id"] and sa["environment_id"] in self._store.environments)
+                    self._store.environments[sa["environment_id"]]["name"]
+                    for sa in self._store.script_env.values()
+                    if sa["script_id"] == item["id"]
+                    and sa["environment_id"] in self._store.environments)
                 item["param_count"] = len(self._vinculos_do_script(item["id"]))
+                item_params = []
+                ptype = item.get("param_type")
+                for sp in self._vinculos_do_script(item["id"]):
+                    if sp["parameter_id"] in self._store.parameters:
+                        p = self._store.parameters[sp["parameter_id"]]
+                        p_code = p.get("code") or ""
+                        p_flag = p.get("param_flag")
+                        if ptype == "NAMED" and p_flag:
+                            item_params.append("%s(%s)" % (p_code, p_flag))
+                        else:
+                            item_params.append(p_code)
+                item["param_names"] = item_params
+                linked_profiles = [
+                    self._store.profiles[ps["profile_id"]]["name"]
+                    for ps in self._store.profile_script.values()
+                    if ps["script_id"] == item["id"]
+                    and ps["profile_id"] in self._store.profiles
+                    and self._store.profiles[ps["profile_id"]].get("active") == "Y"
+                ]
+                item["profile_names"] = sorted(set(admin_profiles + linked_profiles))
             return page_
 
     def scripts_get(self, id):

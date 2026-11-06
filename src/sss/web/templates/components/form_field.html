@@ -30,6 +30,9 @@ if _fc_error:
 pass
 _fc_class = ('form-select' if _fc_kind == 'select' else 'form-control') + (' is-invalid' if _fc_error else '')
 _fc_attrs = {'id': _fc_id, 'name': field['name'], 'class': _fc_class}
+if field.get('action'):
+    _fc_attrs['data-action'] = field['action']
+pass
 if _fc_desc:
     _fc_attrs['aria-describedby'] = ' '.join(_fc_desc)
 pass

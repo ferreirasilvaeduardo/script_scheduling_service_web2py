@@ -27,7 +27,7 @@ _CATALOG = (
         ("MANAGE_PROFILES", u"Gestão de Perfis", "admin_profiles", "index", "icon-shield"),
         ("MANAGE_ENVIRONMENTS", u"Gestão de Ambientes", "admin_environments", "index", "icon-server"),
         ("MANAGE_SCRIPTS", u"Gestão de Scripts", "admin_scripts", "index", "icon-file-code"),
-        ("MANAGE_PARAMETERS", u"Dicionário de Parâmetros", "admin_parameters", "index", "icon-sliders"),
+        ("MANAGE_PARAMETERS", u"Gestão de Parâmetros", "admin_parameters", "index", "icon-sliders"),
         ("MANAGE_SCHEDULES", u"Regras de Agendamento", "schedules", "index", "icon-calendar"),
         ("VIEW_AUDIT", u"Auditoria", "audit", "index", "icon-audit"),
     )),

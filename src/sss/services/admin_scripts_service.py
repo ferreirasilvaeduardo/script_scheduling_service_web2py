@@ -163,7 +163,8 @@ def _links_version(links, mapping):
 class AdminScriptsService(object):
     """Regras do cadastro de scripts com repositorios, configuracao do agente, relogio e log injetados."""
 
-    def __init__(self, catalog, schedules, log, clock, runners=None, rules=None, tickets=None):
+    def __init__(self, catalog, schedules, log, clock, runners=None, rules=None, tickets=None,
+                 rbac=None):
         self._catalog = catalog
         self._schedules = schedules
         self._log = log
@@ -173,6 +174,7 @@ class AdminScriptsService(object):
         # Aviso depois de salvar (CR-018a): regras que o desdobro vai pausar e tickets na fila.
         self._rules = rules
         self._tickets = tickets
+        self._rbac = rbac
 
     def _get(self, script_id):
         sid = _id(script_id)
@@ -184,6 +186,90 @@ class AdminScriptsService(object):
         filters["active"] = "Y"
         return self._schedules.list(filters=filters, page=1, size=_COUNT_PAGE_SIZE)["total"]
 
+    def _profiles_selection(self, script_id=None):
+        """Lista de perfis para selecao na tela (id, name, description, is_admin, active, checked)."""
+        if self._rbac is None:
+            return []
+        try:
+            items = self._rbac.profiles_list(page=1, size=_CATALOG_MAX)["items"]
+        except Exception:
+            return []
+        linked_ids = set()
+        sid = _id(script_id)
+        if sid is not None:
+            try:
+                linked_ids = set(self._rbac.script_profiles_get(sid))
+            except Exception:
+                linked_ids = set()
+        result = []
+        for p in items:
+            is_linked = p["id"] in linked_ids
+            if p.get("active") == "Y" or is_linked:
+                result.append({
+                    "id": p["id"],
+                    "name": p["name"],
+                    "description": p.get("description") or "",
+                    "is_admin": p.get("is_admin") == "Y",
+                    "active": p.get("active") == "Y",
+                    "inactive": p.get("active") != "Y",
+                    "checked": is_linked,
+                })
+        result.sort(key=lambda x: (0 if x["is_admin"] else 1, x["name"].upper()))
+        return result
+
+    def _environments_selection(self, script_id=None):
+        """Lista de ambientes para selecao na tela (id, name, description, checked, inactive)."""
+        marked = set()
+        sid = _id(script_id)
+        if sid is not None:
+            try:
+                marked = set(self._catalog.homologation_get(sid))
+            except Exception:
+                marked = set()
+        try:
+            items = self._catalog.environments_list(page=1, size=_CATALOG_MAX)["items"]
+        except Exception:
+            return []
+        result = []
+        for a in items:
+            is_linked = a["id"] in marked
+            if a.get("active") == "Y" or is_linked:
+                result.append({
+                    "id": a["id"],
+                    "name": a["name"],
+                    "description": a.get("description") or "",
+                    "active": a.get("active") == "Y",
+                    "inactive": a.get("active") != "Y",
+                    "checked": is_linked,
+                })
+        result.sort(key=lambda x: x["name"].upper())
+        return result
+
+    def _parameters_selection(self, script_id=None):
+        mapping = self._dictionary()
+
+        def resumo(p):
+            return {"id": p["id"], "code": p["code"], "label": p.get("label") or "",
+                    "component_type": p["component_type"], "param_flag": p.get("param_flag") or "",
+                    "sensitive": p.get("sensitive") == "Y", "active": p.get("active") == "Y"}
+
+        if script_id in (None, ""):
+            current = []
+        else:
+            current = self._catalog.script_params_get(_id(str(script_id)))
+
+        links = []
+        for v in current:
+            item = resumo(mapping.get(v["parameter_id"], v))
+            sensitive = item["sensitive"]
+            item.update(required=v["required"] == "Y",
+                        default_value_override="" if sensitive else (v.get("default_value_override") or ""),
+                        has_override=bool(v.get("default_value_override")))
+            links.append(item)
+        available = [resumo(p) for p in sorted(mapping.values(), key=lambda p: p["code"])
+                     if p.get("active") == "Y"]
+        return links, available, _links_version(current, mapping)
+
     # ----------------------------------------------------------------- leitura
 
     def list(self, ctx, filters, page, size):
@@ -194,7 +280,14 @@ class AdminScriptsService(object):
     def form(self, ctx, script_id=None):
         """Dados do formulario. Inclui agendamentos ativos na edicao."""
         admin_crud.require_feature(ctx, FEATURE)
-        common = {"validation_note": VALIDATION_NOTE}
+        p_links, p_available, p_ver = self._parameters_selection(script_id)
+        common = {"validation_note": VALIDATION_NOTE,
+                  "profiles_selection": self._profiles_selection(script_id),
+                  "environments_selection": self._environments_selection(script_id),
+                  "parameters_links": p_links,
+                  "parameters_available": p_available,
+                  "parameters_version": p_ver}
+
         if script_id in (None, ""):
             return dict(common, id=None, name="", description="", script_group="", category="", stage="",
                         interpreter=path_guard.ALLOWLIST[0], path_file="", param_type="NAMED",
@@ -323,7 +416,81 @@ class AdminScriptsService(object):
 
     # ----------------------------------------------------------------- escrita
 
-    def save(self, ctx, ip, script_id, data):
+    def _save_profiles_link(self, ctx, ip, script_id, profile_ids):
+        """Salva a associacao de perfis ao script e audita a diferenca."""
+        if self._rbac is None or profile_ids is None:
+            return
+        target_ids = []
+        for x in profile_ids:
+            if x not in (None, "") and _RE_ID.fullmatch(str(x)):
+                target_ids.append(int(x))
+        target_set = set(target_ids)
+        try:
+            current = set(self._rbac.script_profiles_get(script_id))
+        except Exception:
+            current = set()
+        if target_set == current:
+            return
+        try:
+            all_profiles = dict(
+                (p["id"], p["name"])
+                for p in self._rbac.profiles_list(page=1, size=_CATALOG_MAX)["items"]
+            )
+        except Exception:
+            all_profiles = {}
+        added = sorted(all_profiles.get(i, str(i)) for i in (target_set - current))
+        removed = sorted(all_profiles.get(i, str(i)) for i in (current - target_set))
+        diff_parts = [u"+" + n for n in added] + [u"-" + n for n in removed]
+        detail = admin_crud.free_detail(u"perfis: %s" % u", ".join(diff_parts))
+        audit = admin_crud.audit_entry(ctx, ip, "UPDATE", detail)
+        self._rbac.script_profiles_save(script_id, sorted(target_set), audit=audit)
+        self._log.info("perfis do script alterados (login=%s script_id=%s diff=%s)",
+                       ctx.get("login"), script_id, u", ".join(diff_parts),
+                       extra={"action": "UPDATE"})
+
+    def _save_environments_link(self, ctx, ip, script_id, environment_ids):
+        """Salva a homologacao de ambientes ao script e audita a diferenca."""
+        if environment_ids is None:
+            return
+        target_ids = []
+        for x in environment_ids:
+            if x not in (None, "") and _RE_ID.fullmatch(str(x)):
+                target_ids.append(int(x))
+        target_set = set(target_ids)
+        try:
+            current = set(self._catalog.homologation_get(script_id))
+        except Exception:
+            current = set()
+        if target_set == current:
+            return
+        try:
+            all_envs = dict(
+                (a["id"], a)
+                for a in self._catalog.environments_list(page=1, size=_CATALOG_MAX)["items"]
+            )
+        except Exception:
+            all_envs = {}
+        # D9: inativo ja homologado pode sair, nunca entrar
+        inactive_ids = set(i for i, a in all_envs.items() if a.get("active") != "Y")
+        if (target_set - current) & inactive_ids:
+            target_set = target_set - inactive_ids
+        added = sorted(all_envs[i]["name"] for i in (target_set - current) if i in all_envs)
+        removed = sorted(all_envs[i]["name"] for i in (current - target_set) if i in all_envs)
+        if not added and not removed:
+            return
+        diff_parts = [u"+" + n for n in added] + [u"-" + n for n in removed]
+        affected = sum(self._active_schedules(script_id=script_id, environment=n) for n in removed)
+        detail = admin_crud.free_detail(u"homologação: %s%s" % (
+            u", ".join(diff_parts),
+            (u"; agendamentos ativos afetados: %d" % affected) if removed else u""))
+        audit = admin_crud.audit_entry(ctx, ip, "UPDATE", detail)
+        self._catalog.homologation_save(script_id, sorted(target_set), audit=audit)
+        self._log.info("homologacao do script alterada (login=%s script_id=%s diff=%s)",
+                       ctx.get("login"), script_id, u", ".join(diff_parts),
+                       extra={"action": "UPDATE"})
+
+    def save(self, ctx, ip, script_id, data, profile_ids=None, environment_ids=None,
+             links_json=None, parameters_version=None):
         """Inclui ou altera um script. Retorna (id, erros, aviso). Lanca RepoNotFound e AccessDenied."""
         admin_crud.require_feature(ctx, FEATURE)
         errors = {}
@@ -331,6 +498,19 @@ class AdminScriptsService(object):
         reg = self._validate(data, errors, current)
         self.validate_path(reg["path_file"], errors)
         warning = None
+
+        final_links = None
+        current_links = []
+        if current is not None:
+            current_links = self._catalog.script_params_get(current["id"])
+
+        if links_json is not None:
+            final_links = self._build_links(reg, links_json, current_links, errors)
+            if current is not None and parameters_version:
+                expected_ver = _links_version(current_links, self._dictionary())
+                if admin_crud.text(parameters_version, 64) != expected_ver:
+                    errors[GENERAL_FIELD] = admin_crud.MSG_CONFLICT
+
         if script_id in (None, ""):
             if errors:
                 return None, errors, None
@@ -343,10 +523,24 @@ class AdminScriptsService(object):
                 return None, errors, None
             self._log.info("script incluido (login=%s script=%s)", ctx.get("login"), created["name"],
                            extra={"action": "CREATE"})
+            self._save_profiles_link(ctx, ip, created["id"], profile_ids)
+            self._save_environments_link(ctx, ip, created["id"], environment_ids)
+            if final_links:
+                detail_p = admin_crud.free_detail(
+                    u"vínculos: %s → %s" % (u"(nenhum)", self._describe(final_links))
+                )
+                audit_p = admin_crud.audit_entry(ctx, ip, "CREATE", detail_p)
+                self._catalog.script_params_save(
+                    created["id"],
+                    [dict((k, v[k]) for k in ("parameter_id", "sort_order", "required",
+                                              "default_value_override"))
+                     for v in final_links],
+                    expected=[], audit=audit_p
+                )
             return created["id"], {}, warning
 
         current = self._get(script_id)
-        if not errors and reg["param_type"] != current["param_type"]:
+        if links_json is None and not errors and reg["param_type"] != current["param_type"]:
             self._param_type_precheck(current["id"], reg["param_type"], errors)
         if errors:
             return current["id"], errors, None
@@ -355,21 +549,54 @@ class AdminScriptsService(object):
         changes = dict((c, reg[c]) for c in EDITABLE_FIELDS if c != "active")
 
         detail = admin_crud.changes_detail(current, dict(current, **changes), EDITABLE_FIELDS)
-        if detail is None:
-            return current["id"], {}, warning
-        try:
-            self._catalog.scripts_update(current["id"], changes, expected=admin_crud.expected(current, EDITABLE_FIELDS),
-                                           audit=admin_crud.audit_entry(ctx, ip, "UPDATE", detail))
-        except RepoConflict:
-            return current["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}, None
-        except RepoViolation as exc:
-            self._violation(ctx, exc, errors, current["id"])
-            return current["id"], errors, None
-        self._log.info("script alterado (login=%s script=%s)", ctx.get("login"), reg["name"],
-                       extra={"action": "UPDATE"})
-        if changes["path_file"] != current["path_file"] or changes["interpreter"] != current["interpreter"]:
-            warning = self.queued_warning(current["id"])
+        if detail is not None:
+            try:
+                self._catalog.scripts_update(
+                    current["id"], changes,
+                    expected=admin_crud.expected(current, EDITABLE_FIELDS),
+                    audit=admin_crud.audit_entry(ctx, ip, "UPDATE", detail)
+                )
+            except RepoConflict:
+                return current["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}, None
+            except RepoViolation as exc:
+                self._violation(ctx, exc, errors, current["id"])
+                return current["id"], errors, None
+            self._log.info("script alterado (login=%s script=%s)", ctx.get("login"), reg["name"],
+                           extra={"action": "UPDATE"})
+            if changes["path_file"] != current["path_file"] or changes["interpreter"] != current["interpreter"]:
+                warning = self.queued_warning(current["id"])
+        self._save_profiles_link(ctx, ip, current["id"], profile_ids)
+        self._save_environments_link(ctx, ip, current["id"], environment_ids)
+
+        if final_links is not None and _read_back(final_links) != _read_back(current_links):
+            before, after = self._describe(current_links), self._describe(final_links)
+            detail_p = admin_crud.free_detail(u"vínculos: %s → %s" % (before, after))
+            try:
+                self._catalog.script_params_save(
+                    current["id"],
+                    [dict((k, v[k]) for k in ("parameter_id", "sort_order", "required",
+                                              "default_value_override"))
+                     for v in final_links],
+                    expected=_read_back(current_links),
+                    audit=admin_crud.audit_entry(ctx, ip, "UPDATE", detail_p)
+                )
+                self._log.info("vinculos alterados (login=%s script=%s)", ctx.get("login"),
+                               current["name"], extra={"action": "UPDATE"})
+            except RepoConflict:
+                return current["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}, None
+            except RepoViolation as exc:
+                self._log.warning(
+                    "vinculos rejeitados pelo repositorio (login=%s script=%s constraint=%s)",
+                    ctx.get("login"), current["name"], exc.constraint, extra={"action": FEATURE})
+                if exc.constraint == "sss_scr_nomeado_sem_flag":
+                    return current["id"], {GENERAL_FIELD: msg_named_without_flag([v["code"] for v in final_links if not v.get("param_flag")])}, None
+                if exc.constraint == "sss_scr_nenhum_vinculado":
+                    return current["id"], {GENERAL_FIELD: MSG_LINK_NONE}, None
+                return current["id"], {GENERAL_FIELD: admin_crud.MSG_FAILURE}, None
+
         return current["id"], {}, warning
+
+
 
     def queued_warning(self, script_id):
         """Tickets na fila criados com o arquivo ou o interpretador anterior (CR-018a, README §8.4).
@@ -616,14 +843,21 @@ class AdminScriptsService(object):
                        extra={"action": "UPDATE"})
         return after, {}
 
-    def preview(self, ctx, script_id, links_json=None):
+    def preview(self, ctx, script_id, links_json=None, param_type=None):
         """argv mascarado com os valores padrao (README §6.1), da configuracao em edicao ou da gravada.
 
         Retorna {argv: [...] | None, erros: {campo: msg}, aviso: str | None}. Nao grava nada.
         """
         admin_crud.require_feature(ctx, FEATURE)
-        script = self._get(script_id)
-        current = self._catalog.script_params_get(script["id"])
+        if script_id in (None, "", 0):
+            script = {"id": 0, "name": "novo", "param_type": param_type or "NAMED",
+                      "path_file": "script.py", "interpreter": "python3"}
+            current = []
+        else:
+            script = self._get(script_id)
+            if param_type:
+                script = dict(script, param_type=param_type)
+            current = self._catalog.script_params_get(script["id"])
         errors = {}
         if links_json is None:
             links = current
@@ -662,6 +896,7 @@ def _service():
                 runners=admin_profiles_service._service().script_runners,
                 rules=schedules_service._service(),
                 tickets=tickets,
+                rbac=factory.get("rbac"),
             )
         return _default
 
@@ -681,9 +916,18 @@ def form(ctx, script_id=None):
     return _service().form(ctx, script_id)
 
 
-def save(ctx, ip, script_id, data):
+def parameters_selection(script_id=None):
+    """Selecao de parametros para o formulario de script (servico padrao)."""
+    return _service()._parameters_selection(script_id)
+
+
+def save(ctx, ip, script_id, data, profile_ids=None, environment_ids=None,
+         links_json=None, parameters_version=None):
     """Inclusao ou alteracao de script (servico padrao)."""
-    return _service().save(ctx, ip, script_id, data)
+    return _service().save(ctx, ip, script_id, data, profile_ids=profile_ids,
+                           environment_ids=environment_ids,
+                           links_json=links_json,
+                           parameters_version=parameters_version)
 
 
 def toggle_active(ctx, ip, script_id, version):
@@ -711,6 +955,6 @@ def save_parameters(ctx, ip, script_id, links_json, version):
     return _service().save_parameters(ctx, ip, script_id, links_json, version)
 
 
-def preview(ctx, script_id, links_json=None):
+def preview(ctx, script_id, links_json=None, param_type=None):
     """Previa do argv mascarado (servico padrao)."""
-    return _service().preview(ctx, script_id, links_json)
+    return _service().preview(ctx, script_id, links_json, param_type=param_type)

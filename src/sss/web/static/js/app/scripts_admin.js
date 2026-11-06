@@ -89,6 +89,7 @@
 
   // Vinculos: lista ordenavel (subir/descer, sem arrastar), busca no dicionario e previa do argv.
   SSS.component('scriptLinks', function (root) {
+    var form = root.tagName === 'FORM' ? root : (root.closest('form') || document);
     var el = {
       linksJson: dom.ref(root, 'linksJson'),
       noLinks: dom.ref(root, 'noLinks'),
@@ -102,7 +103,7 @@
       previewText: dom.ref(root, 'previewText'),
       previewErrors: dom.ref(root, 'previewErrors'),
       previewWarning: dom.ref(root, 'previewWarning'),
-      submit: root.querySelector('button[type="submit"]')
+      submit: root.querySelector('button[type="submit"]') || form.querySelector('button[type="submit"]')
     };
     var available = readJson(root, 'data-available', []);
     var rows = readJson(root, 'data-links', []).map(function (v) {
@@ -164,7 +165,8 @@
       var used = {};
       rows.forEach(function (l) { used[l.id] = true; });
       return available.filter(function (p) {
-        return !used[p.id] && (!term || (p.code + ' ' + p.label).toLowerCase().indexOf(term) !== -1);
+        var flag = p.param_flag || '';
+        return !used[p.id] && (!term || (p.code + ' ' + p.label + ' ' + flag).toLowerCase().indexOf(term) !== -1);
       }).slice(0, MAX_RESULTS);
     }
 
@@ -178,8 +180,12 @@
       found = results();
       found.forEach(function (p) {
         var item = dom.clone(el.resultTemplate);
+        var flagEl = part(item, 'flag');
         dom.setText(part(item, 'code'), p.code);
         dom.setText(part(item, 'label'), p.label);
+        if (flagEl) {
+          dom.setText(flagEl, p.param_flag ? (' (' + p.param_flag + ')') : '');
+        }
         part(item, 'add').setAttribute('data-id', p.id);
         fragment.appendChild(item);
       });
@@ -240,11 +246,38 @@
         el.search.focus();
       }
     });
+    function updateParamTypeState() {
+      var paramTypeSelect = root.querySelector('select[name="param_type"]') || form.querySelector('select[name="param_type"]');
+      if (!paramTypeSelect) {
+        return;
+      }
+      var isNone = paramTypeSelect.value === 'NONE';
+      var noneAlert = dom.ref(root, 'noneAlert');
+      var linksBody = dom.ref(root, 'linksBody');
+      if (noneAlert) {
+        dom.show(noneAlert, isNone);
+      }
+      if (linksBody) {
+        dom.show(linksBody, !isNone);
+      }
+    }
+    dom.on(form, 'change', 'paramType', updateParamTypeState);
+
     dom.on(root, 'click', 'preview', function () {
       var body = new URLSearchParams();
       var errors = [];
-      body.set('_csrf', root.querySelector('input[name="_csrf"]').value);
-      body.set('id', root.querySelector('input[name="id"]').value);
+      var csrfInput = root.querySelector('input[name="_csrf"]') || form.querySelector('input[name="_csrf"]');
+      var idInput = root.querySelector('input[name="id"]') || form.querySelector('input[name="id"]');
+      var paramTypeSelect = root.querySelector('select[name="param_type"]') || form.querySelector('select[name="param_type"]');
+      if (csrfInput) {
+        body.set('_csrf', csrfInput.value);
+      }
+      if (idInput && idInput.value) {
+        body.set('id', idInput.value);
+      }
+      if (paramTypeSelect && paramTypeSelect.value) {
+        body.set('param_type', paramTypeSelect.value);
+      }
       body.set('links_json', linksJson());
       el.previewButton.disabled = true;
       dom.setText(el.previewText, '');

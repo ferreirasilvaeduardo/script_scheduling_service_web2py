@@ -39,7 +39,7 @@ class RepoCatalog(object):
         """Lista scripts paginados com formato {'items': [...], 'total': n, 'page': p, 'size': t}.
 
         Ordem: nome ASC, id ASC. Filtros: nome (trecho), grupo, categoria, interpretador (logico) e ativo.
-        Cada item traz 'homologated_environments' (nomes, ordem alfabetica) e 'param_count'.
+        Cada item traz 'homologated_environments', 'param_count', 'param_names' e 'profile_names'.
         """
         raise NotImplementedError
 

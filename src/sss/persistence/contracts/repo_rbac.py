@@ -56,3 +56,11 @@ class RepoRbac(object):
     def features_list(self):
         """Retorna lista de dicts com o catalogo canonico de funcionalidades ativas."""
         raise NotImplementedError
+
+    def script_profiles_get(self, script_id):
+        """Retorna lista ordenada de profile_id associados ao script."""
+        raise NotImplementedError
+
+    def script_profiles_save(self, script_id, profile_ids, expected=None, audit=None, actor=None):
+        """Substitui os perfis associados ao script por diferenca, incrementando perm_version."""
+        raise NotImplementedError

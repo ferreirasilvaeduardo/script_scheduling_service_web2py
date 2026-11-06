@@ -15,7 +15,7 @@ from sss.persistence import repo_factory
 CATALOG = {
     "EXEC_SCRIPT": u"Rodar Scripts", "VIEW_LOGS": u"Consultar Tickets", "CANCEL_TICKET": u"Cancelar Tickets",
     "MANAGE_USERS": u"Gestão de Usuários", "MANAGE_PROFILES": u"Gestão de Perfis", "MANAGE_ENVIRONMENTS": u"Gestão de Ambientes",
-    "MANAGE_SCRIPTS": u"Gestão de Scripts", "MANAGE_PARAMETERS": u"Dicionário de Parâmetros",
+    "MANAGE_SCRIPTS": u"Gestão de Scripts", "MANAGE_PARAMETERS": u"Gestão de Parâmetros",
     "MANAGE_SCHEDULES": u"Regras de Agendamento", "VIEW_AUDIT": u"Auditoria",
     "DOWNLOAD_OUTPUT": u"Baixar Saídas", "UPLOAD_INPUT": u"Enviar Arquivos",
     "FILES_UPLOAD": u"Enviar para Pasta de Arquivos", "FILES_DOWNLOAD": u"Baixar da Pasta de Arquivos",  # CR-037

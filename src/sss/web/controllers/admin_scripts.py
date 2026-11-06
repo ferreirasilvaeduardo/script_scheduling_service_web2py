@@ -40,12 +40,18 @@ def _empty_form(ctx):
             "interpreter": path_guard.ALLOWLIST[0], "path_file": "",
             "param_type": "NAMED",
             "max_parallel_env": 1, "timeout_s": "", "active": "Y", "version": "", "active_schedules": 0,
+            "profiles_selection": [],
+            "environments_selection": [],
+            "parameters_links": [],
+            "parameters_available": [],
+            "parameters_version": "",
             "validation_note": service.VALIDATION_NOTE}
 
 
 def _form_page(ctx, data, errors=None):
     response.title = (u"Script %s — SSS" % data["name"]) if data.get("id") else u"Novo script — SSS"
     response.view = "admin_scripts/form.html"
+    response.sss_scripts = [_JS]
     errors = errors or {}
     fields = [{"name": n, "error": errors.get(n)} for n in ("name", "description", "script_group", "category", "stage",
                                                           "interpreter", "path_file", "param_type",
@@ -93,9 +99,21 @@ def save():
     script_id = _text(request.post_vars.get("id"), 11)
     # Teto acima do maior limite do service (path_file: 500), para que o excesso seja recusado (AGENTS §3.4).
     submitted = dict((c, _text(request.post_vars.get(c), 600)) for c in _FIELDS)
+    raw_profiles = request.post_vars.get("profiles")
+    profile_ids = (raw_profiles if isinstance(raw_profiles, list)
+                   else ([] if raw_profiles is None else [raw_profiles]))[:_MAX_IDS]
+    raw_envs = request.post_vars.get("environments")
+    environment_ids = (raw_envs if isinstance(raw_envs, list)
+                       else ([] if raw_envs is None else [raw_envs]))[:_MAX_IDS]
+    links_json = _text(request.post_vars.get("links_json"), _MAX_JSON)
+    parameters_version = _text(request.post_vars.get("parameters_version"), 64)
     warning = None
     try:
-        saved_id, errors, warning = service.save(ctx, _client_ip(), script_id, submitted)
+        saved_id, errors, warning = service.save(ctx, _client_ip(), script_id, submitted,
+                                                 profile_ids=profile_ids,
+                                                 environment_ids=environment_ids,
+                                                 links_json=links_json,
+                                                 parameters_version=parameters_version)
     except RepoNotFound:
         _not_found(_MSG_NOT_FOUND)
     except AccessDenied:
@@ -117,6 +135,33 @@ def save():
         data = dict(data, **dict((c, submitted[c] or "") for c in _FIELDS if c != "version"))
         if script_id:
             data["version"] = submitted["version"] or ""
+    if profile_ids is not None and "profiles_selection" in data:
+        sel_set = set(str(x) for x in profile_ids)
+        for p in data["profiles_selection"]:
+            p["checked"] = str(p["id"]) in sel_set
+    if environment_ids is not None and "environments_selection" in data:
+        sel_env_set = set(str(x) for x in environment_ids)
+        for e in data["environments_selection"]:
+            e["checked"] = str(e["id"]) in sel_env_set
+    if links_json and "parameters_available" in data:
+        try:
+            import json
+            raw_items = json.loads(links_json)
+            avail_map = dict((p["id"], p) for p in data["parameters_available"])
+            new_links = []
+            for item in raw_items:
+                pid = item.get("parameter_id")
+                if pid in avail_map:
+                    p_info = dict(avail_map[pid])
+                    p_info["required"] = item.get("required") is True
+                    p_info["default_value_override"] = item.get("default_value_override") or ""
+                    p_info["has_override"] = bool(p_info["default_value_override"])
+                    new_links.append(p_info)
+            data["parameters_links"] = new_links
+        except Exception:
+            pass
+    if parameters_version:
+        data["parameters_version"] = parameters_version
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
     response.flash = {"kind": "error", "message": errors.get(admin_crud.GENERAL_FIELD)
                       or ui_helpers.message("form_errors")}
@@ -237,9 +282,11 @@ def preview():
     ctx = _require_func(_FUNC)
     response.headers["Cache-Control"] = "no-store"
     links_json = request.post_vars.get("links_json")
+    param_type = _text(request.post_vars.get("param_type"), 30)
     try:
         result = service.preview(ctx, _text(request.post_vars.get("id"), 11),
-                                   _text(links_json, _MAX_JSON) if links_json is not None else None)
+                                 _text(links_json, _MAX_JSON) if links_json is not None else None,
+                                 param_type=param_type)
     except RepoNotFound:
         response.status = 404
         return response.json({"argv": None, "errors": {admin_crud.GENERAL_FIELD: u"Script não encontrado."}})

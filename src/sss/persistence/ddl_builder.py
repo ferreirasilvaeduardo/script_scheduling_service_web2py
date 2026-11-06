@@ -30,7 +30,7 @@ FEATURE_CATALOG = (
     ("ADMIN", "MANAGE_PROFILES", "Gestão de Perfis", "Gerenciar perfis e matrizes de permissão"),
     ("ADMIN", "MANAGE_ENVIRONMENTS", "Gestão de Ambientes", "Gerenciar ambientes e DSNs"),
     ("ADMIN", "MANAGE_SCRIPTS", "Gestão de Scripts", "Cadastrar rotinas e homologação por ambiente"),
-    ("ADMIN", "MANAGE_PARAMETERS", "Dicionário de Parâmetros", "Gerenciar perguntas e flags reutilizáveis"),
+    ("ADMIN", "MANAGE_PARAMETERS", "Gestão de Parâmetros", "Gerenciar perguntas e flags reutilizáveis"),
     ("ADMIN", "MANAGE_SCHEDULES", "Regras de Agendamento", "Criar e gerenciar recorrências"),
     ("ADMIN", "VIEW_AUDIT", "Auditoria", "Consultar a trilha de auditoria e os agentes"),
 )

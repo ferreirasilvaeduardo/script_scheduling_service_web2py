@@ -99,6 +99,15 @@ _SQL_SCR_HOMOLOGATED = (
     "SELECT sa.script_id, a.name FROM {senv} sa JOIN {env} a ON a.id = sa.environment_id "
     "WHERE sa.script_id IN ({ids})"
 )
+_SQL_SCR_PARAM_ITEMS = (
+    "SELECT sp.script_id, p.code, p.param_flag FROM {sprm} sp JOIN {prm} p ON p.id = sp.parameter_id "
+    "WHERE sp.script_id IN ({ids}) ORDER BY sp.script_id, sp.sort_order, p.id"
+)
+_SQL_SCR_PROFILES = (
+    "SELECT ps.script_id, p.name FROM {pscr} ps JOIN {prf} p ON p.id = ps.profile_id "
+    "WHERE ps.script_id IN ({ids}) AND p.active = 'Y'"
+)
+_SQL_ADMIN_PROFILES = "SELECT name FROM {prf} WHERE is_admin = 'Y' AND active = 'Y' ORDER BY name"
 
 _SQL_SENV_OF_SCRIPT = "SELECT id, environment_id FROM {senv} WHERE script_id = :script_id"
 _SQL_SENV_DELETE = "DELETE FROM {senv} WHERE id = :id"
@@ -235,6 +244,7 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             "sprm": self.qualify_table("script_param"),
             "pscr": self.qualify_table("profile_script"),
             "penv": self.qualify_table("profile_env"),
+            "prf": self.qualify_table("profiles"),
         }
         self._sql = {}
         for name, template in globals().items():
@@ -448,6 +458,8 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
         """{script_id: [nomes em ordem alfabetica]} com IN por contagem controlada, em lotes."""
         result = dict((sid, []) for sid in script_ids)
         ids = list(script_ids)
+        if not ids:
+            return result
         cur = conn.cursor()
         try:
             for i in range(0, len(ids), _BATCH_IN):
@@ -463,8 +475,50 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             names.sort()
         return result
 
+    def _parametros_por_script(self, conn, script_ids):
+        """{script_id: [(code, flag), ...]} com IN por contagem controlada, em lotes."""
+        result = dict((sid, []) for sid in script_ids)
+        ids = list(script_ids)
+        if not ids:
+            return result
+        cur = conn.cursor()
+        try:
+            for i in range(0, len(ids), _BATCH_IN):
+                batch = ids[i:i + _BATCH_IN]
+                marks = ", ".join(":s%d" % n for n in range(len(batch)))
+                binds = dict(("s%d" % n, v) for n, v in enumerate(batch))
+                cur.execute(self._sql_dinamico(_SQL_SCR_PARAM_ITEMS, ids=marks), binds)
+                for sid, code, flag in cur.fetchall():
+                    result[sid].append((code, flag))
+        finally:
+            cur.close()
+        return result
+
+    def _perfis_por_script(self, conn, script_ids):
+        """{script_id: [nomes de perfis em ordem alfabetica]} incluindo administradores ativos."""
+        result = dict((sid, []) for sid in script_ids)
+        ids = list(script_ids)
+        cur = conn.cursor()
+        admin_profiles = []
+        try:
+            cur.execute(self._sql["ADMIN_PROFILES"])
+            admin_profiles = [r[0] for r in cur.fetchall()]
+            if ids:
+                for i in range(0, len(ids), _BATCH_IN):
+                    batch = ids[i:i + _BATCH_IN]
+                    marks = ", ".join(":s%d" % n for n in range(len(batch)))
+                    binds = dict(("s%d" % n, v) for n, v in enumerate(batch))
+                    cur.execute(self._sql_dinamico(_SQL_SCR_PROFILES, ids=marks), binds)
+                    for sid, name in cur.fetchall():
+                        result[sid].append(name)
+        finally:
+            cur.close()
+        for sid, names in result.items():
+            result[sid] = sorted(set(admin_profiles + names))
+        return result
+
     def scripts_list(self, filters=None, page=1, size=20, conn=None):
-        """Lista scripts por nome ASC, id ASC, com homologated_environments e param_count."""
+        """Lista scripts por nome ASC, id ASC, com homologados, parametros e perfis."""
         filters = filters or {}
         clauses, binds = [], {}
         if filters.get("name"):
@@ -477,9 +531,21 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
         with self.read_context(conn=conn) as c:
             page_ = self._listar(c, _SQL_SCR_LIST, _SQL_SCR_COUNT, _COLS_SCR, clauses, binds,
                                    page, size, extras=("param_count",))
-            homolog = self._homologados_por_script(c, [it["id"] for it in page_["items"]])
+            ids = [it["id"] for it in page_["items"]]
+            homolog = self._homologados_por_script(c, ids)
+            params = self._parametros_por_script(c, ids)
+            profiles = self._perfis_por_script(c, ids)
         for item in page_["items"]:
             item["homologated_environments"] = homolog.get(item["id"], [])
+            ptype = item.get("param_type")
+            item_params = []
+            for p_code, p_flag in params.get(item["id"], []):
+                if ptype == "NAMED" and p_flag:
+                    item_params.append("%s(%s)" % (p_code, p_flag))
+                else:
+                    item_params.append(p_code)
+            item["param_names"] = item_params
+            item["profile_names"] = profiles.get(item["id"], [])
         return page_
 
     def scripts_get(self, id, conn=None):
