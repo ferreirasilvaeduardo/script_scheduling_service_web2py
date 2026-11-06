@@ -474,7 +474,7 @@ A pasta base é a padrão, `<RAIZ>/scripts_ambiente/`, preservada pela atualiza�
 if [ -d scripts_ambiente/utilitarios ]; then
   echo "ja existe: scripts_ambiente/utilitarios (mantido; para trocar, veja abaixo)"
 else
-  mkdir -p scripts_ambiente && tar -xzf ~/sss_pacote/utilitarios.tar.gz -C scripts_ambiente --strip-components=2
+  tar -xzf ~/sss_pacote/utilitarios.tar.gz
 fi
 ls scripts_ambiente/utilitarios | wc -l                        # esperado: 14
 find scripts_ambiente -type f -exec chmod 0444 {} +

@@ -216,7 +216,7 @@ A ordem das camadas é verificada estaticamente por AST em `tests/architecture/t
 | Camada (`src/sss/`) | Módulos Principais | Responsabilidade |
 |---|---|---|
 | `platform/` | `os_platform/` (`posix.py`, `ticket_files.py`), `path_guard.py`, `env_builder.py`, `files_area.py` | Primitivas POSIX isoladas (spawn `start_process` sem shell, grupos de processo, sinais, lock de instância, identidade de PID, locale), operações isoladas de pasta de ticket (`pack`, `clean-output`, `put-input`, `list-input`), guarda de caminhos/interpretadores, montagem limpa de `env` e operações atômicas da Pasta de Arquivos (`CR-037`). |
-| `core/` | `sql_ident.py`, `cron_parser.py`, `recurrence.py`, `params_compiler.py`, `masking.py`, `rbac.py`, `password_hasher.py`, `input_names.py` | Regras de negócio puras sem I/O: registro e validação de identificadores SQL (`<= 30` chars), parser CRON de 5 campos, cálculo de ocorrências e *misfire*, compilador de parâmetros/snapshot v7 e regex segura, mascaramento em fluxo de segredos, matriz pura de RBAC e hash `PBKDF2-HMAC-SHA256` (`>= 310.000` iterações). |
+| `core/` | `sql_ident.py`, `cron_parser.py`, `recurrence.py`, `params_compiler.py`, `masking.py`, `rbac.py`, `security.py`, `input_names.py` | Regras de negócio puras sem I/O: registro e validação de identificadores SQL (`<= 30` chars), parser CRON de 5 campos, cálculo de ocorrências e *misfire*, compilador de parâmetros/snapshot v7 e regex segura, mascaramento em fluxo de segredos, matriz pura de RBAC e hash `PBKDF2-HMAC-SHA256` (`200.000` iterações). |
 | `config/` | `sss_config.py`, `sss_context.py`, `sss_logging.py`, `log_paths.py` | Leitura e validação de `instance/common.ini`, `instance/<nome>/config.ini` e `instance/secrets.cfg`, validação das invariantes `I1–I4`, contexto de execução, caminhos determinísticos de log/saída/entrada/trabalho e logger com rotação por minuto e tamanho. |
 | `persistence/` | `db_conn.py`, `ddl_builder.py`, `contracts/` (`dto.py`, `exceptions.py`, `repos.py`), `oracle/*`, `fake/*` | Sondagem e conexão adaptativa (`Thin -> Thick -> cx_Oracle`), geração de DDL/seed/validação (`ascii_sql` com `UNISTR`), contratos e exceções (`RepoNotFound`, `RepoConflict`, `RepoViolation`, `RepoUnavailable`) e implementações paritárias em Oracle 11gR2 e em memória (`FAKE`). |
 | `ui/` | `ui_helpers.py`, `ui_menu.py` | Catálogo único de mensagens em duas partes ("o que aconteceu" + "o que fazer agora"), rótulos amigáveis de situações/motivos, mascaramento de atores (`visible_actor`), barras empilhadas em SVG e montagem do menu conforme o perfil. |
@@ -231,25 +231,25 @@ A ordem das camadas é verificada estaticamente por AST em `tests/architecture/t
 * **As 21 Tabelas (nomes lógicos em `src/sss/core/sql_ident.py`):**
   1. `tbsss_control` — controle de versão do esquema (`id = 1`, `schema_version`).
   2. `tbsss_users` — usuários, hash PBKDF2, tentativas de login, bloqueio e `session_epoch`.
-  3. `tbsss_profiles` — perfis de acesso (`is_admin`, `max_priority`, `is_active`).
+  3. `tbsss_profiles` — perfis de acesso (`is_admin`, `max_priority`, `active`).
   4. `tbsss_features` — catálogo das 14 funcionalidades do sistema.
-  5. `tbsss_environments` — ambientes cadastrados (`name`, `dsn`, `is_production`, `is_active`).
-  6. `tbsss_scripts` — scripts (`name`, `path_file`, `interpreter`, `timeout_seconds`, `max_concurrent`, `is_active`).
-  7. `tbsss_parameters` — parâmetros globais (`param_type`: `TEXT`, `NUMBER`, `DATE`, `SELECT`, `CHECKBOX`; `arg_style`: `NAMED`, `POSITIONAL`, `NONE`; `validation_regex`; `is_sensitive`).
-  8. `tbsss_script_Params` — vínculo ordenado script × parâmetro (`param_order`, `is_required`, `default_value`).
-  9. `tbsss_profile_features` — matriz perfil × funcionalidade.
-  10. `tbsss_profile_envs` — matriz perfil × ambiente.
-  11. `tbsss_profile_scripts` — matriz perfil × script.
-  12. `tbsss_script_envs` — homologação de script por ambiente (`approved_by`, `approved_at`).
-  13. `tbsss_schedules` — regras de agendamento (`ONCE`, `DAILY`, `WEEKLY`, `MONTHLY`, `CRON`, `misfire_policy`, `status`, `pause_reason`, `next_run_at`, `params_json`).
-  14. `tbsss_tickets` — fila e histórico de execuções (`status`, `status_reason`, `priority`, `effective_priority_at`, `scheduled_at`, `snapshot_json`, `agent_id`, `pid`, `exit_code`, `log_text` CLOB, `interpreter_path`, `interpreter_used`, `script_path`).
-  15. `tbsss_ticket_params` — respostas de parâmetros por ticket (valores sensíveis limpos ao final).
-  16. `tbsss_ticket_output` — arquivo `.zip` da pasta de saída do ticket (`status`, `zip_blob` BLOB, `sha256`, `file_count`, `total_bytes`).
-  17. `tbsss_agents` — registro e estado dos agentes (`status`, `last_heartbeat`, `hostname`, `pid`, `version`, `critical_config`).
-  18. `tbsss_agent_envs` — ambientes atendidos por cada agente.
-  19. `tbsss_inputs` — fila de arquivos enviados pela tela de Entrada para entrega pelos agentes (`blob_content` BLOB, `sha256`, `status`).
-  20. `tbsss_input_Snapshot` — retrato JSON dos arquivos presentes em `SSS_INPUT_DIR` publicado pelos agentes.
-  21. `tbsss_audit_logs` — trilha imutável de auditoria (`actor_login`, `action`, `entity_type`, `entity_id`, `details_json`, `ip_address`).
+  5. `tbsss_profile_feature` — matriz perfil × funcionalidade.
+  6. `tbsss_environments` — ambientes cadastrados (`name`, `connection`, `is_production`, `active`).
+  7. `tbsss_profile_env` — matriz perfil × ambiente.
+  8. `tbsss_scripts` — scripts (`name`, `path_file`, `interpreter`, `timeout_s`, `max_parallel_env`, `param_mode`, `active`).
+  9. `tbsss_profile_script` — matriz perfil × script.
+  10. `tbsss_script_env` — homologação de script por ambiente.
+  11. `tbsss_parameters` — parâmetros globais (`param_type`: `TEXT`, `NUMBER`, `DATE`, `SELECT`, `CHECKBOX`; `arg_style`: `NAMED`, `POSITIONAL`, `NONE`; `validation_regex`; `is_sensitive`).
+  12. `tbsss_script_param` — vínculo ordenado script × parâmetro (`param_order`, `is_required`, `default_value_override`).
+  13. `tbsss_schedules` — regras de agendamento (`ONCE`, `DAILY`, `WEEKLY`, `MONTHLY`, `CRON`, `misfire_policy`, `active`, `pause_reason`, `next_run_at`, `params_json`).
+  14. `tbsss_tickets` — fila e histórico de execuções (`status`, `status_reason`, `priority`, `scheduled_at`, `submitted_params`, `agent_id`, `process_id`, `return_code`, `log_output` CLOB, `interpreter_path`, `interpreter_used`, `script_path`).
+  15. `tbsss_ticket_answer` — respostas de parâmetros por ticket (valores sensíveis limpos ao final).
+  16. `tbsss_ticket_output` — arquivo `.zip` da pasta de saída do ticket (`state`, `output_blob` BLOB, `sha256`, `file_count`, `total_bytes`).
+  17. `tbsss_agents` — registro e estado dos agentes (`status`, `heartbeat_at`, `hostname`, `daemon_pid`, `version`, `environments`, `critical_config`).
+  18. `tbsss_audit` — trilha imutável de auditoria (`actor`, `action`, `entity`, `entity_id`, `detail`, `source_ip`).
+  19. `tbsss_input_upload` — fila de uploads enviados pela tela de Entrada para entrega pelos agentes (`upload_blob` BLOB, `sha256`, `replace_existing`).
+  20. `tbsss_input_delivery` — entrega dos arquivos aos agentes (`state`, `reason`, `delivered_at`).
+  21. `tbsss_input_listing` — retrato JSON dos arquivos presentes em `SSS_INPUT_DIR` publicado pelos agentes (`items_json`, `truncated`).
 * **As 14 Funcionalidades (`tbsss_features`):**
   * Operação: `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `MANAGE_SCHEDULES`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD`.
   * Administração e Governança: `MANAGE_USERS`, `MANAGE_PROFILES`, `MANAGE_ENVIRONMENTS`, `MANAGE_SCRIPTS`, `MANAGE_PARAMETERS` (Gestão de Parâmetros), `VIEW_AUDIT`.

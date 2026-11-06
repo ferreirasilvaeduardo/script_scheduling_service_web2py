@@ -23,10 +23,10 @@ Este arquivo é carregado automaticamente pelo Antigravity no início de toda co
 
 ### 2.1 Segredos, Credenciais e PII (`AGENTS.md` §3.3)
 * **Proibido em git/código:** senhas, hashes reais, `cookie_key`, tokens ou chaves privadas. Modelos usam `CHANGE_ME`.
-* **Arquivos de segredo (`CR-032`, D14/D18):** `instance/secrets.cfg` único por servidor (modo `0600`, dono igual ao UID do processo; recusado se grupo/outros tiverem permissão ou em diretório gravável por outros) e `instance/common.ini` para `[oracle]`. Cada processo lê apenas as chaves do seu papel (`agent` lê `agent_password`; `web` lê `web_password` e `cookie_key`).
-* **Senhas de usuário:** `PBKDF2-HMAC-SHA256` (`hashlib.pbkdf2_hmac`) com sal de 16 bytes (`secrets.SystemRandom`), mínimo de `310_000` iterações e comparação em tempo constante (`hmac.compare_digest`). Troca de senha, redefinição, desativação ou mudança de perfil incrementa `session_epoch`.
+* **Arquivos de segredo (`CR-032`, D14/D18):** `instance/secrets.cfg` único por servidor (modo `0600`, dono igual ao UID do processo; recusado se grupo/outros tiverem permissão ou em diretório gravável por outros) e `instance/common.ini` para `[oracle]`. Cada processo lê apenas as chaves do seu papel: `[oracle] password` para ambos (`web` e `agente`), `[web] cookie_key` para a web e `[environment:<NOME>] password` para os ambientes no agente.
+* **Senhas de usuário:** `PBKDF2-HMAC-SHA256` (`src/sss/core/security.py`, `hashlib.pbkdf2_hmac`) com sal de 16 bytes (`secrets.token_bytes`), `200_000` iterações e comparação em tempo constante (`hmac.compare_digest`). Troca de senha, redefinição, desativação ou mudança de perfil incrementa `session_epoch`.
 * **Mascaramento (`src/sss/core/masking.py`):** todo log de execução e de aplicação passa pelo filtro em fluxo com janela de retenção `len(maior_segredo) - 1` entre blocos (`flush()` só no encerramento). Valores sensíveis têm no mínimo 4 caracteres (`CR-008`, R-07).
-* **Proibido em logs, HTML ou URL:** senhas, `cookie_key`, `password_hash`, tokens de sessão/CSRF, DSN completo e valores de parâmetros `is_sensitive = 'Y'`. A resposta de parâmetro sensível é apagada do banco ao fim da execução (`FINISHED`, `FAILED`, `CANCELED`, `STOPPED`).
+* **Proibido em logs, HTML ou URL:** senhas, `cookie_key`, `password_hash`, tokens de sessão/CSRF, DSN completo e valores de parâmetros `is_sensitive = 'Y'`. A resposta de parâmetro sensível é apagada do banco ao fim da execução (`SUCCESS`, `FAILED`, `CANCELLED`).
 
 ### 2.2 Segurança Web e Entrada de Dados (`AGENTS.md` §3.4)
 * **Limites de entrada:** toda entrada tem tamanho máximo validado antes do processamento e é **recusada** (nunca truncada) se exceder (`src/sss/web/app/security.py`, `_check_size` antes de ler `request.post_vars`, retornando HTTP 413). O limite grande `files_upload_max_bytes` vale apenas em `files/upload` com sessão autenticada (`security.body_limit`).
@@ -107,7 +107,7 @@ RELATÓRIO DE EXECUÇÃO
 Uma camada **só importa camadas abaixo dela**, sempre com import qualificado (`from sss.<camada> import <módulo>`):
 ```text
 platform (base: só stdlib, POSIX)
-  └── core (regras puras: cron_parser, recurrence, params_compiler, masking, rbac, password_hasher, sql_ident, input_names)
+  └── core (regras puras: cron_parser, recurrence, params_compiler, masking, rbac, security, sql_ident, input_names)
         └── config (sss_config, sss_context, sss_logging, log_paths)
               └── persistence (db_conn, ddl_builder, contracts/, oracle/, fake/)
                     ├── ui (ui_helpers, ui_menu)
@@ -120,10 +120,10 @@ cli (topo: run_web, run_scheduler, init_db, generate_sql, check_env, health, pro
 ### 3.2 Banco de Dados Oracle (21 Tabelas e 14 Funcionalidades RBAC)
 * **21 Tabelas Lógicas (`src/sss/core/sql_ident.py`):**
   * Controle e Segurança (4): `tbsss_control`, `tbsss_users`, `tbsss_profiles`, `tbsss_features`.
-  * Catálogo e Ambientes (4): `tbsss_environments`, `tbsss_scripts`, `tbsss_parameters`, `tbsss_script_Params`.
-  * Vínculos RBAC e Homologação (4): `tbsss_profile_features`, `tbsss_profile_envs`, `tbsss_profile_scripts`, `tbsss_script_envs`.
-  * Operação, Fila, Agentes e Arquivos (8): `tbsss_schedules`, `tbsss_tickets`, `tbsss_ticket_params`, `tbsss_ticket_output`, `tbsss_agents`, `tbsss_agent_envs`, `tbsss_inputs`, `tbsss_input_Snapshot`.
-  * Auditoria (1): `tbsss_audit_logs`.
+  * Catálogo e Ambientes (4): `tbsss_environments`, `tbsss_scripts`, `tbsss_parameters`, `tbsss_script_param`.
+  * Vínculos RBAC e Homologação (4): `tbsss_profile_feature`, `tbsss_profile_env`, `tbsss_profile_script`, `tbsss_script_env`.
+  * Operação, Fila, Agentes e Arquivos (8): `tbsss_schedules`, `tbsss_tickets`, `tbsss_ticket_answer`, `tbsss_ticket_output`, `tbsss_agents`, `tbsss_input_upload`, `tbsss_input_delivery`, `tbsss_input_listing`.
+  * Auditoria (1): `tbsss_audit`.
 * **14 Funcionalidades RBAC (`tbsss_features`):** `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `MANAGE_SCHEDULES`, `MANAGE_USERS`, `MANAGE_PROFILES`, `MANAGE_ENVIRONMENTS`, `MANAGE_SCRIPTS`, `MANAGE_PARAMETERS` ("Gestão de Parâmetros"), `VIEW_AUDIT`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD`.
 * **3 Perfis Padrão Homologados (em português):**
   * `ADMINISTRADOR`: Super Administrador (`is_admin = 'Y'`). Acesso total a todas as funcionalidades e ambientes.

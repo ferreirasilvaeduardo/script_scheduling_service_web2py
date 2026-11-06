@@ -39,7 +39,10 @@ def main():
     total_bytes_orig = 0
 
     try:
-        with zipfile.ZipFile(destino, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=args.nivel) as zf:
+        zip_kwargs = {"compression": zipfile.ZIP_DEFLATED}
+        if sys.version_info >= (3, 7):
+            zip_kwargs["compresslevel"] = args.nivel
+        with zipfile.ZipFile(destino, "w", **zip_kwargs) as zf:
             if os.path.isfile(origem):
                 nome_arc = os.path.basename(origem)
                 zf.write(origem, arcname=nome_arc)
