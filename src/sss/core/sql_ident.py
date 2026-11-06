@@ -115,7 +115,8 @@ def validate_owner(owner):
 def validate_prefix(prefix):
     """Valida o prefixo de tabela conforme AGENTS §3.1.
 
-    Aceita ^[A-Za-z][A-Za-z0-9_]{0,7}$: comeca com letra (nome Oracle valido), ate 8 caracteres.
+    Aceita ^[a-z][a-z0-9_]{0,7}$: so minusculas, comeca com letra (nome Oracle valido), ate 8
+    caracteres.
     Lanca ValueError se invalido, sem ecoar o valor se tiver mais de 64 caracteres.
     """
     if not isinstance(prefix, str) or not _RE_PREFIXO.fullmatch(prefix):
@@ -168,11 +169,11 @@ def sequence(owner, prefix, entity):
 
 
 # ---------------------------------------------------------------------------
-# Registro Declarativo das 17 Tabelas (README §10)
+# Registro Declarativo das 21 Tabelas (README §10)
 # ---------------------------------------------------------------------------
 
 def _build_table_registry():
-    """Constroi o registro declarativo ordenado das 17 tabelas do SSS."""
+    """Constroi o registro declarativo ordenado das 21 tabelas do SSS."""
     r = OrderedDict()
 
     # 1. Ambientes

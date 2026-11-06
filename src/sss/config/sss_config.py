@@ -59,7 +59,7 @@ SSS_VERSION = version_with_build(read_build())
 # CR-036 (D6): as chaves retiradas antes do CR-032 tambem so geram aviso (antes recusavam a subida): uma regra
 # so para chave que saiu. As renomeadas (RENAMED_KEYS) continuam recusadas, para o valor nao se perder.
 _OLD_REMOVED = {
-    ("app", "data_backend"): "a aplicacao usa sempre o Oracle do [oracle] (owner e table_prefix) (F7.3)",
+    ("app", "data_backend"): "a aplicacao usa sempre o Oracle do [oracle] (owner; prefixo fixo por ambiente) (F7.3)",
     ("agent", "script_owner_uids"): "o SSS nao confere mais o dono dos scripts; o ambiente controla o conteudo (CR-011)",
     ("agent", "ambientes_exigem_hash"): "o SSS nao confere mais o hash dos scripts (CR-011)",
 }
@@ -481,6 +481,16 @@ def env_label(install_type: Optional[str] = None) -> str:
     return tipo or "?"
 
 
+def install_env() -> str:
+    """Ambiente que fixa o prefixo das tabelas: SSS_ENV, senao SSS_INSTALL_TYPE, senao a pasta <TIPO>."""
+    return os.environ.get("SSS_ENV") or os.environ.get("SSS_INSTALL_TYPE") or INSTALL_TYPE
+
+
+def table_prefix() -> str:
+    """Prefixo fisico das tabelas do ambiente (tbsdev_ ou tbsprd_), pela regra de install_env()."""
+    return str(sql_ident.default_prefix(install_env()))
+
+
 def has_dev_dir() -> bool:
     """CR-032 (D11): a pasta dev/ existe (o repositorio); no pacote, nao."""
     return os.path.isdir(APP_DEV_DIR)
@@ -704,8 +714,7 @@ def load(ini_path: str) -> "Config":
     # 4. Invariantes
     app_dict = data_sections["app"]
     oracle_dict = data_sections["oracle"]
-    env_name = os.environ.get("SSS_ENV") or os.environ.get("SSS_INSTALL_TYPE") or INSTALL_TYPE
-    oracle_dict["table_prefix"] = sql_ident.default_prefix(env_name)
+    oracle_dict["table_prefix"] = table_prefix()
     # CR-032 (D3): os tempos de saude sao fixos (heartbeat 10, fence 90, offline 180); as invariantes I3/I4 so
     # limitam o call_timeout_ms (ate 40 s), em _validate_cr007.
     _validate_cr007(app_dict, oracle_dict, agent_dict, data_sections["logging"], role)
@@ -752,7 +761,8 @@ def _validate_script_base_dir(agent: dict, log_dir: str) -> None:
     except path_guard.PathGuardError as exc:
         reasons = {"SYSTEM_DIR": "Nao pode ficar numa pasta do sistema",
                    "SSS_DIR": "Nao pode ficar dentro de uma pasta do SSS (log, trabalho, entrada, saida)",
-                   "APP_DIR": "Nao pode ficar dentro da pasta da aplicacao (so em dev/, onde existe)"}
+                   "APP_DIR": "Nao pode ficar dentro da pasta da aplicacao "
+                              "(so em dev/ ou scripts_ambiente/, onde existem)"}
         raise ConfigError(section="agent", key="script_base_dir",
                           reason=reasons.get(exc.code, exc.code))
 

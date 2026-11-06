@@ -20,9 +20,9 @@ from tests.support import _testenv
 
 APP_DIR = _testenv.APP_DIR
 MAX_COLUMNS = 99
-# Tetos medidos no CR-022b9 (2026-10-25); so podem descer.
-FLAKE8_DEBT_MAX = 192
-MYPY_DEBT_MAX = 107
+# Tetos medidos no CR-022b9 (2026-10-25) e rebaixados ao real em 2026-11-06; so podem descer.
+FLAKE8_DEBT_MAX = 189
+MYPY_DEBT_MAX = 105
 
 
 def _flake8_section(path=os.path.join(APP_DIR, ".flake8")):
@@ -76,9 +76,11 @@ class QualityDebtTest(unittest.TestCase):
         self.assertEqual(paid, [], "sem linha acima de 99 colunas: tire o E501 do .flake8")
 
     def test_so_dev_scripts_fora_do_lint(self):
-        """A unica pasta fora do lint e dev/scripts/ (scripts de negocio que o SSS executa)."""
+        """So dev/scripts/ e scripts_ambiente/ ficam fora do lint (scripts de negocio que o SSS
+        executa, nao a aplicacao)."""
         section = _flake8_section()
-        self.assertEqual(section.get("extend-exclude", "").strip(), "dev/scripts")
+        excluded = [p.strip() for p in section.get("extend-exclude", "").split(",") if p.strip()]
+        self.assertEqual(sorted(excluded), ["dev/scripts", "scripts_ambiente"])
         self.assertNotIn("exclude", section)
 
     def test_mypy_estrito_e_divida_real(self):

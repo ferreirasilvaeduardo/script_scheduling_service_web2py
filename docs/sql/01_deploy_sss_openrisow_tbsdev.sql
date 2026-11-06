@@ -1168,7 +1168,7 @@ COMMENT ON COLUMN openrisow.tbsdev_environments.updated_at IS 'Data e hora da ul
 COMMENT ON COLUMN openrisow.tbsdev_environments.updated_by IS 'Identificador do usuario ou servico responsavel pela ultima alteracao';
 COMMENT ON TABLE openrisow.tbsdev_profiles IS 'Perfis de acesso para autorizacao baseada em papeis (RBAC)';
 COMMENT ON COLUMN openrisow.tbsdev_profiles.id IS 'Identificador unico sequencial do perfil (chave primaria)';
-COMMENT ON COLUMN openrisow.tbsdev_profiles.name IS 'Nome unico de identificacao do perfil (ex: ADMINISTRATOR, OPERADOR)';
+COMMENT ON COLUMN openrisow.tbsdev_profiles.name IS 'Nome unico de identificacao do perfil (ex: ADMINISTRADOR, OPERADOR)';
 COMMENT ON COLUMN openrisow.tbsdev_profiles.description IS 'Finalidade e escopo de atuacao dos usuarios vinculados ao perfil';
 COMMENT ON COLUMN openrisow.tbsdev_profiles.is_admin IS 'Indicador de perfil com poderes administrativos plenos (Y/N)';
 COMMENT ON COLUMN openrisow.tbsdev_profiles.perm_version IS 'Versao incremental das permissoes para invalidacao de sessoes ativas';
@@ -1208,14 +1208,14 @@ COMMENT ON TABLE openrisow.tbsdev_scripts IS 'Catalogo de rotinas e scripts homo
 COMMENT ON COLUMN openrisow.tbsdev_scripts.id IS 'Identificador unico sequencial do script (chave primaria)';
 COMMENT ON COLUMN openrisow.tbsdev_scripts.name IS 'Nome unico da rotina (ex: carga_diaria, relatorio_mensal)';
 COMMENT ON COLUMN openrisow.tbsdev_scripts.description IS 'Detalhamento da finalidade, regras e impacto da execucao do script';
-COMMENT ON COLUMN openrisow.tbsdev_scripts.script_group IS 'Coluna script_group da tabela tbsdev_scripts';
+COMMENT ON COLUMN openrisow.tbsdev_scripts.script_group IS 'Grupo de exibicao da rotina na tela (texto livre)';
 COMMENT ON COLUMN openrisow.tbsdev_scripts.category IS 'Categoria de negocio ou agrupador funcional da rotina';
-COMMENT ON COLUMN openrisow.tbsdev_scripts.stage IS 'Coluna stage da tabela tbsdev_scripts';
+COMMENT ON COLUMN openrisow.tbsdev_scripts.stage IS 'Etapa do processo de negocio a que a rotina pertence (texto livre)';
 COMMENT ON COLUMN openrisow.tbsdev_scripts.interpreter IS 'Interpretador do cadastro (python, python3, sh, bash), usado quando nem o digitado nem o #! existem no servidor';
 COMMENT ON COLUMN openrisow.tbsdev_scripts.path_file IS 'Caminho normalizado do script: absoluto ou relativo a [agent] script_base_dir de cada agente';
-COMMENT ON COLUMN openrisow.tbsdev_scripts.param_type IS 'Coluna param_type da tabela tbsdev_scripts';
-COMMENT ON COLUMN openrisow.tbsdev_scripts.max_parallel_env IS 'Coluna max_parallel_env da tabela tbsdev_scripts';
-COMMENT ON COLUMN openrisow.tbsdev_scripts.timeout_s IS 'Coluna timeout_s da tabela tbsdev_scripts';
+COMMENT ON COLUMN openrisow.tbsdev_scripts.param_type IS 'Montagem dos argumentos (NAMED, POSITIONAL, NONE)';
+COMMENT ON COLUMN openrisow.tbsdev_scripts.max_parallel_env IS 'Maximo de execucoes simultaneas da rotina no mesmo ambiente';
+COMMENT ON COLUMN openrisow.tbsdev_scripts.timeout_s IS 'Tempo maximo de execucao em segundos; nulo usa o script_timeout_s do agente';
 COMMENT ON COLUMN openrisow.tbsdev_scripts.active IS 'Indicador de disponibilidade da rotina para novas execucoes (Y/N)';
 COMMENT ON COLUMN openrisow.tbsdev_scripts.created_at IS 'Data e hora da criacao do registro no banco de dados (imutavel)';
 COMMENT ON COLUMN openrisow.tbsdev_scripts.created_by IS 'Identificador do usuario ou servico responsavel pela criacao (imutavel)';
@@ -1245,8 +1245,8 @@ COMMENT ON COLUMN openrisow.tbsdev_users.password_hash IS 'Hash criptografico da
 COMMENT ON COLUMN openrisow.tbsdev_users.profile_id IS 'Identificador do perfil de acesso atribuido (FK para tbsss_profiles)';
 COMMENT ON COLUMN openrisow.tbsdev_users.failed_attempts IS 'Numero de tentativas consecutivas de autenticacao incorretas';
 COMMENT ON COLUMN openrisow.tbsdev_users.locked_until IS 'Data e hora limite de bloqueio temporario por excesso de falhas';
-COMMENT ON COLUMN openrisow.tbsdev_users.last_login_at IS 'Coluna last_login_at da tabela tbsdev_users';
-COMMENT ON COLUMN openrisow.tbsdev_users.password_changed_at IS 'Coluna password_changed_at da tabela tbsdev_users';
+COMMENT ON COLUMN openrisow.tbsdev_users.last_login_at IS 'Data e hora do ultimo login bem-sucedido';
+COMMENT ON COLUMN openrisow.tbsdev_users.password_changed_at IS 'Data e hora da ultima troca de senha';
 COMMENT ON COLUMN openrisow.tbsdev_users.session_epoch IS 'Contador de revogacao de sessoes ativas para seguranca';
 COMMENT ON COLUMN openrisow.tbsdev_users.active IS 'Indicador se o usuario esta ativo (Y=Ativo, N=Bloqueado/Inativo)';
 COMMENT ON COLUMN openrisow.tbsdev_users.created_at IS 'Data e hora da criacao do registro no banco de dados (imutavel)';
@@ -1256,7 +1256,7 @@ COMMENT ON COLUMN openrisow.tbsdev_users.updated_by IS 'Identificador do usuario
 COMMENT ON TABLE openrisow.tbsdev_parameters IS 'Dicionario de perguntas, variaveis e flags reutilizaveis em scripts';
 COMMENT ON COLUMN openrisow.tbsdev_parameters.id IS 'Identificador unico sequencial do parametro (chave primaria)';
 COMMENT ON COLUMN openrisow.tbsdev_parameters.code IS 'Codigo mnemonico unico do parametro (ex: DATA_REF, FORMATO)';
-COMMENT ON COLUMN openrisow.tbsdev_parameters.param_flag IS 'Coluna param_flag da tabela tbsdev_parameters';
+COMMENT ON COLUMN openrisow.tbsdev_parameters.param_flag IS 'Opcao de linha de comando do parametro (ex: --data, -f), usada na montagem NAMED';
 COMMENT ON COLUMN openrisow.tbsdev_parameters.label IS 'Rotulo de exibicao amigavel apresentado no formulario ao usuario';
 COMMENT ON COLUMN openrisow.tbsdev_parameters.description IS 'Texto explicativo de orientacao ao operador';
 COMMENT ON COLUMN openrisow.tbsdev_parameters.component_type IS 'Tipo de componente visual (TEXTO, NUMERO, DATA, SELECT, RADIO, CHECKBOX)';
@@ -1312,7 +1312,7 @@ COMMENT ON COLUMN openrisow.tbsdev_tickets.requested_by IS 'Login do operador qu
 COMMENT ON COLUMN openrisow.tbsdev_tickets.source_ip IS 'Endereco IP do cliente que originou o pedido';
 COMMENT ON COLUMN openrisow.tbsdev_tickets.agent_id IS 'Identificador do daemon do agente que executou o ticket';
 COMMENT ON COLUMN openrisow.tbsdev_tickets.process_id IS 'Identificador do processo (PID) no sistema operacional do servidor';
-COMMENT ON COLUMN openrisow.tbsdev_tickets.process_start IS 'Coluna process_start da tabela tbsdev_tickets';
+COMMENT ON COLUMN openrisow.tbsdev_tickets.process_start IS 'Identidade do processo do script (instante de inicio no sistema operacional)';
 COMMENT ON COLUMN openrisow.tbsdev_tickets.script_path IS 'Caminho real do script executado, resolvido pelo agente (CR-023); vazio antes do inicio';
 COMMENT ON COLUMN openrisow.tbsdev_tickets.interpreter_path IS 'Interpretador digitado no disparo (caminho ou nome, CR-026); vazio quando nao informado';
 COMMENT ON COLUMN openrisow.tbsdev_tickets.interpreter_used IS 'Interpretador executado (digitado, #! ou do cadastro, CR-027); vazio antes do inicio';
@@ -1326,7 +1326,7 @@ COMMENT ON COLUMN openrisow.tbsdev_tickets.submitted_params IS 'Copia fiel dos p
 COMMENT ON COLUMN openrisow.tbsdev_tickets.log_output IS 'Saida completa de execucao capturada de stdout/stderr (CLOB)';
 COMMENT ON COLUMN openrisow.tbsdev_tickets.log_offset_chars IS 'Controle tecnico de caracteres confirmados gravados no log';
 COMMENT ON COLUMN openrisow.tbsdev_tickets.log_truncated IS 'Indicador se o log excedeu o limite maximo de tamanho (Y/N)';
-COMMENT ON COLUMN openrisow.tbsdev_tickets.return_code IS 'Coluna return_code da tabela tbsdev_tickets';
+COMMENT ON COLUMN openrisow.tbsdev_tickets.return_code IS 'Codigo de retorno do script (0=sucesso; negativo para fim forcado pelo SSS)';
 COMMENT ON COLUMN openrisow.tbsdev_tickets.scheduled_at IS 'Data e hora agendadas para o processamento';
 COMMENT ON COLUMN openrisow.tbsdev_tickets.started_at IS 'Data e hora efetivas do inicio da execucao pelo agente';
 COMMENT ON COLUMN openrisow.tbsdev_tickets.heartbeat_at IS 'Data e hora da ultima confirmacao de atividade do processo';
@@ -1339,7 +1339,7 @@ COMMENT ON TABLE openrisow.tbsdev_ticket_answer IS 'Valores individuais preenchi
 COMMENT ON COLUMN openrisow.tbsdev_ticket_answer.id IS 'Identificador unico sequencial da resposta (chave primaria)';
 COMMENT ON COLUMN openrisow.tbsdev_ticket_answer.ticket_id IS 'Identificador do ticket correspondente (FK para tbsss_tickets)';
 COMMENT ON COLUMN openrisow.tbsdev_ticket_answer.parameter_id IS 'Identificador do parametro respondido (FK para tbsss_parameters)';
-COMMENT ON COLUMN openrisow.tbsdev_ticket_answer.answer_value IS 'Coluna answer_value da tabela tbsdev_ticket_answer';
+COMMENT ON COLUMN openrisow.tbsdev_ticket_answer.answer_value IS 'Valor informado pelo operador para este parametro';
 COMMENT ON COLUMN openrisow.tbsdev_ticket_answer.created_at IS 'Data e hora da criacao do registro no banco de dados (imutavel)';
 COMMENT ON COLUMN openrisow.tbsdev_ticket_answer.created_by IS 'Identificador do usuario ou servico responsavel pela criacao (imutavel)';
 COMMENT ON COLUMN openrisow.tbsdev_ticket_answer.updated_at IS 'Data e hora da ultima alteracao de negocio (nulo ate a primeira alteracao)';
@@ -1356,7 +1356,7 @@ COMMENT ON COLUMN openrisow.tbsdev_agents.script_base_dir IS 'Pasta base dos scr
 COMMENT ON COLUMN openrisow.tbsdev_agents.status IS 'Estado de operacao do no (ACTIVE, STOPPED)';
 COMMENT ON COLUMN openrisow.tbsdev_agents.started_at IS 'Data e hora de inicializacao do daemon';
 COMMENT ON COLUMN openrisow.tbsdev_agents.heartbeat_at IS 'Data e hora do sinal periodico de disponibilidade mais recente';
-COMMENT ON COLUMN openrisow.tbsdev_agents.critical_config IS 'Coluna critical_config da tabela tbsdev_agents';
+COMMENT ON COLUMN openrisow.tbsdev_agents.critical_config IS 'Configuracao critica que deve ser igual em todos os agentes ativos';
 COMMENT ON COLUMN openrisow.tbsdev_agents.created_at IS 'Data e hora da criacao do registro no banco de dados (imutavel)';
 COMMENT ON COLUMN openrisow.tbsdev_agents.created_by IS 'Identificador do usuario ou servico responsavel pela criacao (imutavel)';
 COMMENT ON COLUMN openrisow.tbsdev_agents.updated_at IS 'Data e hora da ultima alteracao de negocio (nulo ate a primeira alteracao)';
@@ -1370,7 +1370,7 @@ COMMENT ON COLUMN openrisow.tbsdev_audit.entity IS 'Nome da tabela ou entidade a
 COMMENT ON COLUMN openrisow.tbsdev_audit.entity_id IS 'Identificador numerico do registro alvo afetado';
 COMMENT ON COLUMN openrisow.tbsdev_audit.detail IS 'Texto descritivo ou dados em formato estruturado sobre o evento';
 COMMENT ON COLUMN openrisow.tbsdev_audit.created_at IS 'Data e hora exatas da realizacao do evento auditado';
-COMMENT ON TABLE openrisow.tbsdev_control IS 'Parametros de controle global, versao de esquema e concessao de limpeza';
+COMMENT ON TABLE openrisow.tbsdev_control IS 'Linha unica de controle global com a versao do esquema instalada';
 COMMENT ON COLUMN openrisow.tbsdev_control.id IS 'Identificador unico da linha de controle global (sempre 1)';
 COMMENT ON COLUMN openrisow.tbsdev_control.schema_version IS 'Numero da versao estrutural do banco de dados atualmente instalada';
 COMMENT ON COLUMN openrisow.tbsdev_control.version_applied_at IS 'Data e hora de aplicacao da versao de esquema atual';

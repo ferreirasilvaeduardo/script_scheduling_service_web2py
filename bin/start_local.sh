@@ -3,7 +3,7 @@
 # Script Scheduling Service (SSS) - Inicializador de Ambiente Local (DEV)
 # ==============================================================================
 # Inicia o servidor web do SSS (scripts/run_web.py, CR-021e2) em modo local (DEV) com o Oracle do [oracle] do config.ini
-# (owner e table_prefix). O Python precisa ter o driver Oracle: PYTHON=<python> bin/...
+# (owner; o prefixo das tabelas e fixo por ambiente). O Python precisa ter o driver Oracle: PYTHON=<python> bin/...
 #
 # Uso:
 #   bin/start_local.sh               # Inicia em segundo plano na porta 8000

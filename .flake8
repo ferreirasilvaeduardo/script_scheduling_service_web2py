@@ -1,11 +1,12 @@
 # Lint (CR-022b9, D7): 99 colunas para todo arquivo. Os arquivos de per-file-ignores tem divida
 # anterior ao CR-022b9 e ignoram so os codigos que ja violavam. A lista so diminui
 # (tests/architecture/test_quality_debt.py): ao limpar um arquivo, apague a linha dele.
-# Nunca acrescente arquivo nem codigo. dev/scripts/ fica fora do lint: sao os scripts de negocio que o
-# SSS executa (exemplos e scripts do responsavel), nao a aplicacao, e nao vao no pacote.
+# Nunca acrescente arquivo nem codigo. dev/scripts/ e scripts_ambiente/ ficam fora do lint: sao os
+# scripts de negocio que o SSS executa (exemplos, scripts do responsavel e utilitarios do ambiente),
+# nao a aplicacao.
 [flake8]
 max-line-length = 99
-extend-exclude = dev/scripts
+extend-exclude = dev/scripts,scripts_ambiente
 per-file-ignores =
     dev/others/homologation/tools/build_evidence_docx.py: E128,E302,E501,E741,F841
     dev/others/homologation/tools/update_docx_images.py: E261,E302,E305,E501,W293

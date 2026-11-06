@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """Fabrica de repositorios de persistencia (README §2.5, AGENTS §5.5).
 
-A aplicacao usa sempre o Oracle do [oracle] do config.ini (owner e table_prefix). O FAKE so existe
+A aplicacao usa sempre o Oracle do [oracle] do config.ini (owner; o prefixo das tabelas e fixo por
+ambiente: tbsdev_ ou tbsprd_). O FAKE so existe
 quando um teste o injeta explicitamente por configurar({"app": {"data_backend": "FAKE", ...}}), e so
 onde a pasta dev/ existe (o repositorio; CR-032, D11). Garante singletons por processo.
 """

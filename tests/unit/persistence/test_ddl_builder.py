@@ -534,7 +534,9 @@ class TestAdminLogin(unittest.TestCase):
             self.assertEqual(os.listdir(tmp), [])
             with mock.patch("sys.stdout", new_callable=io.StringIO):
                 self.assertEqual(generate_sql.main(["--admin-login", "joao.silva", "--out-dir", tmp]), 0)
-            with open(os.path.join(tmp, "01_deploy_sss_openrisow_tbsss.sql"), encoding="ascii") as f:
+            from sss.config import sss_config
+            name = "01_deploy_sss_openrisow_%s.sql" % sss_config.table_prefix().rstrip("_")
+            with open(os.path.join(tmp, name), encoding="ascii") as f:
                 self.assertIn("'joao.silva' AS login", f.read())
 
 
@@ -655,11 +657,11 @@ class TestDdlSeedAndRollback(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             ret = gerar_scripts_sql.main([
                 "--owner", self.owner,
-                "--prefix", self.prefixo,
+                "--prefix", sql_ident.PREFIX_PROD,
                 "--out-dir", tmp_dir,
             ])
             self.assertEqual(ret, 0)
-            suffix = "_%s_%s.sql" % (self.owner.lower(), self.prefixo.rstrip("_").lower())
+            suffix = "_%s_%s.sql" % (self.owner.lower(), sql_ident.PREFIX_PROD.rstrip("_"))
             for base in ("01_deploy_sss", "02_rollback_sss", "99_validate_deploy"):
                 self.assertTrue(os.path.isfile(os.path.join(tmp_dir, base + suffix)), base)
             self.assertEqual(sorted(os.listdir(tmp_dir)),
@@ -685,11 +687,50 @@ class TestDdlSeedAndRollback(unittest.TestCase):
         from sss.cli import generate_sql as gerar_scripts_sql
         with tempfile.TemporaryDirectory() as tmp:
             for owner in ("OWNER_A", "OWNER_B"):
-                self.assertEqual(gerar_scripts_sql.main(["--owner", owner, "--prefix", "tbsss_", "--out-dir", tmp]), 0)
+                self.assertEqual(gerar_scripts_sql.main(["--owner", owner, "--prefix", "tbsdev_",
+                                                         "--out-dir", tmp]), 0)
             names = sorted(os.listdir(tmp))
             self.assertEqual(len(names), 6, names)
-            with open(os.path.join(tmp, "01_deploy_sss_owner_b_tbsss.sql"), encoding="utf-8") as f:
-                self.assertIn("rode antes o 02_rollback_sss_owner_b_tbsss.sql", f.read())
+            with open(os.path.join(tmp, "01_deploy_sss_owner_b_tbsdev.sql"), encoding="utf-8") as f:
+                self.assertIn("rode antes o 02_rollback_sss_owner_b_tbsdev.sql", f.read())
+
+    def test_generate_sql_prefixo_padrao_do_ambiente(self):
+        """Sem --prefix nem config, o prefixo e o do ambiente: SSS_ENV, senao SSS_INSTALL_TYPE, senao a pasta."""
+        from sss.cli import generate_sql
+        casos = (({"SSS_ENV": "PROD"}, "tbsprd"), ({"SSS_ENV": "DEV"}, "tbsdev"),
+                 ({"SSS_INSTALL_TYPE": "PROD"}, "tbsprd"),
+                 ({"SSS_ENV": "DEV", "SSS_INSTALL_TYPE": "PROD"}, "tbsdev"))
+        for env, expected in casos:
+            limpo = {k: v for k, v in os.environ.items() if k not in ("SSS_ENV", "SSS_INSTALL_TYPE")}
+            limpo.update(env)
+            with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, limpo, clear=True), \
+                    mock.patch("sys.stdout", new_callable=io.StringIO):
+                self.assertEqual(generate_sql.main(["--owner", "openrisow", "--out-dir", tmp]), 0)
+                self.assertEqual(sorted(os.listdir(tmp)),
+                                 sorted("%s_openrisow_%s.sql" % (b, expected) for b in
+                                        ("01_deploy_sss", "02_rollback_sss", "99_validate_deploy")), env)
+
+    def test_generate_sql_prefix_valido_vence_o_ambiente(self):
+        from sss.cli import generate_sql
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"SSS_ENV": "DEV"}), \
+                mock.patch("sys.stdout", new_callable=io.StringIO):
+            self.assertEqual(generate_sql.main(["--owner", "openrisow", "--prefix", "tbsprd_",
+                                                "--out-dir", tmp]), 0)
+            self.assertIn("01_deploy_sss_openrisow_tbsprd.sql", os.listdir(tmp))
+
+    def test_generate_sql_prefix_invalido_sai_com_2_sem_gravar(self):
+        from sss.cli import generate_sql
+        for prefix in ("tbsss_", "TBSDEV_", "ssdev_", "tbsdev", ""):
+            with tempfile.TemporaryDirectory() as tmp:
+                out = os.path.join(tmp, "sql")
+                with mock.patch("sys.stderr", new_callable=io.StringIO) as err, \
+                        mock.patch("sys.stdout", new_callable=io.StringIO) as std:
+                    self.assertEqual(generate_sql.main(["--prefix", prefix, "--out-dir", out]), 2)
+                    self.assertEqual(generate_sql.main(["--prefix", prefix, "--stdout", "deploy"]), 2)
+                self.assertIn("tbsdev_", err.getvalue())
+                self.assertIn("tbsprd_", err.getvalue())
+                self.assertEqual(std.getvalue(), "")
+                self.assertFalse(os.path.exists(out), prefix)
 
 
 def _decode_unistr(sql):
@@ -725,15 +766,16 @@ class TestAsciiSql(unittest.TestCase):
     def test_scripts_gerados_so_ascii_e_seed_preservado(self):
         from sss.cli import generate_sql
         with tempfile.TemporaryDirectory() as tmp:
-            self.assertEqual(generate_sql.main(["--owner", "openrisow", "--prefix", "tbsss_", "--out-dir", tmp]), 0)
+            self.assertEqual(generate_sql.main(["--owner", "openrisow", "--prefix", "tbsdev_",
+                                                "--out-dir", tmp]), 0)
             for name in os.listdir(tmp):
                 with open(os.path.join(tmp, name), "rb") as f:
                     data = f.read()
                 self.assertEqual([b for b in data if b > 127], [], name)
-            with open(os.path.join(tmp, "01_deploy_sss_openrisow_tbsss.sql"), encoding="ascii") as f:
+            with open(os.path.join(tmp, "01_deploy_sss_openrisow_tbsdev.sql"), encoding="ascii") as f:
                 deploy = f.read()
         self.assertIn("UNISTR(", deploy)
-        seed = "\n".join(ddl_builder.build_seed_statements("openrisow", "tbsss_"))
+        seed = "\n".join(ddl_builder.build_seed_statements("openrisow", "tbsdev_"))
         accented = sorted(set(re.findall(r"'((?:[^']|'')*[^\x00-\x7f](?:[^']|'')*)'", seed)))
         self.assertTrue(accented, "o seed tem textos com acento")
         decoded = _decode_unistr(deploy)

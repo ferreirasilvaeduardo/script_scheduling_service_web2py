@@ -85,7 +85,7 @@ def check_environment_preconditions(cfg=None):
     return True, ""
 
 
-def validate_disposable_schema(conn, configured_owner, expected_session_user, prefix="tbsss_"):
+def validate_disposable_schema(conn, configured_owner, expected_session_user, prefix=None):
     """Confere a sessao real (USER) e, no modo compartilhado, o esquema SSS na versao do codigo.
 
     No modo descartavel, a conta de sessao nunca pode ser a dona do esquema.
@@ -131,7 +131,7 @@ def validate_disposable_schema(conn, configured_owner, expected_session_user, pr
 def _check_sss_schema(cur, owner, prefix):
     """Owner existente: so aceita se o esquema SSS estiver implantado na versao do codigo."""
     from sss.core import sql_ident
-    table = sql_ident.table(owner, prefix or "tbsss_", "control")
+    table = sql_ident.table(owner, prefix or sss_config.table_prefix(), "control")
     try:
         cur.execute("SELECT schema_version FROM " + table)
         row = cur.fetchone()
@@ -175,7 +175,7 @@ def prepare_disposable_schema(role="web", cfg=None, secrets=None):
     from sss.persistence import db_conn
     conn = db_conn.connect(cfg, secrets, role)
     try:
-        prefix = _cfg_oracle(cfg, "table_prefix") or "tbsss_"
+        prefix = _cfg_oracle(cfg, "table_prefix") or sss_config.table_prefix()
         validate_disposable_schema(conn, cfg_owner, user_expected, prefix=prefix)
     finally:
         conn.close()

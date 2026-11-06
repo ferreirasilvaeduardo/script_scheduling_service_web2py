@@ -730,8 +730,12 @@ def next_id(conn, qualified_sequence):
         cur.close()
 
 
-def check_schema_version(conn, owner=None, prefix="tbsss_"):
-    """Confere se schema_version em tbsss_control e igual a SCHEMA_VERSION (CR-007, D4)."""
+def check_schema_version(conn, owner=None, prefix=None):
+    """Confere se schema_version em <prefixo>control e igual a SCHEMA_VERSION (CR-007, D4).
+
+    Sem prefixo, usa o fixo do ambiente (sss_config.table_prefix()).
+    """
+    prefix = prefix or sss_config.table_prefix()
     if owner:
         table = sql_ident.qualify(owner, prefix + sql_ident.physical("control"))
     else:

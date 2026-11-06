@@ -170,10 +170,11 @@ class BaseRepoOracle(object):
 
         if self._cfg is not None:
             self._owner = getattr(getattr(self._cfg, "oracle", None), "owner", "openrisow").strip()
-            self._prefixo = getattr(getattr(self._cfg, "oracle", None), "table_prefix", "tbsss_").strip()
+            self._prefixo = (getattr(getattr(self._cfg, "oracle", None), "table_prefix", None)
+                             or sss_config.table_prefix()).strip()
         else:
             self._owner = "openrisow"
-            self._prefixo = "tbsss_"
+            self._prefixo = sss_config.table_prefix()
 
     def _obter_conexao(self):
         self._resolver_config()

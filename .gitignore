@@ -43,6 +43,8 @@ bkp/
 /output/
 /script_work/
 /dist/
+# Identificador do build: gravado so dentro do pacote (tools/package.py --build), nunca commitado
+/src/sss/BUILD
 inputs/
 outputs/
 logs/

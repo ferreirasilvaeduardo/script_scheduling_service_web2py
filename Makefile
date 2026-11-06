@@ -16,7 +16,9 @@ REQUIRED_PACKAGES := isort autopep8 flake8 pylint mypy
 NAME := agente0001
 CMD := status
 OWNER := openrisow
-PREFIX := tbsss_
+PREFIX := tbsdev_
+# Candidato do make probe-driver (thin, thick ou cx_oracle)
+CANDIDATE := thick
 # Prefixos oficiais fixos por ambiente (DEV = tbsdev_, PROD = tbsprd_)
 SQL_PREFIXES ?= tbsdev_ tbsprd_
 # Pythons da bateria completa (AGENTS §2.1: sintaxe 3.6, execucao de 3.6.0 a 3.13)
@@ -163,7 +165,8 @@ format: check-dev-deps ## Formata e ordena imports (reescreve os arquivos)
 	$(DEV_PYTHON) -m autopep8 --in-place --recursive --exclude .pytest_cache,.bkp,.sql,sss_dev_script_examples,sss_packages .
 
 # Análise estática de código (CR-022b9, D7): portão com zero achados na árvore inteira.
-# Configuração no .flake8 (99 colunas, a dívida por arquivo, que só diminui, e dev/scripts/ fora).
+# Configuração no .flake8 (99 colunas, a dívida por arquivo, que só diminui, e dev/scripts/ e
+# scripts_ambiente/ fora: scripts de negócio que o SSS executa, não a aplicação).
 # Sem lista de arquivos na linha de comando: o flake8 ignora o exclude para arquivo passado à mão.
 lint: check-dev-deps ## flake8 na arvore inteira (portao)
 	$(DEV_PYTHON) -m flake8 .
@@ -220,10 +223,10 @@ check-env: ## Pre-requisitos do processo NAME (scripts/check_env.py)
 health: ## Saude do SSS pela conta do processo NAME (scripts/health.py; saida Nagios)
 	$(PYTHON) scripts/health.py --name $(NAME)
 
-probe-driver: ## Sonda o driver Oracle com o config de NAME (scripts/probe_driver.py; a senha vem pelo stdin)
-	$(PYTHON) scripts/probe_driver.py --config instance/$(NAME)/config.ini
+probe-driver: ## Sonda o driver CANDIDATE (thin, thick ou cx_oracle) com o config de NAME (scripts/probe_driver.py; a senha vem pelo stdin)
+	$(PYTHON) scripts/probe_driver.py $(CANDIDATE) --config instance/$(NAME)/config.ini
 
-sql: ## Gera em docs/sql o 01/02/99 de OWNER e PREFIX (scripts/generate_sql.py)
+sql: ## Gera em docs/sql o 01/02/99 de OWNER e PREFIX (tbsdev_ ou tbsprd_; scripts/generate_sql.py)
 	$(PYTHON) scripts/generate_sql.py --owner $(OWNER) --prefix $(PREFIX) --out-dir docs/sql
 
 sql-all: ## Regera em docs/sql os scripts de todos os SQL_PREFIXES (os versionados)

@@ -75,7 +75,7 @@ class TestMakefile(unittest.TestCase):
         # NAME e comum no ambiente (nome da maquina): com ?= o make o pegaria no lugar do processo.
         # A atribuicao simples do make vai em duas partes (o test_py36_compat a leria como walrus).
         simple = ":" + "="
-        for var in ("NAME", "CMD", "OWNER", "PREFIX"):
+        for var in ("NAME", "CMD", "OWNER", "PREFIX", "CANDIDATE"):
             self.assertRegex(self.text, r"(?m)^%s %s " % (var, simple), var)
 
 

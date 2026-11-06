@@ -5,11 +5,16 @@ Gera scripts .sql autocontidos prontos para execucao direta por DBAs via SQL*Plu
 SQL Developer em ambientes de homologacao e producao, sem depender de execucao Python
 no servidor de banco de dados.
 
-Produz (CR-024: owner e prefixo no nome, ex.: 01_deploy_sss_openrisow_tbsss.sql):
+Produz (CR-024: owner e prefixo no nome, ex.: 01_deploy_sss_openrisow_tbsdev.sql):
   - 01_deploy_sss_<owner>_<prefixo>.sql      : DDL, DML Seed (ambientes, controle, perfil admin), Estatisticas
   - 02_rollback_sss_<owner>_<prefixo>.sql    : Desinstalacao total e limpa (Drop triggers, tabelas, sequences)
   - 03_grants_sss_<owner>_<prefixo>.sql      : Privilegios minimos por papel (web e agente; CR-032: sem monitor) [opcional]
   - 99_validate_deploy_<owner>_<prefixo>.sql : Conferencia do esquema implantado
+
+Prefixo: so os oficiais, tbsdev_ (DEV) e tbsprd_ (PROD). Precedencia: --prefix, depois o do config
+(--name/--config, que ja e o fixo do ambiente), depois o do ambiente (SSS_ENV, senao
+SSS_INSTALL_TYPE, senao a pasta <TIPO>; sss_config.table_prefix()). Outro valor em --prefix sai
+com codigo 2, sem gravar nada.
 """
 import argparse
 import os
@@ -18,6 +23,9 @@ import sys
 from sss.persistence import ddl_builder
 from sss.core import sql_ident
 from sss.config import sss_config
+
+# Prefixos aceitos em --prefix: so os oficiais, fixos por ambiente.
+OFFICIAL_PREFIXES = (sql_ident.PREFIX_DEV, sql_ident.PREFIX_PROD)
 
 
 def main(argv=None):
@@ -32,7 +40,10 @@ def main(argv=None):
     parser.add_argument("--name", dest="name", default=None,
                         help="processo: instance/<nome>/config.ini (opcional; CR-029)")
     parser.add_argument("--owner", dest="owner", default=None, help="Owner do esquema Oracle (ex: OPENRISOW)")
-    parser.add_argument("--prefix", dest="prefixo", default=None, help="Prefixo de tabelas (ex: tbsss_)")
+    parser.add_argument("--prefix", dest="prefixo", default=None,
+                        help="Prefixo das tabelas: %s (DEV) ou %s (PROD); padrao: o do config ou o do "
+                             "ambiente (SSS_ENV, SSS_INSTALL_TYPE ou a pasta <TIPO>)"
+                             % (sql_ident.PREFIX_DEV, sql_ident.PREFIX_PROD))
     parser.add_argument("--lob-basicfile", dest="lob_basicfile", action="store_true", help="Fallback LOB BASICFILE")
     parser.add_argument("--out-dir", dest="out_dir", default="docs/sql", help="Diretorio de destino dos arquivos .sql")
     parser.add_argument("--grants-to", dest="grants_para", default=None,
@@ -52,6 +63,10 @@ def main(argv=None):
     # 1. Carrega configuracoes de owner e prefixo
     owner = args.owner
     prefix = args.prefixo
+    if prefix is not None and prefix not in OFFICIAL_PREFIXES:
+        print("Prefixo invalido em --prefix: use %s (DEV) ou %s (PROD); nada foi gravado"
+              % (sql_ident.PREFIX_DEV, sql_ident.PREFIX_PROD), file=sys.stderr)
+        return 2
     lob_storage = "BASICFILE" if args.lob_basicfile else "SECUREFILE"
 
     cfg = None
@@ -73,16 +88,16 @@ def main(argv=None):
                     if not owner:
                         owner = getattr(cfg.oracle, "owner", "OPENRISOW")
                     if not prefix:
-                        prefix = getattr(cfg.oracle, "table_prefix", "tbsss_")
+                        prefix = getattr(cfg.oracle, "table_prefix", None)
                     if not args.lob_basicfile:
                         lob_storage = getattr(cfg.oracle, "lob_storage", "SECUREFILE")
             except Exception as exc:
-                # Batimento A4: config invalido nao gera SQL com os padroes OPENRISOW/tbsss_ (codigo 2, README §12.1)
+                # Batimento A4: config invalido nao gera SQL com os padroes (codigo 2, README §12.1)
                 print("Configuracao invalida: %s" % exc, file=sys.stderr)
                 return 2
 
     owner = owner or "OPENRISOW"
-    prefix = prefix or "tbsss_"
+    prefix = prefix or sss_config.table_prefix()
 
     try:
         sql_ident.validate_owner(owner)
