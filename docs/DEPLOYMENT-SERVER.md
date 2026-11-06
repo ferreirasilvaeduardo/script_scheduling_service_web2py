@@ -23,9 +23,9 @@ SSS_DB_USER='<conta Oracle>'                    # conta única, dona do esquema 
 SSS_OWNER='<owner>'                             # owner do esquema (em geral, a própria conta)
 SSS_DSN_DEV='<DSN do DEV>'                    # ex.: (DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=h)(PORT=1521))(CONNECT_DATA=(SID=s)))
 SSS_DSN_PROD='<DSN do PROD>'
-SSS_PREFIXO_DEV='<prefixo>_'                    # até 8 caracteres: ^[a-z][a-z0-9_]{0,7}$, novo no owner
-SSS_PREFIXO_PROD='<prefixo>_'
-SSS_OUTROS_PREFIXOS="<prefixos de outras instalações no mesmo owner>"   # ex.: "tbsss_ ssdev_"; nunca tocados
+SSS_PREFIXO_DEV=tbsdev_                             # prefixo fixo pelo ambiente (não parametrizado)
+SSS_PREFIXO_PROD=tbsprd_                            # prefixo fixo pelo ambiente (não parametrizado)
+SSS_OUTROS_PREFIXOS=""                              # prefixos de outras instalações no mesmo owner (se houver)
 SSS_PORTA_DEV='<porta>'                         # o web atende em 127.0.0.1:<porta>
 SSS_PORTA_PROD='<porta>'
 SSS_WEB=web0001
@@ -678,9 +678,9 @@ SSS_DB_USER=openrisow
 SSS_OWNER=openrisow
 SSS_DSN_DEV='(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=10.129.177.188)(PORT=1521))(CONNECT_DATA=(SID=GFPR)))'
 SSS_DSN_PROD='(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=10.129.177.188)(PORT=1521))(CONNECT_DATA=(SID=GFPR)))'
-SSS_PREFIXO_DEV=s3dev_
-SSS_PREFIXO_PROD=s3prd_
-SSS_OUTROS_PREFIXOS="tbsss_ ssdev_"
+SSS_PREFIXO_DEV=tbsdev_
+SSS_PREFIXO_PROD=tbsprd_
+SSS_OUTROS_PREFIXOS=""
 SSS_PORTA_DEV=18000
 SSS_PORTA_PROD=18001
 SSS_WEB=web0001

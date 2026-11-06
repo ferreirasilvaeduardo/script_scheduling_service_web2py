@@ -581,8 +581,8 @@ Qualquer operação que possa reduzir o conjunto de administradores ativos execu
 
 ```sql
 SELECT u.id
-  FROM {owner}.tbsss_users u
-  JOIN {owner}.tbsss_profiles p ON p.id = u.profile_id
+  FROM {owner}.{prefixo}users u
+  JOIN {owner}.{prefixo}profiles p ON p.id = u.profile_id
  WHERE u.active = 'Y' AND p.active = 'Y' AND p.is_admin = 'Y'
    FOR UPDATE OF u.active, p.is_admin WAIT 5
 ```
@@ -879,10 +879,10 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
    * Ele deve ser `>= SYSDATE` **exato**, sem tolerância de minuto: um horário no minuto corrente, mas anterior ao `SYSDATE`, é recusado.
    * O limite superior é `SYSDATE + 366` dias (CR-007, D2). Acima disso, o campo é recusado: "Escolha uma data até {data}."
    * O valor digitado no campo de data e hora do navegador é interpretado como horário de parede do servidor Oracle (§7.1). A tela informa isso ao lado do campo.
-5. Obter o `id` com `SELECT sq_tbsss_tickets.NEXTVAL FROM DUAL` (`db_conn.next_id`) e gravar o ticket com esse `id`, com `submitted_params` contendo o JSON do snapshot e `created_by` (`:actor`) = login do solicitante (§10, CR-006):
+5. Obter o `id` com `SELECT sq_{prefixo}tickets.NEXTVAL FROM DUAL` (`db_conn.next_id`) e gravar o ticket com esse `id`, com `submitted_params` contendo o JSON do snapshot e `created_by` (`:actor`) = login do solicitante (§10, CR-006):
 
    ```sql
-   INSERT INTO {owner}.tbsss_tickets (id, script_id, environment, requested_by, source_ip, agent_id, process_id,
+   INSERT INTO {owner}.{prefixo}tickets (id, script_id, environment, requested_by, source_ip, agent_id, process_id,
           process_start, script_path, interpreter_path, status, priority, cancel_requested, status_reason,
           parent_ticket_id, schedule_id, submitted_params, log_output, log_truncated, return_code, scheduled_at,
           started_at, heartbeat_at, finished_at, created_at, created_by, updated_at, updated_by)
@@ -893,7 +893,7 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
    ```
 
    O `scheduled_at` em branco vira `SYSDATE` no próprio `INSERT`, e `created_at` é sempre `SYSDATE`.
-6. `INSERT` em `tbsss_ticket_answer` via `executemany`, com os valores **resolvidos** (após a precedência), um `id` de `sq_tbsss_ticket_answer` por linha e o mesmo `created_by` do ticket.
+6. `INSERT` em `{owner}.{prefixo}ticket_answer` via `executemany`, com os valores **resolvidos** (após a precedência), um `id` de `sq_{prefixo}ticket_answer` por linha e o mesmo `created_by` do ticket.
 7. Auditoria `TICKET_CREATE` (na reexecução, `TICKET_RERUN`, §5.5) e `COMMIT`. Em qualquer exceção, `ROLLBACK`.
 
 * **Caminho do script na criação (CR-005, D4; CR-011, S1; CR-023):** o nó web valida `path_file` conforme a §8.5 ("Onde cada coisa é conferida"): o formato sempre e, no caminho absoluto, as pastas do sistema e a da aplicação. O arquivo não é conferido no nó web; a validação definitiva fica no claim (§8.4), no servidor do agente.
@@ -966,12 +966,12 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
 **No nó web (uma transação):**
 
 ```sql
-UPDATE {owner}.tbsss_tickets
+UPDATE {owner}.{prefixo}tickets
    SET cancel_requested = 'Y',
        updated_at = SYSDATE, updated_by = :actor
  WHERE id = :id AND status IN ('PENDING', 'RUNNING') AND cancel_requested = 'N';
 
-UPDATE {owner}.tbsss_tickets
+UPDATE {owner}.{prefixo}tickets
    SET status = 'CANCELLED', status_reason = 'CANCEL_USER',
        return_code = -1, finished_at = SYSDATE,
        updated_at = SYSDATE, updated_by = :actor
@@ -980,7 +980,7 @@ UPDATE {owner}.tbsss_tickets
 
 * `:actor` é o login de quem pediu o cancelamento (§10, CR-006).
 
-* Se o primeiro `UPDATE` afetar 0 linhas, o ticket já é terminal **ou** o cancelamento já tinha sido pedido. Para saber qual, a mesma transação lê a linha pela PK (`SELECT status, cancel_requested FROM {owner}.tbsss_tickets WHERE id = :id FOR UPDATE WAIT 5`): terminal dá `sem efeito: ticket encerrado`; `RUNNING` com `cancel_requested = 'Y'` dá `já sinalizado`. O sistema informa o usuário nos dois casos.
+* Se o primeiro `UPDATE` afetar 0 linhas, o ticket já é terminal **ou** o cancelamento já tinha sido pedido. Para saber qual, a mesma transação lê a linha pela PK (`SELECT status, cancel_requested FROM {owner}.{prefixo}tickets WHERE id = :id FOR UPDATE WAIT 5`): terminal dá `sem efeito: ticket encerrado`; `RUNNING` com `cancel_requested = 'Y'` dá `já sinalizado`. O sistema informa o usuário nos dois casos.
 * Se o segundo afetar 0 linhas, o ticket está `RUNNING` e o agente dono trata o cancelamento.
 * **`PENDING` com `cancel_requested = 'Y'` (CR-008, R-02):** é um resíduo (ex.: ticket devolvido por versão anterior do agente). A leitura pela PK o identifica, e o segundo `UPDATE` o cancela na mesma transação, com o resultado `cancelado`. O agente nunca o reserva (o claim exige `'N'`).
 * A operação é auditada e confirmada com `COMMIT`.
@@ -1385,7 +1385,7 @@ Implementado em `src/sss/scheduler/schedule_expansion.py` (F8.4b), chamado pelo 
 
 ```sql
 SELECT id, next_run_at FROM (
-  SELECT id, next_run_at FROM {owner}.tbsss_schedules
+  SELECT id, next_run_at FROM {owner}.{prefixo}schedules
    WHERE active = 'Y' AND next_run_at <= SYSDATE
      AND (next_run_at > :last_next OR (next_run_at = :last_next AND id > :last_id))
    ORDER BY next_run_at, id
@@ -1397,7 +1397,7 @@ SELECT id, next_run_at FROM (
 * Antes de tudo, cada regra da página é travada **sem esperar**:
 
   ```sql
-  SELECT id FROM {owner}.tbsss_schedules
+  SELECT id FROM {owner}.{prefixo}schedules
    WHERE id = :id AND active = 'Y' AND next_run_at <= SYSDATE
      FOR UPDATE SKIP LOCKED
   ```
@@ -1422,10 +1422,10 @@ Para cada regra travada, na **mesma transação** (que já detém o lock da linh
    * `last_ticket_id` nulo, inexistente (purgado, §11.3) ou terminal significa **livre**.
    * Se o ticket que bloqueia foi criado há mais que o tempo máximo do script (`timeout_s` ou `script_timeout_s`) mais `node_offline_timeout_s`, o registro é **WARN** `SKIP_OVERLAP_PRESO`, com o id do ticket: ele provavelmente está preso e precisa de atenção (CR-007, R-26). A lista e a agenda também avisam (§7.6, §7.7).
 5. **Compilar o snapshot** a partir de `params_json`. Se for inválido, pausar com `INVALID_PARAM`. O `detail` do `SCHEDULE_PAUSE` traz o código do parâmetro e a mensagem do erro, nunca o valor (R-26). O mesmo vale para `INVALID_CRON`, com a mensagem do parser.
-6. Se `create_ticket`, obter `:ticket_id` com `SELECT sq_tbsss_tickets.NEXTVAL FROM DUAL` e aplicar a reserva otimista:
+6. Se `create_ticket`, obter `:ticket_id` com `SELECT sq_{prefixo}tickets.NEXTVAL FROM DUAL` e aplicar a reserva otimista:
 
    ```sql
-   UPDATE {owner}.tbsss_schedules
+   UPDATE {owner}.{prefixo}schedules
       SET next_run_at = :new_date,
           last_run_at  = SYSDATE,
           last_ticket_id = :ticket_id
@@ -1434,16 +1434,16 @@ Para cada regra travada, na **mesma transação** (que já detém o lock da linh
       AND next_run_at = :old_date
    ```
 
-   * Se `rowcount = 1`, fazer o `INSERT` do ticket, com `requested_by` = login do `user_id` da regra, **`scheduled_at = :scheduled_at`** (a ocorrência coberta, nunca no futuro, CR-007 R-27) e a prioridade do passo 2. Em seguida, o `INSERT` em `tbsss_ticket_answer`, um por resposta, com o `id` de `sq_tbsss_ticket_answer`:
+   * Se `rowcount = 1`, fazer o `INSERT` do ticket, com `requested_by` = login do `user_id` da regra, **`scheduled_at = :scheduled_at`** (a ocorrência coberta, nunca no futuro, CR-007 R-27) e a prioridade do passo 2. Em seguida, o `INSERT` em `{owner}.{prefixo}ticket_answer`, um por resposta, com o `id` de `sq_{prefixo}ticket_answer`:
 
      ```sql
-     INSERT INTO {owner}.tbsss_tickets (id, script_id, environment, requested_by, source_ip, status,
+     INSERT INTO {owner}.{prefixo}tickets (id, script_id, environment, requested_by, source_ip, status,
             priority, cancel_requested, schedule_id, submitted_params, log_offset_chars,
             log_truncated, scheduled_at, created_at, created_by)
      VALUES (:id, :script_id, :environment, :requested_by, NULL, 'PENDING', :priority, 'N',
             :schedule_id, :params, 0, 'N', :scheduled_at, SYSDATE, :actor)
 
-     INSERT INTO {owner}.tbsss_ticket_answer (id, ticket_id, parameter_id, answer_value,
+     INSERT INTO {owner}.{prefixo}ticket_answer (id, ticket_id, parameter_id, answer_value,
             created_at, created_by, updated_at, updated_by)
      VALUES (:id, :ticket_id, :parameter_id, :value, SYSDATE, :actor, NULL, NULL)
      ```
@@ -1459,7 +1459,7 @@ Para cada regra travada, na **mesma transação** (que já detém o lock da linh
    **Variante `cron_error` (CR-008, R-19):** a reserva (com ticket) ou o avanço (sem ticket) não move `next_run_at`, porque não há `new_date`; a regra é pausada no mesmo `UPDATE` otimista, que mantém `next_run_at` com o valor lido:
 
    ```sql
-   UPDATE {owner}.tbsss_schedules
+   UPDATE {owner}.{prefixo}schedules
       SET active = 'N', pause_reason = 'INVALID_CRON',
           last_run_at  = CASE WHEN :ticket_id IS NULL THEN last_run_at ELSE SYSDATE END,
           last_ticket_id = NVL(:ticket_id, last_ticket_id),
@@ -1472,7 +1472,7 @@ Para cada regra travada, na **mesma transação** (que já detém o lock da linh
    **Avanço sem ticket (CR-007, R-05)**, usado no passo 4 e no *misfire* `SKIP` sem conclusão. Não mexe em `last_run_at`, `last_ticket_id` nem `updated_*` (rotina técnica, §10):
 
    ```sql
-   UPDATE {owner}.tbsss_schedules
+   UPDATE {owner}.{prefixo}schedules
       SET next_run_at = :new_date
     WHERE id = :id AND active = 'Y' AND next_run_at = :old_date
    ```
@@ -1481,7 +1481,7 @@ Para cada regra travada, na **mesma transação** (que já detém o lock da linh
 7. **Pausa** (sempre otimista e só sobre regra **ativa**, CR-007 R-19):
 
    ```sql
-   UPDATE {owner}.tbsss_schedules
+   UPDATE {owner}.{prefixo}schedules
       SET active = 'N', pause_reason = :reason,
           updated_at = SYSDATE, updated_by = :actor
     WHERE id = :id AND active = 'Y' AND next_run_at = :old_date
@@ -1496,7 +1496,7 @@ Para cada regra travada, na **mesma transação** (que já detém o lock da linh
    **Exceção que não é de banco** (ex.: erro de programação, dado incoerente): `ROLLBACK`, log ERROR com o stack e, numa **transação separada**, pausa da regra com `INTERNAL_ERROR` (ator `SYSTEM:<agent_id>`), auditada como `SCHEDULE_PAUSE` com a classe do erro no `detail` (CR-007, R-08). Diferente do passo 7, essa pausa não confere `next_run_at`, porque a regra pode nem ter sido lida:
 
    ```sql
-   UPDATE {owner}.tbsss_schedules
+   UPDATE {owner}.{prefixo}schedules
       SET active = 'N', pause_reason = 'INTERNAL_ERROR',
           updated_at = SYSDATE, updated_by = :actor
     WHERE id = :id AND active = 'Y'
@@ -1509,7 +1509,7 @@ Para cada regra travada, na **mesma transação** (que já detém o lock da linh
 `next_run_at` é `NOT NULL`, então a conclusão **não** grava `NULL`. Ela substitui os passos 6 e 7 por um **único** `UPDATE` otimista, que mantém `next_run_at` com o valor lido:
 
 ```sql
-UPDATE {owner}.tbsss_schedules
+UPDATE {owner}.{prefixo}schedules
    SET active = 'N', pause_reason = 'COMPLETED',
        last_run_at  = SYSDATE,
        last_ticket_id = :ticket_id,
@@ -1683,8 +1683,8 @@ O agente só tenta o claim se `execucoes_locais < max_parallel_jobs`, **e** se o
 
 Três leituras curtas, sem varrer a fila (CR-013), com o índice `ix_tbsss_tck_queue (status, environment, priority, GREATEST(scheduled_at, created_at), id, script_id)`:
 
-1. **Scripts e teto:** `SELECT id, max_parallel_env FROM {owner}.tbsss_scripts` (CR-026: sem filtro de interpretador; todo agente atende qualquer um).
-2. **Em execução por par:** `SELECT script_id, environment, COUNT(*) FROM {owner}.tbsss_tickets WHERE status = 'RUNNING' AND environment IN (:env0, :env1) GROUP BY script_id, environment` (faixa curta de `ix_tbsss_tck_queue`, que tem `status` na frente). O agente separa, por ambiente, os scripts **elegíveis**: os abaixo do teto.
+1. **Scripts e teto:** `SELECT id, max_parallel_env FROM {owner}.{prefixo}scripts` (CR-026: sem filtro de interpretador; todo agente atende qualquer um).
+2. **Em execução por par:** `SELECT script_id, environment, COUNT(*) FROM {owner}.{prefixo}tickets WHERE status = 'RUNNING' AND environment IN (:env0, :env1) GROUP BY script_id, environment` (faixa curta de `ix_tbsss_tck_queue`, que tem `status` na frente). O agente separa, por ambiente, os scripts **elegíveis**: os abaixo do teto.
 3. **Janela:** para cada ambiente e cada prioridade original (1 a 4), os `:batch_size` primeiros da fila pela ordem do índice, só dos scripts elegíveis; os blocos são juntados e ordenados pela ordem da fila:
 
 ```sql
@@ -1692,13 +1692,13 @@ SELECT id, script_id, environment FROM (
   SELECT j.id, j.script_id, j.environment FROM (
     SELECT id, script_id, environment, prio, inicio FROM (
                    SELECT id, script_id, :env0 environment, 1 prio, GREATEST(scheduled_at, created_at) inicio
-                     FROM {owner}.tbsss_tickets
+                     FROM {owner}.{prefixo}tickets
                     WHERE status = 'PENDING' AND environment = :env0 AND priority = 1
                       AND GREATEST(scheduled_at, created_at) <= SYSDATE
                       AND (script_id IN (:s0_0, :s0_1))
                     ORDER BY GREATEST(scheduled_at, created_at), id) WHERE ROWNUM <= :batch_size
     UNION ALL ...   -- um bloco por environment x priority (1 a 4)
-  ) j JOIN {owner}.tbsss_tickets c ON c.id = j.id
+  ) j JOIN {owner}.{prefixo}tickets c ON c.id = j.id
    WHERE c.status = 'PENDING' AND c.cancel_requested = 'N'
    ORDER BY GREATEST(1, j.prio - CASE WHEN :env_min > 0
                                       THEN FLOOR((SYSDATE - j.inicio) * 1440 / :env_min) ELSE 0 END),
@@ -1721,20 +1721,20 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
 1. **Serialização por script:**
    ```sql
    SELECT id, max_parallel_env
-     FROM {owner}.tbsss_scripts
+     FROM {owner}.{prefixo}scripts
     WHERE id = :script_id
       FOR UPDATE WAIT 5
    ```
    ORA-30006 ou ORA-00054 leva a `ROLLBACK` e ao próximo candidato, com uma linha `WARNING [action=CLAIM] claim do ticket <id> pulado: linha do script <id> travada por outra sessao (<código>, FOR UPDATE WAIT 5)`, sem stack trace (§13; F9.1d).
 2. **Checagem de teto** (usa `ix_tbsss_tck_scr`):
    ```sql
-   SELECT COUNT(*) FROM {owner}.tbsss_tickets
+   SELECT COUNT(*) FROM {owner}.{prefixo}tickets
     WHERE script_id = :script_id AND environment = :environment AND status = 'RUNNING'
    ```
    Se `total >= max_parallel_env`, `ROLLBACK` e próximo candidato.
 3. **Reserva atômica, ainda sem PID:**
    ```sql
-   UPDATE {owner}.tbsss_tickets
+   UPDATE {owner}.{prefixo}tickets
       SET status = 'RUNNING', agent_id = :agent_id,
           started_at = SYSDATE, heartbeat_at = SYSDATE,
           log_output = EMPTY_CLOB(),
@@ -1809,7 +1809,7 @@ Não há filtro por pasta (CR-005) nem por pasta base (CR-023): o claim não olh
    **Exceção depois do `Popen` (CR-008, R-01):** se o `Popen` retornou e qualquer passo seguinte falhar antes do `register_pid` (`rename` do log, leitura da identidade, gravação do `.sss_proc`), o agente encerra o grupo de `p.pid` (`signal_group` SIGTERM e, na máquina de estados, SIGKILL; o processo continua no mapa local até ser coletado) e só então finaliza `SPAWN_ERROR`. Nesse caso, o prazo entre o SIGTERM e o SIGKILL é de 10 s (`executor.DEFAULT_GRACE_S`), e não o `kill_grace_s`. O script nunca fica vivo sem registro local.
 5. **Instante de início:** renomear o log (passo 3), ler `os_platform.process_identity(pid)` (`starttime` no Linux; §8.0), gravar **`work_dir/ticket_<id>/.sss_proc`** (JSON com `ticket_id`, `pid`, `pgid` e `process_start`; arquivo temporário + `rename`, `0600`) **antes** do banco (CR-007, R-01) e então:
    ```sql
-   UPDATE {owner}.tbsss_tickets
+   UPDATE {owner}.{prefixo}tickets
       SET process_id = :pid, process_start = :process_start, script_path = :script_path,
           interpreter_used = :interpreter_used
     WHERE id = :ticket_id AND agent_id = :agent_id AND status = 'RUNNING'
@@ -1920,7 +1920,7 @@ Varredura combinada (a cada `cancel_poll_interval_s`, usa `ix_tbsss_tck_run`):
 
 ```sql
 SELECT id, cancel_requested
-  FROM {owner}.tbsss_tickets
+  FROM {owner}.{prefixo}tickets
  WHERE (CASE WHEN status = 'RUNNING' THEN agent_id END) = :agent_id
 ```
 
@@ -1961,7 +1961,7 @@ SELECT id, cancel_requested
 Em duas etapas (CR-007, R-12), para não esperar por linhas travadas (por exemplo, por uma sessão morta de outro agente):
 
 ```sql
-SELECT id FROM {owner}.tbsss_tickets
+SELECT id FROM {owner}.{prefixo}tickets
  WHERE (CASE WHEN status = 'RUNNING' THEN agent_id END) IS NOT NULL
    AND (CASE WHEN status = 'RUNNING' THEN agent_id END) <> :agent_id
    AND heartbeat_at < SYSDATE - :node_offline_timeout_s * INTERVAL '1' SECOND
@@ -1969,7 +1969,7 @@ SELECT id FROM {owner}.tbsss_tickets
 ```
 
 ```sql
-UPDATE {owner}.tbsss_tickets
+UPDATE {owner}.{prefixo}tickets
    SET status = 'FAILED', status_reason = 'NODE_OFFLINE',
        return_code = -2, finished_at = SYSDATE,
        updated_at = SYSDATE, updated_by = :actor
@@ -2032,14 +2032,14 @@ DECLARE
 BEGIN
   SELECT log_output, log_offset_chars
     INTO v_lob, v_offset
-    FROM {owner}.tbsss_tickets
+    FROM {owner}.{prefixo}tickets
    WHERE id = :ticket_id AND agent_id = :agent_id AND status = 'RUNNING'
      FOR UPDATE WAIT 5;
   IF DBMS_LOB.GETLENGTH(v_lob) <> v_offset THEN
     RAISE_APPLICATION_ERROR(-20002, 'LOG_OFFSET_DIVERGENTE');
   ELSIF v_offset = :expected_offset THEN
     DBMS_LOB.WRITEAPPEND(v_lob, v_tamanho, :chunk);
-    UPDATE {owner}.tbsss_tickets
+    UPDATE {owner}.{prefixo}tickets
        SET log_offset_chars = v_offset + v_tamanho
      WHERE id = :ticket_id AND agent_id = :agent_id
        AND status = 'RUNNING' AND log_offset_chars = v_offset;
@@ -2119,7 +2119,7 @@ O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualqu
    * com `output_dir`, `input_dir` e `script_work_dir` (CR-012, CR-014, CR-019), e sempre `files_dir` (CR-037): a pasta existe (ou é criada com `0755`, CR-032 D12), é gravável pelo agente e fica fora das pastas do sistema; as pastas de cada ambiente saem sob demanda.
    * `script_base_dir` (CR-023): criada com `0755` se faltar (CR-032, D12; INFO `pasta criada`); INFO com a pasta base, INFO "sem pasta base" quando vazia, ou WARNING se ela não puder ser criada (a subida segue; os tickets com caminho relativo terminam em `NOT_FOUND`). O formato já foi conferido na carga da configuração.
 5. **Instância única por host:** `os_platform.lock_instance` em `work_dir/sss-<agent_id>.lock`. Um arquivo `.stop` antigo é removido com WARN, para o daemon não parar logo depois de subir (CR-007, R-32).
-6. **Banco:** selecionar o driver (§2.3; a sondagem roda aqui), conectar e confirmar o relógio do banco (`SELECT SYSDATE FROM DUAL`). WARN se o `SYSDATE` divergir do relógio local em mais de 60 s (§7.1). **Versão do esquema (CR-007, D4):** `SELECT schema_version FROM {owner}.tbsss_control WHERE id = 1` precisa ser igual a `sql_ident.SCHEMA_VERSION`; diferente ou ausente, CRITICAL com as duas versões.
+6. **Banco:** selecionar o driver (§2.3; a sondagem roda aqui), conectar e confirmar o relógio do banco (`SELECT SYSDATE FROM DUAL`). WARN se o `SYSDATE` divergir do relógio local em mais de 60 s (§7.1). **Versão do esquema (CR-007, D4):** `SELECT schema_version FROM {owner}.{prefixo}control WHERE id = 1` precisa ser igual a `sql_ident.SCHEMA_VERSION`; diferente ou ausente, CRITICAL com as duas versões.
 7. **Registro em `tbsss_agents`**, numa transação (CR-007, R-11):
    * travar a linha do mesmo `code` com `SELECT ... FOR UPDATE WAIT 5`. Sem linha, a inclusão pode disputar com outro processo: a violação de `uk_tbsss_agt_code` leva a `ROLLBACK` e a uma nova tentativa, que encontra a linha;
    * recusar a subida (`agent_id` duplicado) se a linha estiver `ACTIVE` com `heartbeat_at` recente (menor que `node_offline_timeout_s`) e: `hostname` diferente, **ou** o mesmo `hostname` com um `daemon_pid` diferente do próprio que ainda existe (`os_platform.process_exists`). Mesmo host com o PID antigo morto é a religação depois de uma queda, e segue;

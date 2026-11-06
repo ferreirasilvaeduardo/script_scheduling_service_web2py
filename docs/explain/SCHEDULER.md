@@ -36,7 +36,7 @@ Consultas do `RepoSchedulerQueue` (`src/sss/persistence/oracle/scheduler_queue.p
 **Medido em 2026-10-20**, Oracle 19.24 (`GFPR`), owner `openrisow`, com **1.000.000 de tickets `PENDING` vencidos num único ambiente** (14 scripts, prioridades 1 a 4, espera de até 30 dias), estatísticas reais coletadas (`GATHER_TABLE_STATS`, `cascade`), `statistics_level = ALL` e `DBMS_XPLAN.DISPLAY_CURSOR(..., 'ALLSTATS LAST')`. A massa (`created_by = 'TST:cr013'`) foi removida no fim, e as estatísticas voltaram ao estado da implantação (tabela sem estatística, índices recoletados).
 
 * **Antes (índice só dos `PENDING` por `CASE` e ordenação de toda a fila):** `TABLE ACCESS FULL` de `tbsss_tickets` (1.000.000 de linhas), `INDEX FAST FULL SCAN` de `ix_tck_scr` para o teto e `SORT ORDER BY STOPKEY` sobre o milhão, para devolver 20 linhas. Com um índice de `CASE` em todas as colunas, o Oracle nunca elimina o sort (lê a faixa inteira), nem com dicas.
-* **Depois (CR-013):** cada bloco da janela é um `INDEX RANGE SCAN` de `ix_tbsss_tck_queue` com 3 leituras, sem sort e sem acesso à tabela; só os 80 escolhidos voltam à tabela pela PK. Resultado idêntico ao da ordenação completa da fila.
+* **Depois (CR-013):** cada bloco da janela é um `INDEX RANGE SCAN` de `ix_{prefixo}tck_queue` com 3 leituras, sem sort e sem acesso à tabela; só os 80 escolhidos voltam à tabela pela PK. Resultado idêntico ao da ordenação completa da fila.
 
 | Agentes simultâneos | Antes: mediana / leituras | CR-013: mediana / leituras |
 |---|---|---|

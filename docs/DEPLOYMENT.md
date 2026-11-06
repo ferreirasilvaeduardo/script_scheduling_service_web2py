@@ -20,7 +20,7 @@ O README.md é a especificação. Quando este guia e o README divergirem, vale o
 
 ```text
  usuários ── HTTP(S) ──> nó web (run_web.py, bin/sss-web.sh) ──────────────────┐
-                                                                           ├──> Oracle (owner do esquema, tabelas tbsss_*)
+                                                                           ├──> Oracle (owner do esquema, tabelas tbsdev_* em DEV e tbsprd_* em PROD)
  cron ──> sss-keepalive.sh ──┐                                             │
  cron ──> health.py ──────────┼──> agente (bin/sss-scheduler.sh) ───────────┘
                              │       └── script do usuário (com a conta do agente)
@@ -792,11 +792,11 @@ Do mais novo para o mais antigo. Quem vem de uma versão anterior aplica na orde
 * **Purge retirado (CR-030): com tudo parado.**
   * Saíram o comando `purge.py`, a conta e o papel `purge`, a seção `[retention]`, as retenções de `[logging]` e a limpeza automática dos logs da aplicação. A limpeza passa a ser manual (§12, README §11.3).
   * Tire do `cron` a linha do `purge.py` e, do monitoramento, o `--purge-days`. As linhas antigas do `config.ini` e o `[purge]` do `secrets.cfg` só geram aviso; apague-as.
-  * O esquema perde as duas colunas da concessão. Num banco já instalado, aplique (troque `openrisow` e `tbsss_`):
+  * O esquema perde as duas colunas da concessão. Num banco já instalado, aplique (troque `openrisow` pelo owner e `tbsdev_`/`tbsprd_` pelo prefixo do ambiente):
     ```sql
-    ALTER TABLE openrisow.tbsss_control DROP (purge_owner, purge_lease_until);
+    ALTER TABLE openrisow.tbsprd_control DROP (purge_owner, purge_lease_until);
     ```
-  * **Retorno:** a versão anterior precisa das colunas de volta (`ALTER TABLE openrisow.tbsss_control ADD (purge_owner VARCHAR2(40 CHAR), purge_lease_until DATE)`), das linhas de `[retention]` e do cron do purge.
+  * **Retorno:** a versão anterior precisa das colunas de volta (`ALTER TABLE openrisow.tbsprd_control ADD (purge_owner VARCHAR2(40 CHAR), purge_lease_until DATE)`), das linhas de `[retention]` e do cron do purge.
 
 ---
 

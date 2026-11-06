@@ -506,14 +506,14 @@ class TestRepoSchedulerLog(unittest.TestCase):
         conn = _ConnAppend()
         self.assertEqual(self.repo.append_chunk(conn, 7, "srv-01", 0, "abc"), WRITTEN)
         sql, binds, kinds = conn.executions[0]
-        # Literal do README §8.10, com o owner e o prefixo da configuracao no lugar de {owner}.tbsss_.
+        # Literal do README §8.10, com o owner e o prefixo da configuracao no lugar de {owner}.{prefixo}.
         with open(os.path.join(_testenv.APP_DIR, "README.md"),
                   encoding="utf-8") as f:
             readme = f.read()
         section = readme[readme.index("### 8.10"):readme.index("### 8.11")]
         chunk = section[section.index("```sql\nDECLARE") + len("```sql\n"):]
         chunk = chunk[:chunk.index("\n```")]
-        self.assertEqual(sql, chunk.replace("{owner}.tbsss_tickets", "OWN_X.pfx_tickets"))
+        self.assertEqual(sql, chunk.replace("{owner}.{prefixo}tickets", "OWN_X.pfx_tickets"))
         self.assertNotIn("tbsss_", sql)
         for snippet in ("FOR UPDATE WAIT 5", "DBMS_LOB.GETLENGTH(v_lob) <> v_offset", "DBMS_LOB.WRITEAPPEND",
                        "DBMS_LOB.COMPARE", "WHEN NO_DATA_FOUND", "RAISE_APPLICATION_ERROR(-20002"):

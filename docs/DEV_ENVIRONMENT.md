@@ -202,7 +202,7 @@ make lint DEV_PYTHON=/outro/python3.11   # outro Python das ferramentas
 
 O pacote de implantação sai só do `make package` (ou `make package-local`); o `make list-deploy` lista o mais recente. Os antigos `zip-deploy`, `zip-deploy-zip` e `freeze-req` saíram no CR-033 (D4): empacotavam a árvore inteira, com o `instance/secrets.cfg` real, o `LEIA-ME.TXT` e o `var/`.
 
-**Toda automação pelo Makefile (2026-10-30):** cada script de automação do repositório tem um alvo, e `make help` lista todos com a descrição. Os parâmetros vão na linha do `make` (`NAME=agente0001`, `CMD=status`, `OWNER=openrisow`, `PREFIX=tbsss_`); eles não são lidos do ambiente, porque `NAME` costuma ser o nome da máquina. O `tests/architecture/test_makefile.py` confere que todo alvo tem descrição, que todo arquivo chamado existe e que todo script de `bin/`, `scripts/` e `tools/` tem alvo, salvo os launchers do servidor (chamados pelo `sss-ctl.sh` e pelo cron, onde não há Makefile) e os `run_*.py` (chamados pelos launchers).
+**Toda automação pelo Makefile (2026-10-30):** cada script de automação do repositório tem um alvo, e `make help` lista todos com a descrição. Os parâmetros vão na linha do `make` (`NAME=agente0001`, `CMD=status`, `OWNER=openrisow`, `PREFIX=tbsdev_`); eles não são lidos do ambiente, porque `NAME` costuma ser o nome da máquina. O `tests/architecture/test_makefile.py` confere que todo alvo tem descrição, que todo arquivo chamado existe e que todo script de `bin/`, `scripts/` e `tools/` tem alvo, salvo os launchers do servidor (chamados pelo `sss-ctl.sh` e pelo cron, onde não há Makefile) e os `run_*.py` (chamados pelos launchers).
 
 | Alvo | O que faz |
 |---|---|
