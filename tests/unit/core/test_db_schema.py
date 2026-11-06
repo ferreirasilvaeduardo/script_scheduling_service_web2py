@@ -49,7 +49,7 @@ class TestDbSchema(unittest.TestCase):
                     parts = line.split("=", 1)
                     val = parts[1].split(";")[0].strip()
                     return val
-        return "tbsss_"
+        return sql_ident.default_prefix()
 
     def test_dezessete_tabelas_exatas(self):
         """Verifica presenca e contagem exata das 21 tabelas do README §9.2 e §10 (CR-007: controle; CR-012: ticket_output;

@@ -1,12 +1,26 @@
 # ==========================================
 # Caches e Bytecode Python
 # ==========================================
+*.pyc
 __pycache__/
 *.py[cod]
 *$py.class
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
+
+# ==========================================
+# SSS Instance Configuration e Segredos
+# ==========================================
+/instance/config.ini
+/instance/web.env
+/instance/*/
+!/instance/exemplos/
+/instance/common.ini
+secrets.cfg
+.env
+*.env
+.sss_homolog_pw
 
 # ==========================================
 # Logs, Saídas e Controle de Processo / Locks
@@ -23,11 +37,30 @@ __pycache__/
 # ==========================================
 .bkp/
 bkp/
+/logs/
+/work/
+/input/
+/output/
+/script_work/
+/dist/
 inputs/
 outputs/
 logs/
 works/
 script_works/
+/var/
+/.update-*/
+/scripts_ambiente/
+
+# ==========================================
+# Sobras do web2py (removido no CR-021f)
+# ==========================================
+/parameters_*.py
+/httpserver.pid
+/cron.master
+/welcome.w2p
+/gluon/
+/applications/
 
 # ==========================================
 # Evidências de Homologação

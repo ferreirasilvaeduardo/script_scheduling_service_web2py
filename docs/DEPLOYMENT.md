@@ -269,13 +269,13 @@ O DBA revisa o `01` (ou a saída de `python3 scripts/init_db.py --name agente000
 ```sql
 -- 1a chamada do sqlplus, como a conta dona do esquema: o 01 termina com EXIT
 SPOOL /tmp/sss_01_deploy.log
-@docs/sql/01_deploy_sss_openrisow_tbsss.sql
+@docs/sql/01_deploy_sss_openrisow_tbsprd.sql
 ```
 
 ```sql
 -- 2a chamada do sqlplus, só leitura
 SPOOL /tmp/sss_99_validate.log
-@docs/sql/99_validate_deploy_openrisow_tbsss.sql
+@docs/sql/99_validate_deploy_openrisow_tbsprd.sql
 SPOOL OFF
 EXIT
 ```
@@ -284,7 +284,7 @@ EXIT
 * O `01` para no primeiro erro (`WHENEVER SQLERROR EXIT FAILURE ROLLBACK`): sai com código diferente de zero e sem a linha `Implantacao do SSS concluida com sucesso!` (só ASCII, decisão 16 A). Com o `01` interrompido, rode o `02` antes de aplicá-lo de novo. O `02` e o `99` seguem com `WHENEVER SQLERROR CONTINUE`: procure `ORA-` e `SP2-` nos logs deles.
 * O `99` só lê. As duas linhas de resumo precisam dizer `OK: nenhuma falha`.
 * Com contas separadas, `sss_web` e `sss_agente` são criadas antes do `01`; com a conta única (§4.0), nenhuma conta nova. Nenhum GRANT vai para PUBLIC.
-* **Rollback total** (só em instalação nova ou com autorização): `@docs/sql/02_rollback_sss_openrisow_tbsss.sql`. Ele apaga os dados.
+* **Rollback total** (só em instalação nova ou com autorização): `@docs/sql/02_rollback_sss_openrisow_tbsprd.sql`. Ele apaga os dados.
 
 ### 5.3 Usuários iniciais
 
@@ -339,7 +339,7 @@ O papel vem do próprio arquivo (CR-028, D4): o do web tem `[web]` e, no máximo
 
 | Processo | Chaves a preencher |
 |---|---|
-| Servidor (`instance/common.ini`) | `[oracle]` (`user`, `dsn`, `owner`, `table_prefix`, `driver_mode`): o banco do SSS, comum ao web e aos agentes. Uma chave escrita no `[oracle]` do `config.ini` de um processo vale no lugar da comum |
+| Servidor (`instance/common.ini`) | `[oracle]` (`user`, `dsn`, `owner`, `driver_mode`): o banco do SSS, comum ao web e aos agentes (o prefixo de tabela é fixo pelo ambiente: `tbsdev_` em DEV e `tbsprd_` em PROD). Uma chave escrita no `[oracle]` do `config.ini` de um processo vale no lugar da comum |
 | Web (`instance/web0001/`) | `[app] name` (o nome da pasta); `[web] allowed_origins` e, atrás de proxy, `trusted_proxies` |
 | Agente (`instance/agente0001/`) | `[app] name` (o nome da pasta, que é o `agent_id`); `[agent] environments`, `max_parallel_jobs` |
 
@@ -848,6 +848,6 @@ O DEV é a mesma instalação, na pasta `DEV` (`<RAIZ>` = `/portaloptrib/TESHUVA
 * a tela mostra `[DEV]` no título da aba, o cabeçalho em outra cor e a faixa de ambiente não produtivo;
 * `bin/start_local.sh` e `bin/stop_local.sh` sobem e param o web na máquina de desenvolvimento e não vêm no pacote;
 * a bateria Oracle (`SSS_TEST_ORACLE=1`) usa o `instance/common.ini`, o `instance/secrets.cfg` e o `instance/agente0001/` do DEV, com o DEV parado;
-* **prefixo próprio no mesmo banco (2026-10-29):** o DEV usa `table_prefix = ssdev_` e o PROD `tbsss_`, no mesmo owner. Cada um tem as suas tabelas (agentes, fila, tickets, auditoria), então os dois podem ficar no ar ao mesmo tempo, mesmo com os mesmos nomes `web0001`/`agente0001` (substitui a regra do CR-033, D1). O esquema `ssdev_` foi criado pelo `init_db --real-schema`; o `docs/sql/` tem os scripts dos dois prefixos, com o prefixo no nome (`*_tbsss.sql` do PROD e `*_ssdev.sql` do DEV). No PROD, use só os `*_tbsss.sql`. Os `*_s3dev.sql` e `*_s3prd.sql` são das duas instalações do servidor 3067, com o roteiro próprio em `docs/DEPLOYMENT-SERVER.md`, Apêndice A.
+* **prefixo próprio no mesmo banco:** o DEV usa automaticamente `tbsdev_` e o PROD `tbsprd_`, no mesmo owner, fixos pelo ambiente (não parametrizados). Cada um tem as suas tabelas (agentes, fila, tickets, auditoria), então os dois podem ficar no ar ao mesmo tempo, mesmo com os mesmos nomes `web0001`/`agente0001`. O `docs/sql/` tem os scripts dos dois prefixos, com o prefixo no nome (`*_tbsprd.sql` do PROD e `*_tbsdev.sql` do DEV).
 
 Um DEV instalado pelo pacote não tem a vitrine `/dev/...` (o `src/sss/web/controllers/dev.py` não vai no pacote): ela responde 404, e o resto sobe normalmente (CR-021f3).

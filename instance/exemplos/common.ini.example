@@ -8,5 +8,4 @@
 user = sss_app                    ; conta da aplicacao; com um usuario de banco so, a dona do esquema
 dsn = servidor-banco:1521/servico
 owner = openrisow
-table_prefix = tbsss_
 driver_mode = thick               ; thick (recomendado) | cx_oracle | auto | thin (README §2.3)

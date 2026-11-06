@@ -38,7 +38,7 @@ Este arquivo é carregado automaticamente pelo Antigravity no início de toda co
 ### 2.3 Banco de Dados Oracle 11gR2 (`AGENTS.md` §4)
 * **Onde o SQL pode existir:** exclusivamente em `src/sss/persistence/oracle/`, `src/sss/cli/init_db.py` e `src/sss/persistence/ddl_builder.py` (varrido por `test_sql_oracle11g.py`).
 * **Piso Oracle 11gR2 (proibido 12c+):** proibido `FETCH FIRST n ROWS ONLY` / `OFFSET` (usar subquery com `ROWNUM`), `GENERATED AS IDENTITY` (usar `SEQUENCE` + `TRIGGER`), `LATERAL`, `CROSS APPLY`, `OUTER APPLY`, `WITH` contendo `FUNCTION`/`PROCEDURE`, `JSON_VALUE`/`JSON_QUERY`/`JSON_TABLE`/`IS JSON`, `APPROX_COUNT_DISTINCT`, `LISTAGG(... ON OVERFLOW ...)`, `DEFAULT ... ON NULL`, `TRUNCATE TABLE ... CASCADE` e identificadores `> 30` bytes.
-* **Identificadores e Binds (`src/sss/core/sql_ident.py`):** todo nome físico passa por `sql_ident` (`owner` e `table_prefix` validados; prefixo minúsculo de até 8 chars: `tbsss_`, `ssdev_`, `s3dev_`, `s3prd_`; todo identificador físico `<= 30` chars). Todo valor vai por bind `:nome`.
+* **Identificadores e Binds (`src/sss/core/sql_ident.py`):** todo nome físico passa por `sql_ident` (`owner` validado; prefixo de tabela não parametrizado, fixo pelo ambiente: `tbsdev_` em DEV e `tbsprd_` em PROD; todo identificador físico `<= 30` chars). Todo valor vai por bind `:nome`.
 * **Transações e Locks:** `autocommit = False` sempre; toda escrita termina com `COMMIT` ou `ROLLBACK` explícito. Em bloco `except`, registrar `logger.exception` com código ORA e stack trace **antes** do `ROLLBACK`. `SELECT ... FOR UPDATE` sempre com `WAIT n` (`n <= 5`), exceto o desdobro de agendamentos em `12c+` que usa `SKIP LOCKED` com fallback 11g.
 * **Transições condicionais e Concorrência:** toda mudança de estado de ticket, agendamento ou cadastro confere `cursor.rowcount == 1` (se `0`, faz `ROLLBACK` e lança `RepoConflict`). `RepoViolation` expõe sempre o nome lógico da constraint com prefixo `tbsss_` (`sql_ident.logical_object_name`).
 * **Fila e Índices (`CR-013`):** busca de candidatos do daemon em 3 leituras leves (`candidates` em `persistence/oracle/scheduler_queue.py`) usando `ix_tbsss_tck_queue` (`status, env_id, priority, effective_priority_at, scheduled_at, id`), sem ler `CLOB`/`BLOB` e sem `SELECT *` fora do envelope de paginação. Toda FK tem índice com as colunas da FK na liderança (`test_db_schema.py`).
@@ -69,7 +69,7 @@ Este arquivo é carregado automaticamente pelo Antigravity no início de toda co
   * `make test-functional` (`tests/functional/`)
   * `make test-architecture` (`tests/architecture/`)
   * `make test-matrix` (roda a suíte em Python `3.6.0`, `3.6.15` e `3.13.2`).
-* **Cuidado com `SSS_TEST_ORACLE=1`:** pare o DEV local antes (`make ctl CMD=stop`) para não disputar filas no esquema `ssdev_`.
+* **Cuidado com `SSS_TEST_ORACLE=1`:** pare o DEV local antes (`make ctl CMD=stop`) para não disputar filas no esquema `tbsdev_`.
 
 ### 2.7 Checklist Obrigatório (§8) e Formato de Relatório (§9)
 Antes de concluir qualquer tarefa de código ou documentação, valide todos os itens da §8 do `AGENTS.md` (compatibilidade Python 3.6.0–3.13, zero dependências novas, SQL 11gR2 seguro com `sql_ident` e `rowcount`, camadas respeitadas, `os_platform` isolado, web sem inline/CDN e com CSRF/RBAC, logs sem segredos, testes executados) e **encerre sempre a resposta com o bloco exato da §9**:
@@ -125,9 +125,9 @@ cli (topo: run_web, run_scheduler, init_db, generate_sql, check_env, health, pro
   * Operação, Fila, Agentes e Arquivos (8): `tbsss_schedules`, `tbsss_tickets`, `tbsss_ticket_params`, `tbsss_ticket_output`, `tbsss_agents`, `tbsss_agent_envs`, `tbsss_inputs`, `tbsss_input_Snapshot`.
   * Auditoria (1): `tbsss_audit_logs`.
 * **14 Funcionalidades RBAC (`tbsss_features`):** `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `MANAGE_SCHEDULES`, `MANAGE_USERS`, `MANAGE_PROFILES`, `MANAGE_ENVIRONMENTS`, `MANAGE_SCRIPTS`, `MANAGE_PARAMETERS`, `VIEW_AUDIT`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD`.
-* **4 Instalações / Prefixos Ativos:**
-  * `ssdev_` (DEV local, banco GFPR) | `tbsss_` (PROD local, banco GFPR)
-  * `s3dev_` (DEV servidor `brtlvlty3067sl`, porta 18000) | `s3prd_` (PROD servidor `brtlvlty3067sl`, porta 18001)
+* **Prefixos de Tabela Oficiais por Ambiente:**
+  * `tbsdev_` (Ambiente de desenvolvimento - `DEV`)
+  * `tbsprd_` (Ambiente de produção - `PROD`)
 * **Processos por Instalação (1 Web + 5 Agentes):**
   * `web0001` (interface web)
   * `agente0001` (`GFPREPROD`), `agente0002` (`CLONE2`), `agente0003` (`CLONE1`), `agente0004` (`CLONE6`), `agente0005` (`CLONE7`).
@@ -136,6 +136,6 @@ cli (topo: run_web, run_scheduler, init_db, generate_sql, check_env, health, pro
 * **Manuais Operacionais:** `docs/DEPLOYMENT.md` (manual geral normativo, testado por `test_deployment_doc.py`), `docs/DEPLOYMENT-SERVER.md` (runbook passo a passo de 1 servidor e Apêndice A do 3067), `docs/DEV_ENVIRONMENT.md` (ambiente local, Python 3.6/3.11/3.13 e alvos do `Makefile`), `docs/HOMOLOGATION_RUNBOOK.md`, `docs/UTILITY_SCRIPTS.md`, `docs/ADMIN_CRUD_PATTERN.md`.
 * **Guias Explicativos (`docs/explain/`):** `00-indice-geral.md` a `06-testes-qualidade-e-operacao.md`.
 * **Histórico Arquitetural (`docs/architecture/`):** `CR-001` a `CR-039` + `DEPLOYMENT-history.md`.
-* **Scripts DBA (`docs/sql/`):** `{tbsss,ssdev,s3dev,s3prd}_{01_deploy,02_rollback,99_validate}.sql` (gerados por `make sql-all`, 100% ASCII).
+* **Scripts DBA (`docs/sql/`):** `{tbsdev,tbsprd}_{01_deploy,02_rollback,99_validate}.sql` (gerados por `make sql-all`, 100% ASCII).
 * **Homologação (`docs/homologation/` e `docs/prompts/`):** evidências `.docx` (até `2026-10-30_r4`) e roteiros de fase (`F0` a `F9_2`).
 

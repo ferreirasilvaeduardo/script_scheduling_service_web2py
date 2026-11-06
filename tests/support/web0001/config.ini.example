@@ -6,7 +6,6 @@ name = web0001
 user = sss_web
 dsn = localhost:2424/servico_homolog
 owner = openrisow
-table_prefix = tbsss_
 driver_mode = thick
 
 [web]

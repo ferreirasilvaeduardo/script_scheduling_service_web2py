@@ -2148,15 +2148,12 @@ Pasta permanente por ambiente e script, independente de ticket, para trocar arqu
 ### 9.1 Template e distinção entre prefixo lógico e físico
 
 > [!IMPORTANT]
-> **Distinção entre `tbsss_` (prefixo lógico) e `{table_prefix}` (prefixo físico):**
+> **Distinção entre `tbsss_` (prefixo lógico) e prefixos físicos (`tbsdev_` e `tbsprd_`):**
 > 
 > * **`tbsss_` é o prefixo lógico e canônico da aplicação:** é adotado como padrão documental neste README, no modelo de dados conceitual e no tratamento de integridade (`RepoViolation.constraint` traduz qualquer constraint física `uk_<prefixo>_*` para `uk_tbsss_*`).
-> * **No banco de dados real, o prefixo é dinâmico e configurável:** definido pela chave `table_prefix` na seção `[oracle]` do arquivo de configuração (`config.ini`/`common.ini`). Todo objeto físico é qualificado dinamicamente via `sql_ident` como `{owner}.{table_prefix}{objeto}`.
-> * **Prefixos ativos nos ambientes do projeto:**
->   * `ssdev_` : DEV local (máquina de desenvolvimento atual, conectando no Oracle `GFPR` via túnel);
->   * `tbsss_` : PROD de referência;
->   * `s3dev_` : DEV no servidor corporativo (`brtlvlty3067sl`, porta 18000);
->   * `s3prd_` : PROD no servidor corporativo (`brtlvlty3067sl`, porta 18001).
+> * **No banco de dados real, o prefixo é fixo e determinado pelo ambiente:** não é mais parametrizado pelo `config.ini`/`common.ini`. Todo objeto físico é qualificado dinamicamente via `sql_ident` conforme o ambiente:
+>   * `tbsdev_` : Ambiente de desenvolvimento (`DEV`);
+>   * `tbsprd_` : Ambiente de produção (`PROD`).
 
 ```text
 tabela      = {prefixo}{fisico}                 tbsss_tickets
@@ -2168,15 +2165,15 @@ UK/FK/CK/IX = {uk|fk|ck|ix}_{prefixo}{abrev}_{sufixo}   ix_tbsss_tck_queue
 ```
 
 * **Nomes em inglês (CR-016a):** tabela (`{fisico}`), coluna, abreviação, sufixo e valor gravado (`'Y'`/`'N'`, `DAILY`, `NAMED`, `VIEW_LOGS`…) são em inglês. A chave lógica da entidade no código também é em inglês (`environments`, `schedules`…, CR-016c); `sql_ident.physical(entity)` dá o nome físico, e `sql_ident.table`/`sql_ident.sequence` dão o nome qualificado. Texto de tela e comentários de tabela e coluna continuam em português.
-* `{prefixo}` vem de `table_prefix`, inclui o `_` final e obedece à regex `^[a-z][a-z0-9_]{0,7}$` (começa com letra minúscula, para gerar nome Oracle válido e casar com o registro, que só aceita identificadores em minúsculas; até 8 caracteres; CR-007, R-31).
+* `{prefixo}` é fixo pelo ambiente (`tbsdev_` em DEV e `tbsprd_` em PROD), inclui o `_` final e obedece à regex `^[a-z][a-z0-9_]{0,7}$` (começa com letra minúscula, para gerar nome Oracle válido e casar com o registro, que só aceita identificadores em minúsculas; até 8 caracteres; CR-007, R-31).
 * O DDL é gerado por `init_db.py` a partir de um **registro único de identificadores** em `src/sss/core/sql_ident.py`, consumido também por `test_db_schema.py`.
 * O `owner` vem de `[oracle] owner` no `config.ini` (ex.: `openrisow`) e obedece à regex `^[A-Za-z][A-Za-z0-9_]{0,29}$`. Todo objeto no banco é qualificado como `{owner}.{prefixo}{fisico}`.
-* Os exemplos com `tbsss_` neste documento representam a expansão utilizando o prefixo padrão configurado (`table_prefix = tbsss_`).
+* Os exemplos com `tbsss_` neste documento representam a expansão utilizando o prefixo lógico (`LOGICAL_PREFIX`).
 * **Pior caso com prefixo de 8 caracteres:** `sq_` + 8 + `profile_feature` = **26** (conforme).
 
 ### 9.2 Tabela de abreviações
 
-*(os nomes de sequence, trigger e PK na tabela abaixo utilizam a expansão com o prefixo `tbsss_` do PROD (o DEV usa `ssdev_`; a chave não tem padrão); se `table_prefix` for alterado na configuração, os identificadores são gerados com o prefixo correspondente pelo `sql_ident`)*
+*(os nomes de sequence, trigger e PK na tabela abaixo utilizam a expansão com o prefixo lógico canônico `tbsss_`; em DEV físico é `tbsdev_` e em PROD é `tbsprd_`, gerados automaticamente pelo `sql_ident`)*
 
 | Entidade | Tabela | Abrev. | Sequence | Trigger | PK |
 |---|---|---|---|---|---|
@@ -2893,7 +2890,6 @@ find var/*/logs var/*/outputs var/*/script_works -mindepth 3 -type d -empty -del
 user = sss_app                    ; conta da aplicação (§4.1); com um usuário de banco só, a dona do esquema
 dsn = servidor-banco:1521/servico
 owner = openrisow
-table_prefix = tbsss_
 ```
 
 `instance/web0001/config.ini`:
@@ -2927,7 +2923,6 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[oracle]` | `user` | sim | — | não vazio; pode ser o `owner` (CR-032, D11: ambiente com um usuário de banco só) |
 | `[oracle]` | `dsn` | sim | — | não vazio |
 | `[oracle]` | `owner` | sim | — | `^[A-Za-z][A-Za-z0-9_]{0,29}$` |
-| `[oracle]` | `table_prefix` | sim | — | `^[a-z][a-z0-9_]{0,7}$`: começa com letra minúscula, até 8 caracteres (CR-007, R-31) |
 | `[oracle]` | `driver_mode` (F7.0) | não | `auto` | `auto` (Thin → Thick → cx_Oracle), `thin`, `thick`, `cx_oracle` (§2.3) |
 | `[oracle]` | `call_timeout_ms` | não | `30000` | 1 a 40.000 (CR-032: com os tempos de saúde fixos, as invariantes I3 e I4 do §8.9 limitam a 40 s) |
 | `[agent]` | `environments` | sim | — | lista CSV; o texto inteiro com até 1.000 caracteres (coluna `tbsss_agents.environments`) |

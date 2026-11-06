@@ -17,8 +17,8 @@ NAME := agente0001
 CMD := status
 OWNER := openrisow
 PREFIX := tbsss_
-# Prefixos com SQL versionado em docs/sql: PROD e DEV desta maquina e DEV e PROD do 3067
-SQL_PREFIXES ?= tbsss_ ssdev_ s3dev_ s3prd_
+# Prefixos oficiais fixos por ambiente (DEV = tbsdev_, PROD = tbsprd_)
+SQL_PREFIXES ?= tbsdev_ tbsprd_
 # Pythons da bateria completa (AGENTS §2.1: sintaxe 3.6, execucao de 3.6.0 a 3.13)
 PYTHONS ?= $(HOME)/.pyenv/versions/3.6.0/bin/python $(HOME)/.pyenv/versions/3.6.15/bin/python $(HOME)/.pyenv/versions/3.13.2/bin/python
 HOMOLOG_TOOLS := dev/others/homologation/tools

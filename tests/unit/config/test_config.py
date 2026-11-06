@@ -134,7 +134,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(cfg.oracle.user, "sss_agente")
         self.assertEqual(cfg.oracle.dsn, "localhost:2424/servico_homolog")
         self.assertEqual(cfg.oracle.owner, "openrisow")
-        self.assertEqual(cfg.oracle.table_prefix, "tbsss_")
+        self.assertEqual(cfg.oracle.table_prefix, "tbsdev_")
         self.assertEqual(cfg.oracle.driver_mode, "thick")
         self.assertFalse(hasattr(cfg.oracle, "oracle_client_lib_dir"), "CR-032 (D1)")
         self.assertEqual(cfg.oracle.call_timeout_ms, 30000)
@@ -337,15 +337,13 @@ class TestConfig(unittest.TestCase):
             self.assertTrue(any("data_backend ignorada" in m and "sempre o Oracle" in m
                                 for m in sss_config.pending_warnings()), value)
 
-    def test_prefixo_comeca_com_letra(self):
-        """CR-003 P2: prefixo iniciado por digito ou _ geraria nome Oracle invalido."""
-        for prefix in ("1x_", "_x", "9"):
-            ini = self._copy_and_edit_ini(changes={"oracle": {"table_prefix": prefix}})
-            with self.assertRaises(sss_config.ConfigError) as ctx:
-                sss_config.load(ini)
-            self.assertEqual(ctx.exception.key, "table_prefix", prefix)
-        ini_ok = self._copy_and_edit_ini(changes={"oracle": {"table_prefix": "a1_"}})
-        self.assertEqual(sss_config.load(ini_ok).oracle.table_prefix, "a1_")
+    def test_prefixo_fixo_por_ambiente(self):
+        """O prefixo nao e mais parametrizado: fixo por ambiente (tbsdev_ em DEV, tbsprd_ em PROD)."""
+        sss_config.pending_warnings()
+        ini = self._copy_and_edit_ini(changes={"oracle": {"table_prefix": "qualquer_"}})
+        cfg = sss_config.load(ini)
+        self.assertEqual(cfg.oracle.table_prefix, "tbsdev_")
+        self.assertTrue(any("table_prefix ignorada" in m for m in sss_config.pending_warnings()))
 
     def test_pastas_base_recusadas(self):
         """CR-005 (README §12.1): base_script_dirs e a antiga base_script_dir sao chaves desconhecidas."""
@@ -415,12 +413,12 @@ class TestConfig(unittest.TestCase):
     def test_configuracao_invalida_sem_log_dir_vai_para_stderr(self):
         """CR-003 P2: sem log_dir utilizavel, o CRITICAL vai para o stderr no mesmo formato."""
         self._patch_var_dir(os.path.join(self.tmp_dir, "nao", "existe"))
-        ini = self._copy_and_edit_ini(changes={"oracle": {"table_prefix": "1x_"}})
+        ini = self._copy_and_edit_ini(changes={"oracle": {"owner": "1_invalido"}})
         with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
             with self.assertRaises(sss_config.ConfigError):
                 self._get_with_ini(ini)
         self.assertIn(" CRITICAL ", err.getvalue())
-        self.assertIn("table_prefix", err.getvalue())
+        self.assertIn("owner", err.getvalue())
 
     def test_segredos_invalidos_geram_critical_sem_valor(self):
         """CR-003 P2: falha em secrets.cfg vira CRITICAL sem nenhum valor de segredo."""
@@ -440,19 +438,14 @@ class TestConfig(unittest.TestCase):
         for value in tokens.values():
             self.assertNotIn(value, content)
 
-    def test_prefixo_de_9_caracteres(self):
-        """Verifica restricao de regex de table_prefix (max 8 chars)."""
-        ini_9 = self._copy_and_edit_ini(changes={
-            "oracle": {"table_prefix": "tbsss_123"}  # 9 caracteres
-        })
-        with self.assertRaises(sss_config.ConfigError) as ctx:
-            sss_config.load(ini_9)
-        self.assertEqual(ctx.exception.key, "table_prefix")
-
-        # Teste com owner invalido (iniciando com digito)
+    def test_owner_invalido_comeca_com_digito(self):
+        """Verifica restricao de regex de owner."""
         ini_owner = self._copy_and_edit_ini(changes={
             "oracle": {"owner": "1_invalido"}
         })
+        with self.assertRaises(sss_config.ConfigError) as ctx:
+            sss_config.load(ini_owner)
+        self.assertEqual(ctx.exception.key, "owner")
         with self.assertRaises(sss_config.ConfigError):
             sss_config.load(ini_owner)
 
@@ -705,8 +698,7 @@ class TestConfigCR007(unittest.TestCase):
         self.assertFalse(hasattr(cfg.agent, "exec_users"), "CR-032 (D7): sem usuario de execucao")
         self.assertEqual(cfg.agent.queue_aging_min, 60)
 
-    def test_prefixo_so_minusculas_e_agent_id_purge_reservado(self):
-        self._refusal("table_prefix", oracle={"table_prefix": "TBSSS_"})
+    def test_agent_id_purge_reservado(self):
         self._refusal("name", app={"name": "purge"})
         self.assertEqual(self._load(app={"name": "purge01"}).agent.agent_id, "purge01")
 
@@ -963,13 +955,13 @@ class TestConfigCR007(unittest.TestCase):
                     ("web", "login_lockout_s"): 900, ("web", "log_poll_interval_s"): 3}
         for (sec, key), value in expected.items():
             self.assertEqual(getattr(getattr(cfg, sec), key), value, key)
-        # Os obrigatorios: name, oracle (user, dsn, owner, table_prefix), environments,
+        # Os obrigatorios: name, oracle (user, dsn, owner; prefixo e fixo por ambiente), environments,
         # max_parallel_jobs e allowed_origins (CR-032, D4: agent_id, work_dir e log_dir saem do name).
         required = sorted((sec, k) for sec, fields in sss_config.SCHEMA.items() for k, cdef in fields.items()
                           if cdef.required)
         self.assertEqual(required, sorted([
             ("app", "name"), ("oracle", "user"), ("oracle", "dsn"), ("oracle", "owner"),
-            ("oracle", "table_prefix"), ("agent", "environments"), ("agent", "max_parallel_jobs"),
+            ("agent", "environments"), ("agent", "max_parallel_jobs"),
             ("web", "allowed_origins")]))
 
     def test_pasta_de_saida(self):

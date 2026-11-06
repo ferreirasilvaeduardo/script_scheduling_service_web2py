@@ -12,6 +12,8 @@ import re
 import sys
 from typing import List, Optional
 
+from sss.core import sql_ident
+
 
 # Variaveis que nunca passam do daemon para o script (README §8.6, CR-007 R-32).
 BLOCKED_ENV_VARS = frozenset([
@@ -107,6 +109,10 @@ IGNORED_KEYS.update({("agent", "claim_batch_size"): _REMOVED_REASON,
 # CR-032 (D11): DEV e PROD com o mesmo comportamento; o ambiente mostrado vem da pasta <TIPO>.
 IGNORED_KEYS[("app", "sss_env")] = ("o comportamento e o mesmo em DEV e PROD desde o CR-032; o ambiente mostrado "
                                     "vem da pasta acima da raiz")
+# Prefixo fixo por ambiente (DEV = tbsdev_, PROD = tbsprd_), nao mais parametrizado pelo config.
+IGNORED_KEYS[("oracle", "table_prefix")] = (
+    "o prefixo nao e mais parametrizado; fixo por ambiente (tbsdev_ em DEV, tbsprd_ em PROD)"
+)
 # CR-032 (D7): sem usuario de execucao, sudo nem helper; tudo roda com a conta do agente.
 _NO_EXEC_USER = "sem usuario de execucao desde o CR-032; os scripts rodam com a conta do agente"
 IGNORED_KEYS.update(dict((("agent", key), _NO_EXEC_USER)
@@ -220,8 +226,6 @@ SCHEMA = collections.OrderedDict([
         ("user", FieldDef("str", required=True)),
         ("dsn", FieldDef("str", required=True)),
         ("owner", FieldDef("str", required=True, regex=r"^[A-Za-z][A-Za-z0-9_]{0,29}$")),
-        # So minusculas: o registro de identificadores so aceita nomes em minusculas (CR-007, R-31).
-        ("table_prefix", FieldDef("str", required=True, regex=r"^[a-z][a-z0-9_]{0,7}$")),
         ("driver_mode", FieldDef("enum", required=False, allowed_values=("auto", "thin", "thick", "cx_oracle"), default="auto")),
         ("call_timeout_ms", FieldDef("int", required=False, min_val=1, max_val=3600000, default=30000)),
     ])),
@@ -296,6 +300,9 @@ class OracleConfig(_ItemAccessMixin, collections.namedtuple("OracleConfig", [
     "pool_min", "pool_max"
 ])):
     __slots__ = ()
+
+
+OracleConfig.__new__.__defaults__ = (sql_ident.default_prefix(), "auto", 30000, 1, 4)
 
 
 class SecretsConfig(_ItemAccessMixin, collections.namedtuple("SecretsConfig", ["secrets_file"])):
@@ -697,6 +704,8 @@ def load(ini_path: str) -> "Config":
     # 4. Invariantes
     app_dict = data_sections["app"]
     oracle_dict = data_sections["oracle"]
+    env_name = os.environ.get("SSS_ENV") or os.environ.get("SSS_INSTALL_TYPE") or INSTALL_TYPE
+    oracle_dict["table_prefix"] = sql_ident.default_prefix(env_name)
     # CR-032 (D3): os tempos de saude sao fixos (heartbeat 10, fence 90, offline 180); as invariantes I3/I4 so
     # limitam o call_timeout_ms (ate 40 s), em _validate_cr007.
     _validate_cr007(app_dict, oracle_dict, agent_dict, data_sections["logging"], role)

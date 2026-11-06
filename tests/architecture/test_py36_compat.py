@@ -92,11 +92,12 @@ def find_python_files(app_dir, repo_root):
     """Localiza fontes Python de APP e bin/."""
     files_py = []
     dev_scripts_dir = os.path.normpath(os.path.join(app_dir, "dev", "scripts"))
+    scripts_ambiente_dir = os.path.normpath(os.path.join(app_dir, "scripts_ambiente"))
 
     # Varre a aplicacao
     for root, dirs, files in os.walk(app_dir):
         norm_root = os.path.normpath(root)
-        if norm_root.startswith(dev_scripts_dir):
+        if norm_root.startswith(dev_scripts_dir) or norm_root.startswith(scripts_ambiente_dir):
             continue
         if ".git" in dirs:
             dirs.remove(".git")

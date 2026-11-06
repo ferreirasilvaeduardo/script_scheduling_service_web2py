@@ -672,8 +672,9 @@ class TestDdlSeedAndRollback(unittest.TestCase):
                 "--generate-sql", tmp_dir2,
             ])
             self.assertEqual(ret, 0)
-            self.assertTrue(os.path.isfile(os.path.join(tmp_dir2, "01_deploy_sss" + suffix)))
-            self.assertTrue(os.path.isfile(os.path.join(tmp_dir2, "02_rollback_sss" + suffix)))
+            suffix_cfg = "_%s_%s.sql" % (self.owner.lower(), sql_ident.default_prefix().rstrip("_").lower())
+            self.assertTrue(os.path.isfile(os.path.join(tmp_dir2, "01_deploy_sss" + suffix_cfg)))
+            self.assertTrue(os.path.isfile(os.path.join(tmp_dir2, "02_rollback_sss" + suffix_cfg)))
 
     def test_cr024_nome_dos_arquivos_com_owner_e_prefixo(self):
         """CR-024: <base>_<owner>_<prefixo>.sql; esquemas diferentes lado a lado; o deploy cita o seu rollback."""

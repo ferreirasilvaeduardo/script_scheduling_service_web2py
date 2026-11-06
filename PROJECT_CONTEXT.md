@@ -172,10 +172,8 @@ O porquê completo de cada decisão está em `docs/architecture/CR-*.md` (CR-001
 
     | Instalação | Onde | Prefixo | Situação |
     |---|---|---|---|
-    | DEV local | esta máquina (o próprio repositório) | `ssdev_` (GFPR) | web e 5 agentes, todos parados |
-    | PROD local | `/portaloptrib/TESHUVA/SSS/PROD/script_scheduling_service` | `tbsss_` (GFPR) | esquema recriado vazio em 30/10; parado |
-    | DEV 3067 | `brtlvlty3067sl`, porta 18000 | `s3dev_` | no ar, `1.0.0-dev+2610301500`, esquema refeito em 30/10 |
-    | PROD 3067 | idem, porta 18001 | `s3prd_` | no ar, mesma versão, esquema refeito em 30/10 |
+    | DEV | Ambientes de desenvolvimento (`DEV`) | `tbsdev_` (GFPR) | prefixo fixo pelo ambiente (não parametrizado) |
+    | PROD | Ambientes de produção (`PROD`) | `tbsprd_` | prefixo fixo pelo ambiente (não parametrizado) |
   - [x] Homologação real automatizada no navegador e batimento completo docs × código (30/10/2026): rodada 4 do DEV do 3067 com 356/356 na primeira passada, já com o pacote do batimento (`docs/homologation/SSS_Homologation_Evidence_2026-10-30_r4.docx`).
   - [x] Toda automação pelo `Makefile` (34 alvos, `make help`), com `make test-matrix` de 1557 testes OK em 3.6.0, 3.6.15 e 3.13.2.
 - **Tarefas Pendentes / Em Progresso:**
@@ -287,7 +285,7 @@ A ordem das camadas é verificada estaticamente por AST em `tests/architecture/t
   * `CR-036` a `CR-039`: limites operacionais flexíveis (avisos em vez de recusas), Pasta de Arquivos (`files/<ambiente>/<script>/{inputs,outputs}`, `CR-037`/`CR-037b`), guia `DEPLOYMENT-SERVER.md` (`CR-038`) e `bin/sss-ctl.sh` (`CR-039`).
   * `DEPLOYMENT-history.md` — arquivo histórico de revisões anteriores do guia de implantação.
 * **Scripts SQL para o DBA (`docs/sql/`):**
-  * 4 conjuntos (`tbsss_`, `ssdev_`, `s3dev_`, `s3prd_`) × 3 arquivos (`01_deploy.sql`, `02_rollback.sql`, `99_validate.sql`), gerados por `make sql-all` em ASCII puro (`UNISTR`).
+  * 2 conjuntos oficiais (`tbsdev_` e `tbsprd_`) × 3 arquivos (`01_deploy.sql`, `02_rollback.sql`, `99_validate.sql`), gerados por `make sql-all` em ASCII puro (`UNISTR`).
 * **Roteiros de Fases e Evidências de Homologação (`docs/prompts/` e `docs/homologation/`):**
   * `docs/prompts/F0_kickoff.md` a `F9_2_e2e.md` — prompts históricos de construção incremental do SSS.
   * `docs/homologation/*.docx` e `*.md` — relatórios e evidências de homologação automatizada (mais recente: `SSS_Homologation_Evidence_2026-10-30_r4.docx`, 356/356 passos OK).

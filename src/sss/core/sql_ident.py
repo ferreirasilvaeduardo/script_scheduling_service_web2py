@@ -49,6 +49,18 @@ FBI_TCK_OCCUR_EXPR = (
 # incrementa e traz a migracao src/sss/cli/migrations/m<NNNN>_*.py no mesmo pacote (AGENTS §4.16).
 SCHEMA_VERSION = 1  # aberta ate a primeira producao (AGENTS §4.16): o CR-016a entra direto nela
 
+# Prefixos oficiais fixos por ambiente (nao parametrizados pelo config; DEV = tbsdev_, PROD = tbsprd_).
+PREFIX_DEV = "tbsdev_"
+PREFIX_PROD = "tbsprd_"
+
+
+def default_prefix(env=None):
+    """Retorna o prefixo obrigatorio do ambiente: tbsdev_ (DEV) ou tbsprd_ (PROD)."""
+    if env and str(env).strip().upper() == "PROD":
+        return PREFIX_PROD
+    return PREFIX_DEV
+
+
 # Nome logico das constraints, indices e triggers nos erros do repositorio (RepoViolation.constraint): sempre com
 # este prefixo, qualquer que seja o table_prefix do banco, para os servicos traduzirem pelo mesmo nome no FAKE e no
 # Oracle (batimento de 30/10/2026: com ssdev_ ou s3dev_, o duplicado caia na mensagem generica).
