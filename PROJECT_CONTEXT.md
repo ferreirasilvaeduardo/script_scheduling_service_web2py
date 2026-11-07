@@ -10,9 +10,9 @@
     - **Web** (`web0001`): `bin/sss-web.sh` → `scripts/run_web.py`. UI, login, RBAC, tickets, cadastros, downloads e envio de arquivos.
     - **Agente** (`agente0001`…): `bin/sss-scheduler.sh <nome>` → `scripts/run_scheduler.py`. Desdobro de agendamentos, claim da fila, execução, heartbeat, coleta de log, saída e entrada. Thread única, com laço de eventos e prazos do relógio monotônico.
     - Os processos coordenam-se **só pelo banco**: claim por `UPDATE` condicional com `rowcount`, heartbeat, *fencing* e detecção de nó offline. O web nunca sinaliza processos do SO.
-  - Projeto SSS (Script Scheduling Service); este resumo é de 07/11/2026 (base `c2462b9`, HEAD de `main`: prefixo fixo por ambiente em `a75e3c1`, perfis `ADMINISTRADOR`/`OPERADOR`/`CONSULTA` em `11966d7`, `scripts_ambiente/` versionado em `8a4b5ba`, `utilitarios.tar.gz` no pacote em `ae396c7` e revisão docs × código, passos 1 e 2, em `690d608` e `c2462b9`) e **não substitui as fontes normativas**: o `README.md` (negócio, dados e algoritmos) e o `AGENTS.md` (regras de código e de entrega), nesta ordem. O `CLAUDE.md` traz as diretrizes do agente de IA e o `GEMINI.md` consolida na raiz as regras completas do `AGENTS.md` (§§3.3–9) e o mapa arquitetural para carregamento automático sem truncamento em cada conversa.
+  - Projeto SSS (Script Scheduling Service); este resumo é de 07/11/2026 (base: o commit seguinte ao `c263594` em `main`; marcos: prefixo fixo por ambiente em `a75e3c1`, perfis `ADMINISTRADOR`/`OPERADOR`/`CONSULTA` em `11966d7`, `scripts_ambiente/` versionado em `8a4b5ba`, `utilitarios.tar.gz` no pacote em `ae396c7` e revisão docs × código, passos 1 e 2, em `690d608` e `c2462b9`; quadro "Quem pode rodar" retirado em `fd43cae`, 06/11/2026) e **não substitui as fontes normativas**: o `README.md` (negócio, dados e algoritmos) e o `AGENTS.md` (regras de código e de entrega), nesta ordem. O `CLAUDE.md` e o `GEMINI.md` são atalhos para os agentes de IA, com o mesmo bloco de regras críticas; o `GEMINI.md` também **resume** as §§3.3–9 do `AGENTS.md` e o mapa arquitetural, porque o `AGENTS.md` é truncado na injeção automática. Os dois não criam regra nova: em divergência, vale o `AGENTS.md`/`README.md`.
 - **Stack Tecnológico:**
-  - Linguagem / Runtime: **Python 3.6.0 ou superior**, com sintaxe e biblioteca padrão da 3.6.0; validado em 3.6.0, 3.6.15 e 3.13.2 (referência de produção 3.6.8; no servidor 3067, 3.8.5).
+  - Linguagem / Runtime: **Python 3.6.0 ou superior**, com sintaxe e biblioteca padrão da 3.6.0; testado em 3.6.0, 3.6.8 (referência de produção), 3.6.15 e 3.13.2 (`make test-matrix`); no servidor 3067, 3.8.5.
   - Frameworks / Bibliotecas: **nenhum framework**. Só a biblioteca padrão e o driver Oracle: `python-oracledb` (`< 2.0` no 3.6, `2.x` no 3.7+) e `cx_Oracle 8.3` como contingência. Servidor web, roteador, sessão e templates próprios (`src/sss/web/framework/`). Frontend com Bootstrap 5.3.8 local e JavaScript próprio, sem CDN nem script inline.
   - Banco de Dados: **somente Oracle**, piso **11gR2** (todo SQL roda no 11g) até 23ai; o banco de trabalho (GFPR) é 19c, charset WE8ISO8859P15. Cliente: Instant Client 19 recomendado; outro só avisa (no 3067, cliente 12.2).
   - Infraestrutura / Nuvem: servidores **Linux/Unix POSIX** próprios, sem contêiner; desenvolvimento em WSL (Ubuntu 24.04); servidor 3067 em CentOS 6 (bash 4.1, sem `C.UTF-8`), acessado por bastion SSH. Permanência pelo `crontab` da conta.
@@ -42,8 +42,8 @@
   - `scripts_ambiente/`: árvore versionada dos scripts de negócio que o SSS executa (`script_base_dir` padrão do agente, `<RAIZ>/scripts_ambiente`), com `utilitarios/` (vai também no `utilitarios.tar.gz` do pacote) e `diagnostico/`; fora do lint.
   - `dev/`: só desenvolvimento, fora do pacote: `dev/others/` (`homologation/`, com as ferramentas em `tools/`; `web_harness/`; `notas/`); `dev/scripts/` fica vazia (só `.gitkeep`).
   - `docs/`:
-    - manuais `DEPLOYMENT.md` (genérico), `DEPLOYMENT-SERVER.md` (roteiro de um servidor; Apêndice A = 3067) e `DEV_ENVIRONMENT.md`;
-    - `sql/` (scripts para o DBA), `architecture/` (histórico dos CRs) e `homologation/` (evidências).
+    - manuais `DEPLOYMENT.md` (genérico), `DEPLOYMENT-SERVER.md` (roteiro de um servidor; Apêndice A = 3067), `DEV_ENVIRONMENT.md`, `HOMOLOGATION_RUNBOOK.md`, `UTILITY_SCRIPTS.md` e `ADMIN_CRUD_PATTERN.md`;
+    - `explain/` (planos EXPLAIN históricos), `prompts/` (roteiros das fases), `sql/` (scripts para o DBA), `architecture/` (histórico dos CRs) e `homologation/` (evidências); catálogo completo no §6.3.
   - `instance/`: `common.ini`, `secrets.cfg` (0600) e `<processo>/config.ini`; modelos em `instance/exemplos/`. `var/<processo>/`: logs, pastas de trabalho, saída e entrada.
 - **Estilo e Convenções:**
   - Nomenclatura: `snake_case` em funções, módulos e arquivos; `PascalCase` em classes. Nomes técnicos (código, banco, configuração, variáveis) **em inglês**; textos de tela, comentários e dados em português (CR-016; legado em português aceito). Imports de `sss` sempre qualificados.
@@ -54,7 +54,7 @@
     - binds sempre; nomes físicos só via `sql_ident` (prefixo fixo pelo ambiente: `tbsdev_` em DEV, `tbsprd_` em PROD; até 30 caracteres);
     - `rowcount` conferido em toda transição; `FOR UPDATE WAIT n` com n ≤ 5;
     - sem sintaxe 12c+; paginação por `ROWNUM`;
-    - SQL só em `persistence/oracle/`, `init_db` e `ddl_builder`.
+    - SQL só em `persistence/oracle/`, `init_db` e `ddl_builder`; fora deles, só a sondagem do driver (`probe_driver`) e as consultas fixas do `db_conn.py` (`SYSDATE` em `db_now`/`health`, `NEXTVAL` da sequence e `schema_version`).
   - Tratamento de Erros:
     - **Logs:** no formato fixo do README §13, em `log_dir/internal/app/AAAA/MM/DD/HH/MI/<log_name>_<PID>[_<n>].log` (`config/log_paths.py`); todo `except` registra o código ORA e o stack trace antes do `ROLLBACK`; segredos mascarados.
     - **Repositório:** lança exceções de contrato (`RepoNotFound`, `RepoConflict`, `RepoViolation`, `RepoUnavailable`). A `RepoViolation` traz o **nome lógico** da constraint (sempre com `tbsss_`), que o serviço traduz para a mensagem do campo.
@@ -74,8 +74,8 @@
   - Execução Local: `make dev-start PORT=18000` / `make dev-stop` (web do DEV), `make ctl CMD=status|start|stop` (processos da raiz pelo `bin/sss-ctl.sh`), `make health`, `make init-db-dry`.
   - Bateria de Testes:
     - `make test-all` no `PYTHON`;
-    - `make test-matrix` em 3.6.0, 3.6.15 e 3.13.2;
-    - `make test-oracle` com o Oracle real, que exige o DEV local parado;
+    - `make test-matrix` em 3.6.0, 3.6.8, 3.6.15 e 3.13.2 (`PYTHONS`);
+    - `make test-oracle` com o Oracle real, que exige o DEV local parado e, no GFPR, o DEV do 3067 parado ou ainda no código antigo (`s3dev_`);
     - `make test-unit`, `test-integration`, `test-functional` e `test-architecture` por pasta.
     - Framework: só `unittest`.
   - Linters / Formatação: `make check-all` (portões: `flake8` com zero achados, sem `dev/scripts` e `scripts_ambiente` pelo `extend-exclude` do `.flake8`, e `mypy` estrito); `make format` (isort e autopep8; reescreve arquivos); `make lint-pylint` (fora do portão).
@@ -90,7 +90,7 @@
     - `PYTHON`, `SSS_TZ`, `SSS_LOCALE` (UTF-8; padrão `C.UTF-8`), `SSS_IC_DIR` (Instant Client) e `ORACLE_HOME`;
     - `SSS_WEB_HOST`: endereço do web no `sss-ctl.sh`; sem ela, só `127.0.0.1`;
     - `SSS_STOP_WAIT_S`: espera do `stop` (padrão 45 s).
-  - Prefixo das tabelas: `SSS_ENV`, senão `SSS_INSTALL_TYPE`, senão o nome da pasta `<TIPO>` acima da raiz (`sss_config.install_env`); `PROD` dá `tbsprd_` e qualquer outro valor dá `tbsdev_`. A chave `[oracle] table_prefix` é ignorada.
+  - Prefixo das tabelas: `SSS_ENV`, senão `SSS_INSTALL_TYPE`, senão o nome da pasta `<TIPO>` acima da raiz (`sss_config.install_env()`/`table_prefix()`); `PROD` dá `tbsprd_` e qualquer outro valor dá `tbsdev_`. A chave `[oracle] table_prefix` é ignorada. `SSS_ENV` e `SSS_INSTALL_TYPE` são só para os testes: nas instalações o tipo vem da pasta `<TIPO>`, e nenhuma das duas vai ao `crontab` nem aos launchers (DEPLOYMENT §10.5). A faixa, o título e a cor do ambiente na tela (`env_label`) seguem a mesma regra (`install_env()`).
   - Driver: `[oracle] driver_mode` tem padrão `auto` no código (`sss_config.py`); o recomendado, usado nos modelos (`instance/exemplos/common.ini.example`) e nas instalações, é `thick`.
   - Senhas digitadas: `SSS_INIT_DB_PASSWORD` (dono do esquema, no `init_db`) e `SSS_BOOTSTRAP_ADMIN_PASSWORD` (administrador inicial).
   - Testes e homologação: `SSS_TEST_ORACLE=1` (bateria Oracle) e as `SSS_*` do roteiro de homologação (`dev/others/homologation/README.md`).
@@ -150,14 +150,14 @@ O porquê completo de cada decisão está em `docs/architecture/CR-*.md` (CR-001
   - *Decisão Tomada:* cada script de automação tem um alvo com descrição `##`; os parâmetros têm atribuição simples (`NAME :=`), porque o ambiente costuma ter `NAME` com o nome da máquina.
   - *Impacto:* o `tests/architecture/test_makefile.py` cobra; os launchers do servidor ficam com o `sss-ctl.sh` e o cron.
 - **Restrições Importantes:**
-  - Python 3.6: nada de recurso 3.7+; testar nas 3 versões antes de commitar código.
+  - Python 3.6: nada de recurso 3.7+; testar nas 4 versões (3.6.0, 3.6.8, 3.6.15 e 3.13.2) antes de commitar código.
   - **Nunca rodar `init_db` num banco em uso**; nele, só os MERGE do seed. Refazer um esquema é o ciclo `02_rollback` → `01_deploy` → `99_validate`, com autorização, porque apaga os dados.
   - SQL ao DBA em duas chamadas do sqlplus (o `01` termina com `EXIT`).
-  - Mudança de esquema com a versão 1 ainda "aberta": entra direto na versão 1; quando ela for congelada, toda mudança traz migração (AGENTS §4.16).
+  - A versão 1 do esquema está **congelada** desde o PROD do 3067 (30/10/2026): toda mudança de esquema incrementa `SCHEMA_VERSION` e traz a migração `m0002_*` (AGENTS §4.16, README §11); a troca de prefixo não muda o esquema (DEPLOYMENT-SERVER §15.3).
   - Nunca commitar o `LEIA-ME.TXT` nem `instance/secrets.cfg`: usar `git add -A -- . ':!LEIA-ME.TXT'`.
   - Processo de trabalho:
     - plano → aprovação → implementação → testes → documentação → commit e push → pacote;
-    - decisões do responsável uma de cada vez, em opções A/B com recomendação;
+    - decisões do responsável uma de cada vez, em opções A/B com recomendação (AGENTS §1, como o plano antes de mexer em arquivo crítico);
     - toda entrega termina com o relatório do AGENTS §9;
     - o README e o AGENTS mudam juntos.
   - O código local é a referência (o git é controle pessoal). Transferência ao servidor é feita pela equipe; a instalação do `crontab` no servidor também.
@@ -179,18 +179,19 @@ O porquê completo de cada decisão está em `docs/architecture/CR-*.md` (CR-001
     |---|---|---|---|
     | DEV | servidor 3067 | `tbsdev_` | migração do passo 15.3 escrita, ainda não executada |
     | PROD | servidor 3067 | `tbsprd_` | migração do passo 15.3 escrita, ainda não executada |
-    | Locais | máquinas de desenvolvimento | `tbsdev_` | só sobem contra o GFPR com o 3067 parado (homologação, ensaio) |
+    | Locais | máquinas de desenvolvimento | `tbsdev_` | só sobem contra o GFPR (bateria Oracle, homologação, ensaio) com o tipo correspondente do 3067 parado, ou enquanto o 3067 estiver no código antigo (`s3dev_`/`s3prd_`); recriar o `tbsdev_` só com o 3067 avisado |
 
     Os esquemas aposentados `s3dev_`, `s3prd_`, `tbsss_` e `ssdev_` seguem intactos no owner (`SSS_OUTROS_PREFIXOS`); a remoção é manual (DEPLOYMENT-SERVER §15.3.1).
   - [x] Homologação real automatizada no navegador e batimento completo docs × código (30/10/2026): rodada 4 do DEV do 3067 com 356/356 na primeira passada, já com o pacote do batimento (`docs/homologation/SSS_Homologation_Evidence_2026-10-30_r4.docx`).
-  - [x] Toda automação pelo `Makefile` (34 alvos, `make help`), com `make test-matrix` de 07/11/2026: 1570 testes OK (61 pulados) em 3.6.0, 3.6.15 e 3.13.2.
+  - [x] Toda automação pelo `Makefile` (34 alvos, `make help`), com `make test-matrix` de 07/11/2026: 1570 testes OK (61 pulados) em 3.6.0, 3.6.15 e 3.13.2 (a 3.6.8 entrou no `PYTHONS` depois dessa rodada).
 - **Tarefas Pendentes / Em Progresso:**
   - [ ] Executar no 3067 a migração para o prefixo fixo (DEPLOYMENT-SERVER §15.3), com autorização e o SSS parado.
-  - [ ] Decidir quando congelar a versão 1 do esquema: já há PROD no 3067. O `init_db` ainda não aplica migrações (`src/sss/cli/migrations/` vazia).
+  - [ ] O `init_db` ainda não aplica migrações (`src/sss/cli/migrations/` vazia); a primeira mudança de esquema depois do congelamento da versão 1 traz a `m0002_*`.
+  - [ ] Homologação local de 07/11/2026 em andamento (resultado ainda não registrado).
   - [ ] Definir a semântica do `--recreate` do `init_db` (README §11.1) antes de implementá-lo.
   - [ ] Decidir se o charset AL32UTF8 do README §2.2 é exigência ou recomendação: o GFPR é WE8ISO8859P15 e o SSS funciona nele.
   - [ ] Opcional: o `init_db --generate-sql` passar a usar as contas do config nos GRANTs, como o `generate_sql.py --name`.
-  - [ ] Rodar `make test-oracle` (bateria Oracle) com o DEV local parado, depois da correção das constraints.
+  - [ ] Rodar `make test-oracle` (bateria Oracle) com o DEV local parado e o DEV do 3067 parado (ou ainda no código antigo), depois da correção das constraints.
   - [ ] Teste real dos três drivers (F8.2) e roteiro E2E com agentes POSIX (F9.2, `docs/prompts/F9_2_e2e.md`).
   - [ ] Trocar a senha da conta Oracle usada no 3067 (apareceu numa conversa) e ajustar os `secrets.cfg`.
   - [ ] Atualizar o `~/sss_pacote/sss_vars.sh` real com o `SSS_AGENTE_HEALTH` em ordem alfabética (modelo do DEPLOYMENT-SERVER).
@@ -210,7 +211,7 @@ O porquê completo de cada decisão está em `docs/architecture/CR-*.md` (CR-001
     - o `stop_ticket` (exceção 19 C).
   - Dívida de lint e tipos listada no `.flake8` e no `pyproject.toml`: só diminui (`test_quality_debt.py`).
   - `test_ha_agentes_reais` (CRON) pode estourar o prazo sob carga na bateria completa (passa isolado).
-  - A bateria Oracle disputa o banco com o DEV local: pare o DEV antes (R-23) e confira `find var -maxdepth 2` antes e depois.
+  - A bateria Oracle disputa o banco com o DEV local e com o DEV do 3067 (mesmo `tbsdev_` no GFPR, quando ele já roda o prefixo fixo): pare os dois antes (R-23) e confira `find var -maxdepth 2` antes e depois.
   - O 3067 não comporta o Instant Client 19 (exige glibc 2.14); segue com o cliente 12.2, sem `call_timeout`. Ali, as invariantes I3 e I4 dependem da rede e do `SQLNET.EXPIRE_TIME`.
 
 ### 5.1 Pendências de código
@@ -273,8 +274,8 @@ A ordem das camadas é verificada estaticamente por AST em `tests/architecture/t
   20. `input_delivery` — `id`, `upload_id`, `agent_id`, `state`, `reason`, `delivered_at`.
   21. `input_listing` — `id`, `agent_id`, `environment`, `script_id`, `listing`, `file_count`, `truncated`, `listed_at`, `refresh_requested_at`.
 * **As 14 Funcionalidades (`features`, seed):**
-  * Operação: `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `MANAGE_SCHEDULES`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD`.
-  * Administração e Governança: `MANAGE_USERS`, `MANAGE_PROFILES`, `MANAGE_ENVIRONMENTS`, `MANAGE_SCRIPTS`, `MANAGE_PARAMETERS` (Gestão de Parâmetros), `VIEW_AUDIT`.
+  * Operação (`OPERATION`): `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `DOWNLOAD_OUTPUT`, `UPLOAD_INPUT`, `FILES_UPLOAD`, `FILES_DOWNLOAD`.
+  * Administração e Governança (`ADMIN`): `MANAGE_USERS`, `MANAGE_PROFILES`, `MANAGE_ENVIRONMENTS`, `MANAGE_SCRIPTS`, `MANAGE_PARAMETERS` (Gestão de Parâmetros), `MANAGE_SCHEDULES` (Regras de Agendamento), `VIEW_AUDIT` (`ddl_builder.FEATURE_CATALOG`).
 * **Mapeamento Padrão de Processos × Ambientes:**
   * `web0001` → servidor web da instalação.
   * `agente0001` → `GFPREPROD` | `agente0002` → `CLONE2` | `agente0003` → `CLONE1` | `agente0004` → `CLONE6` | `agente0005` → `CLONE7`.
@@ -285,10 +286,10 @@ A ordem das camadas é verificada estaticamente por AST em `tests/architecture/t
   * `docs/DEPLOYMENT.md` — manual geral normativo de implantação e operação em produção (validado por `test_deployment_doc.py`).
   * `docs/DEPLOYMENT-SERVER.md` — runbook passo a passo para implantação em servidor único (Web + 5 Agentes) e Apêndice A com histórico de decisões do servidor `brtlvlty3067sl`.
   * `docs/DEV_ENVIRONMENT.md` — guia do ambiente de desenvolvimento local: pré-requisitos e compilação dos Pythons 3.6, ferramentas de lint e tipos no 3.11 (`DEV_PYTHON`), assets herméticos, `check_env`, servidor de desenvolvimento, testes, árvore `scripts_ambiente/`, Oracle real e usuários padrão.
-  * `docs/HOMOLOGATION_RUNBOOK.md` — roteiro de homologação manual e automatizada.
+  * `docs/HOMOLOGATION_RUNBOOK.md` — roteiro de homologação manual e automatizada (o `results.json` de cada rodada é versionado, por exceção no `.gitignore`).
   * `docs/UTILITY_SCRIPTS.md` — catálogo das ferramentas e scripts utilitários.
   * `docs/ADMIN_CRUD_PATTERN.md` — padrão arquitetural das 5 telas administrativas.
-* **Planos de execução (`docs/explain/`):** 6 planos EXPLAIN reais das consultas dos repositórios Oracle: `AUDIT_AGENTS.md`, `CATALOG.md`, `RBAC_USERS.md`, `SCHEDULES.md` e `TICKETS.md` (agregados da F7.3) e `SCHEDULER.md` (repositório do agente, F8.3a).
+* **Planos de execução (`docs/explain/`):** 6 planos EXPLAIN reais das consultas dos repositórios Oracle, históricos (19–20/10/2026, prefixo físico `tbsss_` e driver Thin; leia `TBSSS_*` como `{prefixo}`): `AUDIT_AGENTS.md`, `CATALOG.md`, `RBAC_USERS.md`, `SCHEDULES.md` e `TICKETS.md` (agregados da F7.3) e `SCHEDULER.md` (repositório do agente, F8.3a).
 * **Histórico de Change Requests (`docs/architecture/`):**
   * `CR-001` a `CR-005`: separação web/daemon, somente Oracle 11gR2 com driver adaptativo, catálogo de parâmetros, linguagem simples em duas partes, agente somente POSIX e logs por minuto.
   * `CR-006` a `CR-010`: colunas de auditoria nas 21 tabelas, hardening de HA/fencing/orçamento (`SCHEMA_VERSION`), fechamento da revisão R2, reserva da pasta `internal` e variáveis `SSS_*` dos scripts.

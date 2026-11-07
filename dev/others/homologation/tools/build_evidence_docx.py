@@ -938,8 +938,9 @@ ADAPTACAO_MASSA_PROPRIA = {
     "CT-21": u"Ticket fora do escopo do %s: um ticket real de CLONE2." % USR_RESTRITO,
     "CT-25": u"SHA-256 retirado pelo CR-011; a matriz do OPERADOR voltou ao original no fim.",
     "CT-26": u"O perfil %s perdeu VIEW_LOGS por alguns segundos (para mostrar o item Tickets de quem só dispara) e o "
-             u"limpar_linhas_vazias ficou homologado em um ambiente e depois em nenhum (disparo e regra direto ao "
-             u"formulário; quadro Quem pode rodar). Tudo foi desfeito no próprio caso." % PRF_RESTRITO,
+             u"limpar_linhas_vazias ficou homologado em um ambiente só (disparo e regra direto ao formulário). Tudo "
+             u"foi desfeito no próprio caso. O quadro Quem pode rodar saiu da edição do script no fd43cae "
+             u"(06/11/2026)." % PRF_RESTRITO,
     "CT-27": u"O %s ficou sem Consultar Tickets por alguns segundos (cancelar só quem enxerga); a regex do "
              u"caminho_arquivo e o arquivo do contar_linhas_arquivo foram trocados para mostrar os avisos e "
              u"desfeitos no próprio caso; tempos de abertura registrados (CR-018c)." % PRF_RESTRITO,

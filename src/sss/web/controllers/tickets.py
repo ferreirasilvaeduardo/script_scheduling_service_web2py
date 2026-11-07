@@ -103,7 +103,7 @@ def new():
 
 
 def catalog():
-    """Rotinas disponiveis (README §5.8): so leitura, para quem tem EXEC_SCRIPT."""
+    """Rodar um script (README §5.8): so leitura, para quem tem EXEC_SCRIPT."""
     _require_method("GET", "HEAD")
     ctx = _require_func("EXEC_SCRIPT")
     response.title = u"Rodar um script — SSS"

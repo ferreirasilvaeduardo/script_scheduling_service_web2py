@@ -1,5 +1,7 @@
 # SSS — Explain Plan: Agregado CATALOGO (F7.3)
 
+> **Plano histórico:** os planos deste arquivo foram tirados em 19–20/10/2026, quando o prefixo físico era `tbsss_` e o driver usado era o Thin. Leia `TBSSS_*` (e `tbsss_*` nos nomes físicos) como `{prefixo}` (`tbsdev_` ou `tbsprd_` hoje). O plano não depende do prefixo.
+
 Consultas SQL estáticas do `RepoCatalogOracle` (`src/sss/persistence/oracle/catalog.py`) no Oracle 11gR2, com o acesso esperado de cada uma.
 
 > **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` é fixo pelo ambiente (`tbsdev_` em DEV, `tbsprd_` em PROD; não mais parametrizado). Os dois são validados por `sql_ident` e qualificados **uma vez**, na criação do repositório. Todo valor entra por bind.
@@ -34,7 +36,7 @@ SELECT * FROM (SELECT a.*, ROWNUM rn FROM (
   SELECT s.id, s.name, s.description, s.script_group, s.category, s.stage, s.interpreter, s.path_file,
          s.param_type, s.max_parallel_env, s.timeout_s, s.active,
          s.created_at, s.created_by, s.updated_at, s.updated_by,
-         (SELECT COUNT(*) FROM {owner}.{prefixo}script_param sp WHERE sp.script_id = s.id) qtd_parametros
+         (SELECT COUNT(*) FROM {owner}.{prefixo}script_param sp WHERE sp.script_id = s.id) param_count
     FROM {owner}.{prefixo}scripts s
    WHERE LOWER(s.name) LIKE :name_f ESCAPE '\' AND s.script_group = :grupo_f   -- só os filtros informados
    ORDER BY NLSSORT(s.name, 'NLS_SORT=BINARY'), s.id
@@ -46,19 +48,19 @@ SELECT sa.script_id, a.name
  WHERE sa.script_id IN (:s0, :s1, ...)
 ```
 * **Esperado:**
-  * `qtd_parametros`: `INDEX RANGE SCAN` em `uk_{prefixo}sprm_scr_prm` (coluna líder `script_id`);
+  * `param_count`: `INDEX RANGE SCAN` em `uk_{prefixo}sprm_scr_prm` (coluna líder `script_id`);
   * homologados: `INDEX RANGE SCAN` em `uk_{prefixo}senv_scr_env` (líder `script_id`) e `INDEX UNIQUE SCAN` na PK de `{prefixo}environments`.
 * **Sem `LISTAGG`:** de propósito. Com muitos ambientes, ele estouraria os 4.000 bytes (ORA-01489).
 
 ### 1.3 `parameters_list`
 ```sql
 SELECT p.id, p.code, ..., p.updated_by,
-       (SELECT COUNT(*) FROM {owner}.{prefixo}script_param sp WHERE sp.parameter_id = p.id) qtd_scripts
+       (SELECT COUNT(*) FROM {owner}.{prefixo}script_param sp WHERE sp.parameter_id = p.id) script_count
   FROM {owner}.{prefixo}parameters p
  WHERE LOWER(p.code) LIKE :code_f ESCAPE '\'                        -- só os filtros informados
  ORDER BY NLSSORT(p.code, 'NLS_SORT=BINARY'), p.id                    -- dentro do padrão ROWNUM
 ```
-* **Esperado:** `qtd_scripts` faz `INDEX RANGE SCAN` em `ix_{prefixo}sprm_prm` (`parameter_id`).
+* **Esperado:** `script_count` faz `INDEX RANGE SCAN` em `ix_{prefixo}sprm_prm` (`parameter_id`).
 
 ---
 
@@ -79,7 +81,7 @@ SELECT s.id, s.name, ..., s.updated_by
                 WHERE sa.script_id = s.id AND a.active = 'Y')
  ORDER BY NLSSORT(s.name, 'NLS_SORT=BINARY'), s.id
 
--- Administrador: dispensa perfil_scr/perfil_amb; não dispensa a homologação em environment active.
+-- Administrador: dispensa profile_script/profile_env; não dispensa a homologação em environment active.
 SELECT s.id, ... FROM {owner}.{prefixo}scripts s
  WHERE s.active = 'Y'
    AND EXISTS (SELECT 1 FROM {owner}.{prefixo}script_env sa JOIN {owner}.{prefixo}environments a ON a.id = sa.environment_id
@@ -88,8 +90,8 @@ SELECT s.id, ... FROM {owner}.{prefixo}scripts s
 ```
 * **Esperado:**
   * o `EXISTS` vira semi-join (`NESTED LOOPS SEMI` ou `HASH JOIN SEMI`);
-  * `perfil_scr` e `perfil_amb` por `INDEX RANGE SCAN` nas UKs de líder `profile_id`;
-  * `script_amb` por `uk_{prefixo}senv_scr_env` (líder `script_id`).
+  * `profile_script` e `profile_env` por `INDEX RANGE SCAN` nas UKs de líder `profile_id`;
+  * `script_env` por `uk_{prefixo}senv_scr_env` (líder `script_id`).
 
 ---
 
@@ -115,7 +117,7 @@ A ordem de locks é `{prefixo}scripts → {prefixo}parameters`. Ela nunca é inv
 
 * **Sem `TABLE ACCESS FULL` em `tbsss_tickets` nem em `tbsss_audit`:** conforme: o agregado não lê essas tabelas.
 * **`TABLE ACCESS FULL` aceitável:** aparece só no `COUNT` e na página das listagens de cadastro (`tbsss_environments`, `tbsss_scripts`, `tbsss_parameters`), com `COUNT STOPKEY`/`SORT ORDER BY STOPKEY`, e no ramo alternativo dos planos adaptativos (`STATISTICS COLLECTOR` + `HASH JOIN`), que o otimizador só usa se a cardinalidade real for maior.
-* **Leituras por chave e transições:** lock e `UPDATE` pela PK (`INDEX UNIQUE SCAN`); UK do nome do script por `INDEX UNIQUE SCAN`; vínculos por `UK_…_SPRM_SCR_ORD`/`UK_…_SAMB_SCR_AMB` (líder `script_id`); `executable_scripts` com semi-join e `INDEX UNIQUE SCAN` em `UK_…_PSCR_PER_SCR` e `UK_…_PAMB_PER_AMB`. Nas consultas por `parameter_id`, o otimizador escolheu `INDEX SKIP SCAN` em `UK_…_SPRM_SCR_PRM`, por causa do volume pequeno de hoje; `IX_…_SPRM_PRM` continua disponível e é usado em `qtd_scripts`.
+* **Leituras por chave e transições:** lock e `UPDATE` pela PK (`INDEX UNIQUE SCAN`); UK do nome do script por `INDEX UNIQUE SCAN`; vínculos por `UK_…_SPRM_SCR_ORD`/`UK_…_SENV_SCR_ENV` (líder `script_id`); `executable_scripts` com semi-join e `INDEX UNIQUE SCAN` em `UK_…_PSCR_PRF_SCR` e `UK_…_PENV_PRF_ENV`. Nas consultas por `parameter_id`, o otimizador escolheu `INDEX SKIP SCAN` em `UK_…_SPRM_SCR_PRM`, por causa do volume pequeno de hoje; `IX_…_SPRM_PRM` continua disponível e é usado em `script_count`.
 
 ### Planos registrados
 

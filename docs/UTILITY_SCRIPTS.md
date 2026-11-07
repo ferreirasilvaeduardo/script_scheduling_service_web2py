@@ -288,12 +288,15 @@ Com a conta do SSS, sem root (DEPLOYMENT §4.0: um usuário de SO só), a partir
 # na pasta do pacote, depois do sha256sum -c SHA256SUMS
 tar -xzf utilitarios.tar.gz -C <RAIZ>
 cd <RAIZ>
-# padrao oficial: arquivos 0444 e scripts .py/.sh 0555 (o agente recusa script gravavel por grupo ou por outros; README §8.5, AGENTS §3.2)
+# padrao oficial: pastas 0555, arquivos 0444 e scripts .py/.sh 0555 (o agente recusa script gravavel por grupo ou por outros; README §8.5, AGENTS §3.2)
+find scripts_ambiente/utilitarios -type d -exec chmod 0555 {} +
 find scripts_ambiente/utilitarios -type f -exec chmod 0444 {} +
 find scripts_ambiente/utilitarios -type f \( -name '*.py' -o -name '*.sh' \) -exec chmod 0555 {} +
 ```
 
-O pacote da aplicação (`tools/package.py`) não leva `scripts_ambiente/`, e o `sss-update.sh` preserva essa pasta: numa versão com utilitário novo ou alterado, extraia o `utilitarios.tar.gz` de novo e reaplique os modos.
+**Modos (padrão oficial, o mesmo no DEPLOYMENT §1.3/§3 e no DEPLOYMENT-SERVER passo 10):** `scripts_ambiente/` com `0755` (o agente a cria assim); dentro de `scripts_ambiente/utilitarios/`, pastas `0555`, arquivos `0444` e `.py`/`.sh` `0555`; o resto da árvore fica com o modo de quem instala (o agente só exige arquivo não gravável por grupo nem por outros).
+
+O pacote da aplicação (`tools/package.py`) não leva `scripts_ambiente/`, e o `sss-update.sh` preserva essa pasta: numa versão com utilitário novo ou alterado, devolva a escrita à conta (`chmod -R u+w scripts_ambiente/utilitarios`), extraia o `utilitarios.tar.gz` de novo e reaplique os modos.
 
 Nada a configurar no `config.ini` do agente: sem `[agent] script_base_dir`, a pasta base é `scripts_ambiente/` (CR-023, CR-028; DEPLOYMENT §9). Ensaiado no PROD (CR-033 e CR-035).
 
@@ -306,4 +309,4 @@ Para criar o esquema com o catálogo num banco vazio:
 sqlplus usuario_owner/senha@//host:porta/servico @docs/sql/01_deploy_sss_openrisow_tbsprd.sql
 ```
 
-O `01_deploy_sss_<owner>_<prefixo>.sql` não roda sobre um esquema existente (para do primeiro erro; reaplicar exige o `02_rollback_sss_<owner>_<prefixo>.sql` antes, apagando os dados). Num banco já instalado, o catálogo é atualizado pelo `scripts/init_db.py`, que pula os objetos existentes e reaplica o seed por `MERGE INTO`, atualizando descrições, parâmetros e caminhos sem duplicidade (DEPLOYMENT §18).
+O `01_deploy_sss_<owner>_<prefixo>.sql` não roda sobre um esquema existente (para do primeiro erro; reaplicar exige o `02_rollback_sss_<owner>_<prefixo>.sql` antes, apagando os dados). Num banco em uso, **não rode o `scripts/init_db.py`**: ele reaplica o seed inteiro por `MERGE INTO` e devolve ao padrão (e reativa) ambientes, parâmetros, scripts, perfis e usuários mudados pela tela. O catálogo dos utilitários num banco em uso é mantido pela tela (Scripts e Parâmetros, com auditoria); quando uma versão traz funcionalidade nova no catálogo, aplique só os blocos `MERGE` indicados na nota da versão, copiados do `01_deploy` dela (DEPLOYMENT §18.2).

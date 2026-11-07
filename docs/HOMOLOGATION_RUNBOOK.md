@@ -11,7 +11,7 @@ O roteiro abre um navegador sem tela (Puppeteer), executa os casos de teste pela
 | Saída | Onde | Versionado? |
 |---|---|---|
 | Figuras de cada tela (`<CT>_<n>.png`) | `dev/others/homologation/evidence_<rodada>/` | Não (já ficam dentro do `.docx`) |
-| `results.json`: cada verificação (descrição, OK ou não, detalhe) por caso | idem | **Sim** |
+| `results.json`: cada verificação (descrição, OK ou não, detalhe) por caso | idem | **Sim** (o `.gitignore` ignora a pasta `evidence_*/`, com a exceção `!dev/others/homologation/evidence_*/results.json`) |
 | `state.json`: ids e dados criados, para repetir só alguns casos | idem | Não |
 | `execucao.log`: saída do roteiro (`[OK]`, `[NAO OK]`, `[fig]`, `[nota]`) | idem (redirecionada pelo comando) | Não (opcional) |
 | Documento de evidências | `docs/homologation/SSS_Homologation_Evidence_<AAAA-MM-DD>[_r<n>].docx` | **Sim** |
@@ -45,10 +45,11 @@ As senhas nunca vão para o código, o comando ou o log:
 
 Confira antes de subir o DEV local. Se alguma falhar, **não suba** e não rode o roteiro.
 
-1. **O 3067 parado, DEV e PROD.** O prefixo é fixo por tipo (`tbsdev_` no DEV, `tbsprd_` no PROD), e no owner `openrisow` do GFPR existe uma instalação por tipo (decisão 18; `docs/DEPLOYMENT-SERVER.md` §15.3 e Apêndice A). As tabelas são as mesmas do 3067: com ele no ar, os agentes dele disputariam os tickets da rodada, e a rodada mudaria os cadastros dele.
+1. **O 3067 parado, DEV e PROD, quando ele já roda o código do prefixo fixo (a partir do `a75e3c1`).** O prefixo é fixo por tipo (`tbsdev_` no DEV, `tbsprd_` no PROD), e no owner `openrisow` do GFPR existe uma instalação por tipo (decisão 18; `docs/DEPLOYMENT-SERVER.md` §15.3 e Apêndice A). As tabelas são as mesmas do 3067: com ele no ar, os agentes dele disputariam os tickets da rodada, e a rodada mudaria os cadastros dele.
+   - Enquanto o 3067 estiver num pacote anterior ao `a75e3c1` (prefixos `s3dev_`/`s3prd_`; ex.: o pacote `2610301500`, em 07/11/2026), as tabelas são outras, não há colisão e ele pode ficar no ar. Confira em cada raiz do 3067: `cat <RAIZ>/src/sss/BUILD` (o pacote no ar) e `grep -c 'def default_prefix' <RAIZ>/src/sss/core/sql_ident.py` → `0` no código antigo (pode ficar no ar), `1` no código do prefixo fixo (pare como abaixo).
    - No 3067, em cada tipo, pelo `bin/sss-ctl.sh`: `cron remove` e `stop` (como no passo 15.3 a do DEPLOYMENT-SERVER). Sem tirar o bloco do `crontab`, o keepalive sobe tudo de novo em até 5 minutos.
    - Confira: `bin/sss-ctl.sh status` sem processo no ar nos dois tipos e `crontab -l | grep -c sss-keepalive.sh` → `0`.
-   - Registre a parada e, depois da rodada, devolva o 3067 ao ar (`cron install` e `start`, passos 13 e 14 do DEPLOYMENT-SERVER), com o DEV local parado antes.
+   - Registre a parada e, depois da rodada, devolva o 3067 ao ar (`start` e `cron install`, passos 12 e 14 do DEPLOYMENT-SERVER), com o DEV local parado antes.
    - No modo remoto (passo 6, homologar o próprio 3067), vale o inverso: o DEV e o PROD desta máquina parados.
 2. **Esquema `tbsdev_` conferido antes de subir** (no `sqlplus` ou cliente equivalente, com a conta da instalação; a senha nunca no comando):
    - `SELECT COUNT(*) FROM all_tables WHERE owner = 'OPENRISOW' AND table_name LIKE 'TBSDEV\_%' ESCAPE '\';` → **21**;
@@ -58,6 +59,7 @@ Confira antes de subir o DEV local. Se alguma falhar, **não suba** e não rode 
 3. **Usuários do seed e senha.** O seed cadastra só `admin` (ADMINISTRADOR), `op.prod` (OPERADOR) e `consulta` (CONSULTA), com a senha inicial do `docs/DEPLOYMENT.md` §5.3 (o roteiro a lê de lá; não a copie para comando, log ou arquivo versionado).
    - `op.prod` e `consulta` precisam estar na senha inicial, ativos e desbloqueados (o CT-14 bloqueia e desbloqueia o `consulta`).
    - O `admin` está na senha inicial ou na do `~/.sss_homolog_pw`: decida o `SSS_ADMIN_START` no passo 4.
+4. **Túnel do GFPR estável durante toda a rodada.** Nesta máquina, o DSN do GFPR é o túnel SSH `localhost:2424` (para `10.129.177.188:1521`; DEPLOYMENT-SERVER, Apêndice A). Se o túnel cair no meio, os agentes e o web recebem `ORA-12541` e a rodada se perde. Suba o túnel com keepalive, por exemplo `ssh -N -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -L 2424:10.129.177.188:1521 <conta>@<bastion>`, e confira a porta (`nc -z localhost 2424`) antes de subir o DEV local.
 
 ### 3.1 Massa própria do roteiro: perfil restrito e usuário de teste
 
@@ -181,7 +183,7 @@ SSS_HOM_VENV=/home/mastersafgf/.sss_homolog_venv \
 | CT-20, CT-21 | Painel de agentes; acesso direto pela URL sem permissão (ticket de CLONE2 para o `homolog.restrito` → 404) |
 | CT-22, CT-23 | Tema escuro e celular; quadro Registro |
 | CT-24, CT-25 | Robustez do scheduler na interface; correções da auditoria final |
-| CT-26, CT-27 | CR-017 e CR-018 (menu de tickets, cancelar só quem enxerga, avisos de cadastro, desempenho) |
+| CT-26, CT-27 | CR-017 e CR-018 (menu de tickets, um ambiente só, cancelar só quem enxerga, avisos de cadastro, desempenho) |
 | CT-28 a CT-30 | Saídas (download), Entrada (envio, entrega, uso pelo script), pasta de trabalho |
 | CT-31, CT-32 | Caminho relativo à pasta base; interpretador do disparo, do `#!` e do cadastro |
 | CT-33 | Pasta de Arquivos (inputs, uso pelo script, outputs) |
@@ -295,7 +297,7 @@ git commit -m "Homologacao do DEV no 3067, rodada 4: 356/356 com o pacote 261030
 git push origin main
 ```
 
-- As figuras e o `state.json` ficam fora (`.gitignore`); o `execucao.log` não é versionado nas rodadas recentes.
+- As figuras e o `state.json` ficam fora: o `.gitignore` ignora a pasta `evidence_*/` inteira, salvo o `results.json` (exceção `!dev/others/homologation/evidence_*/results.json`), por isso o `git add` acima o aceita sem `-f`. O `execucao.log` não é versionado nas rodadas recentes.
 - **Nunca** use `git add -A` sem a exclusão do `LEIA-ME.TXT`, e nunca commite `instance/secrets.cfg`.
 - Se o roteiro mudou nesta rodada (correção ou caso novo), o `capture_evidence.js` vai num commit próprio, antes.
 

@@ -476,9 +476,13 @@ _AGENT_ONLY_REQUIRED = ("environments", "max_parallel_jobs")
 
 
 def env_label(install_type: Optional[str] = None) -> str:
-    """Ambiente mostrado na tela e na linha de subida (CR-028, D12; CR-032, D11): o nome da pasta <TIPO>."""
-    tipo = INSTALL_TYPE if install_type is None else install_type.upper()
-    return tipo or "?"
+    """Ambiente mostrado na tela e na linha de subida (CR-028, D12; CR-032, D11).
+
+    Sem argumento, a mesma regra do prefixo das tabelas (install_env(): SSS_ENV, senao SSS_INSTALL_TYPE, senao a
+    pasta <TIPO>), para a tela nunca mostrar um ambiente diferente das tabelas.
+    """
+    tipo = install_env() if install_type is None else install_type
+    return tipo.upper() or "?"
 
 
 def install_env() -> str:

@@ -334,16 +334,26 @@ function ticketFromUrl() {
     return m ? parseInt(m[1], 10) : null;
 }
 
-// Clica no botao "Rodar em <env>" do cartao do script em Rodar um script (CR-017b).
+// Clica no botao "Rodar script" do cartao do script em Rodar um script e escolhe o ambiente na etapa 2
+// do disparo (com um so ambiente, o disparo ja abre na etapa 3). O cartao nao lista mais os ambientes
+// (README §5.8); devolve false se o script ou o ambiente nao estao disponiveis para o usuario.
 async function clickRunOnCard(scriptName, env) {
-    const handle = await page.evaluateHandle((n, e) => {
+    const handle = await page.evaluateHandle((n) => {
         const card = Array.from(document.querySelectorAll('li.sss-card-routine'))
             .find((li) => (li.querySelector('h3') || {}).innerText === n);
-        return card ? Array.from(card.querySelectorAll('a')).find((a) => a.innerText.trim() === 'Rodar em ' + e) || null : null;
-    }, scriptName, env);
+        return card ? Array.from(card.querySelectorAll('a')).find((a) => a.innerText.trim() === 'Rodar script') || null : null;
+    }, scriptName);
     const el = handle.asElement();
     if (!el) return false;
     await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), el.click()]);
+    // Etapa 3 ja aberta (um so ambiente): o ambiente escolhido vem no campo oculto do formulario.
+    const chosen = await page.$eval('input[type="hidden"][name="environment"]', (i) => i.value).catch(() => null);
+    if (chosen !== null) return chosen === env;
+    const choice = await page.evaluateHandle((e) => Array.from(document.querySelectorAll('a.sss-choice'))
+        .find((a) => new URL(a.href).searchParams.get('environment') === e) || null, env);
+    const opt = choice.asElement();
+    if (!opt) return false;
+    await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), opt.click()]);
     return true;
 }
 
@@ -458,6 +468,8 @@ async function hasButton(label) {
 }
 
 const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
+
+const CTS = {};
 
 CTS['PREPARO'] = async () => {
     begin('PREPARO', 'Preparação: perfil restrito e usuário de teste da homologação (massa própria, pela tela)');
@@ -1297,9 +1309,7 @@ CTS['CT-16'] = async () => {
     const campo = await page.$eval('#field-path_file', (e) => e.value);
     check('Arquivo do script com o caminho relativo à pasta base (CR-023)', campo === original, campo);
     await expectText('Ajuda do campo com os dois exemplos de caminho', '/opt/automacoes/scripts/', 'relativo à', 'pasta base');
-    await expectText('Quadro Quem pode rodar: pronto, com os perfis (CR-017d)', 'Quem pode rodar', 'Pronto para rodar.',
-        PRF_RESTRITO, 'OPERADOR');
-    await snap('Edição de script com o caminho completo e o quadro Quem pode rodar', { full: true });
+    await snap('Edição de script com o caminho completo', { full: true });
     const casos = [
         ['./contar_linhas_arquivo.sh', 'Escreva o caminho sem // repetida, sem ./ e sem / no fim.'],
         ['/opt/automacoes/../scripts/contar.sh', "O caminho não pode conter '..'."],
@@ -1739,7 +1749,7 @@ async function toggleProfileFeature(profileId, code) {
 }
 
 CTS['CT-26'] = async () => {
-    begin('CT-26', 'CR-017: menu de tickets, um ambiente só e Quem pode rodar');
+    begin('CT-26', 'CR-017: menu de tickets e um ambiente só');
     const todos = ['CLONE1', 'CLONE2', 'CLONE6', 'CLONE7', 'GFPREPROD'];
     const sid = state.scripts.limpar_linhas_vazias;
     // (1) quem só dispara (sem Consultar Logs) continua com o item Tickets no menu
@@ -1766,15 +1776,11 @@ CTS['CT-26'] = async () => {
     await snap('Disparo direto nas perguntas (um ambiente só)', { full: true });
     await go(`/schedules/form?script_id=${sid}`);
     check('Nova regra com um ambiente só abre direto na recorrência (CR-017c)', await page.$('#form-schedule') !== null);
-    // (3) Quem pode rodar sem homologação
-    await setHomologation(sid, []);
-    await go(`/admin_scripts/form/${sid}`);
-    await expectText('Sem homologação: "Ainda não pode rodar." e o que falta, com o link (CR-017d)',
-        'Ainda não pode rodar.', 'Ainda não foi liberado em nenhum ambiente ativo.', 'Abrir a homologação');
-    await snap('Quem pode rodar: script sem homologação', { selector: 'section[aria-labelledby="title-readiness"]' });
+    // Desfaz: homologação do limpar_linhas_vazias de volta nos 5 ambientes
     await setHomologation(sid, todos);
-    await go(`/admin_scripts/form/${sid}`);
-    await expectText('Homologação restaurada nos 5 ambientes: pronto para rodar', 'Pronto para rodar.');
+    await go(`/admin_scripts/homologation/${sid}`);
+    const marcados = await page.$$eval('input[name="environments"]:checked', (bs) => bs.map((b) => b.getAttribute('data-name')));
+    check('Homologação do limpar_linhas_vazias restaurada nos 5 ambientes', sameSet(marcados, todos), marcados.join(', '));
     note(`As mudanças temporárias (VIEW_LOGS do ${PRF_RESTRITO} e a homologação do limpar_linhas_vazias) foram desfeitas no próprio CT e ficam na auditoria.`);
 };
 

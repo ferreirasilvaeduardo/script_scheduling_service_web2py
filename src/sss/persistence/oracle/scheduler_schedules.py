@@ -148,7 +148,7 @@ class RepoSchedulerSchedules(object):
             cur.close()
 
     def script_and_links(self, conn, script_id):
-        """(script, vinculos) para a compilacao do snapshot v4 (README §6.5) e o teto/timeout do script."""
+        """(script, vinculos) para a compilacao do snapshot v7 (README §6.5) e o teto/timeout do script."""
         cur = conn.cursor()
         try:
             cur.execute("SELECT " + ", ".join(_COLS_SCRIPT) + " FROM " + self._scr + " WHERE id = :id",

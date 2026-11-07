@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Rotinas disponiveis e historico do script (README §5.8, CR-004 U5/U7) sobre o FAKE."""
+"""Rodar um script e historico do script (README §5.8, CR-004 U5/U7) sobre o FAKE."""
 from tests.support import _testenv  # noqa: F401
 
 import datetime

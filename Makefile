@@ -22,7 +22,7 @@ CANDIDATE := thick
 # Prefixos oficiais fixos por ambiente (DEV = tbsdev_, PROD = tbsprd_)
 SQL_PREFIXES ?= tbsdev_ tbsprd_
 # Pythons da bateria completa (AGENTS §2.1: sintaxe 3.6, execucao de 3.6.0 a 3.13)
-PYTHONS ?= $(HOME)/.pyenv/versions/3.6.0/bin/python $(HOME)/.pyenv/versions/3.6.15/bin/python $(HOME)/.pyenv/versions/3.13.2/bin/python
+PYTHONS ?= $(HOME)/.pyenv/versions/3.6.0/bin/python $(HOME)/.pyenv/versions/3.6.8/bin/python $(HOME)/.pyenv/versions/3.6.15/bin/python $(HOME)/.pyenv/versions/3.13.2/bin/python
 HOMOLOG_TOOLS := dev/others/homologation/tools
 
 # Valida o sqlplus, ORACLE_HOME e bibliotecas partilhadas do Instant Client
@@ -235,7 +235,7 @@ sql-all: ## Regera em docs/sql os scripts de todos os SQL_PREFIXES (os versionad
 init-db-dry: ## Imprime o DDL do processo NAME sem conectar (scripts/init_db.py --dry-run)
 	$(PYTHON) scripts/init_db.py --name $(NAME) --dry-run
 
-test-matrix: ## Bateria completa em cada Python de PYTHONS (3.6.0, 3.6.15 e 3.13.2)
+test-matrix: ## Bateria completa em cada Python de PYTHONS (3.6.0, 3.6.8, 3.6.15 e 3.13.2)
 	@rc=0; for py in $(PYTHONS); do out=$$($$py -W ignore -m unittest discover -s tests -t . 2>&1) || rc=1; echo "== $$py: $$(printf '%s\n' "$$out" | grep -E '^(Ran|OK|FAILED)' | tr '\n' ' ')"; done; exit $$rc
 
 test-oracle: ## Bateria com o Oracle real (SSS_TEST_ORACLE=1); recusa com o DEV desta raiz no ar (R-23)

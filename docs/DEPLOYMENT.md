@@ -91,7 +91,7 @@ O `health.py` usa a conta do processo do `--name` (CR-032, D8: não há papel mo
 | `<RAIZ>/var/<agente>/script_works` | Pasta de trabalho dos scripts, uma por ticket (CR-019) | `0755`; abaixo, `0700` | padrão de `[agent] script_work_dir` |
 | `<RAIZ>/var/<agente>/files` | Pasta de arquivos só em disco: `<ambiente>/<script>/inputs` e `outputs`, permanentes (CR-037; README §5.11 e §8.16) | `0755`; abaixo, `0700` | sempre do nome (sem chave) |
 | `<RAIZ>/var/<web>/tmp` | Temporário dos envios do web acima de 1 MiB, da Entrada e da Pasta de Arquivos (CR-037, D6) | `0700` | sempre do nome (sem chave) |
-| `<RAIZ>/scripts_ambiente` | Scripts dos ambientes | `0755` | padrão de `[agent] script_base_dir` |
+| `<RAIZ>/scripts_ambiente` | Scripts dos ambientes | `0755` (criada pelo agente); `utilitarios/`: pastas `0555`, arquivos `0444`, `.py`/`.sh` `0555` (§3) | padrão de `[agent] script_base_dir` |
 
 Tudo pertence à conta do SSS. As pastas saem do nome do processo, sem precisar escrevê-las, e são criadas na subida (CR-028, D5; CR-032, D12; README §12.1). Uma chave escrita no `config.ini` vale no lugar do padrão; escrita vazia (ex.: `output_dir =`) desliga a função.
 
@@ -125,11 +125,11 @@ python3 /tmp/sss-limpo/tools/package.py --source /tmp/sss-limpo --out-dir /tmp/s
 
 Na máquina de desenvolvimento, `make package` faz o mesmo (cópia do `HEAD` por `git archive` e `package.py`) e grava em `.bkp/pacote_<data>/` os quatro arquivos de levar ao servidor (abaixo) e o `COMMIT` (usado no CR-035), que fica na máquina de desenvolvimento.
 
-Desde 30/10/2026, o `make package` (e o `make package-local`, a partir dos arquivos locais) gravam na mesma pasta os quatro arquivos de levar ao servidor: o `sss-<versao>.tar.gz` com o id do pacote em `src/sss/BUILD` (o commit curto, ou a data e a hora no `package-local`; a versão aparece como `1.0.0-dev+<id>` no log, na tela Agentes e no rodapé), o `utilitarios.tar.gz` (os scripts de exemplo do seed, com as entradas em `scripts_ambiente/utilitarios/<arquivo>`; o `package.py` não leva `scripts_ambiente/`), o `sss_vars.sh` (de `~/sss_pacote` ou `SSS_VARS=<arquivo>`, para o roteiro `docs/DEPLOYMENT-SERVER.md`) e o `SHA256SUMS` de todos. Sem o `sss_vars.sh` de origem, o pacote sai sem ele (aviso `[!] Sem sss_vars.sh`).
+Desde 30/10/2026, o `make package` (e o `make package-local`, a partir dos arquivos locais) gravam na mesma pasta os quatro arquivos de levar ao servidor: o `sss-<versao>.tar.gz` com o id do pacote em `src/sss/BUILD` (o commit curto, ou a data e a hora no `package-local`; a versão aparece como `1.0.0-dev+<id>` no log, na tela Agentes e no rodapé), o `utilitarios.tar.gz` (os scripts de exemplo do seed, com as entradas em `scripts_ambiente/utilitarios/<arquivo>`; o `package.py` não leva `scripts_ambiente/`), o `sss_vars.sh` (de `~/sss_pacote` ou `SSS_VARS=<arquivo>`, para o roteiro `docs/DEPLOYMENT-SERVER.md`) e o `SHA256SUMS` de todos. Sem o `sss_vars.sh` de origem, o pacote sai sem ele (aviso `[!] Sem sss_vars.sh`). O `make package-local` grava também o `ORIGEM` (de onde veio o pacote: a pasta local e a data, e o commit de base com as mudanças locais; no lugar do `COMMIT`), fora do `SHA256SUMS`; leve-o junto (o `DEPLOYMENT-SERVER.md` §4.2 conta cinco arquivos).
 
 O `package.py` fica em `tools/` desde o CR-022b2 (antes, `scripts/`): é ferramenta de build e não vai no pacote. Ensaiado de novo no CR-021f3, já sem web2py: o `package.py` não grava `__pycache__` na cópia que empacota (antes, o próprio `__pycache__` recusava o pacote). Com código 1, a saída diz o que foi recusado ("Pacote recusado:" e uma linha por problema, com arquivo e linha, nunca o valor). O caso comum é um `password` ou `cookie_key` que não é `CHANGE_ME` no `instance/exemplos/secrets.cfg.example`.
 
-Leve os quatro arquivos (`sss-<versao>.tar.gz`, `utilitarios.tar.gz`, `sss_vars.sh` e `SHA256SUMS`) ao servidor e confira. Na **primeira instalação**:
+Leve os quatro arquivos (`sss-<versao>.tar.gz`, `utilitarios.tar.gz`, `sss_vars.sh` e `SHA256SUMS`; no `package-local`, também o `ORIGEM`) ao servidor e confira. Na **primeira instalação**:
 
 ```bash
 # com a conta do SSS, na pasta onde estão os arquivos
@@ -148,10 +148,13 @@ Depois, instale os utilitários (os scripts de exemplo que o seed cadastra como 
 ```bash
 # na <RAIZ>; as entradas do tar já começam por scripts_ambiente/utilitarios/ (sem --strip-components)
 tar -xzf <pasta do pacote>/utilitarios.tar.gz -C <RAIZ>
+find scripts_ambiente/utilitarios -type d -exec chmod 0555 {} +
 find scripts_ambiente/utilitarios -type f -exec chmod 0444 {} +
 find scripts_ambiente/utilitarios -type f \( -name '*.py' -o -name '*.sh' \) -exec chmod 0555 {} +
 ls scripts_ambiente/utilitarios                             # esperado: os scripts do seed
 ```
+
+**Modos (padrão oficial, o mesmo no DEPLOYMENT-SERVER e no UTILITY_SCRIPTS):** `scripts_ambiente/` com `0755` (o agente a cria assim); dentro de `scripts_ambiente/utilitarios/`, pastas `0555`, arquivos `0444` e `.py`/`.sh` `0555`; o resto da árvore fica com o modo de quem instala (o agente só exige que o arquivo do script não seja gravável por grupo nem por outros, `GROUP_OTHER_WRITABLE`). Para extrair de novo, devolva antes a escrita à conta (`chmod -R u+w scripts_ambiente/utilitarios`).
 
 Nas **atualizações** seguintes, não extraia por cima: use o `bin/sss-update.sh` (§18), que preserva `instance/`, `var/` e `scripts_ambiente/`.
 
@@ -164,7 +167,7 @@ O pacote só tem o `bin/` e a aplicação (o código, os templates e os estátic
 ### 4.0 Roteiro de instalação (um usuário de SO e um de banco) [ensaiado no CR-031]
 
 1. **Pacote (§3)** extraído na `<RAIZ>` com a conta do SSS.
-2. **Banco (§5):** a conta única é a **dona do esquema**. Não há GRANT a aplicar (pule o `03_grants`); o `init_db.py --name agente0001` precisa de `--real-schema`, porque o esquema não é descartável (§5.3).
+2. **Banco (§5):** a conta única é a **dona do esquema**. Não há GRANT a aplicar (pule o `03_grants`); o `init_db.py --name agente0001` precisa de `--real-schema`, porque o esquema não é descartável: sem ele, o `init_db` só aceita o esquema descartável dos testes (`SSS_TEST_DSN`, `SSS_TEST_OWNER` com prefixo `SSS_TEST_` e `SSS_TEST_SCHEMA_DISPOSABLE=1`) e sai com 1 antes de qualquer DDL (README §11.1).
 3. **Configuração (§7):** um `instance/common.ini` com o `[oracle]` (conta única, DSN, owner e `driver_mode`; o prefixo das tabelas é fixo pelo ambiente, §10.5), um `instance/secrets.cfg` com `[oracle] password`, `[web] cookie_key` e os `[environment:<NOME>]` dos ambientes atendidos (os bancos que os scripts usam têm usuários próprios), e um `instance/<nome>/config.ini` por processo, com `[app] name` igual ao nome da pasta.
 4. **Pastas:** nada a fazer. Na subida, cada processo cria as que faltarem em `var/<nome>/` (o web, `var/<web>/tmp`), e só o agente cria a pasta base `scripts_ambiente/` (CR-032, D12), com uma linha `pasta criada` no log para cada pasta do agente (o `log_dir` é criado sem essa linha).
 5. **Subida e permanência (§10.6):** `bin/sss-keepalive.sh` no `crontab` da conta, com `@reboot` e a cada 5 minutos.
@@ -203,7 +206,7 @@ LD_LIBRARY_PATH=/opt/oracle/instantclient_19_27
 | Cookie de sessão | `Secure` só quando a requisição chega por HTTPS; com acesso por HTTP, o cookie vai sem `Secure` |
 | Origem | `allowed_origins` e a do próprio `Host` da requisição |
 | Scripts dentro da raiz | Recusados, salvo `scripts_ambiente/` e `dev/` onde ela existe; o pacote não leva `dev/`, então não crie essa pasta na `<RAIZ>` |
-| `init_db.py` | Recusa um esquema que não é descartável sem `--real-schema` (§5.3) |
+| `init_db.py` | Recusa um esquema que não é descartável sem `--real-schema` (§4.0, item 2; README §11.1) |
 
 * **Ambiente na tela (CR-028, D12; CR-032):** a faixa "Ambiente ... — dados e execuções não produtivos", o rodapé, o `[DEV]` no título da aba e a cor do cabeçalho vêm do nome da pasta `<TIPO>` acima da raiz. Em `PROD` a faixa não aparece; o cabeçalho tem outra cor só em `DEV`. O web e o agente registram na subida `ambiente da instalacao: <TIPO> (<raiz>); [oracle] de <arquivo>`.
 * A tela de DEV (`/dev/...`) não existe numa instalação feita pelo pacote, que não leva o `dev.py` (§3).
@@ -456,7 +459,7 @@ bin/sss-scheduler.sh agente0001            # instance/agente0001/config.ini (CR-
 
 * **Direto por HTTP (CR-032, D19):** na linha do keepalive, `web0001:0.0.0.0:18000` sobe o web em todas as interfaces (ou `web0001:<IP do servidor>:18000`, só nesse endereço). Com o `sss-ctl.sh`, defina `SSS_WEB_HOST=0.0.0.0` (ou o IP) no `sss_vars.sh`: o `start` e o `cron install` montam essa linha (§4.0). Os usuários abrem `http://<servidor>:18000/`. Ponha essa URL exata em `[web] allowed_origins`. Sem HTTPS, o cookie de sessão vai sem `Secure` (CR-032, D11) e a senha trafega sem criptografia na rede interna: risco aceito (README §14). Confira com a equipe de rede que a porta só é alcançável pela rede interna.
 * **Só local (padrão):** `web0001:18000` atende só em `127.0.0.1`. Os usuários chegam por um proxy ou balanceador da empresa que repasse para `http://127.0.0.1:<porta>`, ou por túnel SSH: `ssh -N -L 18000:127.0.0.1:18000 <usuário>@<servidor>` e, no navegador, `http://localhost:18000/` (o próprio `Host` da requisição já vale como origem, CR-032 D11).
-* **Proxy** [não ensaiado]: o limite de corpo dele precisa ser pelo menos `[web] input_upload_max_bytes` mais 64 KiB (tela de Entrada, CR-020d); o endereço dele vai em `[web] trusted_proxies`. Um proxy HTTPS precisa mandar `X-Forwarded-Proto: https`: sem isso, o web acha que a requisição chegou por HTTP e o cookie de sessão sai sem `Secure` (CR-032, D11).
+* **Proxy** [não ensaiado]: o limite de corpo dele precisa ser pelo menos o maior entre `[web] input_upload_max_bytes` (tela de Entrada, CR-020d) e `[web] files_upload_max_bytes` (Pasta de Arquivos, CR-037; 1 GiB por padrão), mais 64 KiB (`security.max_body_bytes`); o endereço dele vai em `[web] trusted_proxies`. Um proxy HTTPS precisa mandar `X-Forwarded-Proto: https`: sem isso, o web acha que a requisição chegou por HTTP e o cookie de sessão sai sem `Secure` (CR-032, D11).
 * **Trocar o endereço de um web que já está no ar:** o keepalive confere só o nome, não o endereço. Depois de mudar a linha do cron (ex.: de `web0001:18000` para `web0001:0.0.0.0:18000`), pare o web (`--pause`, `SIGTERM` e `--resume`, §10.6) para ele subir de novo no endereço novo.
 
 ### 10.5 Variáveis dos launchers
@@ -467,9 +470,9 @@ bin/sss-scheduler.sh agente0001            # instance/agente0001/config.ini (CR-
 | `SSS_TZ` | Fuso exportado como `TZ` | o do sistema |
 | `SSS_LOCALE` | `LANG` e `LC_ALL` (precisa ser UTF-8) | `C.UTF-8` |
 | `SSS_IC_DIR` | Pasta do Instant Client, exportada em `LD_LIBRARY_PATH` só se ele não estiver no `ldconfig` (§6) | — |
-| `SSS_ENV`, `SSS_INSTALL_TYPE` | Ambiente que fixa o prefixo das tabelas: vale a primeira definida, antes da pasta `<TIPO>` (README §9.1). Só `PROD` dá `tbsprd_`; **qualquer outro valor dá `tbsdev_`** (num PROD, não as defina com outro valor) | a pasta `<TIPO>` |
+| `SSS_ENV`, `SSS_INSTALL_TYPE` | **Não use nas instalações:** existem só para os testes. Nas instalações, o ambiente (e o prefixo das tabelas: `tbsprd_` só em `PROD`, `tbsdev_` em qualquer outro) vem só da pasta `<TIPO>` acima da `<RAIZ>` (`sss_config.install_env()`, README §9.1). Não as defina no `crontab` nem nos launchers (o `sss-ctl.sh` não as propaga) | a pasta `<TIPO>` |
 
-No cron, defina-as no topo do `crontab` (§4.0). O agente procura os interpretadores dos scripts no `PATH` herdado (§9): o do cron é curto (`/usr/bin:/bin`), então acrescente `PATH=...` no `crontab` se os interpretadores estiverem em outra pasta.
+No cron, defina as outras no topo do `crontab` (§4.0). O agente procura os interpretadores dos scripts no `PATH` herdado (§9): o do cron é curto (`/usr/bin:/bin`), então acrescente `PATH=...` no `crontab` se os interpretadores estiverem em outra pasta.
 
 ### 10.6 `sss-keepalive.sh` no cron da conta (CR-030) [ensaiado]
 
@@ -574,7 +577,7 @@ CRITICAL: ambiente CLONE1 ativo sem nenhum agente saudavel
 
 | Log | Caminho | Modo |
 |---|---|---|
-| Aplicação (web, agente, `init_db`) | `log_dir/internal/app/AAAA/MM/DD/HH/MI/<nome>_<PID>.log`, com `<nome>` = `sss_web`, `sss_scheduler` ou `init_db` | `0640` |
+| Aplicação (web, agente, `init_db`) | `log_dir/internal/app/AAAA/MM/DD/HH/MI/<nome>_<PID>.log`, com `<nome>` = `sss_web`, `sss_scheduler` ou `sss_init_db` | `0640` |
 | Execução de cada ticket | `log_dir/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log` (ambiente e script em minúsculo, sem acento) | `0600` |
 | Saída padrão dos processos | `var/<nome>/logs/<nome>.out`, pelo keepalive (§10.6) | — |
 
@@ -640,7 +643,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 |---|---|---|
 | `Sondagem do candidato Oracle 'thin' falhou: codigo=DPY-3010 categoria=INCOMPATIBLE` | Banco 11g (o Thin não conecta) | Normal se o Thick conectar em seguida; para evitar a tentativa, `driver_mode = thick` |
 | `Sondagem do candidato Oracle 'thick' falhou: codigo=DPI-1047 categoria=LIBRARY` | Instant Client ausente ou fora do `ldconfig` | Instale o IC 19 e registre no `ldconfig`, ou defina `SSS_IC_DIR` (§6) |
-| `Falha fatal de autenticacao Oracle com candidato 'thin' (codigo=ORA-01017). Cadeia interrompida para proteger a conta.` | Usuário ou senha errados, ou conta bloqueada (`ORA-28000`) | Corrija a senha do papel no `secrets.cfg`. A cadeia para de propósito, para não bloquear a conta |
+| `Falha fatal de autenticacao Oracle com candidato 'thin' (codigo=ORA-01017). Cadeia interrompida para proteger a conta.` | Usuário ou senha errados, conta bloqueada ou senha expirada: o código trata como autenticação `ORA-01017`, `ORA-28000`, `ORA-28001`, `ORA-28002`, `ORA-28003`, `ORA-28007` e `ORA-28014`, e as mensagens `logon denied` e `account is locked` (`probe_driver._AUTH_ERRORS`) | Corrija a senha do papel no `secrets.cfg`. A cadeia para de propósito, para não bloquear a conta |
 | `Falha fatal: todos os candidatos de driver Oracle falharam (thin (NETWORK: DPY-6005); thick (NETWORK: ORA-12541); cx_oracle (NETWORK: ORA-12541))` (capturada no ensaio, com o túnel do banco fora) | Listener inacessível: rede, firewall, DSN ou banco parado | `tnsping`/`nc -z <host> 1521` a partir do servidor; confira o `dsn` |
 | `Falha de configuracao: python-oracledb 2.x nao e compativel com Python 3.6 ...` | Driver errado para o Python | Instale `python-oracledb < 2.0` ou use `driver_mode = cx_oracle` |
 | WARNING `cliente Oracle X; o recomendado e o Instant Client 19` | Outro cliente no `ldconfig` ou no `SSS_IC_DIR` | Só aviso: o processo sobe. Se a conexão falhar, use o 19 no caminho de bibliotecas |
@@ -770,7 +773,8 @@ Do mais novo para o mais antigo. Quem vem de uma versão anterior aplica na orde
 
 * **11966d7: perfis renomeados (sem mudança de esquema; muda o seed).**
   * `ADMINISTRATOR` → `ADMINISTRADOR`, `OPERATOR_PROD` → `OPERADOR`, `READ_ONLY` → `CONSULTA`; o perfil `OPERATOR_HML` e o usuário `op.hml` saíram do seed.
-  * Num banco em uso, o `MERGE` do seed cria os perfis novos e passa `admin`, `op.prod` e `consulta` para eles, mas **não remove** os antigos (`ADMINISTRATOR`, `OPERATOR_PROD`, `READ_ONLY`, `OPERATOR_HML`, `op.hml`): a limpeza é manual (README §11.3).
+  * Os perfis novos só vêm num **esquema novo**, pelo `01_deploy` (o caso do 3067, com `tbsdev_`/`tbsprd_` criados do zero).
+  * Num esquema em uso, **não rode o `init_db`** nem SQL avulso: renomeie os perfis pela tela (Perfis) e mova os usuários para eles pela tela (Usuários); as duas mudanças ficam na auditoria. O perfil `OPERATOR_HML` e o usuário `op.hml`, se não forem usados, são inativados pela tela.
 * **a75e3c1: prefixo das tabelas fixo pelo ambiente (muda o nome físico das tabelas).**
   * O prefixo deixa de ser parametrizado: `tbsprd_` em PROD e `tbsdev_` em qualquer outro ambiente (§10.5). `[oracle] table_prefix` só gera aviso; apague a linha.
   * Atualizar uma instalação com outro prefixo (`s3dev_`, `s3prd_`, `ssdev_`, `tbsss_`...) faz a subida do agente falhar com **código 15** (`banco: <erro>`, com `ORA-00942` na tabela de controle `<owner>.tbsdev_control`/`tbsprd_control`) até haver as tabelas `tbsdev_`/`tbsprd_` no owner. O procedimento está no `docs/DEPLOYMENT-SERVER.md`, seção "Migração para o prefixo fixo (a75e3c1)".
@@ -863,10 +867,11 @@ O esquema do banco é removido com o `02_rollback_sss_<owner>_<prefixo>.sql` (§
 
 O DEV é a mesma instalação, na pasta `DEV` (`<RAIZ>` = `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`), com o mesmo comportamento do PROD (CR-032, D11). O que muda é só o que se pode desenvolver:
 
-* a `<RAIZ>` do DEV é o repositório git: tem `scripts_ambiente/` (scripts operacionais e utilitários usados como `script_base_dir`), os testes, a vitrine `/dev/...` e o FAKE dos testes, que o pacote não leva;
+* há dois DEV: o **DEV do 3067**, instalado pelo pacote como qualquer servidor (`docs/DEPLOYMENT-SERVER.md`, A.3, decisão 18), que é o DEV do GFPR (`tbsdev_` do owner `openrisow`); e a **máquina de desenvolvimento**, cuja `<RAIZ>` é o repositório git. Os itens abaixo falam da máquina de desenvolvimento;
+* a `<RAIZ>` da máquina de desenvolvimento é o repositório git: tem `scripts_ambiente/` (scripts operacionais e utilitários usados como `script_base_dir`), os testes, a vitrine `/dev/...` e o FAKE dos testes, que o pacote não leva;
 * a tela mostra `[DEV]` no título da aba, o cabeçalho em outra cor e a faixa de ambiente não produtivo;
 * `bin/start_local.sh` e `bin/stop_local.sh` sobem e param o web na máquina de desenvolvimento e não vêm no pacote;
-* a bateria Oracle (`SSS_TEST_ORACLE=1`) usa o `instance/common.ini`, o `instance/secrets.cfg` e o `instance/agente0001/` do DEV, com o DEV parado;
+* a bateria Oracle local (`make test-oracle`, `SSS_TEST_ORACLE=1`) e a homologação local usam o `instance/` do repositório e o `tbsdev_` do GFPR, que é o do DEV do 3067: rode-as **só com o DEV do 3067 parado**, ou enquanto ele estiver no código antigo (`s3dev_`); recriar o `tbsdev_` só com o 3067 avisado;
 * **prefixo próprio no mesmo banco:** o DEV usa automaticamente `tbsdev_` e o PROD `tbsprd_`, no mesmo owner, fixos pelo ambiente (não parametrizados). Cada um tem as suas tabelas (agentes, fila, tickets, auditoria), então os dois podem ficar no ar ao mesmo tempo, mesmo com os mesmos nomes `web0001`/`agente0001`. O `docs/sql/` tem os scripts dos dois prefixos, com o prefixo no nome (`*_tbsprd.sql` do PROD e `*_tbsdev.sql` do DEV).
 
 Um DEV instalado pelo pacote não tem a vitrine `/dev/...` (o `src/sss/web/controllers/dev.py` não vai no pacote): ela responde 404, e o resto sobe normalmente (CR-021f3).

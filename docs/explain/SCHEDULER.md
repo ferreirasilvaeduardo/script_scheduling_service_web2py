@@ -1,10 +1,12 @@
 # SSS — Explain Plan: repositório do daemon (F8.3a)
 
+> **Plano histórico:** os planos deste arquivo foram tirados em 19–20/10/2026, quando o prefixo físico era `tbsss_` e o driver usado era o Thin. Leia `TBSSS_*` (e `tbsss_*` nos nomes físicos) como `{prefixo}` (`tbsdev_` ou `tbsprd_` hoje). O plano não depende do prefixo.
+
 Consultas do `RepoSchedulerQueue` (`src/sss/persistence/oracle/scheduler_queue.py`) no Oracle 11gR2+.
 
-> **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` é fixo pelo ambiente (`tbsdev_` em DEV, `tbsprd_` em PROD; não mais parametrizado), validados por `sql_ident` e qualificados uma vez, na criação do repositório. As listas `IN` (`:amb0..`, `:int0..`) são geradas por contagem e todo valor entra por bind.
+> **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` é fixo pelo ambiente (`tbsdev_` em DEV, `tbsprd_` em PROD; não mais parametrizado), validados por `sql_ident` e qualificados uma vez, na criação do repositório. As listas `IN` (`:env0..`) são geradas por contagem e todo valor entra por bind.
 >
-> **Índices:** `candidates` lê `ix_{prefixo}tck_queue (status, environment, priority, GREATEST(scheduled_at, created_at), id, script_id)` pela janela do CR-013 (README §8.2); `own_sweep`/`tickets_running_do_agente` a de `ix_{prefixo}tck_run`, textualmente iguais às do `sql_ident` e sem alias de tabela (CR-007, R-32).
+> **Índices:** `candidates` lê `ix_{prefixo}tck_queue (status, environment, priority, GREATEST(scheduled_at, created_at), id, script_id)` pela janela do CR-013 (README §8.2); `own_sweep`/`agent_running_tickets` a de `ix_{prefixo}tck_run`, textualmente iguais às do `sql_ident` e sem alias de tabela (CR-007, R-32).
 
 ---
 
@@ -12,9 +14,9 @@ Consultas do `RepoSchedulerQueue` (`src/sss/persistence/oracle/scheduler_queue.p
 
 | Método | Consulta | Acesso esperado |
 |---|---|---|
-| `candidates` (CR-013) | (1) scripts do agente por interpretador; (2) `RUNNING` por script e ambiente; (3) janela: por ambiente e prioridade 1 a 4, os `:batch_size` primeiros de `PENDING` vencidos por `(inicio, id)` dos scripts abaixo do teto, juntados e ordenados pela prioridade efetiva (README §8.2) | (1) `{prefixo}scripts` (catálogo); (2) faixa `status = 'RUNNING'` de `ix_{prefixo}tck_queue`; (3) `INDEX RANGE SCAN` de `ix_{prefixo}tck_queue` por bloco, sem sort e sem tabela, `COUNT STOPKEY`; só os escolhidos pela PK |
+| `candidates` (CR-013) | (1) scripts e teto, com qualquer interpretador (CR-026); (2) `RUNNING` por script e ambiente; (3) janela: por ambiente e prioridade 1 a 4, os `:batch_size` primeiros de `PENDING` vencidos por `(inicio, id)` dos scripts abaixo do teto, juntados e ordenados pela prioridade efetiva (README §8.2) | (1) `{prefixo}scripts` (catálogo); (2) faixa `status = 'RUNNING'` de `ix_{prefixo}tck_queue`; (3) `INDEX RANGE SCAN` de `ix_{prefixo}tck_queue` por bloco, sem sort e sem tabela, `COUNT STOPKEY`; só os escolhidos pela PK |
 | `claim` (3 passos) | `SELECT … FOR UPDATE WAIT 5` do script; contagem de `RUNNING` do par; `UPDATE … RETURNING started_at` (README §8.3) | `pk_{prefixo}scripts`; `ix_{prefixo}tck_scr`; `pk_{prefixo}tickets` |
-| `own_sweep`, `tickets_running_do_agente` | `(CASE WHEN status = 'RUNNING' THEN agent_id END) = :agent_id` (README §8.7) | `ix_{prefixo}tck_run` |
+| `own_sweep`, `agent_running_tickets` | `(CASE WHEN status = 'RUNNING' THEN agent_id END) = :agent_id` (README §8.7) | `ix_{prefixo}tck_run` |
 | `heartbeat` | `executemany` do `UPDATE` por PK dos tickets e `UPDATE` do agente por `code` | `pk_{prefixo}tickets`; `uk_{prefixo}agt_code` |
 | `register_pid`, `finalize`, `return_to_queue` | `UPDATE` pela PK com `agent_id` e `status` | `pk_{prefixo}tickets` |
 

@@ -41,7 +41,7 @@
 | 017a | D1, D2, D3 (A1 e A2) | Concluído |
 | 017b | Telas de operação: disparo unificado com Rotinas disponíveis, sem a pré-visualização repetida, etapa 2 pulada com um ambiente; detalhe do ticket sem repetição; painel sem o menu repetido; ajuda da prioridade com o envelhecimento (A3 a A6) | Concluído |
 | 017c | Agendamento com a mesma escolha do disparo, atalho "Agendar", Agenda e Agentes no menu (A7) | Concluído |
-| 017d | Quadro "Quem pode rodar" no formulário do script (A8) | Concluído |
+| 017d | Quadro "Quem pode rodar" no formulário do script (A8) | Concluído; retirado no fd43cae (06/11/2026), substituído pelas associações diretas no cadastro do script |
 
 ## 4. Decisões do 017b
 
@@ -63,7 +63,7 @@
 
 | # | Decisão | Resumo |
 |---|---|---|
-| D12 | Quem pode rodar | O quadro do cadastro de scripts usa `admin_profiles_service.script_runners`, a mesma conta de "Quem pode o quê". Parâmetro obrigatório não entra como requisito: não impede o script de rodar |
+| D12 | Quem pode rodar | (Quadro e `script_runners` retirados no fd43cae, 06/11/2026.) O quadro do cadastro de scripts usava `admin_profiles_service.script_runners`, a mesma conta de "Quem pode o quê". Parâmetro obrigatório não entra como requisito: não impede o script de rodar |
 | D13 | Agendar | A regra do atalho sai do controller para `ticket_service.can_schedule`, com teste (pendência do 017c) |
 
 ## 7. Validação do 017a

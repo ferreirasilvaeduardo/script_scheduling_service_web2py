@@ -1471,7 +1471,7 @@
   margin-top: var(--sss-space-1);
 }
 
-/* Rotinas disponiveis (README §5.8, CR-004). */
+/* Rodar um script (README §5.8, CR-004). */
 .sss-cards-routine {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));

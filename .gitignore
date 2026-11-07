@@ -67,7 +67,8 @@ script_works/
 # Evidências de Homologação
 # ==========================================
 dev/others/homologation/screens/
-dev/others/homologation/evidence_*/
+dev/others/homologation/evidence_*/*
+!dev/others/homologation/evidence_*/results.json
 
 # ==========================================
 # Ambientes Virtuais (venv / conda)

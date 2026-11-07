@@ -339,8 +339,7 @@ class AdminProfilesService(object):
     def _script_runners(self, script, environments, exec_id, profiles, homologated, row, exec_name):
         """Perfis que podem rodar o script (regra de rbac.can_execute por perfil), ativos e inativos."""
         sid = script["id"]
-        found = {"script": script, "profiles": [], "inactive_items": [], "warning": None,
-                 "homologated": sorted(environments[a]["name"] for a in homologated(sid))}
+        found = {"script": script, "profiles": [], "inactive_items": [], "warning": None}
         if script.get("active") != "Y":
             found["warning"] = u"Este script está inativo: ninguém consegue rodá-lo agora."
         for p in profiles:
@@ -356,28 +355,6 @@ class AdminProfilesService(object):
             item = row(p, reason_text, sorted(environments[a]["name"] for a in envs))
             found["profiles" if p["active"] == "Y" else "inactive_items"].append(item)
         return found
-
-    def script_runners(self, script_id):
-        """Quem pode rodar o script, sem guarda de funcionalidade: a mesma conta de who_can por script.
-
-        Usada pelo quadro "Quem pode rodar" do cadastro de scripts (CR-017d), que tem guarda propria.
-        Lanca RepoNotFound para script inexistente.
-        """
-        script = self._catalog.scripts_get(script_id)
-        environments = dict((a["id"], a) for a in self._catalog.environments_list(page=1, size=_CATALOG_MAX)["items"])
-        exec_feature = [f for f in self._rbac.features_list() if f["code"] == "EXEC_SCRIPT"]
-        exec_id = [f["id"] for f in exec_feature]
-        exec_name = exec_feature[0]["name"] if exec_feature else "EXEC_SCRIPT"
-        profiles = self._rbac.profiles_list(page=1, size=_CATALOG_MAX)["items"]
-
-        def homologated(sid):
-            return set(i for i in self._catalog.homologation_get(sid) if environments.get(i, {}).get("active") == "Y")
-
-        def row(profile, reason, details):
-            return {"id": profile["id"], "name": profile["name"], "is_admin": profile["is_admin"] == "Y",
-                    "reason": reason, "details": details, "active_users": self.active_users(profile["id"])}
-
-        return self._script_runners(script, environments, exec_id, profiles, homologated, row, exec_name)
 
     # --------------------------------------------------------------- matriz
 

@@ -1,5 +1,7 @@
 # SSS — Explain Plan: Agregado RBAC_USUARIOS (F7.3)
 
+> **Plano histórico:** os planos deste arquivo foram tirados em 19–20/10/2026, quando o prefixo físico era `tbsss_` e o driver usado era o Thin. Leia `TBSSS_*` (e `tbsss_*` nos nomes físicos) como `{prefixo}` (`tbsdev_` ou `tbsprd_` hoje). O plano não depende do prefixo.
+
 Este documento registra as consultas SQL estáticas executadas pelos repositórios `RepoUsersOracle` e `RepoRbacOracle` no Oracle 11gR2, mapeando os índices esperados e a garantia de desempenho.
 
 > **Parâmetros Dinâmicos de Esquema e Tabela (README §9.1 e §12.1):**
@@ -147,7 +149,7 @@ SELECT id, code, name, module, description, active,
 **Plano: TESTADO em 2026-10-19**, Oracle 19.24 (banco `GFPR`), owner `openrisow` em modo compartilhado (`SSS_TEST_SCHEMA_COMPARTILHADO=1`, README §2.5), driver Thin (python-oracledb 1.4.2). Os planos saíram de `EXPLAIN PLAN SET STATEMENT_ID … FOR <query>` + `DBMS_XPLAN.DISPLAY`, sem executar os comandos. O texto `{owner}` substitui `OPENRISOW`.
 
 * **Sem `TABLE ACCESS FULL` em `tbsss_tickets` nem em `tbsss_audit`:** conforme: o agregado não lê `tbsss_tickets`. A auditoria só recebe `INSERT`, sem leitura.
-* **`TABLE ACCESS FULL` aceitável:** só nas listagens de cadastro (`tbsss_users`, `tbsss_profiles`), com `COUNT STOPKEY`/`SORT ORDER BY STOPKEY`, no catálogo canônico `tbsss_features` (10 linhas) e no lado `tbsss_profiles` do `lock_active_admins`.
+* **`TABLE ACCESS FULL` aceitável:** só nas listagens de cadastro (`tbsss_users`, `tbsss_profiles`), com `COUNT STOPKEY`/`SORT ORDER BY STOPKEY`, no catálogo canônico `tbsss_features` (14 linhas) e no lado `tbsss_profiles` do `lock_active_admins`.
 * **Leituras por chave e transições:** `get_by_login` pela `UK_…_USR_LOGIN`; `get_session_state` e a matriz pelas PKs e pelas UKs de líder `profile_id`.
 
 ### Planos registrados

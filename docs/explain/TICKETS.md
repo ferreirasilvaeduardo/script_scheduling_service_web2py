@@ -1,5 +1,7 @@
 # SSS — Explain Plan: Agregado TICKETS (F7.3)
 
+> **Plano histórico:** os planos deste arquivo foram tirados em 19–20/10/2026, quando o prefixo físico era `tbsss_` e o driver usado era o Thin. Leia `TBSSS_*` (e `tbsss_*` nos nomes físicos) como `{prefixo}` (`tbsdev_` ou `tbsprd_` hoje). O plano não depende do prefixo.
+
 Consultas SQL estáticas do `RepoTicketsOracle` (`src/sss/persistence/oracle/tickets.py`) no Oracle 11gR2+.
 
 > **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` é fixo pelo ambiente (`tbsdev_` em DEV, `tbsprd_` em PROD; não mais parametrizado). Os dois são validados por `sql_ident` e qualificados **uma vez**, na criação do repositório. Todo valor entra por bind, inclusive as listas `IN` (`:s0..`, `:e0..`, geradas por contagem e em lotes de até 500) e as datas (`TIPO_DATE`, README §7.5).

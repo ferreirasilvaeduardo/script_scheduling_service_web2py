@@ -17,17 +17,19 @@ Ordem de leitura: `AGENTS.md`, depois `README.md`.
 
 ### Regras Críticas de Execução
 
+O mesmo bloco está no `CLAUDE.md` e no `GEMINI.md`; a fonte de cada regra é a seção citada.
+
 - **Compatibilidade:** Python 3.6 estrito. Não use sintaxes modernas proibidas (dataclasses, walrus operator, pos-only args, f-string com `=` do 3.8). F-strings simples são permitidas, porque existem no 3.6 (AGENTS §2.1; CR-034, D8).
+- **Banco de Dados Oracle:** SQL 11gR2 estrito, com binds obrigatórios e nomes físicos só por `sql_ident` (AGENTS §3.1 e §4). Prefixo de tabela fixo por ambiente, não parametrizado pelo config: `tbsdev_` no DEV e `tbsprd_` no PROD, pela regra de `sss_config.install_env()`/`table_prefix()` (nas instalações, a pasta `<TIPO>`; `SSS_ENV` e `SSS_INSTALL_TYPE` só nos testes). A versão 1 do esquema está congelada desde o PROD do 3067 (30/10/2026): mudança de esquema incrementa `SCHEMA_VERSION` e traz migração (AGENTS §4.16).
+- **Perfis e Acesso (RBAC):** Os 3 perfis padrão homologados têm nomes em português: `ADMINISTRADOR`, `OPERADOR` e `CONSULTA`. Usuários padrão do seed: `admin`, `op.prod` e `consulta` (perfil `OPERATOR_HML` e usuário `op.hml` foram aposentados).
+- **Scripts:** as ferramentas de homologação ficam em `dev/others/homologation/tools/`; em `<RAIZ>/scripts_ambiente/` ficam os scripts dos ambientes (exemplos, `utilitarios/` do seed e `diagnostico/` usados pelos casos de homologação).
 - **Segurança & CSP:** Ambiente hermético (AGENTS §2.3). Nenhum `<script>` inline nem atributo de evento inline, nenhum `style=` inline (estilo só por classe CSS), nenhuma CDN nem URL remota. Todos os assets devem ser locais.
 - **Relatórios:** Toda entrega deve finalizar com o relatório estrito no padrão de `AGENTS.md` §9, com veredito (PASS/FAIL) e checklist do §8.
-- **Modo de Trabalho:** Primeiro apresente o plano completo de execução e aguarde aprovação antes de modificar arquivos críticos.
-- **Decisões:** apresente uma decisão por vez, com opções (A, B, ...) e a recomendação técnica justificada.
-
-### Outras regras de postura (`AGENTS.md` §1)
-
-- **Lacuna documental:** se o `README.md` não especifica um comportamento, **pare**, não invente e peça decisão.
-- **Escopo estrito:** implemente apenas o item solicitado; não refatore nem renomeie código fora do escopo.
-- **Idioma (`CR-016`, README §2.8):** nomes técnicos novos em **inglês** (módulos, funções, variáveis, rotas, chaves de configuração, tabelas, colunas, binds). Textos de tela, mensagens, logs legíveis, docstrings, comentários e documentação em **português** com acentuação correta. O legado em português fica como está e só muda junto com alteração funcional do mesmo trecho.
+- **Modo de Trabalho (AGENTS §1):** primeiro apresente o plano completo de execução e aguarde aprovação antes de modificar arquivos críticos.
+- **Decisões (AGENTS §1):** apresente uma decisão por vez, com opções (A, B, ...) e a recomendação técnica justificada.
+- **Lacuna documental (AGENTS §1):** se o `README.md` não especifica um comportamento, **pare**, não invente e peça decisão.
+- **Escopo estrito (AGENTS §1):** implemente apenas o item solicitado; não refatore nem renomeie código fora do escopo.
+- **Idioma (AGENTS §1; `CR-016`, README §2.8):** nomes técnicos novos em **inglês** (módulos, funções, variáveis, rotas, chaves de configuração, tabelas, colunas, binds). Textos de tela, mensagens, logs legíveis, docstrings, comentários e documentação em **português** com acentuação correta. O legado em português fica como está e só muda junto com alteração funcional do mesmo trecho.
 
 ---
 
@@ -52,9 +54,9 @@ Ordem de leitura: `AGENTS.md`, depois `README.md`.
 
 ### 2.3 Banco Oracle 11gR2 (`AGENTS.md` §3.1 e §4)
 
-- **Onde o SQL pode existir:** `src/sss/persistence/oracle/`, `src/sss/cli/init_db.py` e `src/sss/persistence/ddl_builder.py` (fora deles, só o `SELECT SYSDATE FROM DUAL` de `src/sss/cli/probe_driver.py`).
+- **Onde o SQL pode existir:** `src/sss/persistence/oracle/`, `src/sss/cli/init_db.py` e `src/sss/persistence/ddl_builder.py` (fora deles, só o `SELECT SYSDATE FROM DUAL` de `src/sss/cli/probe_driver.py` e as consultas fixas de `src/sss/persistence/db_conn.py`: `SYSDATE` em `db_now` e `health`, `NEXTVAL` da sequence e `schema_version` da `control`).
 - **Sintaxe 12c+ proibida:** `FETCH FIRST`/`OFFSET` (use a subquery de `ROWNUM`), `GENERATED AS IDENTITY` (use `SEQUENCE` + trigger), `LATERAL`, `CROSS/OUTER APPLY`, `WITH FUNCTION`, `JSON_*`/`IS JSON`, `LISTAGG ... ON OVERFLOW`, `DEFAULT seq.NEXTVAL`; identificador com mais de 30 caracteres.
-- **Identificadores e binds (`src/sss/core/sql_ident.py`):** todo valor por bind `:nome`; todo nome físico por `sql_ident`. O prefixo físico é fixo: `tbsdev_` ou `tbsprd_`, escolhido por `SSS_ENV`, senão `SSS_INSTALL_TYPE`, senão a pasta `<TIPO>` (só `PROD` dá `tbsprd_`); `[oracle] table_prefix` é ignorada com aviso. `tbsss_` é só o prefixo lógico (`LOGICAL_PREFIX`, documentação e nomes de constraint em `RepoViolation`).
+- **Identificadores e binds (`src/sss/core/sql_ident.py`):** todo valor por bind `:nome`; todo nome físico por `sql_ident`. O prefixo físico é fixo: `tbsdev_` ou `tbsprd_`, pela regra de `sss_config.install_env()`/`table_prefix()`: `SSS_ENV`, senão `SSS_INSTALL_TYPE`, senão a pasta `<TIPO>` (só `PROD` dá `tbsprd_`; as duas variáveis só nos testes, nunca nas instalações nem no `crontab`); `[oracle] table_prefix` é ignorada com aviso. `tbsss_` é só o prefixo lógico (`LOGICAL_PREFIX`, documentação e nomes de constraint em `RepoViolation`).
 - **Transações e locks:** `autocommit = False`; toda escrita termina em `COMMIT` ou `ROLLBACK` explícito. `FOR UPDATE WAIT n` (n ≤ 5), ou `FOR UPDATE SKIP LOCKED` no desdobro de agendamentos e no NODE_OFFLINE. Timeout de lock, deadlock e *call timeout* vão em WARN sem stack trace.
 - **Concorrência:** toda transição de estado é `UPDATE` condicional com checagem de `rowcount` (ignorar é defeito).
 - **Fila (`CR-013`):** a seleção de candidatos (`candidates` em `persistence/oracle/scheduler_queue.py`) lê só a janela de `ix_tbsss_tck_queue`, índice baseado em função `(status, environment, priority, GREATEST(scheduled_at, created_at), id, script_id)` (`sql_ident.FBI_TCK_QUEUE_EXPR`); a query repete a expressão textualmente (`FBI_TCK_QUEUE_START`). Proibido `SELECT *` fora do envelope de paginação. Toda FK tem índice com a FK na liderança.
@@ -62,7 +64,7 @@ Ordem de leitura: `AGENTS.md`, depois `README.md`.
 - **Status do ticket:** `PENDING`, `RUNNING`, `SUCCESS`, `FAILED`, `CANCELLED`.
 - **Colunas de registro (`CR-006`):** 19 das 21 tabelas têm `created_at`, `created_by`, `updated_at`, `updated_by`; `tbsss_audit` só tem `created_at` e `tbsss_control` nenhuma. `updated_*` só muda em alteração de negócio (heartbeat, log, PID e contadores não gravam). Ator obrigatório.
 - **Auditoria:** a ação auditável passa `audit=` ao repositório, gravada na mesma transação.
-- **Versão do esquema:** mudança de esquema incrementa `sql_ident.SCHEMA_VERSION` e traz migração em `src/sss/cli/migrations/`.
+- **Versão do esquema:** a versão 1 está congelada desde o PROD do 3067 (30/10/2026); mudança de esquema incrementa `sql_ident.SCHEMA_VERSION` e traz migração `m0002_*` em `src/sss/cli/migrations/`. Troca de prefixo não muda o esquema (DEPLOYMENT-SERVER §15.3).
 - **SQL gerado em ASCII (decisão 16 A):** `ddl_builder.ascii_sql` converte acentos em `UNISTR`; `docs/sql/*.sql` só tem bytes ≤ 127.
 
 ### 2.4 Camada Web e Repositórios (`AGENTS.md` §5)
@@ -81,8 +83,8 @@ Ordem de leitura: `AGENTS.md`, depois `README.md`.
 ### 2.6 Testes e Portões (`AGENTS.md` §1 e §7)
 
 - **Portões:** `make lint` (flake8, 99 colunas) e `make type-check` (mypy estrito), zero achados; a dívida em `.flake8` e `pyproject.toml` **só diminui** (`tests/architecture/test_quality_debt.py`).
-- **Suíte (`unittest`; `pytest` proibido):** `make test-unit`, `make test-integration` (o Oracle real só com `SSS_TEST_ORACLE=1`), `make test-functional`, `make test-architecture`, `make test-matrix` (3.6.0, 3.6.15 e 3.13.2).
-- **Com `SSS_TEST_ORACLE=1`:** pare o DEV local antes (`make ctl CMD=stop`) para não disputar a fila.
+- **Suíte (`unittest`; `pytest` proibido):** `make test-unit`, `make test-integration` (o Oracle real só com `SSS_TEST_ORACLE=1`), `make test-functional`, `make test-architecture`, `make test-matrix` (3.6.0, 3.6.8, 3.6.15 e 3.13.2).
+- **Com `SSS_TEST_ORACLE=1` e na homologação local:** pare o DEV local antes (`make ctl CMD=stop`) para não disputar a fila; no GFPR, só com o DEV do 3067 parado, ou enquanto ele estiver no código antigo (`s3dev_`) (AGENTS §7, item 2).
 
 ### 2.7 Checklist (§8) e Relatório (§9)
 
@@ -152,6 +154,6 @@ cli          run_web, run_scheduler, init_db, generate_sql, check_env, health,
 ### 3.4 Documentação (`docs/`)
 
 - **Manuais:** `DEPLOYMENT.md` (normativo, testado por `test_deployment_doc.py`), `DEPLOYMENT-SERVER.md`, `DEV_ENVIRONMENT.md`, `HOMOLOGATION_RUNBOOK.md`, `UTILITY_SCRIPTS.md`, `ADMIN_CRUD_PATTERN.md`.
-- **`docs/explain/`:** 6 planos EXPLAIN: `AUDIT_AGENTS.md`, `CATALOG.md`, `RBAC_USERS.md`, `SCHEDULER.md`, `SCHEDULES.md`, `TICKETS.md`.
+- **`docs/explain/`:** 6 planos EXPLAIN: `AUDIT_AGENTS.md`, `CATALOG.md`, `RBAC_USERS.md`, `SCHEDULER.md`, `SCHEDULES.md`, `TICKETS.md` (planos históricos de 19–20/10/2026, tirados com o prefixo físico `tbsss_` e o driver Thin; leia `TBSSS_*` como `{prefixo}`).
 - **`docs/architecture/`:** os CRs e `DEPLOYMENT-history.md`.
 - **`docs/sql/`:** `01_deploy_sss_<owner>_<prefixo>.sql`, `02_rollback_sss_<owner>_<prefixo>.sql` e `99_validate_deploy_<owner>_<prefixo>.sql` (gerados pelo `generate_sql`, 100% ASCII).

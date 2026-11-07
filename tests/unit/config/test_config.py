@@ -818,10 +818,29 @@ class TestConfigCR007(unittest.TestCase):
         """CR-028 (D12), CR-032 (D11): a tela e a linha de subida mostram o nome da pasta <TIPO> acima da raiz."""
         for tipo, shown in (("PROD", "PROD"), ("dev", "DEV"), ("OUTRA", "OUTRA"), ("", "?")):
             self.assertEqual(sss_config.env_label(tipo), shown, tipo)
-        self.assertEqual(sss_config.env_label(), sss_config.INSTALL_TYPE)
+        limpo = {k: v for k, v in os.environ.items() if k not in ("SSS_ENV", "SSS_INSTALL_TYPE")}
+        with mock.patch.dict(os.environ, limpo, clear=True):
+            self.assertEqual(sss_config.env_label(), sss_config.INSTALL_TYPE)
         self.assertTrue(sss_config.has_dev_dir(), "o repositorio tem a pasta dev/")
         self.assertEqual(sss_config.INSTALL_TYPE,
                          os.path.basename(os.path.dirname(sss_config.APP_DIR)).upper())
+
+    def test_env_label_mesma_regra_do_prefixo(self):
+        """A faixa da tela segue install_env() (SSS_ENV, senao SSS_INSTALL_TYPE, senao a pasta), como o prefixo."""
+        limpo = {k: v for k, v in os.environ.items() if k not in ("SSS_ENV", "SSS_INSTALL_TYPE")}
+        casos = (({}, sss_config.INSTALL_TYPE or "?", None),
+                 ({"SSS_ENV": "PROD"}, "PROD", "tbsprd_"),
+                 ({"SSS_INSTALL_TYPE": "PROD"}, "PROD", "tbsprd_"),
+                 ({"SSS_ENV": "prod", "SSS_INSTALL_TYPE": "DEV"}, "PROD", "tbsprd_"),
+                 ({"SSS_ENV": "DEV", "SSS_INSTALL_TYPE": "PROD"}, "DEV", "tbsdev_"))
+        for extra, label, prefix in casos:
+            env = dict(limpo)
+            env.update(extra)
+            with mock.patch.dict(os.environ, env, clear=True):
+                self.assertEqual(sss_config.env_label(), label, extra)
+                if prefix is not None:
+                    self.assertEqual(sss_config.table_prefix(), prefix, extra)
+                self.assertEqual(sss_config.env_label(), sss_config.install_env().upper() or "?", extra)
 
     def test_cr032_sem_usuario_de_execucao(self):
         """CR-032 (D7): exec_users, exec_work_dir e helper_path ficam so com aviso; a subida segue."""

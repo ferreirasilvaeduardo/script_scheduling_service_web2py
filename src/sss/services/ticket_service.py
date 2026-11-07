@@ -744,7 +744,7 @@ class TicketService(object):
         return None, ctx["login"]
 
     def routine_catalog(self, ctx):
-        """Rotinas disponiveis (README §5.8, CR-004 T2): cartoes por grupo dos scripts que o usuario pode rodar.
+        """Rodar um script (README §5.8, CR-004 T2): cartoes por grupo dos scripts que o usuario pode rodar.
 
         Cada cartao: id, name, description, script_group, category, questions [{label, required}],
         environments (nomes) e last_run (None ou {id, state, css_class, icon, when}). So leitura.
@@ -785,12 +785,12 @@ class TicketService(object):
     def script_history(self, ctx, script_id):
         """Historico do script nos ultimos 30 dias (README §5.8, CR-004 T4). So leitura.
 
-        Abre so para um script das Rotinas disponiveis do usuario; senao RepoNotFound (404).
+        Abre so para um script de Rodar um script do usuario; senao RepoNotFound (404).
         """
         sid = _id(script_id)
         available = dict((s["id"], s) for g in self.available_scripts(ctx) for s in g["scripts"])
         if sid is None or sid not in available:
-            raise RepoNotFound("script fora das rotinas disponiveis")
+            raise RepoNotFound("script fora de Rodar um script")
         now = self._tickets.now()
         since = now - datetime.timedelta(days=HISTORY_DAYS)
         scope, requester = self._runs_scope(ctx)
@@ -1258,7 +1258,7 @@ def can_schedule(ctx):
 
 
 def routine_catalog(ctx):
-    """Rotinas disponiveis (servico padrao)."""
+    """Rodar um script (servico padrao)."""
     return _service().routine_catalog(ctx)
 
 

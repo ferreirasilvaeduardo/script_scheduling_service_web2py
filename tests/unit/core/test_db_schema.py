@@ -2,7 +2,7 @@
 """Testes de conformidade do esquema Oracle e identificadores do SSS.
 
 Cobertura obrigatoria (AGENTS.md §7.4):
-- Todos os identificadores com len <= 30 com o prefixo configurado e com 'abcdefg_';
+- Todos os identificadores com len <= 30 com tbsdev_, tbsprd_ e o pior caso 'abcdefg_' (8 caracteres);
 - Todos em ASCII casando ^[a-z][a-z0-9_]*$;
 - Toda FK com indice ou UK cuja coluna lider e a FK;
 - Toda tabela com sequence, trigger _bi e id NUMBER(10) NOT NULL;
@@ -36,20 +36,6 @@ from sss.core.sql_ident import (
 
 class TestDbSchema(unittest.TestCase):
     """Bateria de testes de schema do modelo Oracle 11gR2."""
-
-    def _get_config_example_prefix(self):
-        """Le table_prefix diretamente de tests/support/agente0001/config.ini.example (CR-032)."""
-        app_dir = _testenv.APP_DIR
-        cfg_path = os.path.join(app_dir, "tests", "support", "agente0001", "config.ini.example")
-        self.assertTrue(os.path.isfile(cfg_path), "config.ini.example deve existir")
-        with open(cfg_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("table_prefix"):
-                    parts = line.split("=", 1)
-                    val = parts[1].split(";")[0].strip()
-                    return val
-        return sql_ident.default_prefix()
 
     def test_dezessete_tabelas_exatas(self):
         """Verifica presenca e contagem exata das 21 tabelas do README §9.2 e §10 (CR-007: controle; CR-012: ticket_output;
@@ -119,9 +105,15 @@ class TestDbSchema(unittest.TestCase):
             self.assertEqual(t["tabela"], "tbsss_" + sql_ident.physical(ent), "Nome de tabela divergente em {}".format(ent))
 
     def test_limite_30_caracteres_config_example_e_pior_caso(self):
-        """Valida len <= 30 para prefixo do config.ini.example e pior caso (8 chars)."""
-        prefix_cfg = self._get_config_example_prefix()
-        prefixes_for_test = [prefix_cfg, "abcdefg_"]
+        """Valida len <= 30 com os prefixos fixos tbsdev_ e tbsprd_ e com o pior caso de 8 caracteres."""
+        self.assertEqual(sql_ident.PREFIX_DEV, "tbsdev_")
+        self.assertEqual(sql_ident.PREFIX_PROD, "tbsprd_")
+        self.assertEqual(sql_ident.default_prefix("DEV"), sql_ident.PREFIX_DEV)
+        self.assertEqual(sql_ident.default_prefix("PROD"), sql_ident.PREFIX_PROD)
+        worst = "abcdefg_"
+        self.assertEqual(len(worst), 8)
+        self.assertEqual(validate_prefix(worst), worst)
+        prefixes_for_test = [sql_ident.PREFIX_DEV, sql_ident.PREFIX_PROD, worst]
 
         for pref in prefixes_for_test:
             self.assertTrue(

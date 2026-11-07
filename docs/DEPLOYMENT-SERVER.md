@@ -70,7 +70,7 @@ for t in $SSS_TIPOS; do sss_tipo $t; done
 ```
 
 * **As instalações não se misturam:** cada raiz tem as suas pastas (`var/`, `instance/`) e cada tipo tem as suas tabelas. Os mesmos nomes de processo em raízes diferentes não conflitam: o keepalive e o `sss-stop.sh` trabalham só na raiz de onde são chamados.
-* **Prefixo fixo por tipo (desde o `a75e3c1`):** o prefixo físico das tabelas não é mais escolhido. O código o fixa pelo ambiente: `tbsdev_` no DEV e `tbsprd_` no PROD, pela variável `SSS_ENV`, senão `SSS_INSTALL_TYPE`, senão a pasta `<TIPO>` acima da raiz (só `PROD` dá `tbsprd_`). Um `[oracle] table_prefix` no `common.ini` é ignorado, com aviso. O `scripts/generate_sql.py --prefix` só aceita `tbsdev_` e `tbsprd_` (outro valor: código 2). A função `sss_tipo` deriva o `PREFIX` do tipo do mesmo jeito.
+* **Prefixo fixo por tipo (desde o `a75e3c1`):** o prefixo físico das tabelas não é mais escolhido. O código o fixa pelo ambiente: `tbsdev_` no DEV e `tbsprd_` no PROD, pela pasta `<TIPO>` acima da raiz (só `PROD` dá `tbsprd_`; `sss_config.install_env()`/`table_prefix()`). As variáveis `SSS_ENV` e `SSS_INSTALL_TYPE` existem só para os testes: não as defina no `crontab` nem nos launchers (o `sss-ctl.sh` não as propaga; DEPLOYMENT §10.5). Um `[oracle] table_prefix` no `common.ini` é ignorado, com aviso. O `scripts/generate_sql.py --prefix` só aceita `tbsdev_` e `tbsprd_` (outro valor: código 2). A função `sss_tipo` deriva o `PREFIX` do tipo do mesmo jeito.
 * **Uma instalação por tipo em cada owner:** como o prefixo não muda, duas instalações do mesmo tipo no mesmo owner usariam as mesmas tabelas. Num owner, existe no máximo um DEV (`tbsdev_`) e um PROD (`tbsprd_`). No GFPR (owner `openrisow`), esse DEV e esse PROD são os do servidor do Apêndice A; as instalações locais (máquinas de desenvolvimento) deixam de subir contra o GFPR (decisão 18).
 * **Esquemas aposentados:** `SSS_OUTROS_PREFIXOS` lista os prefixos de esquemas antigos que ainda estão no owner (de antes do prefixo fixo). Este roteiro **nunca** os toca: o passo 4.1 confere que os scripts gerados não os citam. A remoção deles é manual, à parte (passo 15.3.1).
 
@@ -470,7 +470,7 @@ grep 'OK: nenhuma falha' ~/sss_registro/${P}_99_validate.log     # esperado: as 
 
 ## 10. Árvore de scripts (`script_base_dir`)
 
-A pasta base é a padrão, `<RAIZ>/scripts_ambiente/`, preservada pela atualização (DEPLOYMENT §9). O agente exige que o arquivo real não tenha escrita para grupo nem para outros (README §8.5). O padrão oficial de modos: `0444` nos arquivos, `0555` nos `.py`/`.sh` e `0555` nas pastas. Ele atende a regra e também impede que a própria conta altere os scripts sem querer. O `utilitarios.tar.gz` traz as entradas `scripts_ambiente/utilitarios/<arquivo>` e é extraído na `<RAIZ>` como está; só essa pasta vai ao servidor. Em cada tipo:
+A pasta base é a padrão, `<RAIZ>/scripts_ambiente/`, preservada pela atualização (DEPLOYMENT §9). O agente exige que o arquivo real não tenha escrita para grupo nem para outros (README §8.5). **Modos (padrão oficial, o mesmo no DEPLOYMENT §1.3/§3 e no UTILITY_SCRIPTS):** `scripts_ambiente/` com `0755` (o agente a cria assim); dentro de `scripts_ambiente/utilitarios/`, pastas `0555`, arquivos `0444` e `.py`/`.sh` `0555`; o resto da árvore fica com o modo de quem instala (o agente só exige arquivo não gravável por grupo nem por outros). Os modos de `utilitarios/` atendem a regra e também impedem que a própria conta altere os scripts sem querer. O `utilitarios.tar.gz` traz as entradas `scripts_ambiente/utilitarios/<arquivo>` e é extraído na `<RAIZ>` como está; só essa pasta vai ao servidor. Em cada tipo:
 
 ```bash
 . ~/sss_pacote/sss_vars.sh; sss_tipo DEV && cd "$R"            # depois, sss_tipo PROD
@@ -480,10 +480,10 @@ else
   tar -xzf ~/sss_pacote/utilitarios.tar.gz -C .
 fi
 ls scripts_ambiente/utilitarios | wc -l                        # esperado: 14
-find scripts_ambiente -type f -exec chmod 0444 {} +
-find scripts_ambiente -type f \( -name '*.py' -o -name '*.sh' \) -exec chmod 0555 {} +
-find scripts_ambiente -type d -exec chmod 0555 {} +
-find scripts_ambiente -perm /022 | wc -l                       # esperado: 0
+find scripts_ambiente/utilitarios -type f -exec chmod 0444 {} +
+find scripts_ambiente/utilitarios -type f \( -name '*.py' -o -name '*.sh' \) -exec chmod 0555 {} +
+find scripts_ambiente/utilitarios -type d -exec chmod 0555 {} +
+find scripts_ambiente/utilitarios -perm /022 | wc -l           # esperado: 0
 ```
 
 Para trocar um script depois: `chmod u+w` na pasta e no arquivo, troque, e volte para `0444` (ou `0555` nos `.py`/`.sh`) e `0555` na pasta.
@@ -701,7 +701,7 @@ EOF
 sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_registro/${P}_00_perfis.sql    # sozinha; esperado: ADMINISTRADOR, CONSULTA, OPERADOR
 ```
 
-Faltando algum, o esquema é anterior aos perfis atuais: **pare** e registre (o `init_db.py` não roda em banco em uso).
+Faltando algum, o esquema é anterior aos perfis atuais: **pare** e registre (o `init_db.py` não roda em banco em uso, nem SQL avulso: num esquema em uso, os perfis são renomeados pela tela, DEPLOYMENT §18.2, nota `11966d7`).
 
 **e. Configuração, subida e conferências**, em cada tipo:
 
