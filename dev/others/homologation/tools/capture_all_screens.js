@@ -16,6 +16,10 @@ const BASE_URL = 'http://127.0.0.1:8000/script_scheduling_service';
 const PASS_SEED = process.env.SSS_HOMOLOG_PASSWORD;
 if (!PASS_SEED) { console.error('Defina SSS_HOMOLOG_PASSWORD com a senha do admin do DEV.'); process.exit(2); }
 
+// Usuario restrito: o seed nao tem mais op.hml (11966d7); o homolog.restrito e criado pelo caso PREPARO do
+// capture_evidence.js (massa propria da homologacao).
+const USR_RESTRITO = 'homolog.restrito';
+
 async function sleep(ms) {
     return new Promise(r => setTimeout(r, ms));
 }
@@ -98,7 +102,7 @@ async function sleep(ms) {
         await page.goto(`${BASE_URL}/default/login`, { waitUntil: 'networkidle0' });
         await snap(1, false);
 
-        await page.type('#field-login', 'op.hml');
+        await page.type('#field-login', USR_RESTRITO);
         await page.type('#field-password', 'senha-incorreta-teste');
         await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), page.click('button[type="submit"]')]);
         await snap(2, false);
@@ -119,7 +123,7 @@ async function sleep(ms) {
         await page.goto(`${BASE_URL}/default/index`, { waitUntil: 'networkidle0' });
         await snap(5, false);
 
-        await login('op.hml');
+        await login(USR_RESTRITO);
         await page.goto(`${BASE_URL}/default/index`, { waitUntil: 'networkidle0' });
         await snap(6, false);
 
@@ -128,10 +132,10 @@ async function sleep(ms) {
         await snap(7, false);
 
         // ==========================================
-        // CT-03 — O que eu posso fazer (op.hml)
+        // CT-03 — O que eu posso fazer (homolog.restrito)
         // ==========================================
         console.log('\n--- CT-03 ---');
-        await login('op.hml');
+        await login(USR_RESTRITO);
         await page.goto(`${BASE_URL}/default/permissions`, { waitUntil: 'networkidle0' });
         await snap(8, true);
 
@@ -139,7 +143,7 @@ async function sleep(ms) {
         // CT-04 — Rotinas disponíveis e histórico
         // ==========================================
         console.log('\n--- CT-04 ---');
-        await login('op.hml');
+        await login(USR_RESTRITO);
         await page.goto(`${BASE_URL}/tickets/catalog`, { waitUntil: 'networkidle0' });
         await snap(9, true);
 
@@ -203,7 +207,7 @@ async function sleep(ms) {
         await page.goto(`${BASE_URL}/tickets/index?status=RUNNING`, { waitUntil: 'networkidle0' });
         await snap(18, false);
 
-        await login('op.hml');
+        await login(USR_RESTRITO);
         await page.goto(`${BASE_URL}/tickets/index`, { waitUntil: 'networkidle0' });
         await snap(19, true);
 
@@ -445,7 +449,7 @@ async function sleep(ms) {
         // CT-21 — Controle de acesso direto pela URL
         // ==========================================
         console.log('\n--- CT-21 ---');
-        await login('op.hml');
+        await login(USR_RESTRITO);
         await page.goto(`${BASE_URL}/tickets/detail/1`, { waitUntil: 'networkidle0' });
         await snap(55, false);
 
@@ -465,7 +469,7 @@ async function sleep(ms) {
         await page.goto(`${BASE_URL}/default/index`, { waitUntil: 'networkidle0' });
         await snap(58, true);
 
-        await login('op.hml');
+        await login(USR_RESTRITO);
         await page.goto(`${BASE_URL}/tickets/catalog`, { waitUntil: 'networkidle0' });
         await snap(59, true);
 

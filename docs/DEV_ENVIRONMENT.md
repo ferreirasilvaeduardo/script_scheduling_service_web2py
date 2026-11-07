@@ -118,13 +118,15 @@ cd /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service
 ~/.pyenv/versions/3.6.15/bin/python scripts/run_web.py --name web0001 --check
 ```
 
-**A aplicação usa sempre o Oracle** do `[oracle]` do config do processo (`instance/web0001/` e `instance/agente0001/`: owner e prefixo; F7.3). Por isso, o Python precisa ter o driver Oracle (`oracledb` ou `cx_Oracle`). Nesta máquina, o 3.6.0 e o 3.6.15 têm; no `bin/start_local.sh`, use `PYTHON=~/.pyenv/versions/3.6.15/bin/python3` (como primeiro argumento, o `sss-web.sh` só aceita interpretador chamado `python3` ou `python3.X`, não o `python` do pyenv). Para parar, `Ctrl+C` ou `SIGTERM`: o servidor espera as requisições em andamento até `[web] socket_timeout_s`.
+**A aplicação usa sempre o Oracle** do `[oracle]` do config do processo (`instance/common.ini`, lido pelo `instance/web0001/` e pelo `instance/agente0001/`: owner, DSN, conta e `driver_mode`; F7.3). O prefixo das tabelas não vem do config (parágrafo abaixo). Por isso, o Python precisa ter o driver Oracle (`oracledb` ou `cx_Oracle`). Nesta máquina, o 3.6.0 e o 3.6.15 têm; no `bin/start_local.sh`, use `PYTHON=~/.pyenv/versions/3.6.15/bin/python3` (como primeiro argumento, o `sss-web.sh` só aceita interpretador chamado `python3` ou `python3.X`, não o `python` do pyenv). Para parar, `Ctrl+C` ou `SIGTERM`: o servidor espera as requisições em andamento até `[web] socket_timeout_s`.
 
-**Prefixo do DEV:** o DEV usa automaticamente `tbsdev_` e o PROD `tbsprd_`, no mesmo owner (prefixos fixos pelo ambiente, não parametrizados). O esquema `tbsdev_` é criado pelo `init_db --name agente0001 --real-schema` ou pelos scripts em `docs/sql/` (`01_deploy_sss_openrisow_tbsdev.sql`, `02_rollback_sss_openrisow_tbsdev.sql`, `99_validate_deploy_openrisow_tbsdev.sql`), gerados por `make sql-all`. Para recriar o esquema do DEV: `02_rollback` e `01_deploy` do `tbsdev` (apaga os dados), ou um `DROP` das tabelas `tbsdev_*` seguido do `init_db`. Os comentários de coluna das FKs citam `tbsss_<tabela>` em todos os prefixos (texto fixo do dicionário lógico).
+**Prefixo do DEV:** o DEV usa automaticamente `tbsdev_` e o PROD `tbsprd_`, no mesmo owner. O prefixo é fixo pelo ambiente: vale o primeiro definido entre `SSS_ENV`, `SSS_INSTALL_TYPE` e a pasta `<TIPO>` da instalação (só `PROD` dá `tbsprd_`; README §9.1), e a linha `[oracle] table_prefix`, se ainda existir, é ignorada com aviso. O esquema `tbsdev_` é criado pelo `init_db --name agente0001 --real-schema` ou pelos scripts em `docs/sql/` (`01_deploy_sss_openrisow_tbsdev.sql`, `02_rollback_sss_openrisow_tbsdev.sql`, `99_validate_deploy_openrisow_tbsdev.sql`), gerados por `make sql-all`. Para recriar o esquema do DEV: `02_rollback` e `01_deploy` do `tbsdev` (apaga os dados), ou um `DROP` das tabelas `tbsdev_*` seguido do `init_db`. Os comentários de coluna das FKs citam `tbsss_<tabela>` em todos os prefixos (texto fixo do dicionário lógico).
 
-**Um agente por ambiente no DEV (2026-10-29):** `agente0001` = GFPREPROD (o de antes, que ficou só com ele: a massa de teste e a pasta de entrada do GFPREPROD continuam em `var/agente0001/`), `agente0002` = CLONE2, `agente0003` = CLONE1, `agente0004` = CLONE6 e `agente0005` = CLONE7. Cada um com o mesmo config enxuto (`max_parallel_jobs = 4`, `script_base_dir` = `scripts_ambiente`, `env_passthrough`, `level = DEBUG`) e as suas pastas em `var/agente000N/`; o `secrets.cfg` único já tem as credenciais dos cinco ambientes. Subida: `bin/sss-keepalive.sh web0001:18000 agente0001 agente0002 agente0003 agente0004 agente0005` (e `bin/sss-stop.sh` de cada um para parar). O PROD tem a mesma divisão desde o CR-039 (parado, sem `crontab`).
+**Uma instalação por tipo no GFPR (decisão 18, 06/11/2026):** como o prefixo é fixo, duas instalações do mesmo tipo no owner `openrisow` do GFPR usariam as mesmas tabelas. O servidor 3067 é o DEV (`tbsdev_`) e o PROD (`tbsprd_`) desse owner; a instalação local desta máquina só sobe contra o GFPR (web, agentes, `init_db`, `make test-oracle`) com o tipo correspondente do 3067 parado, para homologação ou ensaio (`docs/DEPLOYMENT-SERVER.md` §15.3 e Apêndice A, decisão 18).
 
-**Estrutura por processo (CR-028):** o DEV tem a mesma estrutura do PROD (DEPLOYMENT §1; não há HOM, CR-030), com `<RAIZ>` = `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`: `instance/web0001/` e `instance/agente0001/` a `instance/agente0005/` (cada um com o seu `config.ini`; o `[oracle]` num único `instance/common.ini` e os segredos num único `instance/secrets.cfg` `0600`, os dois fora do git), logs do web em `var/web0001/logs` e as pastas de cada agente em `var/agente000N/` (`logs`, `works`, `outputs`, `inputs`, `script_works`, `files`). Para criar do zero, copie os modelos de `instance/exemplos/` (o `[oracle]` com owner, prefixo e DSN; não há `sss_env` desde o CR-032: o ambiente mostrado vem da pasta `DEV`), as pastas são criadas na subida (CR-032) e siga o `docs/DEPLOYMENT.md` §7. O `bin/start_local.sh` sobe o `web0001` (outro nome com `SSS_WEB_NAME`) e carrega `instance/web0001/web.env` (`SSS_DEV_SEED_PASSWORD` e `SSS_TZ`; `0600`, fora do git). Não há config padrão (CR-029): as ferramentas de banco rodam com `--name agente0001` (`init_db.py`, `generate_sql.py`, `check_env.py`), e a bateria Oracle lê `instance/agente0001/` (config e segredos).
+**Um agente por ambiente no DEV (2026-10-29):** `agente0001` = GFPREPROD (o de antes, que ficou só com ele: a massa de teste e a pasta de entrada do GFPREPROD continuam em `var/agente0001/`), `agente0002` = CLONE2, `agente0003` = CLONE1, `agente0004` = CLONE6 e `agente0005` = CLONE7. Cada um com o mesmo config enxuto (`environments`, `max_parallel_jobs = 4`, `env_passthrough`, `level = DEBUG`; sem `script_base_dir`, cujo padrão já é `<RAIZ>/scripts_ambiente`) e as suas pastas em `var/agente000N/`; o `secrets.cfg` único já tem as credenciais dos cinco ambientes. Subida: `bin/sss-keepalive.sh web0001:18000 agente0001 agente0002 agente0003 agente0004 agente0005` (e `bin/sss-stop.sh` de cada um para parar). O PROD local tem a mesma divisão desde o CR-039 (parado, sem `crontab`; decisão 18 acima).
+
+**Estrutura por processo (CR-028):** o DEV tem a mesma estrutura do PROD (DEPLOYMENT §1; não há HOM, CR-030), com `<RAIZ>` = `/portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service`: `instance/web0001/` e `instance/agente0001/` a `instance/agente0005/` (cada um com o seu `config.ini`; o `[oracle]` num único `instance/common.ini` e os segredos num único `instance/secrets.cfg` `0600`, os dois fora do git), logs do web em `var/web0001/logs` e as pastas de cada agente em `var/agente000N/` (`logs`, `works`, `outputs`, `inputs`, `script_works`, `files`). Para criar do zero, copie os modelos de `instance/exemplos/` (o `[oracle]` do `common.ini` com owner, DSN, conta e `driver_mode`, sem prefixo; não há `sss_env` desde o CR-032: o ambiente mostrado vem da pasta `DEV`), as pastas são criadas na subida (CR-032) e siga o `docs/DEPLOYMENT.md` §7. O `bin/start_local.sh` sobe o `web0001` (outro nome com `SSS_WEB_NAME`) e carrega `instance/web0001/web.env` (`SSS_DEV_SEED_PASSWORD` e `SSS_TZ`; `0600`, fora do git). Não há config padrão (CR-029): as ferramentas de banco rodam com `--name agente0001` (`init_db.py`, `generate_sql.py`, `check_env.py`), e a bateria Oracle lê `instance/agente0001/` (config e segredos).
 
 A aplicação fica no endereço local `127.0.0.1:8000/script_scheduling_service` (porta 8000, caminho `/script_scheduling_service`).
 
@@ -183,10 +185,11 @@ python -m unittest tests.unit.core.test_cron_parser         # um arquivo
 | `tests/functional/` | A aplicação inteira, por requisição ou com o servidor real | `make test-functional` |
 | `tests/architecture/` | Regras lidas no código e nos documentos | `make test-architecture` |
 
-Resultado esperado no encerramento do CR-034, sem `SSS_TEST_ORACLE`: `Ran 1499 tests ... OK (skipped=61)` (o total cresce com os testes novos). Os pulados são, na maior parte, os de `tests/integration/oracle/`. Rode a suíte na **3.6.0** e na **3.6.8** (AGENTS §7, item 3) e, de preferência, também na 3.13.2:
+Resultado esperado em 2026-11-07, sem `SSS_TEST_ORACLE`: `Ran 1570 tests ... OK (skipped=61)` em cada Python do `make test-matrix` (o total cresce com os testes novos). Os pulados são, na maior parte, os de `tests/integration/oracle/`. O `make test-matrix` roda a bateria em cada Python de `PYTHONS` (padrão do Makefile: 3.6.0, 3.6.15 e 3.13.2). A AGENTS §7, item 3, exige também a **3.6.8** (referência de produção); inclua-a pela linha do `make`:
 
 ```bash
-for v in 3.6.0 3.6.8 3.13.2; do ~/.pyenv/versions/$v/bin/python -m unittest discover -s tests -t .; done
+make test-matrix
+make test-matrix PYTHONS="$HOME/.pyenv/versions/3.6.0/bin/python $HOME/.pyenv/versions/3.6.8/bin/python $HOME/.pyenv/versions/3.13.2/bin/python"
 ```
 
 O `tests/support/_testenv.py` põe no `sys.path` a raiz da aplicação, `src/` (pacote `sss`, CR-022b3; ferramentas de operação em `sss.cli`, CR-022b8) e `tools/`, calculados a partir do próprio arquivo, e expõe `APP_DIR`. Todo teste o importa primeiro (`from tests.support import _testenv`). Cada pasta de `tests/` tem `__init__.py`: sem ele, o `unittest` do Python 3.6 não descobre os testes da pasta.
@@ -194,7 +197,7 @@ O `tests/support/_testenv.py` põe no `sys.path` a raiz da aplicação, `src/` (
 **Lint e tipos (CR-022b9, AGENTS §1):** `flake8`, `mypy`, `pylint`, `isort` e `autopep8` ficam no Python 3.11 da máquina de desenvolvimento (o 3.6 não tem as versões atuais), que não precisa de driver Oracle para isso. O Makefile usa esse Python pela variável `DEV_PYTHON` (padrão `~/.pyenv/versions/3.11.11/bin/python3`; CR-033, D4), separada do `PYTHON` da aplicação e dos testes, e o `check-dev-deps` roda cada ferramenta antes (um flake8 que só importa, mas quebra ao carregar os plugins, é recusado):
 
 ```bash
-make lint          # flake8 na árvore (fora dev/scripts/): zero achados
+make lint          # flake8 na árvore (fora dev/scripts/ e scripts_ambiente/, extend-exclude do .flake8): zero achados
 make type-check    # mypy estrito em src/sss: zero achados
 make check-all     # os dois em sequência, sem alterar arquivos (make format reescreve: rode à parte)
 make lint DEV_PYTHON=/outro/python3.11   # outro Python das ferramentas
@@ -207,12 +210,12 @@ O pacote de implantação sai só do `make package` (ou `make package-local`); o
 | Alvo | O que faz |
 |---|---|
 | `dev-start` / `dev-stop` | Web do DEV desta máquina (`bin/start_local.sh [PORT]` / `bin/stop_local.sh`) |
-| `ctl CMD=...` | `bin/sss-ctl.sh` nesta raiz: `status` (padrão), `stop`, `start`, `restart`, `"cron show"` |
-| `check-env`, `health`, `probe-driver` | Diagnóstico do processo `NAME` (o `probe-driver` lê a senha pelo stdin) |
-| `sql`, `sql-all` | `docs/sql` de `OWNER`/`PREFIX`, ou de todos os prefixos versionados (`SQL_PREFIXES`) |
+| `ctl CMD=...` | `bin/sss-ctl.sh` nesta raiz: `status` (padrão), `stop`, `start`, `restart`, `"cron show"`, `"cron install"`, `"cron remove"` |
+| `check-env`, `health`, `probe-driver` | Diagnóstico do processo `NAME` (o `probe-driver` sonda o driver `CANDIDATE`, padrão `thick`: `thin`, `thick` ou `cx_oracle`; lê a senha pelo stdin) |
+| `sql`, `sql-all` | `docs/sql` de `OWNER`/`PREFIX` (padrão `openrisow`/`tbsdev_`; o `generate_sql --prefix` só aceita `tbsdev_` ou `tbsprd_`, outro valor sai com código 2 sem gravar), ou dos dois prefixos oficiais (`SQL_PREFIXES`) |
 | `init-db-dry` | DDL do processo `NAME` sem conectar. O `init_db` no modo real não tem alvo: nunca rode em banco em uso |
 | `test-matrix` | Bateria completa em cada Python de `PYTHONS` (3.6.0, 3.6.15 e 3.13.2) |
-| `test-oracle` | Bateria com `SSS_TEST_ORACLE=1`; recusa (código 2) com o DEV desta raiz no ar (R-23) |
+| `test-oracle` | Bateria com `SSS_TEST_ORACLE=1`; recusa (código 2) com o DEV desta raiz no ar (R-23). No GFPR, só com o DEV do 3067 parado (decisão 18, §4) |
 | `homolog-massa`, `homolog`, `homolog-docx` | Homologação: massa no `input_dir` de `NAME` (`LOTE_MB=`), roteiro no navegador (`CTS="CT-01 CT-05"`, variáveis `SSS_*` do ambiente) e o `.docx` da rodada |
 | `tunel-3067 CMD=...` | Túnel até o web do 3067 pelo bastion: `status` (padrão), `start` ou `stop` |
 
@@ -253,12 +256,7 @@ O script fica num **caminho absoluto** em qualquer lugar do servidor ou num cami
   * o caminho, juntado ou real, não fica em pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`), nem dentro de `log_dir`, `work_dir`, `output_dir`, `input_dir`, `script_work_dir` ou `files_dir`, nem na pasta da aplicação (`dev/` é a exceção onde existe, o repositório);
   * o arquivo real existe, é arquivo regular e não tem escrita para grupo nem para outros (`st_mode & 0o022 == 0`); as pastas do caminho não são conferidas.
 
-**No DEV:** o seed (Oracle e FAKE) e os diagnósticos da homologação usam caminho relativo (`utilitarios/zipar_arquivos.py`, `carga_diaria.py`, `diagnostico/gerar_saida.sh`), e o `instance/agente0001/config.ini` aponta a pasta base para os scripts do repositório:
-
-```ini
-[agent]
-script_base_dir = /portaloptrib/TESHUVA/SSS/DEV/script_scheduling_service/scripts_ambiente
-```
+**No DEV:** o seed (Oracle e FAKE) e os diagnósticos da homologação usam caminho relativo (`utilitarios/zipar_arquivos.py`, `carga_diaria.py`, `diagnostico/gerar_saida.sh`). Os `config.ini` dos agentes não escrevem `script_base_dir`: sem a linha, a pasta base é `<RAIZ>/scripts_ambiente` (`sss_config.SCRIPTS_DIR`), a dos scripts do repositório. Escrever a chave troca a pasta; escrita vazia, só vale caminho absoluto (`NO_BASE_DIR` no relativo).
 
 Os arquivos precisam de modo `0644` ou `0755` (`chmod -R go-w scripts_ambiente`). Uma pasta do seu `$HOME` também serve, com caminho absoluto.
 
@@ -280,7 +278,7 @@ Os arquivos precisam de modo `0644` ou `0755` (`chmod -R go-w scripts_ambiente`)
 
 ### 6.3 Agente em DEV (a partir do F8, CR-007)
 
-* **Config enxuto (CR-026, CR-028):** o `instance/agente0001/config.ini` do DEV só tem as chaves obrigatórias e as que fogem do padrão (`name = agente0001`, `environments`, `max_parallel_jobs`, `script_base_dir = <RAIZ>/scripts_ambiente`, `env_passthrough` e `level = DEBUG`); o do `web0001`, `name`, `level` e `allowed_origins`; o `[oracle]` dos dois fica no `instance/common.ini` (CR-032, D18). As pastas saem do nome. Não há `[agent] interpreters`: o agente procura `python3`, `bash`... no `PATH` do terminal que o subiu. O agente sobe pelo nome: `PYTHON=~/.pyenv/versions/3.6.15/bin/python3 bin/sss-scheduler.sh agente0001`. Para parar, `bin/sss-stop.sh agente0001` ou `SIGTERM` no PID do agente: ele encerra pela máquina de estados (README §8.11).
+* **Config enxuto (CR-026, CR-028):** o `instance/agente0001/config.ini` do DEV só tem as chaves obrigatórias e as que fogem do padrão (`name = agente0001`, `environments`, `max_parallel_jobs`, `env_passthrough` e `level = DEBUG`; a pasta base dos scripts fica no padrão, `<RAIZ>/scripts_ambiente`); o do `web0001`, `name`, `level` e `allowed_origins`; o `[oracle]` dos dois fica no `instance/common.ini` (CR-032, D18). As pastas saem do nome. Não há `[agent] interpreters`: o agente procura `python3`, `bash`... no `PATH` do terminal que o subiu. O agente sobe pelo nome: `PYTHON=~/.pyenv/versions/3.6.15/bin/python3 bin/sss-scheduler.sh agente0001`. Para parar, `bin/sss-stop.sh agente0001` ou `SIGTERM` no PID do agente: ele encerra pela máquina de estados (README §8.11).
 * **Pasta de trabalho dos scripts (CR-019, CR-028):** no DEV é `var/agente0001/script_works` (padrão do nome; fora do git; criada pelo agente na subida, CR-032). Cada ticket recebe `SSS_WORK_DIR` em `script_works/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, que fica depois do ticket até a limpeza manual (README §11.3, CR-030).
 * **DEV igual ao PROD (CR-032, D7, D8, D11):** os scripts rodam com a conta do agente, sem `sudo` nem helper, no DEV e no PROD; não há `sss_env` nem papel monitor. As linhas antigas (`sss_env`, `exec_users`, `exec_work_dir`, `helper_path`, `[monitor]`) só geram aviso.
 * `cron_horizon_days` é fixo em 1.461 desde o CR-032 (uma linha antiga só gera aviso); `max_log_size_bytes` vai até 64 MiB e o prefixo de tabela é fixo por ambiente (`tbsdev_` em DEV, `tbsprd_` em PROD; `table_prefix` no config é ignorado com aviso).
@@ -293,7 +291,7 @@ Os arquivos precisam de modo `0644` ou `0755` (`chmod -R go-w scripts_ambiente`)
 O backend FAKE não precisa de banco. Para o backend ORACLE (README §2.3, CR-002):
 
 * **Driver:** `python-oracledb` (`< 2.0` na 3.6; `2.x` na 3.7+) e `cx_Oracle 8.3` como contingência, com o Oracle Instant Client 19.x. São pré-instalados pela infraestrutura; não use `pip install` no projeto. O projeto não usa a biblioteca `cryptography`: o DEV vem com `driver_mode = thick`, e o modo Thin (que dependeria dela) fica fora de uso.
-* **Modo:** `[oracle] driver_mode = auto` tenta Thin → Thick → cx_Oracle por sondagem. Contra banco **11g**, só Thick e cx_Oracle conectam, então o **Instant Client 19** precisa estar instalado:
+* **Modo:** o padrão do código, sem a linha, é `[oracle] driver_mode = auto`, que tenta Thin → Thick → cx_Oracle por sondagem; o recomendado, e o que vem nos modelos (`instance/exemplos/common.ini.example`) e no DEV, é `thick`. Contra banco **11g**, só Thick e cx_Oracle conectam, então o **Instant Client 19** precisa estar instalado:
   * Linux/Unix: no `ldconfig` (preferencial) ou em `LD_LIBRARY_PATH` exportado **antes** de iniciar o Python;
   * macOS e Windows não são suportados (CR-005; o `oracle_client_lib_dir` saiu no CR-032).
 * **Credencial:** só no `secrets.cfg` (`0600`, dono = usuário do processo), nunca no `config.ini`.
@@ -302,8 +300,8 @@ O backend FAKE não precisa de banco. Para o backend ORACLE (README §2.3, CR-00
   * Via SQL*Plus (autônomo): `sqlplus usuario/senha@//host:porta/servico @docs/sql/01_deploy_sss_openrisow_tbsdev.sql`
   * Rollback total: `sqlplus usuario/senha@//host:porta/servico @docs/sql/02_rollback_sss_openrisow_tbsdev.sql`
   * **No DEV, só os `*_tbsdev.sql`.** Os `*_tbsprd.sql` são as tabelas do PROD, no mesmo owner: o `02_rollback_sss_openrisow_tbsprd.sql` apagaria o PROD.
-* **Testes contra banco real:** só `SSS_TEST_ORACLE=1` (README §2.5). Owner, prefixo, DSN e conta vêm do `[oracle]` do `instance/common.ini` (CR-032, D18; lido pelo `instance/agente0001/config.ini`), e os segredos do `instance/secrets.cfg` único (CR-032).
-  * **No `GFPR`** (owner `openrisow`, modo compartilhado), o driver Oracle só está instalado no Python 3.6.15 desta máquina. Exemplo para um agregado do F7.3:
+* **Testes contra banco real:** só `SSS_TEST_ORACLE=1` (README §2.5). Owner, DSN e conta vêm do `[oracle]` do `instance/common.ini` (CR-032, D18; lido pelo `instance/agente0001/config.ini`), os segredos do `instance/secrets.cfg` único (CR-032), e o prefixo é o fixo do ambiente (`tbsdev_` nesta raiz).
+  * **No `GFPR`** (owner `openrisow`, modo compartilhado), só com o DEV do 3067 parado (decisão 18, §4); o driver Oracle só está instalado no Python 3.6.15 desta máquina. Exemplo para um agregado do F7.3:
     ```bash
     SSS_TEST_ORACLE=1 SSS_TEST_REPO_AGREGADO=TICKETS \
       ~/.pyenv/versions/3.6.15/bin/python -m unittest tests.integration.oracle.test_repo_oracle_progressive -v

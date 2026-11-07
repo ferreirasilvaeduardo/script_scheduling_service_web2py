@@ -12,6 +12,10 @@ const BASE_URL = 'http://127.0.0.1:8000/script_scheduling_service';
 const PASS_SEED = process.env.SSS_HOMOLOG_PASSWORD;
 if (!PASS_SEED) { console.error('Defina SSS_HOMOLOG_PASSWORD com a senha do admin do DEV.'); process.exit(2); }
 
+// Usuario restrito: o seed nao tem mais op.hml (11966d7); o homolog.restrito e criado pelo caso PREPARO do
+// capture_evidence.js (massa propria da homologacao).
+const USR_RESTRITO = 'homolog.restrito';
+
 async function sleep(ms) {
     return new Promise(r => setTimeout(r, ms));
 }
@@ -192,7 +196,7 @@ async function sleep(ms) {
         // CT-21 — Controle de acesso direto pela URL
         // ==========================================
         console.log('\n--- CT-21 (Fig 55) ---');
-        await login('op.hml');
+        await login(USR_RESTRITO);
         await page.goto(`${BASE_URL}/tickets/detail/1`, { waitUntil: 'networkidle0' });
         await snap(55, false);
 
@@ -216,7 +220,7 @@ async function sleep(ms) {
         await snap(58, true);
 
         // Fig 59: Rotinas disponíveis em 360 px
-        await login('op.hml');
+        await login(USR_RESTRITO);
         await page.goto(`${BASE_URL}/tickets/catalog`, { waitUntil: 'networkidle0' });
         await snap(59, true);
 

@@ -6,6 +6,9 @@ Uso (da pasta tools/, Python 3 com python-docx):
 Rodadas conhecidas em RODADAS (20261022: CR-016; 20261023: CR-017; 20261023_r2: CR-018; 20261023_r3: CR-019
 e CR-020; 20261024_r2: CR-021a-c; 20261024_r4: CR-021e; 20261024_r6: CR-021f). Padrao: a data do
 dia (como o capture_evidence.js), ../evidence_<data>[_r<n>] -> ../../../docs/homologation/SSS_Homologation_Evidence_<AAAA-MM-DD>[_r<n>].docx
+Rodadas ate 20261030_r4: seed antigo (historico: perfis ADMINISTRATOR/OPERATOR_PROD/OPERATOR_HML/READ_ONLY e scripts
+em dev/scripts). Rodadas novas (depois do 11966d7) marcam "massa_propria": True: seed com ADMINISTRADOR, OPERADOR
+e CONSULTA e o caso PREPARO do roteiro (perfil HOMOLOG_RESTRITO e usuario homolog.restrito, ADAPTACAO_MASSA_PROPRIA).
 """
 import io
 import json
@@ -41,12 +44,14 @@ VERDE = RGBColor(0x1B, 0x6E, 0x3A)
 VERMELHO = RGBColor(0xB0, 0x1C, 0x1C)
 AMBAR = RGBColor(0x8A, 0x5A, 0x00)
 
-ORDEM = ["CT-01", "CT-02", "CT-03", "MASSA", "CT-04", "CT-05", "CT-06", "CT-07", "CT-08", "CT-09", "CT-10",
+ORDEM = ["PREPARO", "CT-01", "CT-02", "CT-03", "MASSA", "CT-04", "CT-05", "CT-06", "CT-07", "CT-08", "CT-09", "CT-10",
          "CT-11", "CT-12", "CT-13", "CT-14", "CT-15", "CT-16", "CT-17", "CT-18", "CT-19", "CT-20", "CT-21",
          "CT-22", "CT-23", "CT-24", "CT-25", "CT-26", "CT-27", "CT-28", "CT-29", "CT-30", "CT-31",
          "CT-32", "CT-33", "ENCERRAMENTO"]
 
 # Adaptacao de cada caso ao DEV real (o manual de 18/10 foi escrito sobre a massa simulada do FAKE).
+# Historico: os textos abaixo e os das rodadas ate 20261030_r4 citam o seed antigo (OPERATOR_HML, op.hml,
+# READ_ONLY) e a pasta dev/scripts; nas rodadas com "massa_propria" o ADAPTACAO_MASSA_PROPRIA os substitui.
 ADAPTACAO = {
     "CT-01": u"Igual ao manual. A troca válida de senha do admin usou a senha escolhida pelo responsável pela "
              u"homologação; os demais usuários seguem com a senha inicial documentada (DEPLOYMENT.md §5.3).",
@@ -242,6 +247,7 @@ _AGENTE_PADRAO = (u"Agente iniciado com bin/sss-scheduler.sh e uma cópia do ins
                   u"interpretadores o agente não pega tickets).")
 _SENHAS_PADRAO = u"No CT-01 a senha do admin foi trocada pela tela para a senha escolhida pelo responsável pela homologação."
 
+# Historico das rodadas (cada uma com o seed e as pastas da epoca); as novas herdam da anterior parecida.
 RODADAS = {
     "20261022": {"commit": u"07e424f (encerramento do CR-016) mais as correções desta homologação, no mesmo commit "
                            u"deste documento",
@@ -901,8 +907,61 @@ RODADAS["20261030_r4"] = dict(RODADAS["20261030_r3"], **{
         u"(SSS_ADMIN_RESET=seed, decisao 15); massa de 2 GB mantida no servidor.",
     ],
 })
+# Massa propria do roteiro (decisao 3.a, depois do 11966d7): o seed so tem ADMINISTRADOR, OPERADOR e CONSULTA
+# (admin, op.prod e consulta); o caso PREPARO do capture_evidence.js cria ou reaproveita, pela tela, o perfil
+# HOMOLOG_RESTRITO e o usuario homolog.restrito. As rodadas com "massa_propria": True recebem estes textos por
+# cima da adaptacao herdada (os textos das rodadas anteriores ficam como historico).
+PRF_RESTRITO = u"HOMOLOG_RESTRITO"
+USR_RESTRITO = u"homolog.restrito"
+ADAPTACAO_MASSA_PROPRIA = {
+    "PREPARO": u"Caso novo da massa própria do roteiro: o seed não tem mais perfil nem usuário de escopo restrito, "
+               u"então o admin cria (ou reaproveita, de rodada anterior) pela tela o perfil %s, com as 7 "
+               u"funcionalidades de operação, os ambientes CLONE6, CLONE7 e GFPREPROD (CLONE1 e CLONE2 fora) e os "
+               u"14 utilitários do seed (os mesmos do OPERADOR), e o usuário %s nesse perfil, com a senha inicial "
+               u"documentada (DEPLOYMENT.md §5.3)." % (PRF_RESTRITO, USR_RESTRITO),
+    "CT-03": u"HOMOLOGACAO → GFPREPROD; o perfil restrito %s (massa própria) tem CLONE6, CLONE7 e GFPREPROD. A tela "
+             u"mostra quantos scripts o usuário pode rodar e leva aos cartões de Rodar um script." % PRF_RESTRITO,
+    "CT-05": u"carga_diaria em PRODUCAO → gerar_hash_arquivo em CLONE2. Os 14 utilitários do seed são liberados ao "
+             u"OPERADOR e ao %s, então não há script fora do perfil para mostrar na etapa 1. A escolha do script "
+             u"é feita nos cartões de Rodar um script; o comando aparece só na confirmação. Todos os ambientes do "
+             u"seed estão marcados como produção no cadastro (CR-017a), então o alerta e o botão vermelho "
+             u"aparecem." % PRF_RESTRITO,
+    "CT-12": u"Perfis do seed: ADMINISTRADOR, OPERADOR e CONSULTA; o perfil restrito do manual → %s (massa própria); "
+             u"DESENV (inativo) → CLONE7; VER_AUDITORIA → VIEW_AUDIT. A revisão foi cancelada (matriz inalterada). "
+             u"Perfil novo %s_P<hhmm>: a inclusão abre a matriz (CR-018b); desativado ao final."
+             % (PRF_RESTRITO, STAMP),
+    "CT-13": u"carga_diaria → contar_linhas_arquivo; HOMOLOGACAO → GFPREPROD; perfis ADMINISTRADOR, OPERADOR e %s. "
+             u"Motivos com o nome do cadastro (\"tem Rodar Scripts\", CR-018b)." % PRF_RESTRITO,
+    "CT-14": u"O usuário bloqueado foi produzido de verdade: 5 tentativas erradas do consulta, depois desbloqueado "
+             u"pela tela. A redefinição válida do op.prod usou a própria senha inicial. A lista tem os 3 usuários "
+             u"do seed e o %s." % USR_RESTRITO,
+    "CT-21": u"Ticket fora do escopo do %s: um ticket real de CLONE2." % USR_RESTRITO,
+    "CT-25": u"SHA-256 retirado pelo CR-011; a matriz do OPERADOR voltou ao original no fim.",
+    "CT-26": u"O perfil %s perdeu VIEW_LOGS por alguns segundos (para mostrar o item Tickets de quem só dispara) e o "
+             u"limpar_linhas_vazias ficou homologado em um ambiente e depois em nenhum (disparo e regra direto ao "
+             u"formulário; quadro Quem pode rodar). Tudo foi desfeito no próprio caso." % PRF_RESTRITO,
+    "CT-27": u"O %s ficou sem Consultar Tickets por alguns segundos (cancelar só quem enxerga); a regex do "
+             u"caminho_arquivo e o arquivo do contar_linhas_arquivo foram trocados para mostrar os avisos e "
+             u"desfeitos no próprio caso; tempos de abertura registrados (CR-018c)." % PRF_RESTRITO,
+    "CT-28": u"Nenhum script do seed grava na pasta de saída: o diagnóstico diagnostico/gerar_saida.sh (na pasta base, "
+             u"scripts_ambiente/diagnostico/ por padrão) foi cadastrado pela tela (diag_gerar_saida, só GFPREPROD), "
+             u"rodado pelo admin e desativado no fim; o op.prod navegou e baixou como outra pessoa.",
+    "CT-29": u"Com o agente real: envio pela tela do %s para o GFPREPROD, entrega, retrato, EXISTS, substituição com "
+             u"confirmação, subpasta recusada, 413 acima de 50 MiB e um ticket do contar_linhas_arquivo que leu o "
+             u"arquivo enviado." % USR_RESTRITO,
+    "CT-30": u"O diagnóstico diagnostico/pasta_trabalho.sh (na pasta base, scripts_ambiente/diagnostico/ por padrão) "
+             u"foi cadastrado pela tela (diag_pasta_trabalho, só GFPREPROD), rodado e desativado no fim.",
+    "CT-31": u"O painel de agentes mostra a pasta base do agente ([agent] script_base_dir ou, sem a chave, "
+             u"scripts_ambiente/ da raiz); o ticket do CT-05 (utilitarios/gerar_hash_arquivo.py, relativo) mostra o "
+             u"caminho executado; um diagnóstico com caminho relativo para arquivo ausente (diag_relativo_ausente, "
+             u"só GFPREPROD) termina em PRECHECK_FAILED (NOT_FOUND) e é desativado no fim.",
+}
+
 RODADA = RODADAS[RUN_TAG]
+MASSA_PROPRIA = bool(RODADA.get("massa_propria"))
 ADAPTACAO.update(RODADA["adaptacao"])
+if MASSA_PROPRIA:
+    ADAPTACAO.update(ADAPTACAO_MASSA_PROPRIA)
 RESSALVA = RODADA["ressalva"]
 DEFEITOS = RODADA["defeitos"]
 OBSERVACOES = RODADA["observacoes"]
@@ -1093,10 +1152,18 @@ def main():
             u"extrato em texto e um lote de 3 GB de texto para a compactação longa."):
         doc.add_paragraph(txt, style="List Bullet")
     doc.add_heading(u"2.2 Usuários e senhas", 2)
+    if MASSA_PROPRIA:
+        usuarios = (u"Usuários do seed: admin (ADMINISTRADOR), op.prod (OPERADOR) e consulta (CONSULTA), com a senha "
+                    u"inicial documentada no DEPLOYMENT.md §5.3. Massa própria do roteiro (caso PREPARO): o perfil "
+                    u"%s (7 funcionalidades de operação, CLONE6, CLONE7 e GFPREPROD, os 14 utilitários do seed) e "
+                    u"o usuário %s, criados ou reaproveitados pela tela pelo admin, com a mesma senha inicial "
+                    u"documentada; o usuário fica inativo no encerramento. " % (PRF_RESTRITO, USR_RESTRITO))
+    else:
+        # Historico: seed das rodadas ate 20261030_r4 (antes do 11966d7).
+        usuarios = (u"Usuários do seed do DEV: admin (ADMINISTRATOR), op.prod (OPERATOR_PROD), op.hml (OPERATOR_HML) e "
+                    u"consulta (READ_ONLY), com a senha inicial documentada no DEPLOYMENT.md §5.3. ")
     doc.add_paragraph(
-        u"Usuários do seed do DEV: admin (ADMINISTRATOR), op.prod (OPERATOR_PROD), op.hml (OPERATOR_HML) e "
-        u"consulta (READ_ONLY), com a senha inicial documentada no DEPLOYMENT.md §5.3. " +
-        RODADA.get("senhas", _SENHAS_PADRAO) +
+        usuarios + RODADA.get("senhas", _SENHAS_PADRAO) +
         u" Nenhuma senha aparece neste documento, nas telas capturadas ou no roteiro.")
     doc.add_heading(u"2.3 Massa criada pelas telas", 2)
     m = res.get("MASSA")
@@ -1113,7 +1180,10 @@ def main():
         u"parâmetro ct24_valor_<hhmm> e as regras %s_DIARIA_<hhmm> (pausadas no encerramento). "
         % (STAMP, STAMP, STAMP) +
         u"Alterações de cadastro feitas para testar (caminho de script, vínculo de parâmetro, permissão "
-        u"MANAGE_USERS do OPERATOR_PROD) foram desfeitas pela tela no próprio caso." + RODADA.get("registros", u"") +
+        u"MANAGE_USERS do %s) foram desfeitas pela tela no próprio caso." % (u"OPERADOR" if MASSA_PROPRIA else
+                                                                             u"OPERATOR_PROD") +
+        (u" O perfil %s fica ativo e o usuário %s inativo, para a próxima rodada reaproveitar."
+         % (PRF_RESTRITO, USR_RESTRITO) if MASSA_PROPRIA else u"") + RODADA.get("registros", u"") +
         u" Tudo está na trilha de auditoria.")
 
     # 3. Defeitos e observacoes

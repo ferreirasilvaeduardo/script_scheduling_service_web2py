@@ -7,11 +7,15 @@
  * e rodada 3 (CR-019 pasta de trabalho e CR-020 telas de Saidas e de Entrada: CT-28 a CT-30).
  *
  * Uso (servidor web do DEV no ar, agente real no ar):
- *   node capture_evidence.js            -> todos os CTs, na ordem
+ *   node capture_evidence.js            -> todos os casos, na ordem (PREPARO, CT-01 ... CT-33, ENCERRAMENTO)
  *   node capture_evidence.js CT-01 CT-05 -> so os CTs pedidos (o estado fica em <saida>/state.json)
  *
+ * Massa propria (depois do 11966d7, seed com ADMINISTRADOR/OPERADOR/CONSULTA e admin/op.prod/consulta): o caso
+ *   PREPARO cria ou reaproveita, pela tela, o perfil HOMOLOG_RESTRITO e o usuario homolog.restrito (ver
+ *   PRF_RESTRITO); o ENCERRAMENTO desativa o usuario. Repetir um caso dele depois do ENCERRAMENTO: PREPARO antes.
  * Senhas: nunca no codigo nem no log.
- *   - senha inicial dos usuarios do seed: lida do docs/DEPLOYMENT.md (secao 5.3, documentada);
+ *   - senha inicial dos usuarios do seed: lida do docs/DEPLOYMENT.md (secao 5.3, documentada); a mesma do
+ *     usuario homolog.restrito (redefinida pelo PREPARO);
  *   - senha nova do admin (troca valida do CT-01): arquivo SSS_ADMIN_NEW_PASSWORD_FILE (padrao ~/.sss_homolog_pw, 0600).
  *   - SSS_ADMIN_RESET=seed: no encerramento, o admin volta a senha inicial (instalacao que a mantem).
  *   - SSS_ADMIN_START=new: o admin ja esta com a senha nova (rodada repetida no mesmo banco); o CT-01 troca
@@ -394,7 +398,152 @@ const FILE_EXTRATO = path.join(INPUT, 'clone2', 'gerar_hash_arquivo', 'extrato_2
 const DIR_LOTE = path.join(INPUT, 'gfpreprod', 'zipar_arquivos', 'lote_20261022');
 const FILE_INEXISTENTE = path.join(INPUT, 'gfpreprod', 'contar_linhas_arquivo', 'arquivo_que_nao_existe.txt');
 
-const CTS = {};
+// ---------------------------------------------------------------------------------------------
+// Massa propria do roteiro (decisao 3.a, depois do 11966d7): o seed so tem os perfis ADMINISTRADOR, OPERADOR e
+// CONSULTA (usuarios admin, op.prod e consulta). Os casos de escopo restrito usam um perfil e um usuario criados
+// pela tela, pelo admin, no caso PREPARO, com o escopo que o antigo perfil de homologacao do seed tinha: as 7
+// funcionalidades de operacao, os ambientes CLONE6, CLONE7 e GFPREPROD (CLONE1 e CLONE2 fora) e os scripts do
+// seed (os mesmos do OPERADOR). Nomes fixos com a marca HOMOLOG: a rodada seguinte reaproveita o cadastro
+// (reativa, devolve a matriz e o perfil, redefine a senha); o seed fica intacto. Senha do usuario: a senha
+// inicial documentada (SEED_PASS, lida do DEPLOYMENT.md), nunca uma senha no codigo. O ENCERRAMENTO desativa o
+// usuario.
+// ---------------------------------------------------------------------------------------------
+const PRF_RESTRITO = 'HOMOLOG_RESTRITO';
+const USR_RESTRITO = 'homolog.restrito';
+const RESTRITO_FUNCS = ['EXEC_SCRIPT', 'VIEW_LOGS', 'CANCEL_TICKET', 'DOWNLOAD_OUTPUT', 'UPLOAD_INPUT', 'FILES_UPLOAD',
+    'FILES_DOWNLOAD'];
+const RESTRITO_ENVS = ['CLONE6', 'CLONE7', 'GFPREPROD'];
+
+// Id do perfil restrito (do state.json ou da lista filtrada, para repetir um caso sem o PREPARO na mesma pasta).
+async function restritoProfileId() {
+    if (state.restrito && state.restrito.profile) return state.restrito.profile;
+    return idFromList(`/admin_profiles/index?name=${PRF_RESTRITO}`, PRF_RESTRITO, '/admin_profiles/form/');
+}
+
+// Rotulos marcados numa aba da matriz do perfil (funcs: codigo; ambs: ambiente; scrs: nome do script).
+async function matrixChecked(profileId, dim) {
+    await go(`/admin_profiles/matrix/${profileId}`);
+    return page.$$eval(`input[name="${dim}"]`, (boxes) => boxes.filter((b) => b.checked).map((b) => {
+        const l = document.querySelector(`label[for="${b.id}"] .sss-mono`);
+        return l ? l.innerText.trim() : '';
+    }));
+}
+
+// Deixa a matriz do perfil exatamente com os rotulos pedidos ({funcs, ambs, scrs}) e salva, como o usuario;
+// devolve quantas caixas mudaram (0: nada a salvar).
+async function setMatrix(profileId, wanted) {
+    await go(`/admin_profiles/matrix/${profileId}`);
+    const changed = await page.evaluate((w) => {
+        let n = 0;
+        for (const dim of Object.keys(w)) {
+            for (const b of document.querySelectorAll(`input[name="${dim}"]`)) {
+                const l = document.querySelector(`label[for="${b.id}"] .sss-mono`);
+                const want = w[dim].includes(l ? l.innerText.trim() : '');
+                if (b.checked !== want) { b.checked = want; n++; }
+            }
+        }
+        return n;
+    }, wanted);
+    if (changed) {
+        await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }),
+            page.$eval('form[action*="save_matrix"]', (f) => f.submit())]);
+    }
+    return changed;
+}
+
+// Botao visivel com o texto exato (ex.: Desativar, Reativar), sem clicar.
+async function hasButton(label) {
+    return page.$$eval('button', (bs, l) => bs.some((b) => b.innerText.trim() === l &&
+        b.getBoundingClientRect().width > 0), label);
+}
+
+const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
+
+CTS['PREPARO'] = async () => {
+    begin('PREPARO', 'Preparação: perfil restrito e usuário de teste da homologação (massa própria, pela tela)');
+    await login('admin');
+    // Perfil restrito: inclui ou reaproveita (reativa) o da rodada anterior
+    let prf = await idFromList(`/admin_profiles/index?name=${PRF_RESTRITO}`, PRF_RESTRITO, '/admin_profiles/form/');
+    if (!prf) {
+        await go('/admin_profiles/form');
+        await fill('#field-name', PRF_RESTRITO);
+        await fill('#field-description', 'Perfil restrito da homologação (massa própria do roteiro)');
+        await submit('/admin_profiles/save');
+        await expectText(`Perfil ${PRF_RESTRITO} incluído pela tela`, 'Perfil incluído. Agora marque o que ele pode fazer.');
+        prf = await idFromList(`/admin_profiles/index?name=${PRF_RESTRITO}`, PRF_RESTRITO, '/admin_profiles/form/');
+    } else {
+        await go(`/admin_profiles/form/${prf}`);
+        if (await hasButton('Reativar')) {
+            await clickText('button', 'Reativar');
+            await confirmModal();
+            note(`Perfil ${PRF_RESTRITO} de rodada anterior reativado pela tela.`);
+        }
+        note(`Perfil ${PRF_RESTRITO} já cadastrado (rodada anterior): reaproveitado, com a matriz devolvida ao escopo abaixo.`);
+    }
+    check(`Perfil ${PRF_RESTRITO} cadastrado`, !!prf, prf ? '#' + prf : 'não encontrado');
+    if (!prf) return;
+    await go(`/admin_profiles/form/${prf}`);
+    check(`${PRF_RESTRITO} ativo e não administrativo`, (await hasButton('Desativar')) &&
+        await page.$eval('#field-is_admin', (e) => !e.checked));
+    // Escopo: 7 funcionalidades de operação, CLONE6, CLONE7 e GFPREPROD e os scripts do seed (os do OPERADOR)
+    const opPrf = await idFromList('/admin_profiles/index?name=OPERADOR', 'OPERADOR', '/admin_profiles/form/');
+    const scripts = opPrf ? await matrixChecked(opPrf, 'scrs') : [];
+    check('Scripts do seed lidos da matriz do OPERADOR (os 14 utilitários)', scripts.length === 14, scripts.join(', '));
+    const mudou = await setMatrix(prf, { funcs: RESTRITO_FUNCS, ambs: RESTRITO_ENVS, scrs: scripts });
+    if (mudou) await expectText(`Matriz do ${PRF_RESTRITO} salva pela tela`, 'Permissões salvas:');
+    const funcs = await matrixChecked(prf, 'funcs');
+    const ambs = await matrixChecked(prf, 'ambs');
+    const scrs = await matrixChecked(prf, 'scrs');
+    check(`${PRF_RESTRITO}: as 7 funcionalidades de operação, sem as de administração`, sameSet(funcs, RESTRITO_FUNCS), funcs.join(', '));
+    check(`${PRF_RESTRITO}: ambientes CLONE6, CLONE7 e GFPREPROD (CLONE1 e CLONE2 fora)`, sameSet(ambs, RESTRITO_ENVS), ambs.join(', '));
+    check(`${PRF_RESTRITO}: os mesmos scripts do OPERADOR`, scripts.length > 0 && sameSet(scrs, scripts), scrs.length + ' script(s)');
+    await go(`/admin_profiles/matrix/${prf}`);
+    await clickText('button[data-tab]', 'Ambientes');
+    await snap(`Matriz do perfil restrito ${PRF_RESTRITO} (aba Ambientes)`);
+    // Usuário de teste: inclui ou reaproveita (reativa, devolve o perfil e redefine a senha inicial documentada)
+    let usr = await idFromList(`/admin_users/index?login=${USR_RESTRITO}`, USR_RESTRITO, '/admin_users/form/');
+    if (!usr) {
+        await go('/admin_users/form');
+        await fill('#field-login', USR_RESTRITO);
+        await fill('#field-name', 'Usuário restrito da homologação');
+        await fill('#field-profile_id', String(prf));
+        await fill('#field-password', SEED_PASS);
+        await fill('#field-confirmation', SEED_PASS);
+        await submit('/admin_users/save');
+        await expectText(`Usuário ${USR_RESTRITO} incluído pela tela`, 'Usuário salvo com sucesso.');
+        usr = await idFromList(`/admin_users/index?login=${USR_RESTRITO}`, USR_RESTRITO, '/admin_users/form/');
+    } else {
+        await go(`/admin_users/form/${usr}`);
+        if (await hasButton('Reativar')) {
+            await clickText('button', 'Reativar');
+            await confirmModal();
+            note(`Usuário ${USR_RESTRITO} de rodada anterior reativado pela tela.`);
+        }
+        await go(`/admin_users/form/${usr}`);
+        if ((await page.$eval('#field-profile_id', (e) => e.value)) !== String(prf)) {
+            await fill('#field-profile_id', String(prf));
+            await submit('/admin_users/save');
+            await expectText(`Usuário ${USR_RESTRITO} devolvido ao perfil ${PRF_RESTRITO}`, 'Usuário salvo com sucesso.');
+            await go(`/admin_users/form/${usr}`);
+        }
+        await fill('#field-password', SEED_PASS);
+        await fill('#field-confirmation', SEED_PASS);
+        await clickText('button', 'Redefinir senha');
+        await confirmModal();
+        await expectText(`Senha do ${USR_RESTRITO} redefinida para a senha inicial documentada (tentativas e bloqueio zerados)`,
+            'Senha redefinida. Tentativas e bloqueio foram zerados.');
+        note(`Usuário ${USR_RESTRITO} já cadastrado (rodada anterior): reaproveitado.`);
+    }
+    check(`Usuário ${USR_RESTRITO} cadastrado`, !!usr, usr ? '#' + usr : 'não encontrado');
+    state.restrito = { profile: prf, user: usr };
+    saveState();
+    await go(`/admin_users/index?login=${USR_RESTRITO}`);
+    await expectText(`${USR_RESTRITO} no perfil ${PRF_RESTRITO}`, USR_RESTRITO, PRF_RESTRITO);
+    await snap(`Usuário de teste ${USR_RESTRITO} no perfil restrito`);
+    check(`${USR_RESTRITO} entra com a senha inicial documentada`, await login(USR_RESTRITO));
+    await expectNoTextCI(`${USR_RESTRITO}: sem Administração`, 'Administração');
+    await login('admin');
+};
 
 CTS['CT-01'] = async () => {
     begin('CT-01', 'Login, sessão e troca de senha');
@@ -408,12 +557,12 @@ CTS['CT-01'] = async () => {
         await expectText(`Rodapé com o ambiente ${INSTALL_TYPE}`, `Ambiente ${INSTALL_TYPE}`);
     }
     await snap('Tela de login');
-    const okFalha = !(await login('op.hml', 'senha-incorreta-homolog'));
+    const okFalha = !(await login(USR_RESTRITO, 'senha-incorreta-homolog'));
     check('Senha incorreta não entra', okFalha);
     await expectText('Mensagem genérica, sem dizer se o erro foi no login ou na senha',
         'Usuário ou senha incorretos.', 'Confira o que digitou e tente de novo.');
     await snap('Mensagem após senha incorreta');
-    const okEspacos = await login('  op.hml  ', SEED_PASS);
+    const okEspacos = await login(`  ${USR_RESTRITO}  `, SEED_PASS);
     check('Login com espaços em volta entra (o login é limpo antes da validação)', okEspacos, page.url().replace(BASE_URL, ''));
 
     await login('admin');
@@ -463,11 +612,11 @@ CTS['CT-02'] = async () => {
     await expectText('op.prod: Rodar um script no menu, tickets 24 h e meus tickets', 'Rodar um script', 'Tickets nas últimas 24 horas', 'Meus últimos tickets');
     await expectNoTextCI('op.prod: sem agendamentos, agentes e Administração', 'Próximos agendamentos', 'Saúde dos agentes', 'Administração');
     await snap('Painel inicial do op.prod');
-    await login('op.hml');
+    await login(USR_RESTRITO);
     await go('/default/index');
-    await expectText('op.hml: Rodar um script no menu, tickets 24 h e meus tickets', 'Rodar um script', 'Tickets nas últimas 24 horas', 'Meus últimos tickets');
-    await expectNoTextCI('op.hml: sem Administração', 'Administração');
-    await snap('Painel inicial do op.hml');
+    await expectText(`${USR_RESTRITO}: Rodar um script no menu, tickets 24 h e meus tickets`, 'Rodar um script', 'Tickets nas últimas 24 horas', 'Meus últimos tickets');
+    await expectNoTextCI(`${USR_RESTRITO}: sem Administração`, 'Administração');
+    await snap(`Painel inicial do ${USR_RESTRITO}`);
     await login('consulta');
     await go('/default/index');
     await expectText('consulta: tickets 24 h e meus tickets', 'Tickets nas últimas 24 horas', 'Meus últimos tickets');
@@ -477,17 +626,17 @@ CTS['CT-02'] = async () => {
 
 CTS['CT-03'] = async () => {
     begin('CT-03', 'O que eu posso fazer');
-    await login('op.hml');
+    await login(USR_RESTRITO);
     await go('/default/permissions');
     await expectText('Quadros do perfil e a frase de mais acesso',
         'Precisa de mais acesso? Fale com o administrador do sistema.');
-    await expectText('op.hml: ambientes do perfil (CLONE6, CLONE7 e GFPREPROD)', 'CLONE6', 'CLONE7', 'GFPREPROD');
-    await expectNoText('op.hml: CLONE1 e CLONE2 (fora do perfil) não aparecem', 'CLONE1', 'CLONE2');
+    await expectText(`${USR_RESTRITO}: ambientes do perfil (CLONE6, CLONE7 e GFPREPROD)`, 'CLONE6', 'CLONE7', 'GFPREPROD');
+    await expectNoText(`${USR_RESTRITO}: CLONE1 e CLONE2 (fora do perfil) não aparecem`, 'CLONE1', 'CLONE2');
     await expectText('Telas com os nomes do menu: Rodar Scripts e Consultar Tickets (CR-018b)', 'Rodar Scripts', 'Consultar Tickets');
     await expectText('Scripts que posso rodar: só a contagem e o link para os cartões (CR-018b)',
         'Você pode rodar', 'script(s)', 'Abrir Rodar um script');
     await expectNoText('Sem os botões Rodar em… que repetiam os cartões (CR-018b)', 'Rodar em GFPREPROD', 'Rodar em CLONE6');
-    await snap('O que eu posso fazer (op.hml)', { full: true });
+    await snap(`O que eu posso fazer (${USR_RESTRITO})`, { full: true });
     const okAbrir = await clickText('a', 'Abrir Rodar um script', { navigate: true });
     check('Abrir Rodar um script leva aos cartões', okAbrir && page.url().includes('/tickets/catalog'),
         page.url().replace(BASE_URL, ''));
@@ -502,10 +651,10 @@ CTS['CT-03'] = async () => {
 
 CTS['CT-04'] = async () => {
     begin('CT-04', 'Rodar um script (cartões) e histórico do script');
-    await login('op.hml');
+    await login(USR_RESTRITO);
     await go('/tickets/catalog');
     await expectText('Cartões com perguntas, última execução e botões', 'Rodar um script', 'Perguntas que faz', 'Última execução', 'Ver histórico');
-    await expectNoText('op.hml (sem Regras de Agendamento): sem o botão Agendar', 'Agendar');
+    await expectNoText(`${USR_RESTRITO} (sem Regras de Agendamento): sem o botão Agendar`, 'Agendar');
     await page.type('#search-routine', 'hash');
     await sleep(500);
     const visiveis = await page.$$eval('li.sss-card-routine', (as) => as.filter((a) => a.offsetParent !== null).map((a) => a.innerText.split('\n')[0]));
@@ -515,7 +664,7 @@ CTS['CT-04'] = async () => {
     await expectText('Sem resultado: "Nenhuma rotina corresponde à busca."', 'Nenhuma rotina corresponde à busca.');
     await page.$eval('input[type="search"]', (e) => { e.value = ''; e.dispatchEvent(new Event('input', { bubbles: true })); });
     await sleep(400);
-    await snap('Rodar um script (op.hml)', { full: true });
+    await snap(`Rodar um script (${USR_RESTRITO})`, { full: true });
     await login('admin');
     await go('/tickets/catalog');
     const agendar = await page.$$eval('li.sss-card-routine a', (as) => as.filter((a) => a.innerText.trim() === 'Agendar').length);
@@ -552,9 +701,9 @@ CTS['MASSA'] = async () => {
     check('Scripts do seed nos cartões de Rodar um script do admin', Object.keys(state.scripts).length === 14,
         Object.keys(state.scripts).join(', '));
     const plano = [
-        ['ok_hml', 'op.hml', 'contar_linhas_arquivo', 'GFPREPROD', { caminho_arquivo: FILE_CLIENTES }],
-        ['erro_hml', 'op.hml', 'contar_linhas_arquivo', 'GFPREPROD', { caminho_arquivo: FILE_INEXISTENTE }],
-        ['ok_clone6', 'op.hml', 'contar_linhas_arquivo', 'CLONE6', { caminho_arquivo: FILE_NOTAS }],
+        ['ok_hml', USR_RESTRITO, 'contar_linhas_arquivo', 'GFPREPROD', { caminho_arquivo: FILE_CLIENTES }],
+        ['erro_hml', USR_RESTRITO, 'contar_linhas_arquivo', 'GFPREPROD', { caminho_arquivo: FILE_INEXISTENTE }],
+        ['ok_clone6', USR_RESTRITO, 'contar_linhas_arquivo', 'CLONE6', { caminho_arquivo: FILE_NOTAS }],
         ['ok_prod', 'op.prod', 'gerar_hash_arquivo', 'CLONE2', { arq_origem: FILE_EXTRATO }],
         ['ok_admin', 'admin', 'gerar_hash_arquivo', 'CLONE2', { arq_origem: FILE_EXTRATO }],
     ];
@@ -664,10 +813,10 @@ CTS['CT-06'] = async () => {
     await page.click('#auto-refresh');
     await sleep(12000);
     await expectText('Atualização automática: "Atualizada às HH:MM:SS"', 'Atualizada às');
-    await login('op.hml');
+    await login(USR_RESTRITO);
     await go('/tickets/index');
-    await expectNoText('op.hml não vê tickets de CLONE1 e CLONE2', 'CLONE2', 'CLONE1');
-    await snap('Lista de tickets do op.hml: só os ambientes do perfil', { full: true });
+    await expectNoText(`${USR_RESTRITO} não vê tickets de CLONE1 e CLONE2`, 'CLONE2', 'CLONE1');
+    await snap(`Lista de tickets do ${USR_RESTRITO}: só os ambientes do perfil`, { full: true });
     // CR-018a: filtro por solicitante só para quem vê logins; o login alheio na URL é ignorado
     await login('consulta');
     await go('/tickets/index');
@@ -697,7 +846,7 @@ CTS['CT-07'] = async () => {
     check('Baixar log baixa ticket_<id>.log', dl === `ticket_${longo}.log`, dl);
     note('Os scripts PYTHON3 rodam com -I e saída em buffer: o log de um script Python aparece quando o buffer descarrega (no fim); scripts SH/BASH escrevem na hora.');
     // Exibicao segura: o caminho com marcacao HTML volta no log como texto
-    await login('op.hml');
+    await login(USR_RESTRITO);
     const xss = path.join(INPUT, 'gfpreprod', 'contar_linhas_arquivo', '<script>alert(1)</script> <b>negrito</b>.txt');
     const idx = await createTicket('contar_linhas_arquivo', 'GFPREPROD', { caminho_arquivo: xss });
     state.tickets.xss = idx;
@@ -951,17 +1100,18 @@ CTS['CT-12'] = async () => {
     begin('CT-12', 'Gestão de Perfis e matriz de permissões');
     await login('admin');
     await go('/admin_profiles/index');
-    await expectText('Lista com os 4 perfis do seed', 'ADMINISTRATOR', 'OPERATOR_PROD', 'OPERATOR_HML', 'READ_ONLY');
+    await expectText(`Lista com os 3 perfis do seed e o ${PRF_RESTRITO} do PREPARO`, 'ADMINISTRADOR', 'OPERADOR', 'CONSULTA',
+        PRF_RESTRITO);
     await snap('Lista de perfis');
-    const ro = await idFromList('/admin_profiles/index', 'READ_ONLY', '/admin_profiles/form/');
+    const ro = await idFromList('/admin_profiles/index?name=CONSULTA', 'CONSULTA', '/admin_profiles/form/');
     await go(`/admin_profiles/form/${ro}`);
     await clickText('button', 'Desativar');
     await expectText('A confirmação diz o efeito e quem é afetado',
         'Os usuários deste perfil perdem o acesso e têm a sessão encerrada no próximo clique.', 'consulta');
     await snap('Desativação de perfil com usuários afetados');
     await closeModal();
-    const hml = await idFromList('/admin_profiles/index', 'OPERATOR_HML', '/admin_profiles/form/');
-    state.profiles = Object.assign(state.profiles || {}, { READ_ONLY: ro, OPERATOR_HML: hml });
+    const hml = await restritoProfileId();
+    state.profiles = Object.assign(state.profiles || {}, { CONSULTA: ro, RESTRITO: hml });
     await go(`/admin_profiles/matrix/${hml}`);
     await clickText('button[data-tab]', 'Ambientes');
     const marcou = await page.evaluate(() => {
@@ -981,9 +1131,9 @@ CTS['CT-12'] = async () => {
     await expectText('Resumo da revisão no formato +código / -amb:nome', '+VIEW_AUDIT', '-amb:CLONE7');
     await snap('Revisão das alterações da matriz');
     await closeModal();
-    note('A revisão foi cancelada: a matriz do OPERATOR_HML não foi alterada neste CT.');
-    const adm = await idFromList('/admin_profiles/index', 'ADMINISTRATOR', '/admin_profiles/form/');
-    state.profiles.ADMINISTRATOR = adm;
+    note(`A revisão foi cancelada: a matriz do ${PRF_RESTRITO} não foi alterada neste CT.`);
+    const adm = await idFromList('/admin_profiles/index?name=ADMINISTRADOR', 'ADMINISTRADOR', '/admin_profiles/form/');
+    state.profiles.ADMINISTRADOR = adm;
     saveState();
     await go(`/admin_profiles/form/${adm}`);
     const temDesativar = await clickText('button', 'Desativar');
@@ -1020,14 +1170,15 @@ CTS['CT-13'] = async () => {
     begin('CT-13', 'Quem pode o quê');
     await login('admin');
     await go(`/admin_profiles/who_can?script=${state.scripts.contar_linhas_arquivo}`);
-    await expectText('Por script: perfis ativos, por quê, onde e usuários ativos', 'ADMINISTRATOR', 'OPERATOR_PROD', 'OPERATOR_HML');
+    await expectText('Por script: perfis ativos, por quê, onde e usuários ativos', 'ADMINISTRADOR', 'OPERADOR',
+        PRF_RESTRITO);
     await expectText('Motivo com o nome do cadastro: "tem Rodar Scripts…" (CR-018b)', 'tem Rodar Scripts');
     await expectNoText('Sem o nome antigo Disparar Scripts', 'Disparar Scripts');
     await snap('Quem pode o quê: perfis que podem rodar o contar_linhas_arquivo', { full: true });
     const gf = await page.$$eval('#field-environment option', (os) => (os.find((o) => o.innerText.trim() === 'GFPREPROD') || {}).value);
     await go(`/admin_profiles/who_can?environment=${gf}`);
-    await expectText('Por ambiente: quem roda o quê no GFPREPROD', 'GFPREPROD', 'OPERATOR_HML');
-    const ok = await clickText('table a', 'OPERATOR_HML', { navigate: true });
+    await expectText('Por ambiente: quem roda o quê no GFPREPROD', 'GFPREPROD', PRF_RESTRITO);
+    const ok = await clickText('table a', PRF_RESTRITO, { navigate: true });
     check('O nome do perfil leva à matriz de permissões', ok && page.url().includes('/admin_profiles/matrix/'), page.url().replace(BASE_URL, ''));
     await login('op.prod');
     const st = await go('/admin_profiles/who_can');
@@ -1041,7 +1192,7 @@ CTS['CT-14'] = async () => {
     await expectText('Depois de 5 falhas a conta fica bloqueada', 'Houve muitas tentativas com a senha errada.');
     await login('admin');
     await go('/admin_users/index');
-    await expectText('Lista com os 4 usuários do seed', 'admin', 'op.prod', 'op.hml', 'consulta');
+    await expectText(`Lista com os 3 usuários do seed e o ${USR_RESTRITO} do PREPARO`, 'admin', 'op.prod', 'consulta', USR_RESTRITO);
     await snap('Lista de usuários');
     await go('/admin_users/index?state=B');
     await expectText('Filtro Bloqueados mostra o consulta', 'consulta');
@@ -1147,7 +1298,7 @@ CTS['CT-16'] = async () => {
     check('Arquivo do script com o caminho relativo à pasta base (CR-023)', campo === original, campo);
     await expectText('Ajuda do campo com os dois exemplos de caminho', '/opt/automacoes/scripts/', 'relativo à', 'pasta base');
     await expectText('Quadro Quem pode rodar: pronto, com os perfis (CR-017d)', 'Quem pode rodar', 'Pronto para rodar.',
-        'OPERATOR_HML', 'OPERATOR_PROD');
+        PRF_RESTRITO, 'OPERADOR');
     await snap('Edição de script com o caminho completo e o quadro Quem pode rodar', { full: true });
     const casos = [
         ['./contar_linhas_arquivo.sh', 'Escreva o caminho sem // repetida, sem ./ e sem / no fim.'],
@@ -1370,20 +1521,20 @@ CTS['CT-21'] = async () => {
         const st = await go(p);
         check(`op.prod em ${p}: acesso negado (403)`, st === 403 && (await has('Você não tem permissão para abrir esta página.')), 'status ' + st);
     }
-    await login('op.hml');
+    await login(USR_RESTRITO);
     const st404 = await go(`/tickets/detail/${state.tickets.ok_prod}`);
-    check(`op.hml no ticket #${state.tickets.ok_prod} (CLONE2, fora do escopo): 404`, st404 === 404, 'status ' + st404);
+    check(`${USR_RESTRITO} no ticket #${state.tickets.ok_prod} (CLONE2, fora do escopo): 404`, st404 === 404, 'status ' + st404);
     await snap('Erro 404 em ticket fora do escopo');
     await go('/default/permissions');
     const html = await page.content();
-    check('Telas de consulta não vazam o catálogo (nem CLONE1/CLONE2 no HTML do op.hml)', !html.includes('CLONE2') && !html.includes('CLONE1'));
+    check(`Telas de consulta não vazam o catálogo (nem CLONE1/CLONE2 no HTML do ${USR_RESTRITO})`, !html.includes('CLONE2') && !html.includes('CLONE1'));
     await login('consulta');
     const stc = await go('/tickets/catalog');
     check('consulta em /tickets/catalog: 403', stc === 403, 'status ' + stc);
     await clearCookies();
     await go('/default/login?next=https://exemplo.invalido');
-    await page.type('#field-login', 'op.hml');
-    await page.type('#field-password', passOf('op.hml'));
+    await page.type('#field-login', USR_RESTRITO);
+    await page.type('#field-password', passOf(USR_RESTRITO));
     await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), page.click('form button[type="submit"]')]);
     check('Login com next externo abre o Painel inicial, nunca o site externo', page.url().startsWith(BASE_URL), page.url());
 };
@@ -1401,7 +1552,7 @@ CTS['CT-22'] = async () => {
     let largura = await page.evaluate(() => document.documentElement.scrollWidth);
     check('360 px: painel inicial sem rolagem horizontal', largura <= 360, largura + ' px');
     await snap('Painel inicial em 360 px', { full: true });
-    await login('op.hml');
+    await login(USR_RESTRITO);
     await go('/tickets/catalog');
     largura = await page.evaluate(() => document.documentElement.scrollWidth);
     check('360 px: Rodar um script sem rolagem horizontal', largura <= 360, largura + ' px');
@@ -1412,10 +1563,10 @@ CTS['CT-22'] = async () => {
 CTS['CT-23'] = async () => {
     begin('CT-23', 'Quadro Registro: quem criou e quem alterou');
     await login('admin');
-    const roPrf = await idFromList('/admin_profiles/index', 'READ_ONLY', '/admin_profiles/form/');
+    const roPrf = await idFromList('/admin_profiles/index?name=CONSULTA', 'CONSULTA', '/admin_profiles/form/');
     await go(`/admin_profiles/form/${roPrf}`);
     const r1 = await registroTexto();
-    note('READ_ONLY no lugar do OPERATOR_PROD do manual: a matriz do OPERATOR_PROD é alterada pelo CT-25 (MANAGE_USERS concedida e retirada), o que atualiza a última alteração do perfil.');
+    note('CONSULTA no lugar do perfil de operador do manual: a matriz do OPERADOR é alterada pelo CT-25 (MANAGE_USERS concedida e retirada), o que atualiza a última alteração do perfil.');
     check('Perfil do seed: criado pelo Sistema (instalação) e nunca alterado', r1.includes('Sistema') && r1.includes('Nunca alterado'), r1);
     await snap('Perfil nunca alterado', { selector: 'section[aria-labelledby="title-record"]' });
     if (state.envNovo) {
@@ -1483,7 +1634,7 @@ CTS['CT-24'] = async () => {
     await go(`/schedules/index?name=${state.rule.name}`);
     await ruleAction(page, 'resume', state.rule.id);
     await expectText('Regra retomada ao final', `Regra ${state.rule.name} retomada.`);
-    note('Responsável inativo: no DEV as regras são do admin (o op.hml não tem Regras de Agendamento), então o cenário do manual não se aplica sem mudar permissões; coberto pelos testes automatizados.');
+    note(`Responsável inativo: no DEV as regras são do admin (o ${USR_RESTRITO} não tem Regras de Agendamento), então o cenário do manual não se aplica sem mudar permissões; coberto pelos testes automatizados.`);
     note(`Caminho relativo (CR-023): os 14 scripts do seed são cadastrados como utilitarios/<arquivo> e o agente os junta à pasta base (${SCRIPT_BASE.replace(APP + '/', '')}); link simbólico continua aceito (CR-011), com o arquivo real executado.`);
     // quadro Registro por perfil
     await login('consulta');
@@ -1503,7 +1654,7 @@ CTS['CT-24'] = async () => {
 CTS['CT-25'] = async () => {
     begin('CT-25', 'Correções da auditoria final');
     await login('admin');
-    const prodPrf = await idFromList('/admin_profiles/index', 'OPERATOR_PROD', '/admin_profiles/form/');
+    const prodPrf = await idFromList('/admin_profiles/index?name=OPERADOR', 'OPERADOR', '/admin_profiles/form/');
     const toggleFunc = async (code) => {
         await go(`/admin_profiles/matrix/${prodPrf}`);
         await page.evaluate((c) => {
@@ -1520,7 +1671,7 @@ CTS['CT-25'] = async () => {
     const admId = state.users.admin;
     await go(`/admin_users/form/${state.users.op_prod}`);
     const opcoes = await page.$$eval('#field-profile_id option', (os) => os.map((o) => o.innerText));
-    check('op.prod não vê ADMINISTRATOR entre os perfis', !opcoes.some((o) => o.includes('ADMINISTRATOR')), opcoes.join(', '));
+    check('op.prod não vê ADMINISTRADOR entre os perfis', !opcoes.some((o) => o.includes('ADMINISTRADOR')), opcoes.join(', '));
     await go(`/admin_users/form/${admId}`);
     await fill('#field-password', 'NovaSenhaRecusada123!');
     await fill('#field-confirmation', 'NovaSenhaRecusada123!');
@@ -1593,10 +1744,10 @@ CTS['CT-26'] = async () => {
     const sid = state.scripts.limpar_linhas_vazias;
     // (1) quem só dispara (sem Consultar Logs) continua com o item Tickets no menu
     await login('admin');
-    const hml = await idFromList('/admin_profiles/index', 'OPERATOR_HML', '/admin_profiles/form/');
+    const hml = await restritoProfileId();
     await toggleProfileFeature(hml, 'VIEW_LOGS');
-    await expectText('OPERATOR_HML sem VIEW_LOGS (temporário)', 'Permissões salvas: -VIEW_LOGS');
-    await login('op.hml');
+    await expectText(`${PRF_RESTRITO} sem VIEW_LOGS (temporário)`, 'Permissões salvas: -VIEW_LOGS');
+    await login(USR_RESTRITO);
     await go('/default/index');
     await expectText('Só com Rodar Scripts: o item Tickets continua no menu (CR-017a)', 'Tickets', 'Rodar um script');
     await snap('Menu de quem só dispara scripts');
@@ -1606,7 +1757,7 @@ CTS['CT-26'] = async () => {
         linhas.length > 0 && !linhas.some((l) => l.includes('op.prod')), linhas.length + ' linha(s)');
     await login('admin');
     await toggleProfileFeature(hml, 'VIEW_LOGS');
-    await expectText('VIEW_LOGS devolvido ao OPERATOR_HML', 'Permissões salvas: +VIEW_LOGS');
+    await expectText(`VIEW_LOGS devolvido ao ${PRF_RESTRITO}`, 'Permissões salvas: +VIEW_LOGS');
     // (2) script liberado num ambiente só: disparo e nova regra vão direto ao formulário
     await setHomologation(sid, ['GFPREPROD']);
     await go(`/tickets/new?script_id=${sid}`);
@@ -1624,7 +1775,7 @@ CTS['CT-26'] = async () => {
     await setHomologation(sid, todos);
     await go(`/admin_scripts/form/${sid}`);
     await expectText('Homologação restaurada nos 5 ambientes: pronto para rodar', 'Pronto para rodar.');
-    note('As mudanças temporárias (VIEW_LOGS do OPERATOR_HML e a homologação do limpar_linhas_vazias) foram desfeitas no próprio CT e ficam na auditoria.');
+    note(`As mudanças temporárias (VIEW_LOGS do ${PRF_RESTRITO} e a homologação do limpar_linhas_vazias) foram desfeitas no próprio CT e ficam na auditoria.`);
 };
 
 // Cancela pelo detail o ticket esperando (botao Cancelar este pedido e confirmacao).
@@ -1653,19 +1804,19 @@ CTS['CT-27'] = async () => {
     await login('admin');
     const doAdmin = await createTicket('contar_linhas_arquivo', 'GFPREPROD', { caminho_arquivo: FILE_CLIENTES },
         { scheduledAt: localIso(120) });
-    await login('op.hml');
+    await login(USR_RESTRITO);
     const doHml = await createTicket('contar_linhas_arquivo', 'GFPREPROD', { caminho_arquivo: FILE_CLIENTES },
         { scheduledAt: localIso(120) });
     state.tickets.ct27_admin = doAdmin;
     state.tickets.ct27_hml = doHml;
     saveState();
-    check('Tickets esperando criados: um do admin e um do op.hml (GFPREPROD, daqui a 2 horas)', !!doAdmin && !!doHml,
+    check(`Tickets esperando criados: um do admin e um do ${USR_RESTRITO} (GFPREPROD, daqui a 2 horas)`, !!doAdmin && !!doHml,
         `#${doAdmin} e #${doHml}`);
     await login('admin');
-    const hml = await idFromList('/admin_profiles/index', 'OPERATOR_HML', '/admin_profiles/form/');
+    const hml = await restritoProfileId();
     await toggleProfileFeature(hml, 'VIEW_LOGS');
-    await expectText('OPERATOR_HML sem Consultar Tickets (temporário)', 'Permissões salvas: -VIEW_LOGS');
-    await login('op.hml');
+    await expectText(`${PRF_RESTRITO} sem Consultar Tickets (temporário)`, 'Permissões salvas: -VIEW_LOGS');
+    await login(USR_RESTRITO);
     const stOutro = await go(`/tickets/detail/${doAdmin}`);
     check(`Sem Consultar Tickets, o ticket #${doAdmin} do admin não é achado (404), então não há como cancelá-lo`,
         stOutro === 404, 'status ' + stOutro);
@@ -1674,10 +1825,10 @@ CTS['CT-27'] = async () => {
     await snap('Próprio ticket cancelado sem Consultar Tickets', { full: true });
     await login('admin');
     await toggleProfileFeature(hml, 'VIEW_LOGS');
-    await expectText('Consultar Tickets devolvido ao OPERATOR_HML', 'Permissões salvas: +VIEW_LOGS');
-    await login('op.hml');
+    await expectText(`Consultar Tickets devolvido ao ${PRF_RESTRITO}`, 'Permissões salvas: +VIEW_LOGS');
+    await login(USR_RESTRITO);
     const stVolta = await go(`/tickets/detail/${doAdmin}`);
-    check('Com Consultar Tickets de volta, o op.hml vê o ticket do admin e o botão Cancelar este pedido',
+    check(`Com Consultar Tickets de volta, o ${USR_RESTRITO} vê o ticket do admin e o botão Cancelar este pedido`,
         stVolta === 200 && (await has('Cancelar este pedido')), 'status ' + stVolta);
     check(`Cancelar Tickets com Consultar Tickets cancela o ticket #${doAdmin} de outra pessoa`, await cancelWaiting(doAdmin));
     // (2) aviso ao mudar parâmetro usado por regra ativa (CR-018a, D3)
@@ -1723,13 +1874,14 @@ CTS['CT-27'] = async () => {
     check('Rodar um script e O que eu posso fazer abrem (tempo registrado abaixo)', tCatalog > 0 && tPerm > 0);
     note(`Tempo de abertura (mediana de 3, admin, navegador incluído): Rodar um script ${(tCatalog / 1000).toFixed(1)} s; ` +
         `O que eu posso fazer ${(tPerm / 1000).toFixed(1)} s. É só registro do CR-018c, sem limite de aprovação.`);
-    note('As mudanças temporárias (Consultar Tickets do OPERATOR_HML, regex do caminho_arquivo e arquivo do contar_linhas_arquivo) foram desfeitas no próprio CT e ficam na auditoria.');
+    note(`As mudanças temporárias (Consultar Tickets do ${PRF_RESTRITO}, regex do caminho_arquivo e arquivo do contar_linhas_arquivo) foram desfeitas no próprio CT e ficam na auditoria.`);
 };
 
 // ---------------------------------------------------------------------------------------------
 // Rodada 3: CR-019 (pasta de trabalho) e CR-020 (Saidas e Entrada)
 // ---------------------------------------------------------------------------------------------
-// CR-023: os scripts de diagnostico sao cadastrados com caminho relativo a pasta base do agente do DEV (dev/scripts).
+// CR-023: os scripts de diagnostico sao cadastrados com caminho relativo a pasta base do agente
+// (scripts_ambiente/diagnostico/ por padrao).
 const DIAG = 'diagnostico';
 
 // Cadastra (ou reativa) um script de diagnostico pela tela, liberado so no GFPREPROD; devolve o id.
@@ -1843,7 +1995,7 @@ CTS['CT-28'] = async () => {
         'zip completo', 'relatório de testes.csv');
     await snap('Auditoria dos downloads de saída', { full: true });
     check('Script de diagnóstico desativado ao final', await deactivateScript(sid));
-    note('Nenhum script do seed grava na pasta de saída: o diag_gerar_saida (dev/scripts/diagnostico) foi cadastrado pela tela, rodado e desativado no próprio caso.');
+    note('Nenhum script do seed grava na pasta de saída: o diag_gerar_saida (scripts_ambiente/diagnostico) foi cadastrado pela tela, rodado e desativado no próprio caso.');
 };
 
 CTS['CT-29'] = async () => {
@@ -1878,9 +2030,9 @@ CTS['CT-29'] = async () => {
         }
         return '';
     };
-    await login('op.hml');
+    await login(USR_RESTRITO);
     await go('/default/index');
-    await expectTextCI('Item Entrada no menu do op.hml (Enviar Arquivos)', 'Entrada');
+    await expectTextCI(`Item Entrada no menu do ${USR_RESTRITO} (Enviar Arquivos)`, 'Entrada');
     await go('/inputs/index');
     await clickText('a', 'GFPREPROD', { navigate: true });
     await expectText('Scripts do perfil liberados no ambiente', 'contar_linhas_arquivo');
@@ -2219,7 +2371,7 @@ CTS['CT-33'] = async () => {
 };
 
 CTS['ENCERRAMENTO'] = async () => {
-    begin('ENCERRAMENTO', 'Encerramento: regras da homologação pausadas (ficam como evidência, sem rodar)');
+    begin('ENCERRAMENTO', 'Encerramento: regras da homologação pausadas (ficam como evidência, sem rodar) e usuário de teste desativado');
     await login('admin');
     await go(`/schedules/index?name=${STAMP}`);
     const ids = await page.$$eval('form[action*="/schedules/pause"] input[name="id"]', (es) => es.map((e) => e.value));
@@ -2231,6 +2383,20 @@ CTS['ENCERRAMENTO'] = async () => {
     const ativas = await page.$$eval('form[action*="/schedules/pause"]', (fs) => fs.length);
     check(`Regras ${STAMP}_* pausadas (${ids.length} nesta etapa)`, ativas === 0, ativas + ' ativa(s) restante(s)');
     await snap('Regras da homologação pausadas ao final', { full: true });
+    // Massa propria: o usuario de teste fica inativo entre as rodadas (o PREPARO da proxima o reativa e redefine a
+    // senha); o perfil restrito fica ativo, sem usuario ativo.
+    const usr = (state.restrito && state.restrito.user) ||
+        await idFromList(`/admin_users/index?login=${USR_RESTRITO}`, USR_RESTRITO, '/admin_users/form/');
+    if (usr) {
+        await go(`/admin_users/form/${usr}`);
+        if (await hasButton('Desativar')) {
+            await clickText('button', 'Desativar');
+            await confirmModal();
+        }
+        await go(`/admin_users/form/${usr}`);
+    }
+    check(`Usuário de teste ${USR_RESTRITO} desativado ao final (o PREPARO da próxima rodada o reativa)`,
+        !!usr && await hasButton('Reativar'), usr ? '#' + usr : 'não encontrado');
     // SSS_ADMIN_RESET=seed: o admin volta a senha inicial do seed (instalacao que mantem os usuarios do seed na
     // senha inicial, ex.: o 3067, decisao 15). Sem a variavel, o admin fica com a senha escolhida.
     if (ADMIN_RESET_SEED && state.adminNew) {
@@ -2247,7 +2413,7 @@ CTS['ENCERRAMENTO'] = async () => {
     }
 };
 
-const ORDER = ['CT-01', 'CT-02', 'CT-03', 'MASSA', 'CT-04', 'CT-05', 'CT-06', 'CT-07', 'CT-08', 'CT-09', 'CT-10',
+const ORDER = ['PREPARO', 'CT-01', 'CT-02', 'CT-03', 'MASSA', 'CT-04', 'CT-05', 'CT-06', 'CT-07', 'CT-08', 'CT-09', 'CT-10',
     'CT-11', 'CT-12', 'CT-13', 'CT-14', 'CT-15', 'CT-16', 'CT-17', 'CT-18', 'CT-19', 'CT-20', 'CT-21', 'CT-22',
     'CT-23', 'CT-24', 'CT-25', 'CT-26', 'CT-27', 'CT-28', 'CT-29', 'CT-30', 'CT-31', 'CT-32', 'CT-33',
     'ENCERRAMENTO'];
