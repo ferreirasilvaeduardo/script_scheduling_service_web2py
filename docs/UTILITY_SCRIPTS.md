@@ -8,14 +8,14 @@ Documento de especificação, governança e catálogo operacional dos **14 scrip
 
 Para atender aos cenários operacionais frequentes de manipulação de arquivos corporativos (compactação, descompactação, divisão, consolidação, conversão de encoding, deduplicação, higienização, filtros e cálculo de integridade criptográfica), foram homologados **14 scripts utilitários**, desenvolvidos em conformidade com as diretrizes do projeto:
 
-- **Runtime:** Compatíveis com Python 3.6.0+ (sem recursos de versões posteriores) e Shell POSIX (`/bin/bash` e `/bin/sh`).
+- **Runtime:** Compatíveis com Python 3.6.0+ (sintaxe e biblioteca padrão da 3.6.0; validados de 3.6.0 a 3.13) e Shell POSIX (`/bin/bash` e `/bin/sh`).
 - **Segurança e Isolamento:**
   - Caminhos recebidos do agente, que já passaram pelo `path_guard` no disparo (README §8.5); o `descompactar_zip` recusa *zip slip* (entrada com `..` ou caminho absoluto);
   - Leitura em *streaming* / blocos (*chunks*) para arquivos de grande porte, com baixo uso de memória;
   - Parâmetros sanitizados sem injeção de comandos.
 - **Localização dos Fontes:**
   - **Repositório (DEV):** `scripts_ambiente/utilitarios/`; o agente usa a pasta base `<RAIZ>/scripts_ambiente`.
-  - **Instalação pelo pacote (PROD):** `<RAIZ>/scripts_ambiente/utilitarios/`, na pasta base padrão do agente (`scripts_ambiente/`, sem `script_base_dir` no `config.ini`; CR-028 e CR-032). O pacote preserva `scripts_ambiente/`.
+  - **Instalação no servidor:** `<RAIZ>/scripts_ambiente/utilitarios/`, na pasta base padrão do agente (`scripts_ambiente/`, sem `script_base_dir` no `config.ini`; CR-028 e CR-032), a partir do `utilitarios.tar.gz` gerado pelo `make package` (§6.1). O pacote da aplicação (`tools/package.py`) não leva `scripts_ambiente/`, e o `sss-update.sh` preserva essa pasta: com utilitário novo, extraia o `utilitarios.tar.gz` de novo.
 - **Cadastro no catálogo (CR-023):** o seed cadastra os 14 scripts com caminho relativo à pasta base do agente (`utilitarios/<arquivo>`). O mesmo cadastro vale no DEV e no PROD; só a pasta base muda.
 
 ---
@@ -42,6 +42,8 @@ Para atender aos cenários operacionais frequentes de manipulação de arquivos 
 ---
 
 ## 3. Gestão de Parâmetros Homologados (`tbsss_parameters`)
+
+Neste documento, `tbsss_*` é o prefixo lógico das tabelas; o físico é `tbsdev_` no DEV e `tbsprd_` no PROD.
 
 Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de dados e vinculados a cada rotina conforme as necessidades de entrada:
 
@@ -79,6 +81,7 @@ Na coluna "Orientação", o que se espera do valor: o seed não grava regex nem 
   1. `arq_origem` (`--origem`, obrigatório)
   2. `arq_destino` (`--destino`, obrigatório)
   3. `nivel_compressao` (`--nivel`, opcional, padrão `6`)
+- **Nível de compressão:** inteiro de 1 a 9, aplicado em qualquer versão do Python (no 3.7+ pelo `compresslevel` do `zipfile`; no 3.6, cujo `zipfile` não aceita o nível, por um gravador próprio do script, com `zlib` em blocos e zip64 quando preciso). Fora da faixa ou não inteiro (ex.: `0`, `10`, `x`): mensagem no stderr e saída 2, sem criar o arquivo `.zip`.
 - **Exemplo de Execução CLI:**
   ```bash
   python3 scripts_ambiente/utilitarios/zipar_arquivos.py --origem /dados/relatorios --destino /backup/relatorios.zip --nivel 9
@@ -144,7 +147,8 @@ Na coluna "Orientação", o que se espera do valor: o seed não grava regex nem 
 - **Parâmetros:**
   1. `arq_origem` (`--origem`, obrigatório)
   2. `arq_destino` (`--destino`, obrigatório)
-  3. `flag_ordenar` (`--ordenar`, opcional, padrão `Y`)
+  3. `flag_ordenar` (`--ordenar`, opcional, padrão `S`)
+- **Memória:** as linhas únicas ficam num `OrderedDict` até a gravação; o uso de memória cresce com a quantidade de linhas distintas (não é *streaming*).
 - **Exemplo de Execução CLI:**
   ```bash
   python3 scripts_ambiente/utilitarios/remover_duplicadas.py --origem /dados/lista_emails.txt --destino /dados/lista_emails_unicos.txt --ordenar S
@@ -227,7 +231,7 @@ Na coluna "Orientação", o que se espera do valor: o seed não grava regex nem 
 
 ## 5. Homologação, Perfis e Usuários Cadastrados no Oracle
 
-Na implantação do banco de dados (via `scripts/init_db.py` ou script SQL `docs/sql/01_deploy_sss_openrisow_tbsss.sql`):
+Na implantação do banco de dados (via `scripts/init_db.py` ou script SQL `docs/sql/01_deploy_sss_openrisow_tbsprd.sql` no PROD / `docs/sql/01_deploy_sss_openrisow_tbsdev.sql` no DEV). As tabelas `tbsss_*` abaixo usam o prefixo lógico (físico `tbsdev_`/`tbsprd_`):
 
 ### 5.1 Homologação Técnica nos Ambientes (`tbsss_script_env`)
 Todos os 14 scripts são automaticamente homologados para execução nos **5 ambientes padrão**:
@@ -278,16 +282,18 @@ Foram criados **38 vínculos de parâmetros**, estabelecendo ordem de exibição
 
 ### 6.1 Instalação dos Arquivos Físicos no Servidor Linux
 
-Com a conta do SSS, sem root (DEPLOYMENT §4.0: um usuário de SO só), a partir de uma cópia do repositório (o pacote não leva `dev/`):
+Com a conta do SSS, sem root (DEPLOYMENT §4.0: um usuário de SO só), a partir do `utilitarios.tar.gz` gerado pelo `make package` (DEPLOYMENT §3). Só `scripts_ambiente/utilitarios/` vai ao servidor; as entradas do tar já trazem esse caminho:
 
 ```bash
-# na <RAIZ>; a pasta scripts_ambiente/ e criada pelo agente na subida, se faltar (CR-032, D12)
-mkdir -p scripts_ambiente/utilitarios
-cp <copia do repositorio>/dev/scripts/utilitarios/* scripts_ambiente/utilitarios/
-
-# o agente recusa script gravavel por grupo ou por outros (README §8.5; AGENTS §3.2)
-chmod 0755 scripts_ambiente/utilitarios scripts_ambiente/utilitarios/*.sh scripts_ambiente/utilitarios/*.py
+# na pasta do pacote, depois do sha256sum -c SHA256SUMS
+tar -xzf utilitarios.tar.gz -C <RAIZ>
+cd <RAIZ>
+# padrao oficial: arquivos 0444 e scripts .py/.sh 0555 (o agente recusa script gravavel por grupo ou por outros; README §8.5, AGENTS §3.2)
+find scripts_ambiente/utilitarios -type f -exec chmod 0444 {} +
+find scripts_ambiente/utilitarios -type f \( -name '*.py' -o -name '*.sh' \) -exec chmod 0555 {} +
 ```
+
+O pacote da aplicação (`tools/package.py`) não leva `scripts_ambiente/`, e o `sss-update.sh` preserva essa pasta: numa versão com utilitário novo ou alterado, extraia o `utilitarios.tar.gz` de novo e reaplique os modos.
 
 Nada a configurar no `config.ini` do agente: sem `[agent] script_base_dir`, a pasta base é `scripts_ambiente/` (CR-023, CR-028; DEPLOYMENT §9). Ensaiado no PROD (CR-033 e CR-035).
 
@@ -296,7 +302,8 @@ Nada a configurar no `config.ini` do agente: sem `[agent] script_base_dir`, a pa
 Para criar o esquema com o catálogo num banco vazio:
 
 ```bash
-sqlplus usuario_owner/senha@//host:porta/servico @docs/sql/01_deploy_sss_openrisow_tbsss.sql
+# PROD (no DEV: docs/sql/01_deploy_sss_openrisow_tbsdev.sql)
+sqlplus usuario_owner/senha@//host:porta/servico @docs/sql/01_deploy_sss_openrisow_tbsprd.sql
 ```
 
 O `01_deploy_sss_<owner>_<prefixo>.sql` não roda sobre um esquema existente (para do primeiro erro; reaplicar exige o `02_rollback_sss_<owner>_<prefixo>.sql` antes, apagando os dados). Num banco já instalado, o catálogo é atualizado pelo `scripts/init_db.py`, que pula os objetos existentes e reaplica o seed por `MERGE INTO`, atualizando descrições, parâmetros e caminhos sem duplicidade (DEPLOYMENT §18).

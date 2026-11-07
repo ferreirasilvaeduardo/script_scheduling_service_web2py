@@ -123,17 +123,17 @@ python3 /tmp/sss-limpo/tools/package.py --source /tmp/sss-limpo --out-dir /tmp/s
 # esperado: "Pacote: .../sss-<versao>.tar.gz" e "SHA256SUMS: .../SHA256SUMS"; código 0
 ```
 
-Na máquina de desenvolvimento, `make package` faz o mesmo (cópia do `HEAD` por `git archive` e `package.py`) e grava o pacote, o `SHA256SUMS` e o `COMMIT` em `.bkp/pacote_<data>/` (usado no CR-035).
+Na máquina de desenvolvimento, `make package` faz o mesmo (cópia do `HEAD` por `git archive` e `package.py`) e grava em `.bkp/pacote_<data>/` os quatro arquivos de levar ao servidor (abaixo) e o `COMMIT` (usado no CR-035), que fica na máquina de desenvolvimento.
 
-Desde 30/10/2026, o `make package` (e o `make package-local`, a partir dos arquivos locais) gravam na mesma pasta os arquivos de levar ao servidor: o `sss-<versao>.tar.gz` com o id do pacote em `src/sss/BUILD` (o commit curto, ou a data e a hora no `package-local`; a versão aparece como `1.0.0-dev+<id>` no log, na tela Agentes e no rodapé), o `utilitarios.tar.gz` (os scripts de exemplo do seed), o `sss_vars.sh` (de `~/sss_pacote` ou `SSS_VARS=<arquivo>`, para o roteiro `docs/DEPLOYMENT-SERVER.md`) e o `SHA256SUMS` de todos.
+Desde 30/10/2026, o `make package` (e o `make package-local`, a partir dos arquivos locais) gravam na mesma pasta os quatro arquivos de levar ao servidor: o `sss-<versao>.tar.gz` com o id do pacote em `src/sss/BUILD` (o commit curto, ou a data e a hora no `package-local`; a versão aparece como `1.0.0-dev+<id>` no log, na tela Agentes e no rodapé), o `utilitarios.tar.gz` (os scripts de exemplo do seed, com as entradas em `scripts_ambiente/utilitarios/<arquivo>`; o `package.py` não leva `scripts_ambiente/`), o `sss_vars.sh` (de `~/sss_pacote` ou `SSS_VARS=<arquivo>`, para o roteiro `docs/DEPLOYMENT-SERVER.md`) e o `SHA256SUMS` de todos. Sem o `sss_vars.sh` de origem, o pacote sai sem ele (aviso `[!] Sem sss_vars.sh`).
 
-O `package.py` fica em `tools/` desde o CR-022b2 (antes, `scripts/`): é ferramenta de build e não vai no pacote. Ensaiado de novo no CR-021f3, já sem web2py: o `package.py` não grava `__pycache__` na cópia que empacota (antes, o próprio `__pycache__` recusava o pacote). Com código 1, a saída diz o que foi recusado ("Pacote recusado:" e uma linha por problema, com arquivo e linha, nunca o valor). O caso comum é um `password` ou `cookie_key` que não é `CHANGE_ME` no `instance/secrets.cfg.example`.
+O `package.py` fica em `tools/` desde o CR-022b2 (antes, `scripts/`): é ferramenta de build e não vai no pacote. Ensaiado de novo no CR-021f3, já sem web2py: o `package.py` não grava `__pycache__` na cópia que empacota (antes, o próprio `__pycache__` recusava o pacote). Com código 1, a saída diz o que foi recusado ("Pacote recusado:" e uma linha por problema, com arquivo e linha, nunca o valor). O caso comum é um `password` ou `cookie_key` que não é `CHANGE_ME` no `instance/exemplos/secrets.cfg.example`.
 
-Leve os dois arquivos (`sss-<version>.tar.gz` e `SHA256SUMS`) ao servidor e confira. Na **primeira instalação**:
+Leve os quatro arquivos (`sss-<versao>.tar.gz`, `utilitarios.tar.gz`, `sss_vars.sh` e `SHA256SUMS`) ao servidor e confira. Na **primeira instalação**:
 
 ```bash
-# com a conta do SSS, na pasta onde estão os dois arquivos
-sha256sum -c SHA256SUMS                                     # esperado: "sss-<versao>.tar.gz: OK"
+# com a conta do SSS, na pasta onde estão os arquivos
+sha256sum -c SHA256SUMS                                     # esperado: "<arquivo>: OK" para cada um
 mkdir -p /portaloptrib/TESHUVA/SSS/<TIPO>                    # se ainda nao existir
 cd /portaloptrib/TESHUVA/SSS/<TIPO>                          # a pasta de cima da <RAIZ>
 tar -xzf <pasta do pacote>/sss-<versao>.tar.gz
@@ -141,6 +141,16 @@ mv sss-<versao> script_scheduling_service                    # a <RAIZ>
 chmod 0750 script_scheduling_service                         # o tar segue o umask (0755 com 022); §1.3 pede 0750
 cd script_scheduling_service && sha256sum -c --quiet SHA256SUMS && echo "conteúdo confere"
 ls                                                          # esperado: AGENTS.md README.md SHA256SUMS bin docs instance scripts src
+```
+
+Depois, instale os utilitários (os scripts de exemplo que o seed cadastra como `utilitarios/<arquivo>`, §9). Só `utilitarios/` vai ao servidor: o resto de `scripts_ambiente/` é do repositório.
+
+```bash
+# na <RAIZ>; as entradas do tar já começam por scripts_ambiente/utilitarios/ (sem --strip-components)
+tar -xzf <pasta do pacote>/utilitarios.tar.gz -C <RAIZ>
+find scripts_ambiente/utilitarios -type f -exec chmod 0444 {} +
+find scripts_ambiente/utilitarios -type f \( -name '*.py' -o -name '*.sh' \) -exec chmod 0555 {} +
+ls scripts_ambiente/utilitarios                             # esperado: os scripts do seed
 ```
 
 Nas **atualizações** seguintes, não extraia por cima: use o `bin/sss-update.sh` (§18), que preserva `instance/`, `var/` e `scripts_ambiente/`.
@@ -155,8 +165,8 @@ O pacote só tem o `bin/` e a aplicação (o código, os templates e os estátic
 
 1. **Pacote (§3)** extraído na `<RAIZ>` com a conta do SSS.
 2. **Banco (§5):** a conta única é a **dona do esquema**. Não há GRANT a aplicar (pule o `03_grants`); o `init_db.py --name agente0001` precisa de `--real-schema`, porque o esquema não é descartável (§5.3).
-3. **Configuração (§7):** um `instance/common.ini` com o `[oracle]` (conta única, DSN, owner e prefixo), um `instance/secrets.cfg` com `[oracle] password`, `[web] cookie_key` e os `[environment:<NOME>]` dos ambientes atendidos (os bancos que os scripts usam têm usuários próprios), e um `instance/<nome>/config.ini` por processo, com `[app] name` igual ao nome da pasta.
-4. **Pastas:** nada a fazer. Na subida, o web e o agente criam as que faltarem em `var/<nome>/` e `scripts_ambiente/` (CR-032, D12), com uma linha `pasta criada` no log para cada pasta do agente (o `log_dir` é criado sem essa linha).
+3. **Configuração (§7):** um `instance/common.ini` com o `[oracle]` (conta única, DSN, owner e `driver_mode`; o prefixo das tabelas é fixo pelo ambiente, §10.5), um `instance/secrets.cfg` com `[oracle] password`, `[web] cookie_key` e os `[environment:<NOME>]` dos ambientes atendidos (os bancos que os scripts usam têm usuários próprios), e um `instance/<nome>/config.ini` por processo, com `[app] name` igual ao nome da pasta.
+4. **Pastas:** nada a fazer. Na subida, cada processo cria as que faltarem em `var/<nome>/` (o web, `var/<web>/tmp`), e só o agente cria a pasta base `scripts_ambiente/` (CR-032, D12), com uma linha `pasta criada` no log para cada pasta do agente (o `log_dir` é criado sem essa linha).
 5. **Subida e permanência (§10.6):** `bin/sss-keepalive.sh` no `crontab` da conta, com `@reboot` e a cada 5 minutos.
 6. **Monitoração (§13)** e **limpeza manual (§12, README §11.3)** pelo mesmo `crontab`.
 
@@ -253,7 +263,7 @@ O launcher aplica `umask 077`. O próprio SSS cria:
 
 ### 5.2 Scripts SQL e contas por papel [ensaiado no GFPR: ciclo 02 → 01 → 99]
 
-Os três scripts saem do mesmo registro de identificadores, com o owner e o prefixo do `[oracle]`. Com contas separadas por papel, os GRANTs saem com elas (`--grants-to`); com a conta única, que é a dona do esquema, não há GRANT:
+Os três scripts saem do mesmo registro de identificadores, com o owner do `[oracle]` e o prefixo fixo do ambiente (`tbsprd_` em PROD, `tbsdev_` em DEV, §10.5). `--prefix` aceita só `tbsdev_` ou `tbsprd_`; outro valor sai com código 2, sem gravar nada. Com contas separadas por papel, os GRANTs saem com elas (`--grants-to`); com a conta única, que é a dona do esquema, não há GRANT:
 
 ```bash
 # na máquina de desenvolvimento ou num servidor com o pacote
@@ -300,7 +310,7 @@ O seed cria os usuários de homologação `admin`, `op.prod` e `consulta` com a 
 
 ### 5.5 Dimensionamento dos LOBs (CR-007, R-29; CR-012)
 
-* **Log no banco:** num banco AL32UTF8, o CLOB guarda cerca de **2 bytes por caractere**. Estimativa do segmento LOB de `tbsss_tickets`: `tickets por dia × caracteres médios do log × 2 × dias guardados até a limpeza × 1,3`. Exemplo: 2.000 × 50.000 × 2 × 180 × 1,3 ≈ 47 GB. O teto por ticket é `max_log_size_bytes` (até 64 MiB).
+* **Log no banco:** num banco AL32UTF8, o CLOB guarda cerca de **2 bytes por caractere**. Estimativa do segmento LOB de `tbsss_tickets` (prefixo lógico; físico `tbsdev_`/`tbsprd_`): `tickets por dia × caracteres médios do log × 2 × dias guardados até a limpeza × 1,3`. Exemplo: 2.000 × 50.000 × 2 × 180 × 1,3 ≈ 47 GB. O teto por ticket é `max_log_size_bytes` (até 64 MiB).
 * **Saída dos scripts:** o zip fica no BLOB de `tbsss_ticket_output` até o ticket sair na limpeza manual: `tickets com saída por dia × zip médio × dias guardados × 1,3`. **Não há teto por ticket** desde o CR-036 (D3): uma saída grande (vários GB) vai inteira para o BLOB. Acompanhe o tablespace do esquema e combine com o DBA um alerta de espaço.
 * Depois da limpeza manual (§12), o espaço volta ao segmento, não ao tablespace. Para devolvê-lo, o DBA usa `ALTER TABLE ... MOVE LOB` ou redefinição online numa janela.
 
@@ -312,7 +322,7 @@ O seed cria os usuários de homologação `admin`, `op.prod` e `consulta` com a 
 * **Linha da combinação escolhida**, no log da aplicação de cada processo (ensaio, banco 19c):
   `INFO ... [action=INICIO] driver=oracledb modo=thin servidor=19.24.0.0.0 cliente=-`
   Com Thick ou cx_Oracle, `cliente=` mostra a versão do cliente (o recomendado é o 19; outra versão aparece antes como WARNING `cliente Oracle <versao>; o recomendado e o Instant Client 19`). Registre essa linha no checklist (§19).
-* **Conferência antes de subir:** `python3 scripts/check_env.py --name <nome>`, a partir de `W`. Ela confere os arquivos e **conecta ao banco** com a conta e os segredos do processo, mostrando o driver, o modo e as versões (CR-033, D6), e o orçamento da abertura da conexão (`AVISO` com `CONEXAO_ACIMA_DO_PRAZO` quando passa do `call_timeout_s`, §5.4). Código 0 = tudo OK (avisos não reprovam), 1 = falta arquivo ou o banco não conectou (linha `FALHA`, com o motivo), 2 = sem processo (`--name` nem `--config`) ou Python menor que 3.6.0.
+* **Conferência antes de subir:** `python3 scripts/check_env.py --name <nome>`, a partir da `<RAIZ>`. Ela confere os arquivos e **conecta ao banco** com a conta e os segredos do processo, mostrando o driver, o modo e as versões (CR-033, D6), e o orçamento da abertura da conexão (`AVISO` com `CONEXAO_ACIMA_DO_PRAZO` quando passa do `call_timeout_s`, §5.4). Código 0 = tudo OK (avisos não reprovam), 1 = falta arquivo ou o banco não conectou (linha `FALHA`, com o motivo), 2 = sem processo (`--name` nem `--config`) ou Python menor que 3.6.0.
 * **Quando forçar:**
   * `driver_mode = thick` quando o banco é 11g. O Thin recusa com `DPY-3010` e a cadeia já pula para o Thick, mas forçar evita a sondagem a cada subida.
   * `driver_mode = cx_oracle` quando o `python-oracledb` não estiver disponível ou falhar nesse servidor.
@@ -376,20 +386,20 @@ Um `secrets.cfg` antigo dentro de `instance/<nome>/` ainda é lido, com um aviso
 
 ## 8. Pastas dos processos
 
-O web e o agente criam na subida as pastas que faltarem (CR-032, D12): `var/<nome>/logs` (`0750`), `var/<nome>/works` (`0700`), `outputs`, `inputs`, `script_works`, `files` e `scripts_ambiente` (`0755`); o web, `var/<web>/tmp` (`0700`, CR-037), o temporário de todo envio acima de 1 MiB, criado se faltar (sem a recusa com código 13). O web lê e grava em `var/<agente>/files` de cada agente que atende o ambiente: a tela Pasta de Arquivos só funciona com o web no mesmo servidor do agente ou na raiz compartilhada (§4.1). Uma pasta existente que não possa ser usada (arquivo no lugar, sem escrita, pasta do sistema) recusa a subida (código 13, §15). Não há helper de execução, `sudoers` nem usuário de execução (CR-032, D7): os scripts rodam com a conta do agente, em `var/<agente>/works/ticket_<id>/exec`, apagada no fim do ticket.
+O web e o agente criam na subida as pastas que faltarem (CR-032, D12): `var/<nome>/logs` (`0750`); o agente, `var/<agente>/works` (`0700`), `outputs`, `inputs`, `script_works`, `files` e a pasta base `scripts_ambiente` (`0755`; só o agente a cria); o web, `var/<web>/tmp` (`0700`, CR-037), o temporário de todo envio acima de 1 MiB, criado se faltar (sem a recusa com código 13). O web lê e grava em `var/<agente>/files` de cada agente que atende o ambiente: a tela Pasta de Arquivos só funciona com o web no mesmo servidor do agente ou na raiz compartilhada (§4.1). Uma pasta existente que não possa ser usada (arquivo no lugar, sem escrita, pasta do sistema) recusa a subida (código 13, §15). Não há helper de execução, `sudoers` nem usuário de execução (CR-032, D7): os scripts rodam com a conta do agente, em `var/<agente>/works/ticket_<id>/exec`, apagada no fim do ticket.
 
 ---
 
 ## 9. Scripts cadastrados (CR-005, CR-011, CR-023)
 
 * O caminho cadastrado (`path_file`) é **absoluto** ou **relativo à pasta base** do agente (CR-023), em qualquer pasta fora das pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`), fora das pastas do SSS (`log_dir`, `work_dir`, `output_dir`, `input_dir`, `script_work_dir` e `files_dir`) e fora da pasta da aplicação (a `<RAIZ>`, cujo código é trocado a cada atualização), **exceto** `<RAIZ>/scripts_ambiente/`, que a atualização preserva (CR-028, D3).
-* **Pasta base (CR-023, CR-028):** `[agent] script_base_dir`, por padrão `<RAIZ>/scripts_ambiente/`. O agente junta o caminho relativo cadastrado (ex.: `faturamento/carga.py`) a ela e confere o resultado como um caminho absoluto; o arquivo real pode ficar fora da pasta base (link). A pasta pode ser diferente em cada servidor, mas **todo agente de um ambiente que tem script com caminho relativo precisa dela**: o ticket vai para qualquer agente do ambiente, e o agente sem pasta base termina o ticket em `PRECHECK_FAILED` (`NO_BASE_DIR`). Na subida, o log mostra a pasta base (INFO) ou avisa que ela não existe (WARNING); o painel de agentes mostra a de cada um. Os 14 scripts de demonstração do seed são cadastrados como `utilitarios/<arquivo>`.
+* **Pasta base (CR-023, CR-028):** `[agent] script_base_dir`, por padrão `<RAIZ>/scripts_ambiente/`. O agente junta o caminho relativo cadastrado (ex.: `faturamento/carga.py`) a ela e confere o resultado como um caminho absoluto; o arquivo real pode ficar fora da pasta base (link). A pasta pode ser diferente em cada servidor, mas **todo agente de um ambiente que tem script com caminho relativo precisa dela**: o ticket vai para qualquer agente do ambiente, e o agente sem pasta base termina o ticket em `PRECHECK_FAILED` (`NO_BASE_DIR`). Na subida, o log mostra a pasta base (INFO) ou avisa que ela não existe (WARNING); o painel de agentes mostra a de cada um. Os 14 scripts de demonstração do seed são cadastrados como `utilitarios/<arquivo>`, e vêm do `utilitarios.tar.gz` (§3); o `sss-update.sh` não os troca: numa versão com utilitários novos, extraia o `utilitarios.tar.gz` de novo.
 * **Pasta de entrada (CR-014):** com `[agent] input_dir`, cada script recebe `SSS_INPUT_DIR` = `input_dir/<ambiente>/<nome do script em minúsculo, sem acento nem espaço>/` (ex.: "Carga Diária" em `PRODUCAO`, no `agente0001` → `<RAIZ>/var/agente0001/inputs/producao/carga_diaria/`). A pasta é criada na primeira execução e **nunca** é limpa pelo SSS: quem deposita os arquivos e o próprio script cuidam do conteúdo. Para depositar arquivos de fora, use a conta do agente (ou a tela de Entrada, CR-020).
 * **Pasta de trabalho (CR-019):** com `[agent] script_work_dir`, cada ticket recebe `SSS_WORK_DIR` = `script_work_dir/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, criada antes da execução e mantida depois dela, para consulta no servidor do agente. O `HOME` e a pasta corrente do script continuam na pasta descartável `work_dir/ticket_<id>/exec`.
 * Pode ser um link simbólico. O arquivo **real** precisa existir no servidor do agente, ser arquivo regular, ser legível pela conta do agente e **não** ter escrita de grupo nem de outros (`chmod go-w`).
 * O conteúdo e a versão do script são controlados pelo ambiente: o SSS não confere hash nem dono (CR-011). Quem grava na pasta do script muda o que vai rodar.
 * O nó web confere o formato do caminho e, no caminho absoluto, as pastas do sistema e a da aplicação (o relativo só pelo formato). A conferência do arquivo é feita pelo agente, antes de cada execução; uma recusa aparece como `PRECHECK_FAILED` (§15).
-* **Interpretador (CR-025, CR-026, CR-027):** o cadastro guarda só o nome (`python`, `python3`, `sh` ou `bash`). Na execução vale, nesta ordem (CR-027): o interpretador digitado no disparo (caminho absoluto ou só o nome, ex.: `python3.13`), se existir no servidor; o `#!` da primeira linha do script, se o executável existir; o nome do cadastro, com `python` e `python3` servindo um ao outro. Quem não existe é pulado, com uma linha `[SSS]` no log do ticket. Os nomes são procurados no `PATH` herdado pelo **processo do agente**: o do `crontab` que roda o keepalive (§10.5) ou o do shell que rodou o `bin/sss-scheduler.sh`, que não o altera. **Confira esse `PATH` em cada servidor:** ele precisa achar `python3`, `bash` e os demais que os scripts usam. O agente atende qualquer interpretador; num servidor sem nenhum interpretador possível (o digitado, o do `#!` e o do cadastro, com a troca `python` ↔ `python3`), o ticket termina em `PRECHECK_FAILED` (`INTERPRETER_NOT_FOUND`). O agente só confere, com a conta dele, se o executável existe e é executável (não confere se ele está numa pasta do SSS: risco aceito, README §14), e o executa sem resolver links (o Python de um virtualenv funciona). `#!/usr/bin/env python3` funciona: o `env` procura o `python3` no `PATH` do filho (`/usr/bin:/bin` e, no fim, a pasta do Python do agente, README §8.6), não no `PATH` herdado pelo agente, e o interpretador registrado como usado é `/usr/bin/env`. Um interpretador digitado que não existe é pulado (CR-027): vale o `#!` ou o cadastro, e o log do ticket registra a tentativa. **Risco aceito pelo responsável pelo produto:** quem pode disparar escolhe o programa que roda o script (o digitado vence o `#!`, CR-027), e, sem digitado, quem edita a primeira linha troca o interpretador sem passar pelo cadastro. O digitado fica no snapshot, em `tbsss_tickets.interpreter_path` e na auditoria do disparo; o usado, em `tbsss_tickets.interpreter_used` e na linha `[SSS] interpretador usado` do log (README §8.5).
+* **Interpretador (CR-025, CR-026, CR-027):** o cadastro guarda só o nome (`python`, `python3`, `sh` ou `bash`). Na execução vale, nesta ordem (CR-027): o interpretador digitado no disparo (caminho absoluto ou só o nome, ex.: `python3.13`), se existir no servidor; o `#!` da primeira linha do script, se o executável existir; o nome do cadastro, com `python` e `python3` servindo um ao outro. Quem não existe é pulado, com uma linha `[SSS]` no log do ticket. Os nomes são procurados no `PATH` herdado pelo **processo do agente**: o do `crontab` que roda o keepalive (§10.5) ou o do shell que rodou o `bin/sss-scheduler.sh`, que não o altera. **Confira esse `PATH` em cada servidor:** ele precisa achar `python3`, `bash` e os demais que os scripts usam. O agente atende qualquer interpretador; num servidor sem nenhum interpretador possível (o digitado, o do `#!` e o do cadastro, com a troca `python` ↔ `python3`), o ticket termina em `PRECHECK_FAILED` (`INTERPRETER_NOT_FOUND`). O agente só confere, com a conta dele, se o executável existe e é executável (não confere se ele está numa pasta do SSS: risco aceito, README §14), e o executa sem resolver links (o Python de um virtualenv funciona). `#!/usr/bin/env python3` funciona: o `env` procura o `python3` no `PATH` do filho (`/usr/bin:/bin` e, no fim, a pasta do Python do agente, README §8.6), não no `PATH` herdado pelo agente, e o interpretador registrado como usado é `/usr/bin/env`. Um interpretador digitado que não existe é pulado (CR-027): vale o `#!` ou o cadastro, e o log do ticket registra a tentativa. **Risco aceito pelo responsável pelo produto:** quem pode disparar escolhe o programa que roda o script (o digitado vence o `#!`, CR-027), e, sem digitado, quem edita a primeira linha troca o interpretador sem passar pelo cadastro. O digitado fica no snapshot, em `tbsss_tickets.interpreter_path` (prefixo lógico; físico `tbsdev_`/`tbsprd_`) e na auditoria do disparo; o usado, em `tbsss_tickets.interpreter_used` e na linha `[SSS] interpretador usado` do log (README §8.5).
 
 ---
 
@@ -457,6 +467,7 @@ bin/sss-scheduler.sh agente0001            # instance/agente0001/config.ini (CR-
 | `SSS_TZ` | Fuso exportado como `TZ` | o do sistema |
 | `SSS_LOCALE` | `LANG` e `LC_ALL` (precisa ser UTF-8) | `C.UTF-8` |
 | `SSS_IC_DIR` | Pasta do Instant Client, exportada em `LD_LIBRARY_PATH` só se ele não estiver no `ldconfig` (§6) | — |
+| `SSS_ENV`, `SSS_INSTALL_TYPE` | Ambiente que fixa o prefixo das tabelas: vale a primeira definida, antes da pasta `<TIPO>` (README §9.1). Só `PROD` dá `tbsprd_`; **qualquer outro valor dá `tbsdev_`** (num PROD, não as defina com outro valor) | a pasta `<TIPO>` |
 
 No cron, defina-as no topo do `crontab` (§4.0). O agente procura os interpretadores dos scripts no `PATH` herdado (§9): o do cron é curto (`/usr/bin:/bin`), então acrescente `PATH=...` no `crontab` se os interpretadores estiverem em outra pasta.
 
@@ -621,7 +632,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | 17 | `ambientes atendidos inexistentes: X` | Nome em `environments` não cadastrado | Corrija o nome ou cadastre o ambiente. Ambiente inativo só gera `WARNING ambiente atendido X inativo: ignorado ate ser reativado` |
 | 18 | `startup check: <erro>` | Falha ao conferir o que ficou da execução anterior | Veja as linhas `TALVEZ_INICIADO`, `ORPHAN_PROCESS` e `pasta do ticket nao removida` logo antes |
 | 19 | `o processo tem N threads antes do primeiro spawn (...)` | Algo criou uma thread antes do primeiro script | Suba só pelo `bin/sss-scheduler.sh` (Python puro), nunca de dentro de outro processo |
-| 20 | `REGISTRO_PERDIDO: <motivo>; encerramento TERMINATE` (com o agente já no ar) | A linha do agente em `tbsss_agents` sumiu ou mudou de dono | Veja se alguém apagou a linha ou subiu outro agente com o mesmo `agent_id`; reinicie |
+| 20 | `REGISTRO_PERDIDO: <motivo>; encerramento TERMINATE` (com o agente já no ar) | A linha do agente em `tbsss_agents` (prefixo lógico; físico `tbsdev_`/`tbsprd_`) sumiu ou mudou de dono | Veja se alguém apagou a linha ou subiu outro agente com o mesmo `agent_id`; reinicie |
 
 ### 15.2 Cadeia de driver Oracle (`[action=SELECAO_DRIVER]`)
 
@@ -645,7 +656,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | `SALTO_RELOGIO: o SYSDATE andou N s diferente do relogio monotonico; NODE_OFFLINE ...` | Ajuste brusco de relógio no banco ou no servidor | Use NTP em *slew*; a detecção de nó offline fica suspensa por um ciclo |
 | `relogio local diverge do SYSDATE em N s (README §7.1)` | Servidor sem NTP | Ative o NTP |
 | `CONEXAO_ACIMA_DO_PRAZO: orcamento da conexao Ns excede call_timeout_s Ms (CR-008, R-17)` | `CONNECT_TIMEOUT × tentativas × endereços` maior que o `call_timeout` | Ajuste o descritor (§5.4) |
-| `WARNING ... [action=CLAIM] claim do ticket N pulado: linha do script S travada por outra sessao (ORA-30006, FOR UPDATE WAIT 5)` | Outra sessão segura a linha do script em `tbsss_scripts` por mais de 5 s (edição presa ou sessão morta) | Ocasional é normal: o ticket volta no próximo ciclo. Persistente: o DBA procura a sessão em `v$lock`/`v$session` e a encerra; `SQLNET.EXPIRE_TIME` (§5.1) evita sessões mortas |
+| `WARNING ... [action=CLAIM] claim do ticket N pulado: linha do script S travada por outra sessao (ORA-30006, FOR UPDATE WAIT 5)` | Outra sessão segura a linha do script em `tbsss_scripts` (prefixo lógico; físico `tbsdev_`/`tbsprd_`) por mais de 5 s (edição presa ou sessão morta) | Ocasional é normal: o ticket volta no próximo ciclo. Persistente: o DBA procura a sessão em `v$lock`/`v$session` e a encerra; `SQLNET.EXPIRE_TIME` (§5.1) evita sessões mortas |
 
 ### 15.4 Tickets (status e motivo na tela e no log)
 
@@ -726,7 +737,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
   2. finalize como `FAILED`/`ORPHAN_PROCESS` os tickets `RUNNING` restaurados que têm PID (eles se referem a processos que não existem mais);
   3. **revise** os tickets `PENDING` e os `RUNNING` sem PID criados antes do instante de restauração. Compare com os logs locais dos agentes (`log_dir/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log`), que sobrevivem à restauração. Os que já rodaram depois do backup são cancelados pela tela (auditado como `TICKET_CANCEL` com o login do operador), nunca apagados;
   4. para não repetir ocorrências de agendamento já cumpridas, configure temporariamente `misfire_policy = SKIP` em **todos** os agentes (o `critical_config` precisa ser igual em todos) e no `[agent]` do config do web (§7.1, para a tela de agendamentos) para a primeira subida; volte a `RUN_ONCE` depois que o primeiro desdobro avançar as regras;
-  5. avance as sequences de `tbsss_tickets` e `tbsss_audit` acima do maior id visto nos logs locais e no log da aplicação. O DBA recria a sequence com `START WITH` maior; o 11g não tem `ALTER SEQUENCE ... RESTART`. Assim nenhum id se repete entre o banco e os arquivos locais;
+  5. avance as sequences de `tbsss_tickets` e `tbsss_audit` (prefixo lógico; físico `tbsdev_`/`tbsprd_`) acima do maior id visto nos logs locais e no log da aplicação. O DBA recria a sequence com `START WITH` maior; o 11g não tem `ALTER SEQUENCE ... RESTART`. Assim nenhum id se repete entre o banco e os arquivos locais;
   6. religue os agentes. O startup check limpa as pastas locais.
 
 ---
@@ -756,6 +767,14 @@ O código é trocado **no lugar** pelo `bin/sss-update.sh`. `instance/`, `var/` 
 ### 18.2 Notas por versão (estrutura por processo)
 
 Do mais novo para o mais antigo. Quem vem de uma versão anterior aplica na ordem cronológica. As notas da instalação anterior ao CR-028 (`/opt/sss/app`) estão em `docs/architecture/DEPLOYMENT-history.md`.
+
+* **11966d7: perfis renomeados (sem mudança de esquema; muda o seed).**
+  * `ADMINISTRATOR` → `ADMINISTRADOR`, `OPERATOR_PROD` → `OPERADOR`, `READ_ONLY` → `CONSULTA`; o perfil `OPERATOR_HML` e o usuário `op.hml` saíram do seed.
+  * Num banco em uso, o `MERGE` do seed cria os perfis novos e passa `admin`, `op.prod` e `consulta` para eles, mas **não remove** os antigos (`ADMINISTRATOR`, `OPERATOR_PROD`, `READ_ONLY`, `OPERATOR_HML`, `op.hml`): a limpeza é manual (README §11.3).
+* **a75e3c1: prefixo das tabelas fixo pelo ambiente (muda o nome físico das tabelas).**
+  * O prefixo deixa de ser parametrizado: `tbsprd_` em PROD e `tbsdev_` em qualquer outro ambiente (§10.5). `[oracle] table_prefix` só gera aviso; apague a linha.
+  * Atualizar uma instalação com outro prefixo (`s3dev_`, `s3prd_`, `ssdev_`, `tbsss_`...) faz a subida do agente falhar com **código 15** (`banco: <erro>`, com `ORA-00942` na tabela de controle `<owner>.tbsdev_control`/`tbsprd_control`) até haver as tabelas `tbsdev_`/`tbsprd_` no owner. O procedimento está no `docs/DEPLOYMENT-SERVER.md`, seção "Migração para o prefixo fixo (a75e3c1)".
+  * **Uma instalação por tipo por owner:** dois DEV (ou dois PROD) no mesmo owner dividiriam as mesmas tabelas.
 
 * **CR-037: Pasta de Arquivos, só em disco (sem mudança de esquema; muda o catálogo).**
   * Duas funcionalidades novas no catálogo, `FILES_UPLOAD` e `FILES_DOWNLOAD`, e no seed dos perfis `ADMINISTRADOR` e `OPERADOR`. Numa instalação nova, o `01_deploy` já as traz. **Num banco em uso, não rode o `init_db`**: ele refaz o seed inteiro e devolve ao padrão ambientes, parâmetros, scripts, perfis e usuários do seed (reativa e sobrescreve o que foi mudado pela tela). Aplique só os blocos `MERGE` das duas funcionalidades e das marcas dos perfis, copiados do `docs/sql/01_deploy_sss_<owner>_<prefixo>.sql` da versão (procure por `FILES_UPLOAD` e `FILES_DOWNLOAD`), com `COMMIT` no fim.

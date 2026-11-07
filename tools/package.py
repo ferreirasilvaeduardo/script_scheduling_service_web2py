@@ -54,7 +54,7 @@ EXCLUDE_APP = (
 # Os testes ficam em tests/, fora da lista de permissao (CR-022b1); um test_*.py perdido em scripts/ tambem fica fora.
 _RE_TEST = re.compile(r"^scripts/test_[^/]*\.py$")
 _RE_CREDENTIAL = re.compile(r"^\s*(password|cookie_key)\s*[=:]\s*(.*?)\s*$", re.IGNORECASE)
-_SECRETS_EXAMPLE = "instance/secrets.cfg.example"
+_SECRETS_EXAMPLE = "instance/exemplos/secrets.cfg.example"
 _PLACEHOLDER = "CHANGE_ME"
 MTIME = 1767225600  # 2026-01-01 00:00:00 UTC: tar reprodutivel
 

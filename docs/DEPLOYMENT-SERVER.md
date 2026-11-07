@@ -4,7 +4,7 @@ Roteiro passo a passo, auditável, para instalar o Script Scheduling Service num
 
 * Cada passo diz o que conferir antes de seguir. Se uma conferência falhar, **pare** e resolva antes do passo seguinte.
 * **Senhas:** nenhuma senha aparece neste documento nem no `sss_vars.sh`. As senhas de banco vão do cofre direto para o `secrets.cfg` no servidor (passo 8.2), nunca por e-mail, chat ou arquivo intermediário.
-* **Exemplo preenchido:** o Apêndice A traz os valores, os achados e as decisões do servidor `brtlvlty3067sl` (29/10/2026).
+* **Exemplo preenchido:** o Apêndice A traz os valores, os achados e as decisões do servidor `brtlvlty3067sl` (29/10/2026; prefixo fixo e uma instalação por tipo desde 06/11/2026, decisão 18).
 
 ---
 
@@ -23,9 +23,7 @@ SSS_DB_USER='<conta Oracle>'                    # conta única, dona do esquema 
 SSS_OWNER='<owner>'                             # owner do esquema (em geral, a própria conta)
 SSS_DSN_DEV='<DSN do DEV>'                    # ex.: (DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=h)(PORT=1521))(CONNECT_DATA=(SID=s)))
 SSS_DSN_PROD='<DSN do PROD>'
-SSS_PREFIXO_DEV=tbsdev_                             # prefixo fixo pelo ambiente (não parametrizado)
-SSS_PREFIXO_PROD=tbsprd_                            # prefixo fixo pelo ambiente (não parametrizado)
-SSS_OUTROS_PREFIXOS=""                              # prefixos de outras instalações no mesmo owner (se houver)
+SSS_OUTROS_PREFIXOS="<esquemas aposentados no owner, ou vazio>"   # ex.: "s3dev_ s3prd_ tbsss_ ssdev_"; nunca tocados
 SSS_PORTA_DEV='<porta>'                         # o web atende em 127.0.0.1:<porta>
 SSS_PORTA_PROD='<porta>'
 SSS_WEB=web0001
@@ -49,10 +47,12 @@ if [ -n "$SSS_IC_DIR" ]; then
   case ":${LD_LIBRARY_PATH:-}:" in *":$SSS_IC_DIR:"*) ;; *) export LD_LIBRARY_PATH="$SSS_IC_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}";; esac
 fi
 # sss_tipo DEV|PROD: acerta T, R (raiz), PREFIX, P (prefixo sem _), PORT e DSN do tipo.
+# O prefixo e fixo pelo tipo, como no codigo (sss_config.table_prefix): PROD -> tbsprd_, qualquer outro -> tbsdev_.
 sss_tipo() {
   case " $SSS_TIPOS " in *" $1 "*) ;; *) echo "tipo invalido: $1 (use: $SSS_TIPOS)"; return 1;; esac
   T=$1; R=$SSS_BASE/$T/script_scheduling_service
-  eval "PREFIX=\$SSS_PREFIXO_$T; PORT=\$SSS_PORTA_$T; DSN=\$SSS_DSN_$T"
+  case $T in PROD) PREFIX=tbsprd_;; *) PREFIX=tbsdev_;; esac
+  eval "PORT=\$SSS_PORTA_$T; DSN=\$SSS_DSN_$T"
   P=${PREFIX%_}; export T R PREFIX P PORT DSN
   echo "tipo=$T raiz=$R prefixo=$PREFIX porta=$PORT"
 }
@@ -69,8 +69,10 @@ echo "agentes: $SSS_NOMES_AGENTES | ambientes: $SSS_AMBIENTES | health: $SSS_AGE
 for t in $SSS_TIPOS; do sss_tipo $t; done
 ```
 
-* **As instalações não se misturam:** cada raiz tem as suas pastas (`var/`, `instance/`) e cada prefixo tem as suas tabelas. Os mesmos nomes de processo em raízes diferentes não conflitam: o keepalive e o `sss-stop.sh` trabalham só na raiz de onde são chamados.
-* **Prefixos novos:** use prefixos que ainda não existem no owner. Os de `SSS_OUTROS_PREFIXOS` (outras instalações no mesmo owner) **nunca** são tocados por este roteiro: o passo 4.1 confere que os scripts gerados não os citam, e o passo 9 confere que o prefixo novo está vazio.
+* **As instalações não se misturam:** cada raiz tem as suas pastas (`var/`, `instance/`) e cada tipo tem as suas tabelas. Os mesmos nomes de processo em raízes diferentes não conflitam: o keepalive e o `sss-stop.sh` trabalham só na raiz de onde são chamados.
+* **Prefixo fixo por tipo (desde o `a75e3c1`):** o prefixo físico das tabelas não é mais escolhido. O código o fixa pelo ambiente: `tbsdev_` no DEV e `tbsprd_` no PROD, pela variável `SSS_ENV`, senão `SSS_INSTALL_TYPE`, senão a pasta `<TIPO>` acima da raiz (só `PROD` dá `tbsprd_`). Um `[oracle] table_prefix` no `common.ini` é ignorado, com aviso. O `scripts/generate_sql.py --prefix` só aceita `tbsdev_` e `tbsprd_` (outro valor: código 2). A função `sss_tipo` deriva o `PREFIX` do tipo do mesmo jeito.
+* **Uma instalação por tipo em cada owner:** como o prefixo não muda, duas instalações do mesmo tipo no mesmo owner usariam as mesmas tabelas. Num owner, existe no máximo um DEV (`tbsdev_`) e um PROD (`tbsprd_`). No GFPR (owner `openrisow`), esse DEV e esse PROD são os do servidor do Apêndice A; as instalações locais (máquinas de desenvolvimento) deixam de subir contra o GFPR (decisão 18).
+* **Esquemas aposentados:** `SSS_OUTROS_PREFIXOS` lista os prefixos de esquemas antigos que ainda estão no owner (de antes do prefixo fixo). Este roteiro **nunca** os toca: o passo 4.1 confere que os scripts gerados não os citam. A remoção deles é manual, à parte (passo 15.3.1).
 
 ---
 
@@ -182,7 +184,7 @@ Preencha agora, **na origem**, a parte de baixo do `sss_vars.sh` (`PYTHON`, `ORA
 
 ### 4.1 Geração dos scripts SQL
 
-Os scripts saem do registro de identificadores do código, com o owner e o prefixo de cada instalação (DEPLOYMENT §5.2). O owner e o prefixo vêm da linha de comando: não é preciso config, banco nem senha, e o comando não conecta. Com a conta única, dona do esquema, nenhum GRANT é gerado: o fim do `01` diz "conta nao informada; nenhum GRANT gerado".
+Os scripts saem do registro de identificadores do código, com o owner e o prefixo fixo de cada tipo (`tbsdev_`, `tbsprd_`; DEPLOYMENT §5.2). O owner e o prefixo vêm da linha de comando (`--prefix` só aceita os dois oficiais): não é preciso config, banco nem senha, e o comando não conecta. Com a conta única, dona do esquema, nenhum GRANT é gerado: o fim do `01` diz "conta nao informada; nenhum GRANT gerado".
 
 ```bash
 . ~/sss_pacote/sss_vars.sh
@@ -195,7 +197,7 @@ OUTROS=$(echo $SSS_OUTROS_PREFIXOS | tr ' ' '|'); O=$(echo "$SSS_OWNER" | tr A-Z
 for t in $SSS_TIPOS; do sss_tipo $t >/dev/null
   echo "== $P"
   grep -c "WHENEVER SQLERROR EXIT FAILURE ROLLBACK" docs/sql/01_deploy_sss_${O}_$P.sql                  # esperado: 1
-  if [ -n "$OUTROS" ]; then                                                                              # sem outros prefixos, nada a conferir
+  if [ -n "$OUTROS" ]; then                                                                              # sem esquemas aposentados, nada a conferir
     grep -E -i "$OUTROS" docs/sql/01_deploy_sss_${O}_$P.sql | grep -vc "COMMENT ON COLUMN"              # esperado: 0
     grep -E -ic "$OUTROS" docs/sql/02_rollback_sss_${O}_$P.sql                                          # esperado: 0
   fi
@@ -205,7 +207,7 @@ for t in $SSS_TIPOS; do sss_tipo $t >/dev/null
 done
 ```
 
-* O `tbsss_` aparece no `01` de qualquer prefixo só nos `COMMENT ON COLUMN` das FKs (texto fixo do dicionário, sem efeito): por isso o filtro da segunda conferência.
+* O `tbsss_` (nome lógico das tabelas no dicionário) aparece no `01` de `tbsdev_` e de `tbsprd_` só nos `COMMENT ON COLUMN` das FKs (texto, sem efeito): por isso o filtro da segunda conferência, já que `tbsss_` é um dos esquemas aposentados do GFPR.
 * O DBA pode revisar o `01` antes da janela. No servidor, o mesmo comando, rodado na `<RAIZ>` com `--out-dir /tmp/sql_conferencia`, gera arquivos idênticos aos do pacote (mesmo `sha256`).
 
 ### 4.2 Pacote
@@ -226,7 +228,7 @@ Esperado: `ORIGEM`, `SHA256SUMS`, `sss-<versao>.tar.gz`, `sss_vars.sh` e `utilit
 * O `make package-local` copia só o que vai para o servidor (`bin`, `docs`, `instance/exemplos`, `scripts`, `src`, `AGENTS.md`, `README.md`), sem caches e sem `docs/homologation`, e passa a cópia pelo `tools/package.py`. Esse script só usa a biblioteca padrão e recusa o pacote com `__pycache__`, `*.pyc`, `secrets.cfg` real, senha fora do `CHANGE_ME` dos modelos, link simbólico ou restos do web2py. O código de DEV (`dev/`, `controllers/dev.py`, o FAKE) e os testes ficam de fora sem aviso. Os `instance/<nome>/` da origem (com senhas reais) nunca entram.
 * O id do pacote (`src/sss/BUILD`) aparece na versão (`1.0.0-dev+<id>`): no log de subida, na tela Agentes e no rodapé. Com o `make package` (git), o id é o commit curto.
 * O `ORIGEM` registra a pasta e a hora do pacote. Se a pasta tiver um `.git`, ele também cita o commit de base, só como informação: a referência são os arquivos.
-* Os scripts de exemplo do seed (`utilitarios/*`) ficam em `dev/scripts/`, que o pacote não leva: por isso o `utilitarios.tar.gz` separado.
+* Os scripts de exemplo do seed ficam em `scripts_ambiente/utilitarios/` do repositório, que o `sss-<versao>.tar.gz` não leva: por isso o `utilitarios.tar.gz` separado, com as entradas `scripts_ambiente/utilitarios/<arquivo>`. Só essa pasta vai ao servidor; o resto de `scripts_ambiente/` (exemplos de árvore, `bkp/`) é só do repositório.
 
 ---
 
@@ -236,7 +238,7 @@ Esperado: `ORIGEM`, `SHA256SUMS`, `sss-<versao>.tar.gz`, `sss_vars.sh` e `utilit
 
 | Arquivo | Conteúdo |
 |---|---|
-| `sss-<versao>.tar.gz` | A aplicação, com os scripts SQL dos prefixos em `docs/sql/` |
+| `sss-<versao>.tar.gz` | A aplicação, com os scripts SQL de `tbsdev_` e `tbsprd_` em `docs/sql/` |
 | `utilitarios.tar.gz` | Os 14 scripts de exemplo do seed (passo 10) |
 | `sss_vars.sh` | Os valores desta implantação (sem senhas) |
 | `SHA256SUMS` | As impressões digitais dos três arquivos acima |
@@ -320,11 +322,12 @@ sss_grava instance/common.ini 0640 <<EOF
 user = $SSS_DB_USER
 dsn = $DSN
 owner = $SSS_OWNER
-table_prefix = $PREFIX
 driver_mode = $SSS_DRIVER_MODE
 EOF
 cat instance/common.ini
 ```
+
+Sem `table_prefix`: o prefixo sai do tipo (`tbsdev_` ou `tbsprd_`, passo 0); a chave, se aparecer, é ignorada com aviso.
 
 Com `auto`, cada processo testa Thin → Thick → cx_Oracle na subida e fica com o primeiro que conectar (DEPLOYMENT §6). Um driver não instalado falha na hora e deixa no log uma linha `WARNING ... Sondagem do candidato Oracle '<candidato>' falhou: codigo=IMPORT_ERROR categoria=LIBRARY`, esperada. Só um erro de senha interrompe a cadeia.
 
@@ -387,11 +390,11 @@ Esperado: cada agente com o seu ambiente, como em `SSS_AGENTES`. Não escreva `a
 
 ---
 
-## 9. Banco: um esquema por prefixo
+## 9. Banco: um esquema por tipo
 
-Os esquemas são novos: o `01_deploy` só cria objetos do seu prefixo. **Nunca rode aqui um script de `SSS_OUTROS_PREFIXOS`**: são de outras instalações no mesmo owner, e o `02_rollback` deles apagaria aquelas tabelas.
+Um esquema por tipo: `tbsdev_` para o DEV e `tbsprd_` para o PROD. O `01_deploy` só cria objetos do seu prefixo. **Nunca rode aqui nada contra os esquemas de `SSS_OUTROS_PREFIXOS`** (aposentados, passo 0).
 
-Os comandos vão num arquivo `.sql`, e o `sqlplus` pede a senha no terminal (`-L`: uma tentativa só). Em cada tipo, primeiro a conferência de que o prefixo está vazio (esperado `0`):
+Os comandos vão num arquivo `.sql`, e o `sqlplus` pede a senha no terminal (`-L`: uma tentativa só). Em cada tipo, primeiro a conferência de que o prefixo está vazio (esperado `0`; com as 21 tabelas, o esquema já existe: siga o passo 15.3 em vez deste):
 
 ```bash
 . ~/sss_pacote/sss_vars.sh; sss_tipo DEV && cd "$R"            # depois, sss_tipo PROD
@@ -461,28 +464,29 @@ grep 'OK: nenhuma falha' ~/sss_registro/${P}_99_validate.log     # esperado: as 
 
 * O `01` para no primeiro erro (`WHENEVER SQLERROR EXIT FAILURE ROLLBACK`). Se ele parar, guarde o log, rode o `02_rollback_sss_${O}_${P}.sql` (só o do prefixo deste passo) e repita.
 * **Sem `sqlplus`:** `"$PYTHON" scripts/init_db.py --name $SSS_AGENTE_HEALTH --real-schema` cria o mesmo esquema e o seed, com a conta e os segredos do agente (passo 11 antes, para conferir o acesso). `--dry-run` imprime o DDL sem conectar.
-* O seed cria os usuários `admin`, `op.prod` e `consulta` com a senha inicial do DEPLOYMENT §5.3. Ela é trocada no passo 13.
+* O `01` já traz o seed (`MERGE` idempotente): os perfis `ADMINISTRADOR`, `OPERADOR` e `CONSULTA` e os usuários `admin`, `op.prod` e `consulta`, com a senha inicial do DEPLOYMENT §5.3. Ela é trocada no passo 13.
 
 ---
 
 ## 10. Árvore de scripts (`script_base_dir`)
 
-A pasta base é a padrão, `<RAIZ>/scripts_ambiente/`, preservada pela atualização (DEPLOYMENT §9). O agente exige que o arquivo real não tenha escrita para grupo nem para outros (README §8.5). Os modos `0444` (arquivos) e `0555` (pastas) atendem a regra e também impedem que a própria conta altere os scripts sem querer. Em cada tipo:
+A pasta base é a padrão, `<RAIZ>/scripts_ambiente/`, preservada pela atualização (DEPLOYMENT §9). O agente exige que o arquivo real não tenha escrita para grupo nem para outros (README §8.5). O padrão oficial de modos: `0444` nos arquivos, `0555` nos `.py`/`.sh` e `0555` nas pastas. Ele atende a regra e também impede que a própria conta altere os scripts sem querer. O `utilitarios.tar.gz` traz as entradas `scripts_ambiente/utilitarios/<arquivo>` e é extraído na `<RAIZ>` como está; só essa pasta vai ao servidor. Em cada tipo:
 
 ```bash
 . ~/sss_pacote/sss_vars.sh; sss_tipo DEV && cd "$R"            # depois, sss_tipo PROD
 if [ -d scripts_ambiente/utilitarios ]; then
   echo "ja existe: scripts_ambiente/utilitarios (mantido; para trocar, veja abaixo)"
 else
-  tar -xzf ~/sss_pacote/utilitarios.tar.gz
+  tar -xzf ~/sss_pacote/utilitarios.tar.gz -C .
 fi
 ls scripts_ambiente/utilitarios | wc -l                        # esperado: 14
 find scripts_ambiente -type f -exec chmod 0444 {} +
+find scripts_ambiente -type f \( -name '*.py' -o -name '*.sh' \) -exec chmod 0555 {} +
 find scripts_ambiente -type d -exec chmod 0555 {} +
 find scripts_ambiente -perm /022 | wc -l                       # esperado: 0
 ```
 
-Para trocar um script depois: `chmod u+w` na pasta e no arquivo, troque, e volte para `0444`/`0555`.
+Para trocar um script depois: `chmod u+w` na pasta e no arquivo, troque, e volte para `0444` (ou `0555` nos `.py`/`.sh`) e `0555` na pasta.
 
 ---
 
@@ -621,6 +625,107 @@ grep 'Rollback do SSS concluido' ~/sss_registro/${P}_02_rollback.log   # esperad
 
 Depois, o passo 9 inteiro deste tipo: a conferência do prefixo vazio (`0`), o `01` e o `99`, com as mesmas conferências (os logs antigos do passo 9 são sobrescritos). Por fim, `bin/sss-ctl.sh start` e as conferências do passo 12. As pastas de saída, de trabalho e de logs dos tickets antigos ficam em disco: o nome delas tem ambiente, script e minuto, e não colide com os tickets novos (os números recomeçam em 1).
 
+### 15.3 Migração para o prefixo fixo (a75e3c1)
+
+Uma vez por servidor, nos dois tipos, com autorização e o SSS parado. Até o `a75e3c1`, o prefixo vinha do `[oracle] table_prefix` (no 3067, `s3dev_` e `s3prd_`). A partir dele, o código ignora essa chave e usa `tbsdev_` no DEV e `tbsprd_` no PROD (passo 0). Sem as tabelas do prefixo novo, o agente aborta a subida com código 15 (banco) e o web não aceita login. Os esquemas antigos ficam **intactos**, como aposentados; nenhum passo abaixo os apaga.
+
+**0. Na origem:** acerte o `sss_vars.sh` como no passo 0 (sem `SSS_PREFIXO_DEV/PROD`, a `sss_tipo` nova e `SSS_OUTROS_PREFIXOS` com os esquemas aposentados; Apêndice A.1), gere o pacote (passos 4.1 e 4.2) e transfira os cinco arquivos (passo 5). No servidor:
+
+```bash
+. ~/sss_pacote/sss_vars.sh
+grep -c 'SSS_PREFIXO_' ~/sss_pacote/sss_vars.sh                # esperado: 0
+for t in $SSS_TIPOS; do sss_tipo $t; done                      # esperado: prefixo=tbsdev_ no DEV e tbsprd_ no PROD
+```
+
+**a. Parar DEV e PROD** (o bloco do `crontab` sai, para o keepalive e o `health.py` não agirem durante a migração):
+
+```bash
+crontab -l > ~/sss_registro/crontab_antes_$(date +%Y%m%d_%H%M%S).txt 2>/dev/null
+for t in $SSS_TIPOS; do sss_tipo $t >/dev/null
+  (cd "$R" && bin/sss-ctl.sh cron remove && bin/sss-ctl.sh stop; echo "$T: codigo $?")   # esperado: parado ..., codigo 0
+done
+crontab -l 2>/dev/null | grep -c 'sss-keepalive.sh'           # esperado: 0
+```
+
+**b. Atualizar o código** de cada tipo, como no passo 15.1, **sem** o `start`:
+
+```bash
+for t in $SSS_TIPOS; do sss_tipo $t >/dev/null
+  (cd "$R" && bin/sss-update.sh ~/sss_pacote/sss-*.tar.gz; echo "$T: codigo $?"; sha256sum -c --quiet SHA256SUMS && echo "$T: conteudo confere")
+done
+```
+
+**c. Esquema do prefixo novo**, um tipo de cada vez. Primeiro, quantas tabelas do prefixo já existem no owner:
+
+```bash
+. ~/sss_pacote/sss_vars.sh; sss_tipo DEV && cd "$R"            # depois, sss_tipo PROD
+O=$(echo "$SSS_OWNER" | tr A-Z a-z)
+cat > ~/sss_registro/${P}_00_contagem.sql <<EOF
+SELECT COUNT(*) FROM all_tables WHERE owner = UPPER('$SSS_OWNER') AND table_name LIKE UPPER('$P') || '\_%' ESCAPE '\';
+EXIT
+EOF
+```
+
+```bash
+sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_registro/${P}_00_contagem.sql   # sozinha: pede a senha
+```
+
+* **`0`:** o esquema é novo. Rode o passo 9 deste tipo a partir da conferência da DDL: o `01_deploy_sss_${O}_${P}.sql` e o `99_validate_deploy_${O}_${P}.sql`, com as mesmas conferências.
+* **`21`:** o esquema já existe. Ele é **reaproveitado, sem apagar nada**, se a versão gravada for a do código:
+
+```bash
+cat > ~/sss_registro/${P}_00_versao.sql <<EOF
+SELECT schema_version FROM $SSS_OWNER.${PREFIX}control;
+EXIT
+EOF
+grep -n '^SCHEMA_VERSION' src/sss/core/sql_ident.py            # a versão do código (hoje, 1)
+```
+
+```bash
+sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_registro/${P}_00_versao.sql    # sozinha; esperado: o mesmo número
+```
+
+* **Outro número de tabelas, ou versão diferente:** **pare** e registre no passo 17. É um esquema incompleto ou de outra versão; a saída é a recriação abaixo, decidida pelo responsável.
+* **Recriar (opcional e explícito):** só com autorização e **depois do backup** das tabelas do prefixo (Data Pump do owner, pedido ao DBA; DEPLOYMENT §17). O `02` apaga os usuários, os cadastros, os **tickets e a auditoria** do prefixo `$P`. O roteiro é o do passo 15.2 (`02` e depois `01`/`99`).
+
+**d. Seed:** o `01` já traz o seed (passo 9). Num esquema reaproveitado, confira os perfis:
+
+```bash
+cat > ~/sss_registro/${P}_00_perfis.sql <<EOF
+SELECT name FROM $SSS_OWNER.${PREFIX}profiles ORDER BY name;
+EXIT
+EOF
+```
+
+```bash
+sqlplus -L "$SSS_DB_USER@$DSN" @$HOME/sss_registro/${P}_00_perfis.sql    # sozinha; esperado: ADMINISTRADOR, CONSULTA, OPERADOR
+```
+
+Faltando algum, o esquema é anterior aos perfis atuais: **pare** e registre (o `init_db.py` não roda em banco em uso).
+
+**e. Configuração, subida e conferências**, em cada tipo:
+
+```bash
+. ~/sss_pacote/sss_vars.sh; sss_tipo DEV && cd "$R"            # depois, sss_tipo PROD
+grep -n 'table_prefix' instance/common.ini instance/*/config.ini   # o que sair, tire
+```
+
+Para o `common.ini`, rode de novo o bloco do passo 8.1 (o `sss_grava` guarda o anterior e mostra a diferença: sai só a linha `table_prefix`). Num `config.ini`, tire a linha com o `vi`. Deixada, a chave só gera aviso. Depois, as conferências do passo 11 (`check_env` com código 0 em todos), a subida e as conferências do passo 12 (`bin/sss-ctl.sh start`, `bin/sss-ctl.sh status`, `health.py` com `SSS OK`) e o `crontab` do passo 14 (`bin/sss-ctl.sh cron install`). Num esquema novo, a senha inicial do seed volta a valer (passo 13).
+
+#### 15.3.1 Remoção dos esquemas aposentados (manual, posterior)
+
+Os esquemas de `SSS_OUTROS_PREFIXOS` (no GFPR: `s3dev_` e `s3prd_` do 3067, `tbsss_` e `ssdev_` das instalações locais) ficam no owner até uma decisão à parte. Para remover um deles, com autorização, um prefixo de cada vez e **depois do backup** das tabelas dele (Data Pump, DEPLOYMENT §17): o `02_rollback` desses prefixos não está mais em `docs/sql/`; ele sai do histórico do git, na origem, do pai do commit que o apagou:
+
+```bash
+cd "$ORIGEM"
+git log --diff-filter=D --name-only --oneline -- docs/sql       # o commit que apagou os arquivos: a75e3c1
+p=s3dev                                                          # o prefixo aposentado, sem _ (s3dev, s3prd, tbsss, ssdev)
+git show a75e3c1^:docs/sql/02_rollback_sss_openrisow_$p.sql > ~/sss_pacote/02_rollback_sss_openrisow_$p.sql
+grep -m1 '^-- Prefixo' ~/sss_pacote/02_rollback_sss_openrisow_$p.sql; sha256sum ~/sss_pacote/02_rollback_sss_openrisow_$p.sql   # o prefixo certo; anote o sha256
+```
+
+Leve o arquivo ao servidor (`~/sss_registro`, conferindo o `sha256`) e rode-o como no passo 15.2 (arquivo `.sql` com `SPOOL`, `sqlplus` sozinho, `Rollback do SSS concluido` no log). Ele só apaga os objetos daquele prefixo; o `tbsdev_` e o `tbsprd_` não são tocados. Depois, tire o prefixo de `SSS_OUTROS_PREFIXOS`.
+
 ---
 
 ## 16. Retorno (desfazer a implantação)
@@ -678,9 +783,7 @@ SSS_DB_USER=openrisow
 SSS_OWNER=openrisow
 SSS_DSN_DEV='(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=10.129.177.188)(PORT=1521))(CONNECT_DATA=(SID=GFPR)))'
 SSS_DSN_PROD='(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=10.129.177.188)(PORT=1521))(CONNECT_DATA=(SID=GFPR)))'
-SSS_PREFIXO_DEV=tbsdev_
-SSS_PREFIXO_PROD=tbsprd_
-SSS_OUTROS_PREFIXOS=""
+SSS_OUTROS_PREFIXOS="s3dev_ s3prd_ tbsss_ ssdev_"     # aposentados (passo 15.3.1)
 SSS_PORTA_DEV=18000
 SSS_PORTA_PROD=18001
 SSS_WEB=web0001
@@ -694,7 +797,9 @@ SSS_DRIVER_MODE=auto
 SSS_LOCALE=en_US.utf8
 ```
 
-O resto do arquivo (a parte "derivados" e a função `sss_tipo`) é o do passo 0, sem mudança.
+O resto do arquivo (a parte "derivados" e a função `sss_tipo`) é o do passo 0, sem mudança. Com ela, o DEV usa `tbsdev_` e o PROD `tbsprd_` (desde o `a75e3c1`; migração no passo 15.3).
+
+**Histórico (antes do `a75e3c1`):** o arquivo tinha `SSS_PREFIXO_DEV=s3dev_`, `SSS_PREFIXO_PROD=s3prd_` e `SSS_OUTROS_PREFIXOS="tbsss_ ssdev_"`, e a `sss_tipo` lia o prefixo dessas variáveis. Os esquemas `s3dev_` e `s3prd_` ficam no owner como aposentados.
 
 ### A.2 Achados da pré-checagem (passos 2 e 3)
 
@@ -707,7 +812,7 @@ O resto do arquivo (a parte "derivados" e a função `sss_tipo`) é o do passo 0
 | Python | Só o 3.8.5 do Sparta: `stdlib OK`, sem `ssl` e sem `_hashlib` (PBKDF2 em 0,3 s) |
 | Driver | `cx_Oracle` 8.3.0 com o cliente completo 12.2 (fora do `ldconfig`); sem `oracledb`. Com `auto`, Thin e Thick falham na hora (`IMPORT_ERROR`) e o cx_Oracle conecta |
 | `sqlplus` | 12.2, em `/opt/oracle/product/12c/client/bin` |
-| Banco | `10.129.177.188:1521` (GFPR) alcançável. No mesmo owner `openrisow` já existem `tbsss_` e `ssdev_` (21 tabelas cada, instalações da máquina de desenvolvimento); `s3dev_` e `s3prd_` vazios |
+| Banco | `10.129.177.188:1521` (GFPR) alcançável. No mesmo owner `openrisow` já existiam `tbsss_` e `ssdev_` (21 tabelas cada, instalações da máquina de desenvolvimento); `s3dev_` e `s3prd_` vazios (29/10; situação antes do prefixo fixo, decisão 18) |
 | Portas | 18000 e 18001 livres |
 | `locale -a` | Lista nomes em Latin-1 (`bokmål`, byte `0xe5`). Até a correção de 29/10 (`posix._run_short` lê em bytes e decodifica com substituição), os agentes caíam na subida com `UnicodeDecodeError` no passo 12; o web subia. Corrigido no código, com teste, e levado ao servidor pelo `sss-update.sh` |
 | Transferência | O meio usado troca a pasta `~/sss_pacote` inteira: os logs do passo 9 guardados nela se perderam na segunda transferência. Os registros passaram para `~/sss_registro` |
@@ -729,11 +834,12 @@ O resto do arquivo (a parte "derivados" e a função `sss_tipo`) é o do passo 0
 | 1 A | Segue o sistema atual, não o pedido original (tabela A.4) |
 | 2 B | Hosts reais no documento, sem senha |
 | 3 A | O DEV usa o DSN direto do GFPR (o `localhost:2424` do pedido é um túnel da máquina de desenvolvimento) |
-| 4 B, 5 A | Prefixos novos, `s3dev_` e `s3prd_`, independentes do `tbsss_` e do `ssdev_` |
+| 4 B, 5 A | Prefixos novos, `s3dev_` e `s3prd_`, independentes do `tbsss_` e do `ssdev_` (histórico: substituída pela decisão 18) |
 | — | Transferência manual pela equipe; pacote dos arquivos locais (sem git); acesso pelo meio habitual; `driver_mode = auto` |
 | 15 (risco aceito) | Os três usuários do seed (`admin`, `op.prod`, `consulta`) ficam na senha inicial do DEPLOYMENT §5.3 no DEV e no PROD, por decisão do responsável (30/10). A senha está num documento público; o que reduz o risco é o web atender só em `127.0.0.1` do servidor (acesso só pela conta do servidor ou por túnel pelo bastion). Uma homologação no DEV troca a senha do `admin` no CT-01 (passo 13); depois dela, o `admin` volta à senha inicial pela tela |
 | 16 A | SQL gerado só em ASCII, com os literais acentuados em `UNISTR` (30/10), para valer com qualquer `NLS_LANG` e conjunto de caracteres, em qualquer servidor |
 | 17 B | Os textos com mojibake do seed (6 linhas de `features` em cada esquema) saem refazendo os esquemas `s3dev_` e `s3prd_` com o SSS parado (passo 15.2), não por `MERGE` no lugar. Os dados de homologação e de teste se perdem, e os usuários do seed voltam à senha inicial (decisão 15). Executada em 30/10 com o pacote `2610301342` (base `c0c2bfd`): DEV às 13:56 e PROD às 13:59, `02`/`01`/`99` sem erro, os dois no ar com `SSS OK` e `healthy_agents=5`, `features` sem mojibake |
+| 18 (06/11/2026) | Prefixo fixo (`a75e3c1`): **uma instalação por tipo no owner `openrisow` do GFPR**. O 3067 é o DEV (`tbsdev_`) e o PROD (`tbsprd_`); as instalações locais, que usavam o mesmo owner, deixam de subir contra o GFPR. `s3dev_`, `s3prd_`, `tbsss_` e `ssdev_` ficam intactos como aposentados (`SSS_OUTROS_PREFIXOS`); a migração é a do passo 15.3, e a remoção deles, o passo 15.3.1, à parte |
 | 7 A | SSS antigo (web2py, porta 8000, `/home/mastersafgf/sss/web2py`): parado no passo 6, sem apagar nada; a pasta `~/sss` fica como histórico |
 
 ### A.4 Diferenças em relação ao pedido original
