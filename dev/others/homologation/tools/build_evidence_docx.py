@@ -907,6 +907,27 @@ RODADAS["20261030_r4"] = dict(RODADAS["20261030_r3"], **{
         u"(SSS_ADMIN_RESET=seed, decisao 15); massa de 2 GB mantida no servidor.",
     ],
 })
+
+RODADAS["20261107_r3"] = dict(RODADAS["20261029_r5"], **{
+    "commit": u"a9ecb89 (revisao docs x codigo, passos 1 a 4: prefixo fixo tbsdev_/tbsprd_, perfis ADMINISTRADOR/"
+              u"OPERADOR/CONSULTA, quadro Quem pode rodar retirado, env_label pelo install_env) no DEV desta maquina",
+    "massa_propria": True,
+    "ressalva": dict(RODADAS["20261029_r5"]["ressalva"], **{
+        "CT-24": u"Perfil do seed alterado fora da aplicacao: no tbsdev_ os perfis ADMINISTRADOR e CONSULTA foram "
+                 u"renomeados por SQL direto em 06/11/2026 (updated_by = SYSTEM:migration, sem auditoria). A "
+                 u"verificacao aponta o dado corretamente; o codigo nao tem defeito (decisao do responsavel)."}),
+    "defeitos": [],
+    "observacoes": [
+        u"Primeira rodada com a massa propria do roteiro (PREPARO: perfil HOMOLOG_RESTRITO e usuario "
+        u"homolog.restrito) e o seed novo, no prefixo tbsdev_ do GFPR. Marca %s." % STAMP,
+        u"O 3067 ficou no ar: roda o pacote 2610301500 (anterior ao a75e3c1, prefixos s3dev_/s3prd_), sem colisao "
+        u"com o tbsdev_ desta rodada.",
+        u"362/363: a unica falha e o CT-24 (perfil do seed alterado por SQL direto em 06/11), registrada como achado "
+        u"de dado. As rodadas 1 e 2 do dia nao valem (ferramenta com o botao antigo do cartao; queda do tunel do "
+        u"GFPR, ORA-12541).",
+        u"O admin comecou na senha escolhida da rodada anterior (SSS_ADMIN_START=new).",
+    ],
+})
 # Massa propria do roteiro (decisao 3.a, depois do 11966d7): o seed so tem ADMINISTRADOR, OPERADOR e CONSULTA
 # (admin, op.prod e consulta); o caso PREPARO do capture_evidence.js cria ou reaproveita, pela tela, o perfil
 # HOMOLOG_RESTRITO e o usuario homolog.restrito. As rodadas com "massa_propria": True recebem estes textos por
